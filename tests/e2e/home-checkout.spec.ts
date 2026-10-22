@@ -39,13 +39,19 @@ function lineTotal(qty: number, p: Product) {
   return Math.floor(qty / p.bundleSize) * p.bundlePriceCents + (qty % p.bundleSize) * p.unitPriceCents;
 }
 
-function availabilityBody(items: { productId: string; qty: number }[], fulfillment: string) {
+type CartProblem = { productId: string; error: string };
+
+function availabilityBody(
+  items: { productId: string; qty: number }[],
+  fulfillment: string,
+  cartProblems: CartProblem[] = [],
+) {
   const subtotal = items.reduce((s, i) => s + lineTotal(i.qty, PRODUCTS.find((p) => p.id === i.productId)!), 0);
   const fee = fulfillment === "DELIVERY" && subtotal < 2500 ? 500 : 0;
   return {
     orderingEnabled: true,
     pricing: { subtotalCents: subtotal, deliveryFeeCents: fee, totalCents: subtotal + fee, freeDeliveryGapCents: Math.max(0, 2500 - subtotal) },
-    cartProblems: [],
+    cartProblems,
     dates: [
       { date: "2026-10-30", state: "AVAILABLE", cutoffAt: "2026-10-30T01:00:00Z", cutoffLabel: "10/29 周四 20:00 截止" },
       { date: "2026-10-31", state: "FULL" },
@@ -59,12 +65,21 @@ function availabilityBody(items: { productId: string; qty: number }[], fulfillme
 
 type OrderHandler = (route: Route, body: Record<string, unknown>, n: number) => Promise<void>;
 
-async function mockApis(page: Page, opts: { menu?: Record<string, unknown>; orders?: OrderHandler } = {}) {
+async function mockApis(
+  page: Page,
+  opts: {
+    menu?: Record<string, unknown>;
+    orders?: OrderHandler;
+    cartProblems?: (items: { productId: string; qty: number }[]) => CartProblem[];
+  } = {},
+) {
   const orderBodies: Record<string, unknown>[] = [];
   await page.route("**/api/menu", (route) => route.fulfill({ json: menuBody(opts.menu) }));
   await page.route("**/api/availability", (route) => {
     const body = route.request().postDataJSON() as { items: { productId: string; qty: number }[]; fulfillment: string };
-    return route.fulfill({ json: availabilityBody(body.items, body.fulfillment) });
+    return route.fulfill({
+      json: availabilityBody(body.items, body.fulfillment, opts.cartProblems?.(body.items) ?? []),
+    });
   });
   await page.route("**/api/orders", async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>;
@@ -257,6 +272,10 @@ test("checkout: FULL without suggestion and other errors", async ({ page }) => {
     { status: 409, json: { error: "CUTOFF_PASSED", message: "x" } },
     { status: 409, json: { error: "ORDERING_DISABLED", message: "x" } },
     { status: 429, json: { error: "RATE_LIMITED", message: "x" } },
+    { status: 409, json: { error: "PRODUCT_UNAVAILABLE", message: "x" } },
+    { status: 409, json: { error: "QTY_LIMIT", message: "x" } },
+    { status: 409, json: { error: "DATE_CLOSED", message: "x" } },
+    { status: 409, json: { error: "SOMETHING_NEW", message: "x" } },
     { status: 500, json: { error: "BOOM", message: "x" } },
   ];
   await mockApis(page, { orders: (route, _b, n) => route.fulfill(responses[n - 1]) });
@@ -267,6 +286,10 @@ test("checkout: FULL without suggestion and other errors", async ({ page }) => {
     "这一天已经截止啦，请选择其他日期",
     "暂未开放预订 🍞",
     "提交太频繁了，请稍后再试，或加微信联系店主",
+    "有商品暂时不能预订，请从购物车移除后再提交",
+    "有商品超过了每单的数量上限，请减少数量",
+    "这一天不接受预订，请选择其他日期",
+    "提交失败，请稍后再试",
     "提交失败，请稍后再试",
   ];
   await fillAndPickDate(page);
@@ -276,6 +299,37 @@ test("checkout: FULL without suggestion and other errors", async ({ page }) => {
     await expect(page.getByTestId("submit-error")).toHaveText(text);
     await expect(page.getByTestId("submit")).toBeEnabled();
   }
+});
+
+test("checkout: cart problems block submit until fixed", async ({ page }) => {
+  // The server reports QTY_LIMIT for redbean above 3 (e.g. the max dropped after the menu loaded).
+  const bodies = await mockApis(page, {
+    cartProblems: (items) =>
+      items.filter((i) => i.productId === "p-redbean" && i.qty > 3).map((i) => ({ productId: i.productId, error: "QTY_LIMIT" })),
+  });
+  await seedCart(page, [
+    { productId: "p-paused", qty: 1 },
+    { productId: "p-redbean", qty: 4 },
+  ]);
+  await fillAndPickDate(page);
+  const submit = page.getByTestId("submit");
+  const paused = page.locator('[data-testid="cart-line"][data-product-id="p-paused"]');
+  const redbean = page.locator('[data-testid="cart-line"][data-product-id="p-redbean"]');
+
+  await expect(paused).toContainText("暂停供应");
+  await expect(redbean).toContainText("大量订购请加微信联系");
+  await expect(submit).toBeDisabled();
+
+  // removing the paused line still leaves the QTY_LIMIT problem
+  await paused.getByRole("button", { name: "移除" }).click();
+  await expect(paused).toHaveCount(0);
+  await expect(submit).toBeDisabled();
+
+  // reducing the qty clears the problem
+  await redbean.getByRole("button", { name: "减少一个" }).click();
+  await expect(redbean).not.toContainText("大量订购请加微信联系");
+  await expect(submit).toBeEnabled();
+  expect(bodies).toHaveLength(0);
 });
 
 test("checkout: VALIDATION gets a new idempotency key; network error keeps it", async ({ page }) => {

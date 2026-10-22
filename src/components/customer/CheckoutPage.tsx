@@ -203,6 +203,11 @@ export function CheckoutPage() {
   const needsLeadHint = lines.some((l) => l.product.leadDays >= 2);
   const orderingEnabled = menu.orderingEnabled && (data ? data.orderingEnabled : true);
   const gap = data?.pricing.freeDeliveryGapCents ?? 0;
+  // CAPACITY_RULES §7 rules 3–4: a cart with a paused/unavailable product or a qty over the
+  // per-item max cannot check out. The offending lines explain why.
+  const hasCartProblem = lines.some(
+    (l) => l.product.status === "PAUSED" || problems.has(l.productId) || l.qty > menu.maxQtyPerItem,
+  );
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -262,6 +267,9 @@ export function CheckoutPage() {
       case "CUTOFF_PASSED":
       case "ORDERING_DISABLED":
       case "RATE_LIMITED":
+      case "PRODUCT_UNAVAILABLE":
+      case "QTY_LIMIT":
+      case "DATE_CLOSED":
         setSubmitError({ message: copy.errors[err.error] });
         break;
       case "VALIDATION":
@@ -538,7 +546,7 @@ export function CheckoutPage() {
         <button
           type="submit"
           className="min-h-12 w-full rounded-full bg-accent text-base font-semibold text-accent-ink active:bg-accent-strong disabled:bg-disabled disabled:text-disabled-ink"
-          disabled={submitting || !orderingEnabled}
+          disabled={submitting || !orderingEnabled || hasCartProblem}
           data-testid="submit"
         >
           {submitting ? t.submitting : t.submit}
