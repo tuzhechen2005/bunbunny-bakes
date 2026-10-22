@@ -7,6 +7,7 @@ import { prisma } from "@/server/db";
 import { AppError } from "@/server/errors";
 import { clientIp, jsonError, requireJsonContentType } from "@/server/http";
 import { createCustomerOrder, type CreateOrderInput } from "@/server/orders";
+import { sendAfterResponse } from "@/server/outboxSend";
 import { hashIp } from "@/server/tokens";
 
 function honeypotTripped(website: unknown): boolean {
@@ -53,8 +54,8 @@ export async function POST(request: Request): Promise<Response> {
     } as unknown as CreateOrderInput;
     const created = await createCustomerOrder(prisma, input, now);
 
-    // notify: send notificationId after commit (M6)
-    void created.notificationId;
+    // Committed: send the new-order email after the response (null on replay).
+    sendAfterResponse(prisma, created.notificationId, now);
 
     return NextResponse.json(
       { orderNo: created.orderNo, viewToken: created.viewToken, url: `/o/${created.viewToken}` },

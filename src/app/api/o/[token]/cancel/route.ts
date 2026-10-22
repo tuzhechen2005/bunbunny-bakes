@@ -6,6 +6,7 @@ import { prisma } from "@/server/db";
 import { AppError, isAppError } from "@/server/errors";
 import { isWellFormedViewToken, jsonError, noStore, requireJsonContentType } from "@/server/http";
 import { customerCancel } from "@/server/orderAdmin";
+import { sendAfterResponse } from "@/server/outboxSend";
 
 export async function POST(
   request: Request,
@@ -27,8 +28,8 @@ export async function POST(
       throw e;
     }
 
-    // notify: send notificationId (customer_cancelled) after commit (M6)
-    void result.notificationId;
+    // Committed: send the cancellation email after the response (null if already cancelled).
+    sendAfterResponse(prisma, result.notificationId, now);
 
     return noStore(NextResponse.json({ status: "CANCELLED" }));
   } catch (e) {
