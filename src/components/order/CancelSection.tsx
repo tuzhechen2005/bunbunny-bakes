@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { copy } from "@/copy";
 
 const t = copy.customer.order;
@@ -15,13 +15,13 @@ type Props = {
   onRefused: () => void;
 };
 
+/** Message for a refused cancel. Falls back to order-page wording, never the checkout wording. */
 async function errorMessage(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { error?: unknown; message?: unknown };
     if (typeof body.message === "string" && body.message) return body.message;
-    if (typeof body.error === "string" && body.error in copy.errors) {
-      return copy.errors[body.error as keyof typeof copy.errors];
-    }
+    if (body.error === "CUTOFF_PASSED") return t.cancelClosed;
+    if (body.error === "NOT_CANCELLABLE") return copy.errors.NOT_CANCELLABLE;
   } catch {
     // not JSON
   }
@@ -32,6 +32,25 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
   const [sheetOpen, setSheetOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const backRef = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+
+  // Move focus into the sheet when it opens, and back to the trigger when it closes.
+  useEffect(() => {
+    if (sheetOpen) backRef.current?.focus();
+    else if (wasOpen.current) triggerRef.current?.focus();
+    wasOpen.current = sheetOpen;
+  }, [sheetOpen]);
+
+  useEffect(() => {
+    if (!sheetOpen || busy) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setSheetOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [sheetOpen, busy]);
 
   async function onConfirm() {
     if (busy) return;
@@ -59,18 +78,8 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
     setBusy(false);
   }
 
-  if (!canCancel) {
-    return (
-      <div className="flex flex-col gap-2">
-        {error && (
-          <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
-            {error}
-          </p>
-        )}
-        <p className="text-sm text-neutral-600">{t.cancelClosed}</p>
-      </div>
-    );
-  }
+  // Not cancellable: the closed message says it all (no duplicated alert after a 409).
+  if (!canCancel) return <p className="text-sm text-neutral-600">{t.cancelClosed}</p>;
 
   return (
     <div className="flex flex-col gap-2">
@@ -80,6 +89,7 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
         </p>
       )}
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => {
           setError(null);
@@ -104,7 +114,7 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
             role="dialog"
             aria-modal="true"
             aria-labelledby="cancel-sheet-title"
-            className="relative w-full max-w-md rounded-t-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+            className="relative w-full max-w-md rounded-t-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-neutral-900"
           >
             <p id="cancel-sheet-title" className="mb-5 text-center text-lg font-semibold">
               {t.cancelConfirmTitle}
@@ -119,6 +129,7 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
                 {busy ? t.cancelling : t.cancelConfirm}
               </button>
               <button
+                ref={backRef}
                 type="button"
                 onClick={() => setSheetOpen(false)}
                 disabled={busy}

@@ -176,10 +176,22 @@ test.describe("order page /o/{token}", () => {
     await page.getByRole("button", { name: t.cancelOrder }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toContainText(t.cancelConfirmTitle);
+    // Focus moves into the sheet, onto the safe "back" button.
+    await expect(sheet.getByRole("button", { name: t.cancelBack })).toBeFocused();
+    expect(await sheet.evaluate((el) => el.contains(document.activeElement))).toBe(true);
 
-    // "back" closes without posting
+    // "back" closes without posting and returns focus to the trigger
     await sheet.getByRole("button", { name: t.cancelBack }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: t.cancelOrder })).toBeFocused();
+    expect(calls.cancel).toHaveLength(0);
+
+    // Escape also closes it
+    await page.getByRole("button", { name: t.cancelOrder }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: t.cancelOrder })).toBeFocused();
     expect(calls.cancel).toHaveLength(0);
 
     await page.getByRole("button", { name: t.cancelOrder }).click();
@@ -208,9 +220,57 @@ test.describe("order page /o/{token}", () => {
     await page.goto(ORDER_PATH);
     await page.getByRole("button", { name: t.cancelOrder }).click();
     await page.getByRole("dialog").getByRole("button", { name: t.cancelConfirm }).click();
-    await expect(page.getByRole("main").getByRole("alert")).toHaveText("已过取消时间，请微信联系店主");
-    await expect(page.getByRole("button", { name: t.cancelOrder })).toHaveCount(0);
+    // The re-fetch says canCancel=false, so only the closed message shows (no duplicated alert).
     await expect(page.getByText(t.cancelClosed)).toBeVisible();
+    await expect(page.getByRole("button", { name: t.cancelOrder })).toHaveCount(0);
+    await expect(page.getByRole("main").getByRole("alert")).toHaveCount(0);
+    await expect(page.getByText("已过取消时间，请微信联系店主")).toHaveCount(0);
+  });
+
+  test("cancel 409 while the order still says cancellable shows the API message", async ({ page }) => {
+    await mockOrder(page, () => makeOrder(CONFIRMED));
+    await page.route(`**${API_PATH}/cancel`, (route) =>
+      route.fulfill({ status: 409, json: { error: "NOT_CANCELLABLE", message: "这个订单现在不能取消了" } }),
+    );
+    await page.goto(ORDER_PATH);
+    await page.getByRole("button", { name: t.cancelOrder }).click();
+    await page.getByRole("dialog").getByRole("button", { name: t.cancelConfirm }).click();
+    await expect(page.getByRole("main").getByRole("alert")).toHaveText("这个订单现在不能取消了");
+  });
+
+  test("cancel 409 CUTOFF_PASSED without a message falls back to order-page copy", async ({ page }) => {
+    await mockOrder(page, () => makeOrder(CONFIRMED));
+    await page.route(`**${API_PATH}/cancel`, (route) =>
+      route.fulfill({ status: 409, json: { error: "CUTOFF_PASSED" } }),
+    );
+    await page.goto(ORDER_PATH);
+    await page.getByRole("button", { name: t.cancelOrder }).click();
+    await page.getByRole("dialog").getByRole("button", { name: t.cancelConfirm }).click();
+    await expect(page.getByRole("main").getByRole("alert")).toHaveText(t.cancelClosed);
+    await expect(page.getByText(copy.errors.CUTOFF_PASSED)).toHaveCount(0);
+  });
+
+  test("cancel succeeds but the re-fetch fails: shows retry, not the stale order", async ({ page }) => {
+    let order: Order = makeOrder(CONFIRMED);
+    let failGet = false;
+    await page.route(`**${API_PATH}`, (route) =>
+      failGet ? route.abort("failed") : route.fulfill({ status: 200, json: order }),
+    );
+    await page.route(`**${API_PATH}/cancel`, async (route) => {
+      order = makeOrder(CANCELLED);
+      failGet = true;
+      await route.fulfill({ status: 200, json: { status: "CANCELLED" } });
+    });
+    await page.goto(ORDER_PATH);
+    await page.getByRole("button", { name: t.cancelOrder }).click();
+    await page.getByRole("dialog").getByRole("button", { name: t.cancelConfirm }).click();
+    await expect(page.getByText(t.loadFailed)).toBeVisible();
+    await expect(page.getByTestId("status-text")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: t.cancelOrder })).toHaveCount(0);
+
+    failGet = false;
+    await page.getByRole("button", { name: t.retry }).click();
+    await expect(page.getByTestId("status-text")).toHaveText(copy.customerStatus.cancelled);
   });
 
   test("not cancellable and not finished: shows the contact-owner message", async ({ page }) => {
@@ -243,6 +303,42 @@ test.describe("order page /o/{token}", () => {
     await expect(page.getByText(copy.errors.NOT_FOUND)).toBeVisible();
     await expect(page.getByRole("link", { name: t.backHome })).toBeVisible();
   });
+
+  const darkCases: [string, string, boolean][] = [
+    ["global 404", "/o/", false],
+    ["order page", ORDER_PATH, false],
+    ["order 404", ORDER_PATH, true],
+  ];
+  for (const [name, path, notFound] of darkCases) {
+    test(`${name} stays light and readable when the OS is in dark mode`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: "dark" });
+      await mockOrder(page, () => (notFound ? null : makeOrder()));
+      await page.goto(path);
+      const target =
+        name === "order page" ? page.getByTestId("status-text") : page.getByText(copy.errors.NOT_FOUND);
+      await expect(target).toBeVisible();
+      const colors = await target.evaluate((el) => {
+        let node: Element | null = el;
+        let bg = "rgba(0, 0, 0, 0)";
+        while (node) {
+          bg = getComputedStyle(node).backgroundColor;
+          if (bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") break;
+          node = node.parentElement;
+        }
+        // Normalise any CSS colour (lab/oklch/rgb) to RGB via a canvas pixel.
+        const lightness = (c: string) => {
+          const ctx = document.createElement("canvas").getContext("2d")!;
+          ctx.fillStyle = c;
+          ctx.fillRect(0, 0, 1, 1);
+          const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+          return (r + g + b) / 3;
+        };
+        return { text: lightness(getComputedStyle(el).color), bg: lightness(bg) };
+      });
+      expect(colors.bg).toBeGreaterThan(200); // light background
+      expect(colors.text).toBeLessThan(140); // dark text
+    });
+  }
 
   test("network error shows retry, which recovers", async ({ page }) => {
     let fail = true;

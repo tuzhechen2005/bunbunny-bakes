@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { copy } from "@/copy";
 import { formatCents } from "@/domain/pricing";
 import { CancelSection } from "./CancelSection";
@@ -33,6 +33,8 @@ export function OrderPage() {
   }, [hasNewParam, pathname, router]);
 
   const [state, setState] = useState<LoadState>({ kind: "loading" });
+  /** Set when the order on screen is known to be out of date (a cancel just succeeded). */
+  const staleAfterCancel = useRef(false);
   const [justCancelled, setJustCancelled] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -50,8 +52,13 @@ export function OrderPage() {
         const order = (await response.json()) as OrderViewData;
         if (active) setState({ kind: "ready", order });
       } catch {
-        // Keep showing the order we already have if a background re-fetch fails.
-        if (active) setState((prev) => (prev.kind === "ready" ? prev : { kind: "failed" }));
+        // A background re-fetch failure keeps the order on screen, except right after a
+        // cancel: then the shown order is known to be stale, so offer a retry instead.
+        if (!active) return;
+        const keepStale = !staleAfterCancel.current;
+        setState((prev) => (keepStale && prev.kind === "ready" ? prev : { kind: "failed" }));
+      } finally {
+        if (active) staleAfterCancel.current = false;
       }
     })();
     return () => {
@@ -162,6 +169,7 @@ export function OrderPage() {
           cancelDeadlineLabel={order.cancelDeadlineLabel}
           onCancelled={() => {
             setJustCancelled(true);
+            staleAfterCancel.current = true;
             reload();
           }}
           onRefused={reload}
