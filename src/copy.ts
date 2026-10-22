@@ -48,4 +48,29 @@ export const copy = {
     /** Unknown / unexpected errors. */
     fallback: "提交失败，请稍后再试",
   },
+  admin: {
+    /** Admin login, password reset (PAGES.md /admin/login). */
+    auth: {
+      loginTitle: "后台登录",
+      username: "用户名",
+      password: "密码",
+      login: "登录",
+      loggingIn: "登录中…",
+      forgotPassword: "忘记密码？",
+      resetSent: "重置链接已发送到你的邮箱",
+      invalidCredentials: "用户名或密码错误",
+      resetTitle: "设置新密码",
+      newPassword: "新密码（至少 10 位）",
+      confirmPassword: "再输入一次新密码",
+      saveNewPassword: "保存新密码",
+      saving: "保存中…",
+      passwordTooShort: "密码至少 10 位",
+      passwordMismatch: "两次输入的密码不一样",
+      resetInvalid: "重置链接无效或已过期，请重新申请",
+      resetDone: "密码已更新，请用新密码登录",
+      backToLogin: "返回登录",
+      currentPasswordWrong: "当前密码不正确",
+      requestFailed: "操作失败，请稍后再试",
+    },
+  },
 } as const;
