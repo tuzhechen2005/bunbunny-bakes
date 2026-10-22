@@ -27,6 +27,77 @@ export const copy = {
     orderingClosed: "暂未开放预订 🍞",
   },
 
+  /** Customer pages: home (menu + cart) and checkout (PAGES.md). */
+  customer: {
+    home: {
+      orderingClosedHint: "下一轮预订开放时间请关注群内通知～",
+      loading: "加载中…",
+      loadFailed: "菜单加载失败，请稍后再试",
+      retry: "重新加载",
+      emptyMenu: "暂时还没有可以预订的面包～",
+      /** e.g. "$2.49 / 个" */
+      unitPrice: "{price} / 个",
+      /** e.g. "4 个 $8.99" */
+      bundlePrice: "{size} 个 {price}",
+      /** Joins unitPrice and bundlePrice (full-width space). */
+      priceSeparator: "　",
+      paused: "暂停供应",
+      maxReached: "大量订购请加微信联系",
+      decrease: "减少一个",
+      increase: "增加一个",
+      /** Screen-reader label for the qty, e.g. "已选 3 个" */
+      qtyLabel: "已选 {qty} 个",
+      barCount: "已选 {count} 件",
+      barSubtotal: "小计 {amount}",
+      goCheckout: "去结算",
+      checkoutClosed: "暂未开放预订",
+      footerContact: "联系店主：微信 {id}",
+    },
+    checkout: {
+      pageTitle: "确认预订",
+      backToMenu: "‹ 返回菜单",
+      emptyCart: "购物车还是空的～",
+      emptyCartLink: "回首页挑选面包",
+      cartTitle: "购物车明细",
+      /** e.g. "奶酪角 ×5" */
+      lineName: "{name} ×{qty}",
+      remove: "移除",
+      datesTitle: "选择取货日期",
+      leadDaysHint: "含布蕾的订单需提前两天预订",
+      noDates: "暂时没有可以预订的日期，请关注群内通知～",
+      datesLoading: "正在查询可以预订的日期…",
+      datesFailed: "日期加载失败，请稍后再试",
+      retry: "重试",
+      stateCutoff: "已截止",
+      stateFull: "已满",
+      stateDeliveryFull: "配送已满，可选自提",
+      fulfillmentTitle: "自提或配送",
+      pickup: "自提",
+      delivery: "配送",
+      /** e.g. "运费 $5，满 $25 免运费" */
+      deliveryFee: "运费 {fee}，满 {min} 免运费",
+      /** e.g. "再买 $5.02 就免运费啦" */
+      freeDeliveryGap: "再买 {gap} 就免运费啦",
+      deliveryArrange: "具体配送时间和地点会在微信上和你确认",
+      wechatLabel: "你的微信号",
+      wechatHint: "店主会加你微信确认订单",
+      wechatRequired: "请填写你的微信号",
+      noteLabel: "备注（选填）",
+      /** e.g. "12/300" */
+      noteCounter: "{count}/{max}",
+      totalsTitle: "金额",
+      subtotal: "小计",
+      deliveryFeeLabel: "运费",
+      total: "总额",
+      payLater: "无需在线付款，收到货后再付款。",
+      submit: "确认提交预订",
+      submitting: "提交中…",
+      pickDate: "请先选择取货日期",
+      /** FULL suggestion button, e.g. "改成 10/31 周六" */
+      switchDate: "改成 {day}",
+    },
+  },
+
   /** Default `message` per API error code (API_SPEC.md §1, PAGES.md checkout errors). */
   errors: {
     VALIDATION: "填写的内容有误，请检查后再提交",
