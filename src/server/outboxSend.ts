@@ -8,7 +8,8 @@
 //   3. finish: one short update to SENT, or failure bookkeeping (backoff / FAILED).
 // Two senders cannot both claim a row while its lease runs. If a sender dies between
 // claim and finish, the lease expires and the row is retried with the same
-// Idempotency-Key, so the provider never delivers it twice.
+// Idempotency-Key, so the provider never delivers it twice. The finish is fenced by
+// the claim's attempt number, so a late finisher never overwrites a newer claim.
 
 import { after } from "next/server";
 import type { DbClient } from "./db";
@@ -82,7 +83,8 @@ async function recordFailure(db: DbClient, row: ClaimedRow, now: Date, e: unknow
   const failed = row.attempts >= MAX_ATTEMPTS;
   console.warn(`outbox: notification ${row.id} attempt ${row.attempts} failed: ${lastError}`);
   await db.notification.updateMany({
-    where: { id: row.id, status: "PENDING" },
+    // Fenced by the claim: a newer claim (lease expired) owns the row now.
+    where: { id: row.id, status: "PENDING", attempts: row.attempts },
     data: {
       lastError,
       nextAttemptAt: new Date(now.getTime() + backoffMs(row.attempts)),
@@ -132,7 +134,9 @@ export async function sendNotification(
       idempotencyKey: row.dedupeKey,
     });
     await db.notification.updateMany({
-      where: { id: row.id, status: "PENDING" },
+      // Fenced by the claim. FAILED is allowed: the row may have been given up while this
+      // (confirmed) send was in flight, and it was delivered after all.
+      where: { id: row.id, attempts: row.attempts, status: { in: ["PENDING", "FAILED"] } },
       data: {
         status: "SENT",
         sentAt: now,
