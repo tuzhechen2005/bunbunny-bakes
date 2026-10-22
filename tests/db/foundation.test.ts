@@ -88,7 +88,7 @@ describe("migration + seed", () => {
     expect(out).toMatch(/No pending migrations/);
     const status = execFileSync("npx", ["prisma", "migrate", "status"], { env: CHILD_ENV }).toString();
     expect(status).toMatch(/Database schema is up to date/);
-    expect(status).toContain("bunbunny_test");
+    expect(status).toContain(decodeURIComponent(new URL(TEST_DATABASE_URL).pathname.slice(1)));
   });
 
   it("seed creates settings, 4 products and the admin, and is idempotent", async () => {

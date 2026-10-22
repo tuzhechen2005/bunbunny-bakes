@@ -20,18 +20,30 @@ export function formatOrderNo(date: LocalDate, seq: number): string {
 }
 
 /**
- * Next seq for `date`: coalesce(max(seq), 0) + 1 over ALL orders of the day (any status,
- * so numbers are never reused).
+ * Next seq for `date`: increments and returns `OpenDate.lastSeq`, the highest number ever
+ * handed out for that day. Numbers are never reused: cancelled orders keep theirs, and an
+ * order moved to another day (D52) leaves its old number behind, unused.
+ *
+ * As a guard, the counter never goes below the highest seq actually on the day (rows
+ * inserted without allocateSeq, e.g. test fixtures or manual repairs).
  *
  * MUST be called only after the OpenDate row of `date` is locked in the same transaction
- * (`lockOpenDate` / `lockOpenDates`): that lock is what makes max + 1 safe against
- * concurrent creates and date-changing edits.
+ * (`lockOpenDate` / `lockOpenDates`), so concurrent creates and date-changing edits queue.
+ * The increment rolls back with the transaction, so a failed create leaves no gap.
+ * Throws if the date has no OpenDate row.
  */
 export async function allocateSeq(tx: Tx, date: LocalDate): Promise<AllocatedSeq> {
-  const agg = await tx.order.aggregate({
-    where: { pickupDate: toDbDate(date) },
-    _max: { seq: true },
-  });
-  const seq = (agg._max.seq ?? 0) + 1;
+  parseLocalDate(date);
+  const rows = await tx.$queryRaw<{ lastSeq: number }[]>`
+    UPDATE "OpenDate"
+    SET "lastSeq" = GREATEST(
+          "lastSeq",
+          (SELECT COALESCE(MAX("seq"), 0) FROM "Order" WHERE "pickupDate" = ${toDbDate(date)}::date)
+        ) + 1
+    WHERE "date" = ${toDbDate(date)}::date
+    RETURNING "lastSeq"`;
+  const row = rows[0];
+  if (!row) throw new Error(`allocateSeq: no OpenDate row for ${date}`);
+  const seq = Number(row.lastSeq);
   return { seq, orderNo: formatOrderNo(date, seq) };
 }

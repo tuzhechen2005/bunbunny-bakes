@@ -126,6 +126,8 @@ model OpenDate {
   deliveryEnabled Boolean  @default(true)
   deliveryLimit   Int?
   note            String?
+  /// Highest order seq handed out for this date (src/server/seq.ts); never decreases.
+  lastSeq         Int      @default(0)
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
