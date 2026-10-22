@@ -126,7 +126,7 @@ describe("send after commit", () => {
     vi.setSystemTime(new Date(NOW.getTime() + 5 * 60_000));
     const cronRes = await cron("Bearer cron-secret-value");
     expect(cronRes.status).toBe(200);
-    expect((await cronRes.json()).outbox).toEqual({ sent: 1, failed: 0, skipped: 0 });
+    expect((await cronRes.json()).outbox).toEqual({ sent: 1, failed: 0, skipped: 0, deferred: 0 });
     n = await db.notification.findFirstOrThrow();
     expect(n.status).toBe("SENT");
     expect(n.attempts).toBe(2);
@@ -205,13 +205,13 @@ describe("POST /api/cron/outbox", () => {
     const first = await cron("Bearer cron-secret-value");
     expect(first.status).toBe(200);
     expect(await first.json()).toEqual({
-      outbox: { sent: 1, failed: 0, skipped: 0 },
+      outbox: { sent: 1, failed: 0, skipped: 0, deferred: 0 },
       cleanup: { rateLimitHits: 1, adminSessions: 0, passwordResets: 0, ordersIpHashCleared: 0 },
     });
     const second = await cron("Bearer cron-secret-value");
     expect(second.status).toBe(200);
     expect(await second.json()).toEqual({
-      outbox: { sent: 0, failed: 0, skipped: 0 },
+      outbox: { sent: 0, failed: 0, skipped: 0, deferred: 0 },
       cleanup: { rateLimitHits: 0, adminSessions: 0, passwordResets: 0, ordersIpHashCleared: 0 },
     });
     expect(goodTransport.send).toHaveBeenCalledTimes(1);

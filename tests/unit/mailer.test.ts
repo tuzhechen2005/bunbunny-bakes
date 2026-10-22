@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getTransport, MailConfigError, RESEND_ENDPOINT, ResendTransport } from "@/server/mailer";
+import { getTransport, MailConfigError, redact, RESEND_ENDPOINT, ResendTransport } from "@/server/mailer";
 
 const KEY = "re_super_secret_key_123";
 const msg = {
@@ -49,6 +49,35 @@ describe("ResendTransport", () => {
     expect(m).not.toContain(KEY);
     expect(m).not.toContain("owner@example.com");
     expect(m.length).toBeLessThan(300);
+  });
+
+  it("409 invalid_idempotent_request (key already used, different body) counts as sent", async () => {
+    const f = fakeFetch(
+      () =>
+        new Response(JSON.stringify({ name: "invalid_idempotent_request", message: "different payload" }), {
+          status: 409,
+        }),
+    );
+    expect(await new ResendTransport({ apiKey: KEY, fetch: f }).send(msg)).toEqual({ id: "", duplicate: true });
+  });
+
+  it("other 409s (a concurrent request with the same key) still throw, to be retried", async () => {
+    const f = fakeFetch(
+      () => new Response(JSON.stringify({ name: "concurrent_idempotent_requests" }), { status: 409 }),
+    );
+    await expect(new ResendTransport({ apiKey: KEY, fetch: f }).send(msg)).rejects.toThrow(/409/);
+    const g = fakeFetch(() => new Response("not json", { status: 409 }));
+    await expect(new ResendTransport({ apiKey: KEY, fetch: g }).send(msg)).rejects.toThrow(/409/);
+  });
+
+  it("redaction is case-insensitive", async () => {
+    const f = fakeFetch(() => new Response(`bad ${KEY.toUpperCase()} for OWNER@Example.COM`, { status: 422 }));
+    const m = ((await new ResendTransport({ apiKey: KEY, fetch: f }).send(msg).catch((e: Error) => e)) as Error).message;
+    expect(m.toLowerCase()).not.toContain(KEY);
+    expect(m.toLowerCase()).not.toContain("owner@example.com");
+    expect(redact("a.b+c@x.com and A.B+C@X.COM and aXb+c@x.com", ["a.b+c@x.com"])).toBe(
+      "[redacted] and [redacted] and aXb+c@x.com",
+    );
   });
 
   it("network errors do not leak the key", async () => {

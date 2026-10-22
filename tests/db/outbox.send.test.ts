@@ -1,6 +1,15 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MailMessage, MailTransport } from "@/server/mailer";
-import { BACKOFF_MINUTES, processOutbox, sendNotification, type SendDeps } from "@/server/outboxSend";
+import type { DbClient } from "@/server/db";
+import {
+  BACKOFF_MINUTES,
+  LEASE_MS,
+  MAX_ATTEMPTS,
+  OUTBOX_BUDGET_MS,
+  processOutbox,
+  sendNotification,
+  type SendDeps,
+} from "@/server/outboxSend";
 import { db, resetDb } from "./helpers";
 
 const NOW = new Date("2026-10-20T17:00:00Z");
@@ -131,7 +140,7 @@ describe("sendNotification", () => {
     // FAILED is never retried.
     const later = new Date(now.getTime() + 365 * 24 * 60 * MIN);
     expect(await sendNotification(db, n.id, later, { render, transport: t })).toBe("skipped");
-    expect(await processOutbox(db, later, { render, transport: t })).toEqual({ sent: 0, failed: 0, skipped: 0 });
+    expect(await processOutbox(db, later, { render, transport: t })).toEqual({ sent: 0, failed: 0, skipped: 0, deferred: 0 });
     expect(t.send).toHaveBeenCalledTimes(8);
   });
 
@@ -177,7 +186,126 @@ describe("sendNotification", () => {
   });
 });
 
+/** `client` whose notification.updateMany always throws (the finish step fails). */
+function withBrokenFinish(client: DbClient): DbClient {
+  const notification = new Proxy(client.notification, {
+    get(t, p) {
+      if (p === "updateMany") {
+        return async () => {
+          throw new Error("db write failed");
+        };
+      }
+      return Reflect.get(t, p, t);
+    },
+  });
+  return new Proxy(client, {
+    get(t, p) {
+      if (p === "notification") return notification;
+      const v = Reflect.get(t, p, t);
+      return typeof v === "function" ? v.bind(t) : v;
+    },
+  });
+}
+
+describe("every attempt counts (no endless retries)", () => {
+  it("a thrown non-Error counts as a failed attempt", async () => {
+    const n = await createNotification();
+    const t: MailTransport = {
+      async send() {
+        throw "plain string";
+      },
+    };
+    expect(await sendNotification(db, n.id, NOW, { render, transport: t })).toBe("failed");
+    const row = await db.notification.findUniqueOrThrow({ where: { id: n.id } });
+    expect(row.attempts).toBe(1);
+    expect(row.lastError).toBe("plain string");
+  });
+
+  it("when the finish step itself fails, the attempt is still counted and the row ends FAILED", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const n = await createNotification({
+      kind: "PASSWORD_RESET",
+      dedupeKey: "password_reset:crash",
+      payload: { url: "https://x/admin/reset?token=secret" },
+    });
+    const { t, calls } = okTransport();
+    const broken = withBrokenFinish(db);
+    let now = NOW;
+    for (let i = 1; i <= MAX_ATTEMPTS; i++) {
+      expect(await sendNotification(broken, n.id, now, { render, transport: t })).toBe("failed");
+      const row = await db.notification.findUniqueOrThrow({ where: { id: n.id } });
+      expect(row.status).toBe("PENDING");
+      expect(row.attempts).toBe(i);
+      // Leased: nobody else may claim it until the lease runs out.
+      expect(row.nextAttemptAt).toEqual(new Date(now.getTime() + LEASE_MS));
+      expect(await sendNotification(db, n.id, new Date(now.getTime() + LEASE_MS - 1), { render, transport: t })).toBe(
+        "skipped",
+      );
+      now = row.nextAttemptAt;
+    }
+    expect(calls).toHaveLength(MAX_ATTEMPTS);
+    // Attempts used up: given up without another send.
+    expect(await sendNotification(broken, n.id, now, { render, transport: t })).toBe("failed");
+    expect(calls).toHaveLength(MAX_ATTEMPTS);
+    const row = await db.notification.findUniqueOrThrow({ where: { id: n.id } });
+    expect(row.status).toBe("FAILED");
+    expect(row.attempts).toBe(MAX_ATTEMPTS);
+    expect(row.lastError).toMatch(/gave up after 8 attempts/);
+    expect(row.payload).toEqual({ scrubbed: true });
+    expect(calls.every((c) => c.idempotencyKey === "password_reset:crash")).toBe(true);
+  });
+
+  it("a send already in flight holds a lease: a second sender skips it", async () => {
+    const n = await createNotification();
+    let release!: () => void;
+    let entered!: () => void;
+    const inSend = new Promise<void>((r) => (entered = r));
+    const calls: string[] = [];
+    const slow: MailTransport = {
+      async send(m) {
+        calls.push(m.idempotencyKey);
+        entered();
+        await new Promise<void>((r) => (release = r));
+        return { id: "x" };
+      },
+    };
+    const first = sendNotification(db, n.id, NOW, { render, transport: slow });
+    await inSend;
+    expect(await sendNotification(db, n.id, NOW, { render, transport: slow })).toBe("skipped");
+    expect(await processOutbox(db, new Date(NOW.getTime() + LEASE_MS - 1), { render, transport: slow })).toEqual({
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      deferred: 0,
+    });
+    release();
+    expect(await first).toBe("sent");
+    expect(calls).toHaveLength(1);
+    expect((await db.notification.findUniqueOrThrow({ where: { id: n.id } })).attempts).toBe(1);
+  });
+});
+
 describe("processOutbox", () => {
+  it("stops starting new sends once the time budget is used", async () => {
+    for (let i = 0; i < 5; i++) {
+      await createNotification({ dedupeKey: `k:${i}`, nextAttemptAt: new Date(NOW.getTime() - (5 - i) * 1000) });
+    }
+    let t = 0;
+    const sent: string[] = [];
+    const slow: MailTransport = {
+      async send(m) {
+        t += 7_000;
+        sent.push(m.idempotencyKey);
+        return { id: "x" };
+      },
+    };
+    expect(OUTBOX_BUDGET_MS).toBe(20_000);
+    const counts = await processOutbox(db, NOW, { render, transport: slow, clock: () => t });
+    expect(counts).toEqual({ sent: 3, failed: 0, skipped: 0, deferred: 2 });
+    expect(sent).toEqual(["k:0", "k:1", "k:2"]);
+    expect(await db.notification.count({ where: { status: "PENDING" } })).toBe(2);
+  });
+
   it("sends due PENDING only, oldest due first, up to limit", async () => {
     const a = await createNotification({ dedupeKey: "k:a", nextAttemptAt: new Date(NOW.getTime() - 2 * MIN) });
     const b = await createNotification({ dedupeKey: "k:b", nextAttemptAt: new Date(NOW.getTime() - 5 * MIN) });
@@ -185,14 +313,14 @@ describe("processOutbox", () => {
     await createNotification({ dedupeKey: "k:failed", status: "FAILED" });
     await createNotification({ dedupeKey: "k:sent", status: "SENT" });
     const { t, calls } = okTransport();
-    expect(await processOutbox(db, NOW, { render, transport: t }, 1)).toEqual({ sent: 1, failed: 0, skipped: 0 });
+    expect(await processOutbox(db, NOW, { render, transport: t }, 1)).toEqual({ sent: 1, failed: 0, skipped: 0, deferred: 0 });
     expect(calls.map((c) => c.idempotencyKey)).toEqual(["k:b"]);
-    expect(await processOutbox(db, NOW, { render, transport: t })).toEqual({ sent: 1, failed: 0, skipped: 0 });
+    expect(await processOutbox(db, NOW, { render, transport: t })).toEqual({ sent: 1, failed: 0, skipped: 0, deferred: 0 });
     expect(calls.map((c) => c.idempotencyKey)).toEqual(["k:b", "k:a"]);
     expect((await db.notification.findUniqueOrThrow({ where: { id: a.id } })).status).toBe("SENT");
     expect((await db.notification.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("SENT");
     // Repeated run: nothing more.
-    expect(await processOutbox(db, NOW, { render, transport: t })).toEqual({ sent: 0, failed: 0, skipped: 0 });
+    expect(await processOutbox(db, NOW, { render, transport: t })).toEqual({ sent: 0, failed: 0, skipped: 0, deferred: 0 });
   });
 
   it("a failure does not stop the rest", async () => {
@@ -206,7 +334,7 @@ describe("processOutbox", () => {
         return { id: "x" };
       },
     };
-    expect(await processOutbox(db, NOW, { render, transport: t })).toEqual({ sent: 1, failed: 1, skipped: 0 });
+    expect(await processOutbox(db, NOW, { render, transport: t })).toEqual({ sent: 1, failed: 1, skipped: 0, deferred: 0 });
     expect(sent).toEqual(["k:2"]);
   });
 });

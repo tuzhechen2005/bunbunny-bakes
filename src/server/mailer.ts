@@ -11,7 +11,17 @@ export interface MailMessage {
 }
 
 export interface MailTransport {
-  send(msg: MailMessage): Promise<{ id: string }>;
+  /** `duplicate`: the provider says this idempotency key was already accepted. */
+  send(msg: MailMessage): Promise<{ id: string; duplicate?: boolean }>;
+}
+
+function resendErrorName(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body) as { name?: unknown };
+    return typeof parsed.name === "string" ? parsed.name : null;
+  } catch {
+    return null;
+  }
 }
 
 export const RESEND_ENDPOINT = "https://api.resend.com/emails";
@@ -28,7 +38,10 @@ export interface ResendTransportOptions {
 export function redact(text: string, secrets: (string | undefined)[]): string {
   let out = text;
   for (const s of secrets) {
-    if (s && s.length >= 3) out = out.split(s).join("[redacted]");
+    if (s && s.length >= 3) {
+      const escaped = s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      out = out.replace(new RegExp(escaped, "gi"), "[redacted]");
+    }
   }
   return out;
 }
@@ -44,7 +57,7 @@ export class ResendTransport implements MailTransport {
     this.timeoutMs = options.timeoutMs ?? RESEND_TIMEOUT_MS;
   }
 
-  async send(msg: MailMessage): Promise<{ id: string }> {
+  async send(msg: MailMessage): Promise<{ id: string; duplicate?: boolean }> {
     if (!msg.to || !msg.from) throw new MailConfigError("mail recipient or sender is not configured");
     const secrets = [this.apiKey, msg.to];
     const controller = new AbortController();
@@ -70,6 +83,11 @@ export class ResendTransport implements MailTransport {
         throw new Error(redact(`Resend request failed: ${reason}`, secrets));
       }
       const body = await res.text().catch(() => "");
+      // Same Idempotency-Key with a different body: a retry of an email Resend already
+      // accepted (the body was re-rendered after the data changed). Treat it as sent.
+      if (res.status === 409 && resendErrorName(body) === "invalid_idempotent_request") {
+        return { id: "", duplicate: true };
+      }
       if (!res.ok) {
         const short = body.replace(/\s+/g, " ").slice(0, MAX_BODY_IN_ERROR);
         throw new Error(redact(`Resend responded ${res.status}: ${short}`, secrets));
