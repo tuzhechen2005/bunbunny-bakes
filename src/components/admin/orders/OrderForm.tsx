@@ -164,7 +164,15 @@ export function OrderForm({ data, order }: OrderFormProps) {
   const est = estimate(values.items, prices, fulfillment, data.fees);
   const itemCount = values.items.filter((l) => l.qty > 0).length;
 
+  /** Any edit makes the listed violations stale: close the panel so 仍然保存 cannot override them. */
+  function closeOverride() {
+    setPending(null);
+    setReason("");
+    setReasonError(null);
+  }
+
   function setLineQty(productId: string, next: number) {
+    closeOverride();
     setQty((q) => ({ ...q, [productId]: Math.max(0, Math.min(QTY_MAX, next)) }));
     setFieldError(null);
     setError(null);
@@ -381,6 +389,7 @@ export function OrderForm({ data, order }: OrderFormProps) {
                     selected ? "border-accent bg-soft ring-2 ring-accent" : "border-line bg-card"
                   }`}
                   onClick={() => {
+                    closeOverride();
                     setPickupDate(d.date);
                     setFieldError(null);
                     setError(null);
@@ -412,6 +421,7 @@ export function OrderForm({ data, order }: OrderFormProps) {
                   value={f}
                   checked={checked}
                   onChange={() => {
+                    closeOverride();
                     setFulfillment(f);
                   }}
                   className="h-5 w-5 accent-[var(--accent)]"
@@ -436,6 +446,7 @@ export function OrderForm({ data, order }: OrderFormProps) {
             autoCorrect="off"
             aria-invalid={wechatError ? true : undefined}
             onChange={(e) => {
+              closeOverride();
               setWechatId(e.target.value);
               setWechatError(null);
             }}
@@ -455,6 +466,7 @@ export function OrderForm({ data, order }: OrderFormProps) {
             value={note}
             maxLength={NOTE_MAX}
             onChange={(e) => {
+              closeOverride();
               setNote(e.target.value.slice(0, NOTE_MAX));
             }}
           />
@@ -549,11 +561,7 @@ export function OrderForm({ data, order }: OrderFormProps) {
               type="button"
               className={outlineButton}
               disabled={submitting}
-              onClick={() => {
-                setPending(null);
-                setReason("");
-                setReasonError(null);
-              }}
+              onClick={closeOverride}
             >
               {t.overCancel}
             </button>

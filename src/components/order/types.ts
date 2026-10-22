@@ -18,7 +18,6 @@ export type OrderViewData = {
   canCancel: boolean;
   cancelDeadlineLabel: string | null;
   note: string | null;
-  wechatId: string;
 };
 
 /** Replaces each {key} in a copy.ts template. */
