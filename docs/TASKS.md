@@ -12,22 +12,22 @@
 - [x] 在 GitHub 新建仓库（公开，D47），放入本套文档
 
 助手要做的：
-- [ ] **T0.1** `create-next-app`：TypeScript、App Router、Tailwind、ESLint；`src/` 目录
-- [ ] **T0.2** Prisma + Neon；本地开发用 Docker 里的 Postgres
-- [ ] **T0.3** Vitest（单元测试）、Playwright（端到端测试）；`npm test` 一条命令跑完单元测试和数据库测试
-- [ ] **T0.4** `.env.example`、`.gitignore`、README（如何本地运行）
+- [x] **T0.1** `create-next-app`：TypeScript、App Router、Tailwind、ESLint；`src/` 目录
+- [x] **T0.2** Prisma + Neon；本地开发用 Docker 里的 Postgres
+- [x] **T0.3** Vitest（单元测试）、Playwright（端到端测试）；`npm test` 一条命令跑完单元测试和数据库测试
+- [x] **T0.4** `.env.example`、`.gitignore`、README（如何本地运行）
 - [ ] **T0.5** 部署一个空白首页到 Vercel，绑定域名，HTTPS 正常
 - **验收**：手机微信里打开域名能看到页面；`npm test` 通过
 
 ## M1 规则纯函数（约 4 小时）—— 最重要
 
 `src/domain/`，不碰数据库、不读系统时间：
-- [ ] **T1.1** `pricing.ts`：单行金额、小计、运费、总额、距免运费还差多少
-- [ ] **T1.2** `capacity.ts`：面团用量（按个 / 按大圆包）、独立限额用量、配送单数；before / after 判断；返回所有超限项
-- [ ] **T1.3** `cutoff.ts`：`lead_days`、截止时刻（America/Chicago → UTC）、截止标签文字（"10/29 周四 20:00 截止"）
-- [ ] **T1.4** `availability.ts`：按 `CAPACITY_RULES.md` 第 7 节的顺序判断日期状态；推荐下一个日期
-- [ ] **T1.5** `status.ts`：状态机（允许的转换、谁可以做、要不要原因）、顾客版文案、能不能取消
-- [ ] **T1.6** `summary.ts`：生产汇总的数据
+- [x] **T1.1** `pricing.ts`：单行金额、小计、运费、总额、距免运费还差多少
+- [x] **T1.2** `capacity.ts`：面团用量（按个 / 按大圆包）、独立限额用量、配送单数；before / after 判断；返回所有超限项
+- [x] **T1.3** `cutoff.ts`：`lead_days`、截止时刻（America/Chicago → UTC）、截止标签文字（"10/29 周四 20:00 截止"）
+- [x] **T1.4** `availability.ts`：按 `CAPACITY_RULES.md` 第 7 节的顺序判断日期状态；推荐下一个日期
+- [x] **T1.5** `status.ts`：状态机（允许的转换、谁可以做、要不要原因）、顾客版文案、能不能取消
+- [x] **T1.6** `summary.ts`：生产汇总的数据
 - **验收**：`CAPACITY_RULES.md` 里的**每一个例子**（P1–P10、D1–D7 及取消例子、B1–B3、C1–C5、汇总例子）都是一条测试，全部通过；外加截止前 1 秒 / 截止那一刻、2499 / 2500 美分两组边界测试
 
 ## M2 数据库与下单事务（约 5 小时）

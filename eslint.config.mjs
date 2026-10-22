@@ -45,6 +45,8 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    // Claude Code agent worktrees (local only):
+    ".claude/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
