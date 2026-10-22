@@ -12,6 +12,21 @@ No online payment: customers pay after they receive their order.
 
 Next.js (App Router, TypeScript) · Postgres (Neon) + Prisma · Vercel · Resend · cron-job.org
 
+## Run locally
+
+Prerequisites: Node.js 20+ and Docker.
+
+```sh
+cp .env.example .env     # then fill in DATABASE_URL / DIRECT_URL, e.g.
+                         # postgresql://bunbunny:bunbunny@localhost:5432/bunbunny
+docker compose up -d     # Postgres 16 on localhost:5432
+npm install
+npm run dev              # http://localhost:3000
+npm test                 # unit + db tests (Vitest)
+```
+
+Other scripts: `npm run test:unit`, `npm run test:db`, `npm run test:e2e` (Playwright; run `npx playwright install` once first), `npm run lint`, `npm run build`.
+
 ## Docs
 
 | File | What it covers |
