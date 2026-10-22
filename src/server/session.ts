@@ -4,6 +4,7 @@
 // validate the session against the database.
 
 import { cookies } from "next/headers";
+import { unstable_rethrow } from "next/navigation";
 import { redirect } from "next/navigation";
 import { connection, NextResponse } from "next/server";
 import { z } from "zod";
@@ -105,7 +106,9 @@ export function errorResponse(e: unknown): NextResponse {
       { status: e.httpStatus },
     );
   }
-  console.error("admin api: unexpected error", e);
+  // Next control flow (prerender bailout from connection(), redirect, notFound) must not be swallowed.
+  unstable_rethrow(e);
+  console.error("api: unexpected error", e);
   return NextResponse.json({ error: "INTERNAL", message: copy.errors.fallback }, { status: 500 });
 }
 

@@ -84,9 +84,16 @@ export async function getCustomerOrderView(
   if (!settings) throw new Error("Setting row (id = 1) is missing; run `npm run db:seed`");
   const products = await db.product.findMany({
     where: { id: { in: order.items.map((i) => i.productId) } },
-    select: { id: true, capacityMode: true },
+    select: { id: true, capacityMode: true, sortOrder: true },
   });
   const mode = new Map(products.map((p) => [p.id, p.capacityMode]));
+  const sortOf = new Map(products.map((p) => [p.id, p.sortOrder]));
+  // Stable display order: product sortOrder, then name (a gone product sorts last).
+  const sortedItems = [...order.items].sort(
+    (a, b) =>
+      (sortOf.get(a.productId) ?? Number.MAX_SAFE_INTEGER) - (sortOf.get(b.productId) ?? Number.MAX_SAFE_INTEGER) ||
+      (a.nameSnapshot < b.nameSnapshot ? -1 : a.nameSnapshot > b.nameSnapshot ? 1 : 0),
+  );
   // Current product modes; a product that no longer exists counts as dough.
   const hasDoughItem = order.items.some((i) => mode.get(i.productId) !== "INDEPENDENT");
 
@@ -94,7 +101,7 @@ export async function getCustomerOrderView(
   const pickupDate = fromDbDate(order.pickupDate);
   return {
     orderNo: order.orderNo,
-    items: order.items.map((i) => ({ name: i.nameSnapshot, qty: i.qty, lineTotalCents: i.lineTotalCents })),
+    items: sortedItems.map((i) => ({ name: i.nameSnapshot, qty: i.qty, lineTotalCents: i.lineTotalCents })),
     subtotalCents: order.subtotalCents,
     deliveryFeeCents: order.deliveryFeeCents,
     totalCents: order.totalCents,

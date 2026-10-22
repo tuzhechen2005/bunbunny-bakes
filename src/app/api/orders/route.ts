@@ -37,8 +37,7 @@ export async function POST(request: Request): Promise<Response> {
       console.error("POST /api/orders: IP_HASH_SECRET is not set; refusing to take orders");
       return NextResponse.json({ error: "INTERNAL", message: copy.errors.fallback }, { status: 500 });
     }
-    const ip = clientIp(request);
-    const ipHash = ip ? hashIp(ip, secret) : null;
+    const ipHash = hashIp(clientIp(request), secret);
 
     await connection();
     const now = new Date();

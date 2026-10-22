@@ -4,10 +4,17 @@ import type { NextResponse } from "next/server";
 import { AppError } from "./errors";
 import { errorResponse } from "./session";
 
-/** First x-forwarded-for entry, trimmed (Vercel puts the client first), or null. */
-export function clientIp(request: Request): string | null {
-  const first = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return first || null;
+/**
+ * Client IP for rate limiting (D57): first x-forwarded-for entry, else x-real-ip, else the
+ * literal "unknown" (a shared bucket, so the per-IP limit always applies). Warns on fallback.
+ */
+export function clientIp(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  if (forwarded) return forwarded;
+  const real = request.headers.get("x-real-ip")?.trim();
+  if (real) return real;
+  console.warn("clientIp: no x-forwarded-for or x-real-ip header; using the shared 'unknown' bucket");
+  return "unknown";
 }
 
 /** API_SPEC §1 JSON for any thrown value; unexpected errors become a generic 500. */

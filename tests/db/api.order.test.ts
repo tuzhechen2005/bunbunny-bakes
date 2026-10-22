@@ -89,6 +89,20 @@ describe("GET /api/o/{token}", () => {
     for (const leak of ["paid", "Paid", "viewToken", "ipHash", "cutoffAt", "status\""]) expect(text).not.toContain(leak);
   });
 
+  it("lists items by product sortOrder, independent of insertion order", async () => {
+    const o = await createOrder({
+      date: "2026-10-22",
+      items: [
+        { productId: ids.brulee, qty: 1 },
+        { productId: ids.cheeseHorn, qty: 1 },
+        { productId: ids.redBean, qty: 1 },
+        { productId: ids.rockCheese, qty: 1 },
+      ],
+    });
+    const j = await (await view(o.viewToken)).json();
+    expect(j.items.map((i: { name: string }) => i.name)).toEqual(["奶酥红豆包", "岩烧乳酪包", "奶酪角", "焦糖布蕾"]);
+  });
+
   it("shows REJECTED as cancelled", async () => {
     const o = await make("REJECTED");
     const j = await (await view(o.viewToken)).json();

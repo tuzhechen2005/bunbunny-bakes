@@ -135,6 +135,24 @@ describe("POST /api/orders", () => {
     expect(dump).not.toContain("10.0.0.1");
   });
 
+  it("D57: falls back to x-real-ip, then a shared 'unknown' bucket; the limit always applies", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect((await post(body(), { "x-forwarded-for": "  ", "x-real-ip": "192.0.2.5" })).status).toBe(201);
+      expect((await db.order.findFirstOrThrow()).ipHash).toBe(hashIp("192.0.2.5", SECRET));
+      expect(warn).not.toHaveBeenCalled();
+
+      for (let i = 0; i < 3; i++) expect((await post(body(), {})).status).toBe(201);
+      expect(warn).toHaveBeenCalled();
+      const hashes = (await db.order.findMany({ orderBy: { createdAt: "asc" } })).map((o) => o.ipHash);
+      expect(hashes.slice(1)).toEqual(Array(3).fill(hashIp("unknown", SECRET)));
+      const res = await post(body(), {});
+      expect(res.status).toBe(429);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("rejects a non-JSON content type and garbage bodies", async () => {
     const wrong = await POST(
       new Request("http://x/api/orders", {
