@@ -76,6 +76,10 @@ export function cartProblems(
   products: Record<string, AvailProduct>,
   maxQtyPerItem: number,
 ): CartProblem[] {
+  // Fail closed: NaN/0/fractional would make "total > max" meaningless.
+  if (!Number.isInteger(maxQtyPerItem) || maxQtyPerItem < 1) {
+    throw new Error(`availability: maxQtyPerItem must be an integer >= 1 (got ${String(maxQtyPerItem)})`);
+  }
   const totals = new Map<string, number>();
   for (const line of cart) {
     totals.set(line.productId, (totals.get(line.productId) ?? 0) + line.qty);
@@ -147,9 +151,14 @@ export function listAvailability(input: AvailabilityInput): AvailabilityResult {
   return { orderingEnabled: true, cartProblems: problems, dates };
 }
 
-/** §7.1: first visible day strictly after fromDate that is AVAILABLE for the whole cart. */
+/**
+ * §7.1: first visible day strictly after fromDate that satisfies rules 1–7 for the whole cart.
+ * A cart with problems (rules 3–4) fits no day, so there is no suggestion.
+ */
 export function suggestNextDate(input: AvailabilityInput, fromDate: LocalDate): LocalDate | null {
-  if (!input.orderingEnabled) return null;
+  // Validate first so a bad maxQtyPerItem throws even when ordering is off.
+  const problems = cartProblems(input.cart, input.products, input.maxQtyPerItem);
+  if (!input.orderingEnabled || problems.length > 0) return null;
   for (const day of visibleDays(input)) {
     if (compareLocalDate(day.date, fromDate) <= 0) continue;
     if (evaluateDay(input, day).state === "AVAILABLE") return day.date;

@@ -385,3 +385,45 @@ describe("PRD §9 #1: full day and suggestNextDate (CAPACITY_RULES §7.1)", () =
     expect(JSON.stringify(inp)).toBe(snapshot);
   });
 });
+
+describe("review follow-ups", () => {
+  const days = [day("2026-10-24", fullDoughOrders()), day("2026-10-25")];
+
+  it("suggestNextDate → null when the cart has a paused product (§7.1 needs rules 1–7)", () => {
+    const cart: CartLine[] = [
+      { productId: "redBean", qty: 1 },
+      { productId: "paused", qty: 1 },
+    ];
+    expect(suggestNextDate(input({ cart, days }), "2026-10-24")).toBeNull();
+  });
+
+  it("suggestNextDate → null when a qty is over maxQtyPerItem", () => {
+    expect(suggestNextDate(input({ cart: [{ productId: "redBean", qty: 9 }], days }), "2026-10-24")).toBeNull();
+  });
+
+  it("suggestNextDate → null when the cart has an unknown product", () => {
+    const cart: CartLine[] = [
+      { productId: "redBean", qty: 1 },
+      { productId: "ghost", qty: 1 },
+    ];
+    expect(suggestNextDate(input({ cart, days }), "2026-10-24")).toBeNull();
+  });
+
+  it("suggestNextDate still suggests for a clean cart", () => {
+    expect(suggestNextDate(input({ days }), "2026-10-24")).toBe("2026-10-25");
+  });
+
+  it.each([Number.NaN, 0, -1, 1.5, Number.POSITIVE_INFINITY])("throws when maxQtyPerItem is %s", (max) => {
+    const cart: CartLine[] = [{ productId: "redBean", qty: 1 }];
+    expect(() => cartProblems(cart, products, max)).toThrow(/maxQtyPerItem/);
+    expect(() => listAvailability(input({ maxQtyPerItem: max, days }))).toThrow(/maxQtyPerItem/);
+    expect(() => listAvailability(input({ orderingEnabled: false, maxQtyPerItem: max, days }))).toThrow(
+      /maxQtyPerItem/,
+    );
+    expect(() => suggestNextDate(input({ maxQtyPerItem: max, days }), "2026-10-24")).toThrow(/maxQtyPerItem/);
+  });
+
+  it("maxQtyPerItem 1 is valid", () => {
+    expect(cartProblems([{ productId: "redBean", qty: 1 }], products, 1)).toEqual([]);
+  });
+});
