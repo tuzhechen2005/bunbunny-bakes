@@ -36,6 +36,8 @@ export const copy = {
     PRODUCT_UNAVAILABLE: "有商品暂时不能预订，请从购物车移除后再提交",
     QTY_LIMIT: "有商品超过了每单的数量上限，请减少数量",
     FULL: "这一天的预订名额已经满啦，可以选择下一个有空位的日期～",
+    /** FULL when there is no suggested date (PAGES.md checkout errors). */
+    FULL_NO_SUGGESTION: "暂时没有可以容纳这个订单的日期，可以减少数量或加微信联系店主",
     DELIVERY_FULL: "这一天的配送名额满了，可以改成自提～",
     RATE_LIMITED: "提交太频繁了，请稍后再试，或加微信联系店主",
     NOT_CANCELLABLE: "这个订单现在不能取消了，请加微信联系店主",

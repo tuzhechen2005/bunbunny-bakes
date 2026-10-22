@@ -5,6 +5,7 @@ import { checkDay, usage } from "@/domain/capacity";
 import { copy } from "@/copy";
 import type { LocalDate } from "@/domain/types";
 import type { Tx } from "@/server/db";
+import { createPrismaClient } from "@/server/db";
 import { fromDbDate, toDbDate } from "@/server/dbDates";
 import { AppError, ERROR_CODES } from "@/server/errors";
 import {
@@ -191,6 +192,33 @@ describe("CHECK constraints", () => {
     await expectCheck(db.setting.create({ data: { id: 2 } }), "Setting_single_row_chk");
   });
 
+  it("Setting cutoffTime is HH:MM (00:00-23:59)", async () => {
+    await createSettings();
+    const set = (cutoffTime: string) => db.setting.update({ where: { id: 1 }, data: { cutoffTime } });
+    for (const bad of ["8pm", "8:00", "24:00", "20:60", "20:00 ", " 20:00", "2000", "", "20:00:00"]) {
+      await expectCheck(set(bad), "Setting_cutoffTime_chk");
+    }
+    for (const ok of ["00:00", "09:30", "20:00", "23:59"]) await set(ok);
+    expect((await db.setting.findUniqueOrThrow({ where: { id: 1 } })).cutoffTime).toBe("23:59");
+  });
+
+  it("Setting fees and limits >= 0, maxQtyPerItem >= 1", async () => {
+    await createSettings();
+    const set = (data: Record<string, number>) => db.setting.update({ where: { id: 1 }, data });
+    await expectCheck(set({ deliveryFeeCents: -1 }), "Setting_fees_chk");
+    await expectCheck(set({ freeDeliveryMinCents: -1 }), "Setting_fees_chk");
+    await expectCheck(set({ defaultDoughLimitG: -1 }), "Setting_limits_chk");
+    await expectCheck(set({ defaultDeliveryLimit: -1 }), "Setting_limits_chk");
+    await expectCheck(set({ maxQtyPerItem: 0 }), "Setting_maxQty_chk");
+    await set({
+      deliveryFeeCents: 0,
+      freeDeliveryMinCents: 0,
+      defaultDoughLimitG: 0,
+      defaultDeliveryLimit: 0,
+      maxQtyPerItem: 1,
+    });
+  });
+
   it("Product capacity mode requires its fields", async () => {
     const C = "Product_capacity_mode_chk";
     await expectCheck(insertProduct({ capacityMode: "DOUGH_PER_UNIT", doughG: null }), C);
@@ -262,6 +290,10 @@ describe("CHECK constraints", () => {
     await expectCheck(order({ totalCents: -1 }), "Order_money_chk");
     await expectCheck(order({ wechatId: "" }), "Order_wechatId_chk");
     await expectCheck(order({ wechatId: "a".repeat(41) }), "Order_wechatId_chk");
+    // Must be stored trimmed (the app trims; this is the backstop).
+    for (const untrimmed of ["   ", " wx", "wx ", "\twx", "wx\n"]) {
+      await expectCheck(order({ wechatId: untrimmed }), "Order_wechatId_chk");
+    }
     await expectCheck(order({ note: "面".repeat(301) }), "Order_note_chk");
     await expectCheck(order({ seq: 0 }), "Order_seq_chk");
     // Boundaries are accepted; length counts characters, not bytes.
@@ -653,6 +685,40 @@ describe("AppError", () => {
     expect(full.message).toBe("这一天的预订名额已经满啦，可以选择下一个有空位的日期～");
     expect(full.extra).toEqual({ suggestion: "2026-10-31" });
     expect(new AppError("VALIDATION", { message: "x" }).message).toBe("x");
+    // PAGES.md: FULL without a suggested date.
+    expect(copy.errors.FULL_NO_SUGGESTION).toBe(
+      "暂时没有可以容纳这个订单的日期，可以减少数量或加微信联系店主",
+    );
+  });
+});
+
+describe("createPrismaClient", () => {
+  it("honours the pool size option", async () => {
+    const small = createPrismaClient(TEST_DATABASE_URL, { max: 2 });
+    try {
+      const backendsOf = async () => {
+        const r = await db.$queryRaw<{ n: number }[]>`
+          SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE datname = current_database() AND application_name = 'pool-size-probe'`;
+        return r[0].n;
+      };
+      // 6 concurrent holders on a pool of 2: at most 2 connections at once.
+      let peak = 0;
+      await Promise.all(
+        Array.from({ length: 6 }, () =>
+          small.$transaction(async (tx) => {
+            await tx.$executeRaw`SET LOCAL application_name = 'pool-size-probe'`;
+            await sleep(150);
+            peak = Math.max(peak, await backendsOf());
+          }, { maxWait: 10_000, timeout: 10_000 }),
+        ),
+      );
+      expect(peak).toBeGreaterThanOrEqual(1);
+      expect(peak).toBeLessThanOrEqual(2);
+    } finally {
+      await small.$disconnect();
+    }
+    expect(() => createPrismaClient(TEST_DATABASE_URL, { max: 0 })).toThrow(/max/);
   });
 });
 

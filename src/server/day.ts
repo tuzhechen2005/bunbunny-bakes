@@ -28,6 +28,12 @@ export interface OpenDateRow {
  * Locks the OpenDate row of `date` (`SELECT … FOR UPDATE`) until the
  * transaction ends. All orders of one pickup date queue up here.
  * Returns null when the date has no row (nothing is locked then).
+ *
+ * MUST be called with the client of an interactive `prisma.$transaction(async (tx) => …)`
+ * running at the default READ COMMITTED isolation. Outside a transaction the lock is
+ * released immediately. Under REPEATABLE READ / SERIALIZABLE the snapshot is taken at
+ * this statement (before it waits for the lock), so later reads such as loadDayContext
+ * would miss the order that was just committed by the previous lock holder -> oversell.
  */
 export async function lockOpenDate(tx: Tx, date: LocalDate): Promise<OpenDateRow | null> {
   parseLocalDate(date); // throws on a malformed date before it reaches SQL
@@ -44,6 +50,7 @@ export async function lockOpenDate(tx: Tx, date: LocalDate): Promise<OpenDateRow
 /**
  * Locks several dates in ascending order (deadlock avoidance when an edit moves
  * an order between days). Duplicates are locked once. Returns date -> row|null.
+ * Same requirement as lockOpenDate: inside an interactive transaction at READ COMMITTED.
  */
 export async function lockOpenDates(
   tx: Tx,

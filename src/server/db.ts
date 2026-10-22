@@ -7,13 +7,30 @@ import { PrismaClient, type Prisma } from "@/generated/prisma/client";
 
 export type DbClient = InstanceType<typeof PrismaClient>;
 
-/** Interactive-transaction client, as passed to `prisma.$transaction(async (tx) => …)`. */
-export type Tx = Prisma.TransactionClient;
+/**
+ * Interactive-transaction client, as passed to `prisma.$transaction(async (tx) => …)`.
+ * The `$connect?: never` brand rejects the root client: `Prisma.TransactionClient` alone
+ * is structurally satisfied by it, and a FOR UPDATE outside a transaction autocommits
+ * (the lock is released at once). Guarded by tests/db/txType.test.ts.
+ */
+export type Tx = Prisma.TransactionClient & { $connect?: never };
+
+export interface CreatePrismaClientOptions {
+  /** Max connections in the node-postgres pool (pg default: 10). */
+  max?: number;
+}
 
 /** A new client for `url`. Tests use this with TEST_DATABASE_URL; call `$disconnect()` when done. */
-export function createPrismaClient(url: string): DbClient {
+export function createPrismaClient(url: string, options: CreatePrismaClientOptions = {}): DbClient {
   if (!url) throw new Error("createPrismaClient: database URL is empty");
-  return new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+  if (options.max !== undefined && (!Number.isInteger(options.max) || options.max < 1)) {
+    throw new Error(`createPrismaClient: max must be a positive integer (got ${options.max})`);
+  }
+  const adapter = new PrismaPg({
+    connectionString: url,
+    ...(options.max !== undefined ? { max: options.max } : {}),
+  });
+  return new PrismaClient({ adapter });
 }
 
 const globalForPrisma = globalThis as unknown as { __bunbunnyPrisma?: DbClient };
