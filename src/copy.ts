@@ -96,6 +96,37 @@ export const copy = {
       /** FULL suggestion button, e.g. "改成 10/31 周六" */
       switchDate: "改成 {day}",
     },
+    /** Order page /o/{token} (PAGES.md), also the "order submitted" page. */
+    order: {
+      newTitle: "预订提交成功！🎉",
+      newHint: "请收藏或截图这个页面，随时可以回来查看订单状态",
+      loading: "加载中…",
+      loadFailed: "加载失败，请稍后刷新",
+      retry: "重新加载",
+      addOwnerWechat: "请加店主微信：{ownerWechatId}",
+      copyWechat: "复制",
+      copied: "已复制",
+      orderNo: "订单号：{orderNo}",
+      pickupDate: "取货：{pickupDateLabel}",
+      pickup: "自提",
+      delivery: "配送",
+      itemsTitle: "订单明细",
+      itemLine: "{name} × {qty}",
+      subtotal: "小计",
+      deliveryFee: "运费",
+      total: "总额",
+      note: "备注：{note}",
+      payOnReceipt: "无需在线付款，收到货后再付款。",
+      cancelOrder: "取消订单",
+      cancelConfirmTitle: "确定要取消这个订单吗？",
+      cancelConfirm: "确定取消",
+      cancelBack: "再想想",
+      cancelling: "取消中…",
+      cancelled: "已取消",
+      cancelClosed: "已过取消时间，如需修改请微信联系店主",
+      cancelFailed: "取消失败，请稍后再试",
+      backHome: "返回首页",
+    },
   },
 
   /** Default `message` per API error code (API_SPEC.md §1, PAGES.md checkout errors). */
@@ -119,6 +150,7 @@ export const copy = {
     /** Unknown / unexpected errors. */
     fallback: "提交失败，请稍后再试",
   },
+
   admin: {
     /** Admin login, password reset (PAGES.md /admin/login). */
     auth: {
