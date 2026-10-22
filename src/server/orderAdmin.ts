@@ -24,6 +24,7 @@ import {
   isOccupying,
 } from "@/domain/status";
 import type { CartLine, Fulfillment, LocalDate, OrderStatus, PriceSnapshot, Violation } from "@/domain/types";
+import { copy } from "@/copy";
 import { Prisma } from "@/generated/prisma/client";
 import type { PaidMethod } from "@/generated/prisma/client";
 import type { z } from "zod";
@@ -43,12 +44,9 @@ import { mergeLines } from "./orders";
 import { enqueueNotification } from "./outbox";
 import { allocateSeq } from "./seq";
 
-// TODO(copy): these two messages belong in src/copy.ts (outside this task's files).
 const MESSAGES = {
-  /** API_SPEC.md POST /api/o/{token}/cancel, past cutoff. */
-  cancelCutoffPassed: "已过取消时间，请微信联系店主",
-  /** Admin status change that the state machine does not allow. */
-  badTransition: "不能改成这个状态",
+  cancelCutoffPassed: copy.errors.CUTOFF_PASSED_CANCEL,
+  badTransition: copy.errors.STATUS_NOT_ALLOWED,
 } as const;
 
 /** Long enough for concurrent edits queueing on one day's lock. */

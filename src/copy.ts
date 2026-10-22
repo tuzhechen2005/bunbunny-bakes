@@ -41,6 +41,10 @@ export const copy = {
     DELIVERY_FULL: "这一天的配送名额满了，可以改成自提～",
     RATE_LIMITED: "提交太频繁了，请稍后再试，或加微信联系店主",
     NOT_CANCELLABLE: "这个订单现在不能取消了，请加微信联系店主",
+    /** CUTOFF_PASSED on customer cancel (API_SPEC.md POST /api/o/{token}/cancel). */
+    CUTOFF_PASSED_CANCEL: "已过取消时间，请微信联系店主",
+    /** VALIDATION for an admin status change the state machine does not allow (D46). */
+    STATUS_NOT_ALLOWED: "不能改成这个状态",
     OVER_LIMIT: "这样会超过上限",
     STALE: "这笔订单刚刚在别处改过，请刷新后再操作",
     UNAUTHORIZED: "请先登录",

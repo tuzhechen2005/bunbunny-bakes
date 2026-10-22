@@ -1,6 +1,7 @@
 // adminChangeStatus, adminCorrectStatus, adminSetPayment (DATA_MODEL §2, D46, CAPACITY_RULES §8).
 
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { copy } from "@/copy";
 import type { LocalDate, OrderStatus } from "@/domain/types";
 import { toDbDate } from "@/server/dbDates";
 import { AppError } from "@/server/errors";
@@ -90,7 +91,7 @@ describe("adminChangeStatus", () => {
         adminChangeStatus(db, { orderId: o.id, to, reason: "x", expectedUpdatedAt: o.stamp }, NOW),
       );
       expect(err.code).toBe("VALIDATION");
-      expect(err.message).toBe("不能改成这个状态");
+      expect(err.message).toBe(copy.errors.STATUS_NOT_ALLOWED);
       expect((await fetch(o.id)).status).toBe(from);
     }
     expect(await db.auditLog.count()).toBe(0);

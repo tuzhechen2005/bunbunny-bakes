@@ -159,8 +159,10 @@ describe("adminEditOrder: date change (D52)", () => {
   it("allocates a new seq / orderNo on the new date and keeps the viewToken", async () => {
     await createOrder({ date: B, items: [{ productId: P.redBean, qty: 1 }] });
     await createOrder({ date: B, items: [{ productId: P.redBean, qty: 1 }] });
-    const o = await placed([{ productId: P.redBean, qty: 2 }]);
-    const before = await fetch(o.id);
+    // Through the real create flow, so A's counter (OpenDate.lastSeq) is 1.
+    const created = await createAdminOrder(db, { items: [{ productId: P.redBean, qty: 2 }], pickupDate: A, fulfillment: "PICKUP", wechatId: "wx_o" }, NOW);
+    const before = await fetch(created.id);
+    const o = { id: created.id, viewToken: created.viewToken, stamp: before.updatedAt.toISOString() };
     expect(before.orderNo).toBe("1030-001");
 
     const res = await edit(o.id, o.stamp, { pickupDate: B });
@@ -177,10 +179,12 @@ describe("adminEditOrder: date change (D52)", () => {
     expect(audit.before).toMatchObject({ orderNo: "1030-001", pickupDate: A });
     expect(audit.after).toMatchObject({ orderNo: "1031-003", pickupDate: B });
 
-    // Current seq.ts behaviour (max + 1 over the orders still on A): the number the moved
-    // order left behind is handed out again. Reported to the orchestrator, not changed here.
+    // The number the moved order left behind on A is never handed out again.
     const next = await createAdminOrder(db, { items: [{ productId: P.redBean, qty: 1 }], pickupDate: A, fulfillment: "PICKUP", wechatId: "wx_x" }, NOW);
-    expect(next.orderNo).toBe("1030-001");
+    expect(next.orderNo).toBe("1030-002");
+    // Moving it back to A gives it a new number there too.
+    const back = await edit(o.id, res.updatedAt, { pickupDate: A }, new Date(NOW.getTime() + 1000));
+    expect(back.orderNo).toBe("1030-003");
   });
 
   it("the new day's capacity is checked (old day's content excluded)", async () => {

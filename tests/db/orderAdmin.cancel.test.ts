@@ -1,6 +1,7 @@
 // customerCancel (POST /api/o/{token}/cancel; CAPACITY_RULES §9, §3.4 cancel example; D26).
 
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { copy } from "@/copy";
 import { usage } from "@/domain/capacity";
 import type { LocalDate } from "@/domain/types";
 import { loadDayContext, loadProductMap, loadSettings } from "@/server/day";
@@ -121,7 +122,8 @@ describe("customerCancel", () => {
     const a = await placed([{ productId: P.redBean, qty: 1 }]);
     const err = await errorOf(customerCancel(db, { viewToken: a.viewToken }, CUTOFF));
     expect(err.code).toBe("CUTOFF_PASSED");
-    expect(err.message).toBe("已过取消时间，请微信联系店主");
+    expect(err.message).toBe(copy.errors.CUTOFF_PASSED_CANCEL);
+    expect(copy.errors.CUTOFF_PASSED_CANCEL).toBe("已过取消时间，请微信联系店主");
     expect((await db.order.findUniqueOrThrow({ where: { id: a.id } })).status).toBe("NEW");
     expect(await db.auditLog.count()).toBe(0);
 
