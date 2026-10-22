@@ -6,6 +6,7 @@ import { copy } from "@/copy";
 import { requestPasswordReset } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { checkOrigin } from "@/server/origin";
+import { sendAfterResponse } from "@/server/outboxSend";
 
 export async function POST(request: Request): Promise<Response> {
   const forbidden = checkOrigin(request);
@@ -15,7 +16,9 @@ export async function POST(request: Request): Promise<Response> {
     const now = new Date();
     const siteUrl = process.env.SITE_URL;
     if (siteUrl) {
-      await requestPasswordReset(prisma, { siteUrl, now });
+      const result = await requestPasswordReset(prisma, { siteUrl, now });
+      // Committed: send the reset email after the response.
+      if (result.status === "created") sendAfterResponse(prisma, result.notificationId, now);
     } else {
       console.error("password reset: SITE_URL is not set; no link created");
     }
