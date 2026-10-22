@@ -9,7 +9,7 @@
 // If the pickupDate moved between 1 and 3 (a concurrent date-changing edit committed), the
 // whole transaction is rolled back and run once more; a second move -> STALE.
 // Admin mutations compare `expectedUpdatedAt` with the locked row (mismatch -> STALE) and
-// set updatedAt = now.
+// set updatedAt = max(now, previous updatedAt + 1 ms), so the token always changes.
 
 import { checkDay } from "@/domain/capacity";
 import { cutoffAt as computeCutoffAt, leadDaysOf } from "@/domain/cutoff";
@@ -181,6 +181,15 @@ async function lockOrder(
   return { order, date: fromDbDate(order.pickupDate), days };
 }
 
+/**
+ * The new updatedAt for a write to a row last stamped `prev`: max(now, prev + 1 ms).
+ * updatedAt is the optimistic-concurrency token, so it must strictly increase even when two
+ * writes land in the same millisecond or the clock steps back.
+ */
+function nextUpdatedAt(prev: Date, now: Date): Date {
+  return new Date(Math.max(now.getTime(), prev.getTime() + 1));
+}
+
 function assertFresh(order: { updatedAt: Date }, expectedUpdatedAt: string): void {
   if (new Date(expectedUpdatedAt).getTime() !== order.updatedAt.getTime()) {
     throw new AppError("STALE");
@@ -285,7 +294,7 @@ export async function customerCancel(
 
     await tx.order.update({
       where: { id: order.id },
-      data: { status: "CANCELLED", cancelledAt: now, cancelledBy: "CUSTOMER", updatedAt: now },
+      data: { status: "CANCELLED", cancelledAt: now, cancelledBy: "CUSTOMER", updatedAt: nextUpdatedAt(order.updatedAt, now) },
     });
     await writeAudit(tx, {
       actor: "CUSTOMER",
@@ -336,7 +345,7 @@ export async function adminChangeStatus(
       where: { id: order.id },
       data: {
         status: data.to,
-        updatedAt: now,
+        updatedAt: nextUpdatedAt(order.updatedAt, now),
         ...(entersConfirmed(order.status, data.to) && order.confirmedAt === null ? { confirmedAt: now } : {}),
         ...(data.to === "CANCELLED" ? { cancelledAt: now, cancelledBy: "ADMIN" as const } : {}),
       },
@@ -387,7 +396,7 @@ export async function adminCorrectStatus(
       }
     }
 
-    const data2: Prisma.OrderUpdateInput = { status: data.to, updatedAt: now };
+    const data2: Prisma.OrderUpdateInput = { status: data.to, updatedAt: nextUpdatedAt(order.updatedAt, now) };
     if (CONFIRMED_OR_LATER.includes(data.to) && order.confirmedAt === null) data2.confirmedAt = now;
     if (order.status === "CANCELLED") {
       data2.cancelledAt = null;
@@ -438,7 +447,7 @@ export async function adminSetPayment(
 
     const updated = await tx.order.update({
       where: { id: order.id },
-      data: { ...next, updatedAt: now },
+      data: { ...next, updatedAt: nextUpdatedAt(order.updatedAt, now) },
       select: summarySelect,
     });
     await writeAudit(tx, {
@@ -598,7 +607,7 @@ export async function adminEditOrder(
         note: newNote,
         cutoffAt: newCutoffAt,
         ...totals,
-        updatedAt: now,
+        updatedAt: nextUpdatedAt(order.updatedAt, now),
       },
       select: summarySelect,
     });
