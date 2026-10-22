@@ -31,7 +31,7 @@
 | 陷阱字段 | 隐藏的 `website` 字段，有值就拒绝 |
 | 验证码 | 第一版不用。出现垃圾订单后再加 Cloudflare Turnstile，并先在微信内置浏览器里测试 |
 
-IP 来自 Vercel 的 `x-forwarded-for`（取第一个）。
+IP 来自 Vercel 的 `x-forwarded-for`（取第一个）；没有时用 `x-real-ip`，再没有就记为 "unknown"（D57），按 IP 的限制始终生效。
 
 ## 5. 定时任务接口
 
