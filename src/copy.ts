@@ -155,6 +155,17 @@ export const copy = {
     NOT_FOUND: "找不到这个订单，请检查链接是否完整，或加微信联系店主",
     /** Unknown / unexpected errors. */
     fallback: "提交失败，请稍后再试",
+    /** VALIDATION `fields` messages, safe to show customers (orderSchemas.ts). */
+    fields: {
+      wechatId: "请填写微信号（最多 40 个字符）",
+      note: "备注最多 300 字",
+      items: "商品数量有误",
+      qty: "商品数量有误",
+      pickupDate: "请选择取货日期",
+      fulfillment: "请选择自提或配送",
+      reason: "请写超限的原因（最多 500 字）",
+      other: "填写的内容有误",
+    },
   },
 
   admin: {
@@ -421,6 +432,7 @@ export const copy = {
       save: "保存",
       saving: "保存中…",
       saveAnyway: "仍然保存",
+      archivedProduct: "已下架商品",
       cancelWarning: "再想想",
       overLimitMessage: "这样会让这天超过上限，请确认",
       warnTitle: "请确认：",
@@ -473,7 +485,7 @@ export const copy = {
       overHint: "你可以超限保存，但必须写原因，原因会记入日志。",
       overReasonLabel: "超限原因（必填）",
       overReasonRequired: "请写超限的原因",
-      overConfirm: "仍然保存",
+      overConfirm: "仍然保存（请写原因）",
       overCancel: "返回修改",
       violation: {
         dough: "{day} 面团：上限 {limit} g，保存后 {after} g，超出 {over} g",
@@ -695,6 +707,54 @@ export const copy = {
       overLimitLink: "去日历查看",
       backToList: "回到商品列表",
       validationFallback: "填写的内容有误，请检查后再提交",
+    },
+
+    /** Owner notification emails (NOTIFICATIONS.md §2–§5, CAPACITY_RULES.md §10). */
+    emails: {
+      newOrder: {
+        subject: "🍞 新订单 {orderNo}｜{pickupLabel} {fulfillment}｜{total}",
+        wechatLine: "微信号：{wechatId}",
+        itemLine: "{name} × {qty}",
+        totalsLine: "小计 {subtotal}　运费 {fee}　总额 {total}",
+        pickupLine: "取货：{pickupLabel}　{fulfillment}",
+        noteLine: "备注：{note}",
+        noteNone: "（无）",
+        openOrder: "[打开订单] → {url}",
+      },
+      cancelled: {
+        subject: "取消 {orderNo}｜{pickupLabel}｜微信号 {wechatId}",
+        released: "名额已释放",
+      },
+      passwordReset: {
+        subject: "后台密码重置",
+        intro: "点这个链接重置后台密码：",
+        validity: "15 分钟内有效，只能用一次。",
+        ignore: "如果不是你本人操作，忽略这封邮件即可。",
+      },
+      summary: {
+        subjectOpen: "🐰 明天 {tomorrowLabel}",
+        subjectBread: "：面包 {count} 个 · {doughG} g",
+        subjectClosed: "🐰 明天 {tomorrowLabel}没有开放",
+        subjectTonight: "今晚布蕾 {cups} 杯",
+        subjectSeparator: "｜",
+        breadHeader: "【明天 {tomorrowLabel} 的面包】",
+        closed: "明天没有开放",
+        breadLine: "{name} {qty}",
+        breadLineRounds: "{name} {qty}（做 {rounds} 个大圆包，多出 {leftover} 角）",
+        dough: "面团 {used} / {limit} g",
+        tonightHeader: "【今晚要做的布蕾】（{md} 取货）",
+        tomorrowNightHeader: "【明晚要做的布蕾】（{md} 取货，刚截止）",
+        batchLine: "{qty} 杯 → {batches} 批，多出 {leftover} 杯",
+        batchLineExact: "{qty} 杯 → {batches} 批",
+        batchLineNoYield: "{qty} 杯",
+        batchNamePrefix: "{name} ",
+        deliveryHeader: "【明天的交付】",
+        deliveryLine: "自提 {pickup} 单　配送 {delivery} 单",
+        unconfirmedHeader: "【还没确认的订单】",
+        unconfirmedLine: "{orderNo}　微信 {wechatId}（{status}）",
+        unconfirmedStatus: { NEW: "新订单", CONTACTED: "已联系" },
+        openAdmin: "[打开后台] → {url}",
+      },
     },
   },
 } as const;
