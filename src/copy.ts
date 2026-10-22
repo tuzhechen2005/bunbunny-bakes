@@ -124,6 +124,8 @@ export const copy = {
       cancelling: "取消中…",
       cancelled: "已取消",
       cancelClosed: "已过取消时间，如需修改请微信联系店主",
+      /** e.g. "10/29 周四 20:00 前可以自己取消" */
+      cancelDeadline: "{label} 前可以自己取消",
       cancelFailed: "取消失败，请稍后再试",
       backHome: "返回首页",
     },
