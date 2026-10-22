@@ -463,3 +463,56 @@ describe("validation", () => {
     expect(JSON.stringify(day)).toBe(snapshot);
   });
 });
+
+describe("fail closed (review #1)", () => {
+  it("throws on undefined or unknown capacityMode from usage() and checkDay()", () => {
+    for (const mode of [undefined, "BOGUS"]) {
+      const bad = {
+        ...products,
+        redBean: { ...products.redBean, capacityMode: mode },
+      } as unknown as ProductMap;
+      expect(() => usage([order([line("redBean", 1)])], bad)).toThrow();
+      expect(() => check([], pickup(line("redBean", 1)), { products: bad })).toThrow();
+    }
+  });
+
+  it("throws when doughLimitG is NaN, undefined, negative or non-integer", () => {
+    for (const v of [Number.NaN, undefined, -1, 1.5, Number.POSITIVE_INFINITY]) {
+      const l = { ...limits(), doughLimitG: v } as unknown as DayLimits;
+      expect(() => check([], pickup(line("redBean", 1)), { limits: l })).toThrow();
+    }
+  });
+
+  it("throws when deliveryLimit is NaN, undefined, negative or non-integer", () => {
+    for (const v of [Number.NaN, undefined, -1, 1.5]) {
+      const l = { ...limits(), deliveryLimit: v } as unknown as DayLimits;
+      expect(() =>
+        check([], { items: [line("redBean", 1)], fulfillment: "DELIVERY" }, { limits: l }),
+      ).toThrow();
+    }
+  });
+
+  it("throws when the resolved product limit is NaN, negative or non-integer", () => {
+    for (const v of [Number.NaN, -1, 2.5]) {
+      expect(() =>
+        check([], pickup(line("brulee", 1)), { limits: limits({ productLimits: { brulee: v } }) }),
+      ).toThrow();
+      const badDefault: ProductMap = { ...products, brulee: { ...products.brulee, dailyLimit: v } };
+      expect(() => check([], pickup(line("brulee", 1)), { products: badDefault })).toThrow();
+    }
+  });
+
+  it("throws when a ProductMap key does not match the product id", () => {
+    const bad: ProductMap = { ...products, brulee2: products.brulee };
+    expect(() => usage([], bad)).toThrow();
+    expect(() => check([], pickup(line("redBean", 1)), { products: bad })).toThrow();
+  });
+
+  it("Product over its limit (owner override) does not block a candidate without it", () => {
+    const day = [order([line("brulee", 30)])];
+    const r = check(day, pickup(line("redBean", 1)));
+    expect(r.after.products.brulee).toBe(30);
+    expect(r.violations).toEqual([]);
+    expect(r.ok).toBe(true);
+  });
+});

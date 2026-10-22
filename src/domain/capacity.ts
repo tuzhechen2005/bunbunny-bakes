@@ -97,11 +97,37 @@ function doughOfProduct(product: CapacityProduct, total: number): number {
       return Math.ceil(total / product.piecesPerRound) * product.roundG;
     case "INDEPENDENT":
       return 0;
+    default: {
+      // Fail closed: an unknown mode must never yield NaN dough (NaN > limit is false).
+      const mode: never = product.capacityMode;
+      throw new Error(`capacity: product "${product.id}" has unknown capacityMode "${String(mode)}"`);
+    }
+  }
+}
+
+function isLimit(n: unknown): n is number {
+  return typeof n === "number" && Number.isInteger(n) && n >= 0;
+}
+
+function assertLimit(name: string, n: unknown): number {
+  if (!isLimit(n)) {
+    throw new Error(`capacity: ${name} must be a finite integer >= 0 (got ${String(n)})`);
+  }
+  return n;
+}
+
+/** Keys must match ids, so usage.products cannot get duplicate or mismatched keys. */
+function assertProductMap(products: ProductMap): void {
+  for (const [key, product] of Object.entries(products)) {
+    if (!product || product.id !== key) {
+      throw new Error(`capacity: ProductMap key "${key}" does not match product id "${product?.id}"`);
+    }
   }
 }
 
 /** Usage of already-filtered (counted) orders. */
 function usageOfCounted(orders: DayOrder[], products: ProductMap): Usage {
+  assertProductMap(products);
   const totals = totalsOf(orders, products);
   const result: Usage = { doughG: 0, products: {}, deliveries: 0 };
 
@@ -134,6 +160,11 @@ export function doughUsed(orders: DayOrder[], products: ProductMap): number {
 export function checkDay(input: CheckDayInput): CheckDayResult {
   const { date, existing, candidate, excludeOrderId, products, limits } = input;
 
+  // Fail closed on malformed limits: a NaN/undefined limit would make every "> limit" false.
+  const doughLimitG = assertLimit("doughLimitG", limits.doughLimitG);
+  const deliveryLimit = assertLimit("deliveryLimit", limits.deliveryLimit);
+  assertProductMap(products);
+
   // Validate candidate lines up front (unknown product, bad qty).
   for (const line of candidate.items) {
     assertQty(line);
@@ -161,13 +192,13 @@ export function checkDay(input: CheckDayInput): CheckDayResult {
     (id) => lookup(products, id).capacityMode !== "INDEPENDENT",
   );
 
-  if (touchesDough && after.doughG > limits.doughLimitG) {
+  if (touchesDough && after.doughG > doughLimitG) {
     violations.push({
       kind: "DOUGH",
       date,
-      limit: limits.doughLimitG,
+      limit: doughLimitG,
       after: after.doughG,
-      over: after.doughG - limits.doughLimitG,
+      over: after.doughG - doughLimitG,
     });
   }
 
@@ -177,10 +208,11 @@ export function checkDay(input: CheckDayInput): CheckDayResult {
     const override = Object.prototype.hasOwnProperty.call(limits.productLimits, productId)
       ? limits.productLimits[productId]
       : undefined;
-    const limit = override ?? product.dailyLimit;
-    if (limit === null || limit === undefined) {
+    const resolved = override ?? product.dailyLimit;
+    if (resolved === null || resolved === undefined) {
       throw new Error(`capacity: INDEPENDENT product "${productId}" has no daily limit`);
     }
+    const limit = assertLimit(`limit of product "${productId}"`, resolved);
     const used = after.products[productId] ?? 0;
     if (used > limit) {
       violations.push({ kind: "PRODUCT", date, productId, limit, after: used, over: used - limit });
@@ -190,13 +222,13 @@ export function checkDay(input: CheckDayInput): CheckDayResult {
   if (candidate.fulfillment === "DELIVERY") {
     if (!limits.deliveryEnabled) {
       violations.push({ kind: "DELIVERY_DISABLED", date });
-    } else if (after.deliveries > limits.deliveryLimit) {
+    } else if (after.deliveries > deliveryLimit) {
       violations.push({
         kind: "DELIVERY",
         date,
-        limit: limits.deliveryLimit,
+        limit: deliveryLimit,
         after: after.deliveries,
-        over: after.deliveries - limits.deliveryLimit,
+        over: after.deliveries - deliveryLimit,
       });
     }
   }
