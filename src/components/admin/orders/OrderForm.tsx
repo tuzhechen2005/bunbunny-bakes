@@ -4,6 +4,7 @@
 // Prices shown here are a preview; the server recomputes everything. An over-limit save
 // lists every violation and asks for a reason before it is sent again with `override`.
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { copy } from "@/copy";
@@ -283,12 +284,14 @@ export function OrderForm({ data, order }: OrderFormProps) {
           <button type="button" className={primaryButton} onClick={() => void copyLink(created.url)}>
             {copied ? t.copied : t.copyLink}
           </button>
+          {/* Full page load on purpose: it resets every field for the next phone order. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/admin/orders/new" className={`${outlineButton} flex items-center justify-center`}>
             {t.newAnother}
           </a>
-          <a href="/admin/orders" className="flex min-h-11 items-center justify-center text-sm text-muted">
+          <Link href="/admin/orders" className="flex min-h-11 items-center justify-center text-sm text-muted">
             {t.backToOrders}
-          </a>
+          </Link>
         </div>
       </AdminCard>
     );
