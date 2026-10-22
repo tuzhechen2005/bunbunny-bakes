@@ -1,0 +1,331 @@
+// Home + checkout against mocked customer APIs (docs/API_SPEC.md §2).
+import { expect, test, type Page, type Route } from "@playwright/test";
+
+const CART_KEY = "bb_cart_v1";
+
+type Product = {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl: string | null;
+  unitPriceCents: number;
+  bundleSize: number;
+  bundlePriceCents: number | null;
+  status: "ACTIVE" | "PAUSED";
+  leadDays: number;
+};
+
+const PRODUCTS: Product[] = [
+  { id: "p-redbean", name: "奶酥红豆包", description: "红豆馅", imageUrl: null, unitPriceCents: 249, bundleSize: 4, bundlePriceCents: 899, status: "ACTIVE", leadDays: 1 },
+  { id: "p-cheese", name: "奶酪角", description: "奶酪", imageUrl: null, unitPriceCents: 299, bundleSize: 4, bundlePriceCents: 1099, status: "ACTIVE", leadDays: 1 },
+  { id: "p-brulee", name: "焦糖布蕾", description: "布蕾", imageUrl: null, unitPriceCents: 450, bundleSize: 1, bundlePriceCents: null, status: "ACTIVE", leadDays: 2 },
+  { id: "p-paused", name: "菠萝包", description: "暂停中", imageUrl: null, unitPriceCents: 300, bundleSize: 1, bundlePriceCents: null, status: "PAUSED", leadDays: 1 },
+];
+
+function menuBody(overrides: Record<string, unknown> = {}) {
+  return {
+    orderingEnabled: true,
+    products: PRODUCTS,
+    pickupNote: "自提时间在下午 5 点以后，具体时间微信确认",
+    deliveryFeeCents: 500,
+    freeDeliveryMinCents: 2500,
+    maxQtyPerItem: 8,
+    ...overrides,
+  };
+}
+
+function lineTotal(qty: number, p: Product) {
+  if (p.bundlePriceCents === null) return qty * p.unitPriceCents;
+  return Math.floor(qty / p.bundleSize) * p.bundlePriceCents + (qty % p.bundleSize) * p.unitPriceCents;
+}
+
+function availabilityBody(items: { productId: string; qty: number }[], fulfillment: string) {
+  const subtotal = items.reduce((s, i) => s + lineTotal(i.qty, PRODUCTS.find((p) => p.id === i.productId)!), 0);
+  const fee = fulfillment === "DELIVERY" && subtotal < 2500 ? 500 : 0;
+  return {
+    orderingEnabled: true,
+    pricing: { subtotalCents: subtotal, deliveryFeeCents: fee, totalCents: subtotal + fee, freeDeliveryGapCents: Math.max(0, 2500 - subtotal) },
+    cartProblems: [],
+    dates: [
+      { date: "2026-10-30", state: "AVAILABLE", cutoffAt: "2026-10-30T01:00:00Z", cutoffLabel: "10/29 周四 20:00 截止" },
+      { date: "2026-10-31", state: "FULL" },
+      { date: "2026-11-01", state: "CUTOFF" },
+      fulfillment === "DELIVERY"
+        ? { date: "2026-11-02", state: "DELIVERY_FULL" }
+        : { date: "2026-11-02", state: "AVAILABLE", cutoffAt: "2026-11-01T01:00:00Z", cutoffLabel: "10/31 周六 20:00 截止" },
+    ],
+  };
+}
+
+type OrderHandler = (route: Route, body: Record<string, unknown>, n: number) => Promise<void>;
+
+async function mockApis(page: Page, opts: { menu?: Record<string, unknown>; orders?: OrderHandler } = {}) {
+  const orderBodies: Record<string, unknown>[] = [];
+  await page.route("**/api/menu", (route) => route.fulfill({ json: menuBody(opts.menu) }));
+  await page.route("**/api/availability", (route) => {
+    const body = route.request().postDataJSON() as { items: { productId: string; qty: number }[]; fulfillment: string };
+    return route.fulfill({ json: availabilityBody(body.items, body.fulfillment) });
+  });
+  await page.route("**/api/orders", async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    orderBodies.push(body);
+    if (opts.orders) return opts.orders(route, body, orderBodies.length);
+    return route.fulfill({ status: 201, json: { orderNo: "1030-001", viewToken: "tok123", url: "/o/tok123" } });
+  });
+  return orderBodies;
+}
+
+async function seedCart(page: Page, items: { productId: string; qty: number }[]) {
+  await page.goto("/");
+  await page.evaluate(([key, value]) => localStorage.setItem(key, value), [CART_KEY, JSON.stringify(items)] as const);
+  await page.goto("/checkout");
+}
+
+function card(page: Page, id: string) {
+  return page.locator(`[data-testid="product-card"][data-product-id="${id}"]`);
+}
+
+async function fillAndPickDate(page: Page, date = "2026-10-30") {
+  await page.locator(`[data-testid="date-card"][data-date="${date}"]`).click();
+  await page.getByLabel("你的微信号").fill("  bunny_fan_01  ");
+}
+
+test("home: add items updates the bar; placeholder; open state", async ({ page }) => {
+  await mockApis(page);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "🐰的大面包" })).toBeVisible();
+  await expect(page.getByTestId("ordering-state")).toHaveText("预订开放中");
+  await expect(card(page, "p-redbean").getByTestId("price")).toHaveText("$2.49 / 个　4 个 $8.99");
+  await expect(card(page, "p-brulee").getByTestId("price")).toHaveText("$4.50 / 个");
+  await expect(card(page, "p-redbean").getByTestId("bunny-placeholder")).toBeVisible();
+  await expect(page.getByTestId("footer-contact")).toHaveCount(0);
+
+  const plus = card(page, "p-cheese").getByRole("button", { name: "增加一个" });
+  for (let i = 0; i < 5; i++) await plus.click();
+  await expect(page.getByTestId("bar-count")).toHaveText("已选 5 件");
+  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $13.98");
+  await card(page, "p-redbean").getByRole("button", { name: "增加一个" }).click();
+  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $16.47");
+  await card(page, "p-cheese").getByRole("button", { name: "减少一个" }).click();
+  await expect(page.getByTestId("bar-count")).toHaveText("已选 5 件");
+  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $13.48");
+
+  // persisted across reloads
+  await page.reload();
+  await expect(page.getByTestId("bar-count")).toHaveText("已选 5 件");
+});
+
+test("home: paused card disabled, max reached, footer wechat, vanished items dropped", async ({ page }) => {
+  await mockApis(page, { menu: { ownerWechatId: "bunbunny_owner" } });
+  await page.goto("/");
+  await page.evaluate((key) => localStorage.setItem(key, JSON.stringify([{ productId: "gone", qty: 3 }, { productId: "p-redbean", qty: 1 }])), CART_KEY);
+  await page.reload();
+  await expect(page.getByTestId("bar-count")).toHaveText("已选 1 件");
+  expect(await page.evaluate((key) => localStorage.getItem(key), CART_KEY)).toBe(JSON.stringify([{ productId: "p-redbean", qty: 1 }]));
+
+  const paused = card(page, "p-paused");
+  await expect(paused).toHaveAttribute("data-paused", "true");
+  await expect(paused.getByText("暂停供应")).toBeVisible();
+  await expect(paused.getByRole("button", { name: "增加一个" })).toBeDisabled();
+
+  const plus = card(page, "p-redbean").getByRole("button", { name: "增加一个" });
+  await expect(card(page, "p-redbean").getByTestId("max-hint")).toHaveCount(0);
+  for (let i = 0; i < 7; i++) await plus.click();
+  await expect(card(page, "p-redbean").getByTestId("qty")).toHaveText("8");
+  await expect(plus).toBeDisabled();
+  await expect(card(page, "p-redbean").getByTestId("max-hint")).toHaveText("大量订购请加微信联系");
+  await expect(page.getByTestId("footer-contact")).toHaveText("联系店主：微信 bunbunny_owner");
+
+  await page.getByTestId("go-checkout").click();
+  await expect(page).toHaveURL(/\/checkout$/);
+  await expect(page.getByTestId("cart-line")).toHaveCount(1);
+});
+
+test("home: ordering closed disables the bar button but allows adding", async ({ page }) => {
+  await mockApis(page, { menu: { orderingEnabled: false } });
+  await page.goto("/");
+  await expect(page.getByText("暂未开放预订 🍞")).toBeVisible();
+  await expect(page.getByText("下一轮预订开放时间请关注群内通知～")).toBeVisible();
+  await card(page, "p-redbean").getByRole("button", { name: "增加一个" }).click();
+  await expect(page.getByTestId("bar-count")).toHaveText("已选 1 件");
+  const button = page.getByTestId("go-checkout");
+  await expect(button).toHaveText("暂未开放预订");
+  await expect(button).toBeDisabled();
+});
+
+test("checkout: lines, date states, brûlée hint, delivery gap", async ({ page }) => {
+  await mockApis(page);
+  await seedCart(page, [{ productId: "p-cheese", qty: 5 }, { productId: "p-brulee", qty: 1 }]);
+  const cheese = page.locator('[data-testid="cart-line"][data-product-id="p-cheese"]');
+  await expect(cheese).toContainText("奶酪角 ×5");
+  await expect(cheese.getByTestId("line-breakdown")).toHaveText("$10.99 + $2.99 = $13.98");
+  await expect(page.getByTestId("lead-hint")).toHaveText("含布蕾的订单需提前两天预订");
+
+  const date = (d: string) => page.locator(`[data-testid="date-card"][data-date="${d}"]`);
+  await expect(date("2026-10-30")).toContainText("10/30 周五");
+  await expect(date("2026-10-30")).toContainText("10/29 周四 20:00 截止");
+  await expect(date("2026-10-30")).toBeEnabled();
+  await expect(date("2026-10-31")).toContainText("已满");
+  await expect(date("2026-10-31")).toBeDisabled();
+  await expect(date("2026-11-01")).toContainText("已截止");
+  await expect(date("2026-11-01")).toBeDisabled();
+  await expect(page.getByTestId("pickup-note")).toHaveText("自提时间在下午 5 点以后，具体时间微信确认");
+  await expect(page.getByTestId("total-total")).toHaveText("$18.48");
+
+  // select 11/2, then switch to delivery: 11/2 becomes DELIVERY_FULL and is deselected
+  await date("2026-11-02").click();
+  await expect(date("2026-11-02")).toHaveAttribute("aria-pressed", "true");
+  await page.getByLabel("配送").check();
+  await expect(date("2026-11-02")).toContainText("配送已满，可选自提");
+  await expect(date("2026-11-02")).toBeDisabled();
+  await expect(date("2026-11-02")).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByTestId("delivery-fee")).toHaveText("运费 $5，满 $25 免运费");
+  await expect(page.getByTestId("delivery-gap")).toHaveText("再买 $6.52 就免运费啦");
+  await expect(page.getByText("具体配送时间和地点会在微信上和你确认")).toBeVisible();
+  await expect(page.getByTestId("total-fee")).toHaveText("$5.00");
+  await expect(page.getByTestId("total-total")).toHaveText("$23.48");
+
+  // qty editing re-queries: removing the brûlée drops the hint and updates totals
+  const brulee = page.locator('[data-testid="cart-line"][data-product-id="p-brulee"]');
+  await brulee.getByRole("button", { name: "减少一个" }).click();
+  await expect(page.getByTestId("lead-hint")).toHaveCount(0);
+  await expect(page.getByTestId("total-subtotal")).toHaveText("$13.98");
+
+  // honeypot present, hidden and empty
+  const honeypot = page.locator('input[name="website"]');
+  await expect(honeypot).toHaveCount(1);
+  await expect(honeypot).toHaveValue("");
+  await expect(honeypot).toHaveAttribute("tabindex", "-1");
+  await expect(honeypot).toHaveAttribute("autocomplete", "off");
+});
+
+test("checkout: happy path submits once, navigates and clears the cart", async ({ page }) => {
+  const bodies = await mockApis(page, {
+    orders: async (route) => {
+      await new Promise((r) => setTimeout(r, 800));
+      await route.fulfill({ status: 201, json: { orderNo: "1030-001", viewToken: "tok123", url: "/o/tok123" } });
+    },
+  });
+  await seedCart(page, [{ productId: "p-redbean", qty: 4 }]);
+  await fillAndPickDate(page);
+  await page.getByLabel("备注（选填）").fill("谢谢");
+  await expect(page.getByTestId("note-counter")).toHaveText("2/300");
+
+  // double tap: two clicks in the same task, before React re-renders
+  await page.getByTestId("submit").evaluate((el: HTMLButtonElement) => {
+    el.click();
+    el.click();
+  });
+  await expect(page.getByText("提交中…")).toBeVisible();
+  await page.waitForURL(/\/o\/tok123\?new=1$/);
+  expect(bodies).toHaveLength(1);
+  const body = bodies[0];
+  expect(body).toMatchObject({
+    items: [{ productId: "p-redbean", qty: 4 }],
+    pickupDate: "2026-10-30",
+    fulfillment: "PICKUP",
+    wechatId: "bunny_fan_01",
+    note: "谢谢",
+    website: "",
+  });
+  expect(body.idempotencyKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  expect(Object.keys(body).sort()).toEqual(["fulfillment", "idempotencyKey", "items", "note", "pickupDate", "website", "wechatId"]);
+  expect(await page.evaluate((key) => localStorage.getItem(key), CART_KEY)).toBe("[]");
+});
+
+test("checkout: FULL with suggestion offers a date switch, without auto-submitting", async ({ page }) => {
+  const bodies = await mockApis(page, {
+    orders: (route) =>
+      route.fulfill({ status: 409, json: { error: "FULL", message: "x", suggestion: "2026-11-02" } }),
+  });
+  await seedCart(page, [{ productId: "p-redbean", qty: 2 }]);
+  await fillAndPickDate(page);
+  await page.getByTestId("submit").click();
+  await expect(page.getByTestId("submit-error")).toContainText("这一天的预订名额已经满啦，可以选择下一个有空位的日期～");
+  await expect(page.getByTestId("submit")).toBeEnabled();
+  await page.getByRole("button", { name: "改成 11/2 周一" }).click();
+  await expect(page.locator('[data-testid="date-card"][data-date="2026-11-02"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('[data-testid="date-card"][data-date="2026-10-30"]')).toHaveAttribute("aria-pressed", "false");
+  await page.waitForTimeout(300);
+  expect(bodies).toHaveLength(1);
+});
+
+test("checkout: FULL without suggestion and other errors", async ({ page }) => {
+  const responses = [
+    { status: 409, json: { error: "FULL", message: "x", suggestion: null } },
+    { status: 409, json: { error: "DELIVERY_FULL", message: "x" } },
+    { status: 409, json: { error: "CUTOFF_PASSED", message: "x" } },
+    { status: 409, json: { error: "ORDERING_DISABLED", message: "x" } },
+    { status: 429, json: { error: "RATE_LIMITED", message: "x" } },
+    { status: 500, json: { error: "BOOM", message: "x" } },
+  ];
+  await mockApis(page, { orders: (route, _b, n) => route.fulfill(responses[n - 1]) });
+  await seedCart(page, [{ productId: "p-redbean", qty: 2 }]);
+  const expected = [
+    "暂时没有可以容纳这个订单的日期，可以减少数量或加微信联系店主",
+    "这一天的配送名额满了，可以改成自提～",
+    "这一天已经截止啦，请选择其他日期",
+    "暂未开放预订 🍞",
+    "提交太频繁了，请稍后再试，或加微信联系店主",
+    "提交失败，请稍后再试",
+  ];
+  await fillAndPickDate(page);
+  for (const text of expected) {
+    await page.locator('[data-testid="date-card"][data-date="2026-10-30"]').click();
+    await page.getByTestId("submit").click();
+    await expect(page.getByTestId("submit-error")).toHaveText(text);
+    await expect(page.getByTestId("submit")).toBeEnabled();
+  }
+});
+
+test("checkout: VALIDATION gets a new idempotency key; network error keeps it", async ({ page }) => {
+  const bodies = await mockApis(page, {
+    orders: async (route, _b, n) => {
+      if (n === 1) return route.abort("failed");
+      if (n === 2) return route.fulfill({ status: 422, json: { error: "VALIDATION", message: "x", fields: { wechatId: "微信号格式不对" } } });
+      return route.fulfill({ status: 201, json: { orderNo: "1030-002", viewToken: "tok456", url: "/o/tok456" } });
+    },
+  });
+  await seedCart(page, [{ productId: "p-redbean", qty: 2 }]);
+  await fillAndPickDate(page);
+
+  await page.getByTestId("submit").click();
+  await expect(page.getByTestId("submit-error")).toHaveText("提交失败，请稍后再试");
+  await page.getByTestId("submit").click();
+  await expect(page.getByTestId("wechat-error")).toHaveText("微信号格式不对");
+  await page.getByLabel("你的微信号").fill("bunny_fan_02");
+  await page.getByTestId("submit").click();
+  await page.waitForURL(/\/o\/tok456\?new=1$/);
+
+  expect(bodies).toHaveLength(3);
+  expect(bodies[1].idempotencyKey).toBe(bodies[0].idempotencyKey);
+  expect(bodies[2].idempotencyKey).not.toBe(bodies[1].idempotencyKey);
+});
+
+test("checkout: client-side checks and empty cart", async ({ page }) => {
+  const bodies = await mockApis(page);
+  await seedCart(page, [{ productId: "p-redbean", qty: 1 }]);
+  await expect(page.getByTestId("date-card").first()).toBeVisible();
+  await page.getByTestId("submit").click();
+  await expect(page.getByTestId("wechat-error")).toHaveText("请填写你的微信号");
+  await expect(page.getByTestId("submit-error")).toHaveText("请先选择取货日期");
+  expect(bodies).toHaveLength(0);
+
+  await page.locator('[data-testid="cart-line"]').getByRole("button", { name: "减少一个" }).click();
+  await expect(page.getByTestId("empty-cart")).toContainText("购物车还是空的～");
+  await page.getByRole("link", { name: "回首页挑选面包" }).click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
+test.describe("narrow screens", () => {
+  test.use({ viewport: { width: 320, height: 640 } });
+  test("no horizontal scroll at 320px", async ({ page }) => {
+    await mockApis(page);
+    await page.goto("/");
+    await expect(page.getByTestId("product-card").first()).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+    await seedCart(page, [{ productId: "p-cheese", qty: 5 }, { productId: "p-brulee", qty: 1 }]);
+    await expect(page.getByTestId("date-card").first()).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  });
+});
