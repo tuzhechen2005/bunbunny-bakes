@@ -80,6 +80,8 @@ test.describe("order page /o/{token}", () => {
     const banner = page.getByTestId("new-banner");
     await expect(banner).toContainText(t.newTitle);
     await expect(banner).toContainText(t.newHint);
+    // The banner shows the plain order link (no ?new=1).
+    await expect(banner.getByRole("textbox")).toHaveValue(new URL(ORDER_PATH, page.url()).href);
     await expect(page).toHaveURL((url) => url.pathname === ORDER_PATH && url.search === "");
     // Still shown after the query is dropped (no remount / flash).
     await expect(banner).toBeVisible();
@@ -151,6 +153,69 @@ test.describe("order page /o/{token}", () => {
     await expect(block.getByRole("button", { name: t.copied })).toBeVisible();
     expect(await page.evaluate(() => (window as unknown as { __copied: string[] }).__copied)).toEqual([
       "bunbunny_bakes",
+    ]);
+  });
+
+  test("banner copy-link button (async clipboard) copies the link without ?new=1 and shows 已复制", async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __copied: string[] };
+      w.__copied = [];
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: async (text: string) => void w.__copied.push(text) },
+      });
+    });
+    await mockOrder(page, () => makeOrder());
+    await page.goto(`${ORDER_PATH}?new=1`);
+    const banner = page.getByTestId("new-banner");
+    await expect(banner.getByRole("textbox")).toHaveAttribute("readonly", "");
+    await banner.getByRole("button", { name: t.copyLink }).click();
+    await expect(banner.getByRole("button", { name: t.copied })).toBeVisible();
+    const link = new URL(ORDER_PATH, page.url()).href;
+    expect(await page.evaluate(() => (window as unknown as { __copied: string[] }).__copied)).toEqual([link]);
+    expect(link).not.toContain("new=1");
+  });
+
+  test("banner copy-link button falls back to execCommand without navigator.clipboard", async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __selected: string[] };
+      w.__selected = [];
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+      document.execCommand = (command: string) => {
+        const el = document.activeElement;
+        if (command === "copy" && el instanceof HTMLInputElement) w.__selected.push(el.value);
+        return true;
+      };
+    });
+    await mockOrder(page, () => makeOrder());
+    await page.goto(`${ORDER_PATH}?new=1`);
+    const banner = page.getByTestId("new-banner");
+    await banner.getByRole("button", { name: t.copyLink }).click();
+    await expect(banner.getByRole("button", { name: t.copied })).toBeVisible();
+    expect(await page.evaluate(() => (window as unknown as { __selected: string[] }).__selected)).toEqual([
+      new URL(ORDER_PATH, page.url()).href,
+    ]);
+  });
+
+  test("without ?new=1 there is no banner but a secondary copy-link button", async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __copied: string[] };
+      w.__copied = [];
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText: async (text: string) => void w.__copied.push(text) },
+      });
+    });
+    await mockOrder(page, () => makeOrder());
+    await page.goto(ORDER_PATH);
+    await expect(page.getByTestId("status-text")).toBeVisible();
+    await expect(page.getByTestId("new-banner")).toHaveCount(0);
+    const button = page.getByTestId("copy-link-secondary");
+    await expect(button).toHaveText(t.copyLink);
+    await button.click();
+    await expect(button).toHaveText(t.copied);
+    expect(await page.evaluate(() => (window as unknown as { __copied: string[] }).__copied)).toEqual([
+      new URL(ORDER_PATH, page.url()).href,
     ]);
   });
 

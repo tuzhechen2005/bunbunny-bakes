@@ -1,48 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { copy } from "@/copy";
+import { copyText } from "./copyText";
 import { fill } from "./types";
+import { useCopied } from "./useCopied";
 
 const t = copy.customer.order;
 
-/** Fallback for WebViews without navigator.clipboard: select a hidden input and execCommand. */
-function legacyCopy(input: HTMLInputElement | null): boolean {
-  if (!input) return false;
-  try {
-    input.focus();
-    input.select();
-    input.setSelectionRange(0, input.value.length);
-    const ok = document.execCommand("copy");
-    input.blur();
-    return ok;
-  } catch {
-    return false;
-  }
-}
-
 export function WechatBlock({ ownerWechatId, prominent }: { ownerWechatId: string; prominent: boolean }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), 2000);
-    return () => clearTimeout(timer);
-  }, [copied]);
+  const [copied, setCopied] = useCopied();
 
   async function onCopy() {
-    let ok = false;
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(ownerWechatId);
-        ok = true;
-      }
-    } catch {
-      // fall through to the legacy path
-    }
-    if (!ok) ok = legacyCopy(inputRef.current);
-    if (ok) setCopied(true);
+    if (await copyText(ownerWechatId)) setCopied(true);
   }
 
   const label = fill(t.addOwnerWechat, { ownerWechatId });
@@ -75,14 +44,6 @@ export function WechatBlock({ ownerWechatId, prominent }: { ownerWechatId: strin
         {label}
       </p>
       {button}
-      <input
-        ref={inputRef}
-        readOnly
-        tabIndex={-1}
-        aria-hidden="true"
-        value={ownerWechatId}
-        className="pointer-events-none fixed left-0 top-0 h-px w-px opacity-0"
-      />
     </section>
   );
 }

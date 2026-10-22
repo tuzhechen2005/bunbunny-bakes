@@ -133,7 +133,7 @@ export async function resetAndSeed(opts: SeedOptions = {}): Promise<Seeded> {
     const red = await mk("奶酥红豆包", 249, 899, "DOUGH_PER_UNIT", { doughG: 70 }, 1, 1);
     const cheeseRock = await mk("岩烧乳酪包", 249, 899, "DOUGH_PER_UNIT", { doughG: 70 }, 1, 2);
     const wedge = await mk("奶酪角", 299, 1099, "DOUGH_PER_ROUND", { roundG: 340, piecesPerRound: 4 }, 1, 3);
-    const brulee = await mk("焦糖布蕾", 229, 799, "INDEPENDENT", { dailyLimit: 24, batchYield: 3 }, 2, 4);
+    const brulee = await mk("焦糖布蕾", 229, 899, "INDEPENDENT", { dailyLimit: 24, batchYield: 3 }, 2, 4);
 
     const toOpen = [dates.d1, dates.d2, dates.d3];
     if (opts.openTomorrow) toOpen.unshift(dates.tomorrow);
