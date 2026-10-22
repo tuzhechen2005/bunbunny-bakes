@@ -48,8 +48,10 @@ const baseShape = {
 
 export const customerOrderSchema = z.object({
   ...baseShape,
+  // v4 only (crypto.randomUUID()): rejects nil / max / other versions, which a buggy client
+  // could share between customers.
   idempotencyKey: z
-    .uuid()
+    .uuidv4()
     .nullish()
     .transform((s) => s ?? null),
 });

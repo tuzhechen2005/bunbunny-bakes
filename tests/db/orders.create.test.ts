@@ -151,14 +151,62 @@ describe("createCustomerOrder: success", () => {
   it("sequential replay of an idempotencyKey returns the same order without writing", async () => {
     await createOpenDate(DATE);
     const idempotencyKey = randomUUID();
-    const first = await create({ idempotencyKey });
+    const first = await create({ idempotencyKey, wechatId: "wx_replay" });
     // Even after ordering is switched off and the cutoff has passed.
     await createSettings({ orderingEnabled: false });
-    const again = await create({ idempotencyKey }, new Date("2026-10-30T12:00:00Z"));
+    const again = await create({ idempotencyKey, wechatId: "wx_replay", ipHash: "another_ip" }, new Date("2026-10-30T12:00:00Z"));
     expect(again).toEqual({ ...first, notificationId: null, replayed: true });
     expect(await db.order.count()).toBe(1);
     expect(await db.auditLog.count()).toBe(1);
     expect(await db.rateLimitHit.count()).toBe(1);
+  });
+
+  it("replay with the same key but another wechatId -> generic VALIDATION, no token, no writes", async () => {
+    await createOpenDate(DATE);
+    const idempotencyKey = randomUUID();
+    const first = await create({ idempotencyKey, wechatId: "wx_owner" });
+    const e = await errorOf(create({ idempotencyKey, wechatId: "wx_stranger" }));
+    expect(e.code).toBe("VALIDATION");
+    expect(e.message).toBe(copy.errors.fallback);
+    expect(JSON.stringify({ message: e.message, extra: e.extra })).not.toContain(first.viewToken);
+    expect(JSON.stringify(e.extra)).not.toContain(first.id);
+    expect(await db.order.count()).toBe(1);
+    expect(await db.auditLog.count()).toBe(1);
+    expect(await db.notification.count()).toBe(1);
+    expect(await db.rateLimitHit.count()).toBe(1);
+    // The rightful owner still gets a replay (wechatId compared after trimming).
+    await expect(create({ idempotencyKey, wechatId: "  wx_owner " })).resolves.toMatchObject({
+      viewToken: first.viewToken,
+      replayed: true,
+    });
+  });
+
+  it("replay with the same key and wechatId but another pickupDate -> VALIDATION, no writes", async () => {
+    await createOpenDate(DATE);
+    await createOpenDate("2026-10-31");
+    const idempotencyKey = randomUUID();
+    const first = await create({ idempotencyKey, wechatId: "wx_owner" });
+    const e = await errorOf(create({ idempotencyKey, wechatId: "wx_owner", pickupDate: "2026-10-31" }));
+    expect(e.code).toBe("VALIDATION");
+    expect(e.message).toBe(copy.errors.fallback);
+    expect(JSON.stringify(e.extra)).not.toContain(first.viewToken);
+    expect(await db.order.count()).toBe(1);
+    expect(await db.auditLog.count()).toBe(1);
+  });
+
+  it("idempotencyKey must be a v4 UUID (nil, max, v1, v7 rejected)", async () => {
+    await createOpenDate(DATE);
+    for (const key of [
+      "00000000-0000-0000-0000-000000000000",
+      "ffffffff-ffff-ffff-ffff-ffffffffffff",
+      "6ba7b810-9dad-11d1-80b4-00c04fd430c8", // v1
+      "01890a5d-ac96-774b-bcce-b302099a8057", // v7
+    ]) {
+      const e = await errorOf(create({ idempotencyKey: key }));
+      expect(e.code).toBe("VALIDATION");
+      expect(Object.keys(e.extra!.fields as object)).toEqual(["idempotencyKey"]);
+    }
+    expect(await db.order.count()).toBe(0);
   });
 
   it("cutoff: 1 s before is ok; exactly at cutoff -> CUTOFF_PASSED", async () => {

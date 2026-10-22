@@ -41,6 +41,17 @@ afterAll(async () => {
 
 type Outcome = { ok: true; order: CreatedOrder } | { ok: false; code: string };
 
+/** AppError -> its code; anything else still fails the test. */
+function settle(p: Promise<CreatedOrder>): Promise<Outcome> {
+  return p.then(
+    (order): Outcome => ({ ok: true, order }),
+    (e: unknown): Outcome => {
+      if (isAppError(e)) return { ok: false, code: e.code };
+      throw e;
+    },
+  );
+}
+
 /** n concurrent orders, each with its own wechatId and ipHash. */
 async function race(
   n: number,
@@ -50,16 +61,12 @@ async function race(
 ): Promise<Outcome[]> {
   return Promise.all(
     Array.from({ length: n }, (_, i) =>
-      createCustomerOrder(
-        pool,
-        { items, pickupDate: date, fulfillment, wechatId: `wx_race_${i}`, ipHash: `ip_${i}_${randomUUID()}` },
-        NOW,
-      ).then(
-        (order): Outcome => ({ ok: true, order }),
-        (e: unknown): Outcome => {
-          if (isAppError(e)) return { ok: false, code: e.code };
-          throw e;
-        },
+      settle(
+        createCustomerOrder(
+          pool,
+          { items, pickupDate: date, fulfillment, wechatId: `wx_race_${i}`, ipHash: `ip_${i}_${randomUUID()}` },
+          NOW,
+        ),
       ),
     ),
   );
@@ -163,19 +170,73 @@ describe("DATA_MODEL §5 concurrency", () => {
     expect(await db.rateLimitHit.count()).toBe(1);
   });
 
-  it("5b: same idempotencyKey racing on two different dates -> 1 order, same viewToken", async () => {
+  it("5b: same idempotencyKey racing on two different dates -> 1 order, the other rejected without a token", async () => {
+    // Different day locks, so the loser hits the unique index (P2002 path), then must not
+    // receive the winner's viewToken because the pickup date differs.
     await createOpenDate(DATE);
     await createOpenDate("2026-10-31");
     const idempotencyKey = randomUUID();
-    const base = { items: [{ productId: P.redBean, qty: 1 }], fulfillment: "PICKUP" as const, idempotencyKey };
-    const results = await Promise.all([
-      createCustomerOrder(pool, { ...base, pickupDate: DATE, wechatId: "wx_a", ipHash: "ip_a" }, NOW),
-      createCustomerOrder(pool, { ...base, pickupDate: "2026-10-31", wechatId: "wx_b", ipHash: "ip_b" }, NOW),
+    const base = {
+      items: [{ productId: P.redBean, qty: 1 }],
+      fulfillment: "PICKUP" as const,
+      idempotencyKey,
+      wechatId: "wx_same_person",
+    };
+    const outcomes = await Promise.all([
+      settle(createCustomerOrder(pool, { ...base, pickupDate: DATE, ipHash: "ip_a" }, NOW)),
+      settle(createCustomerOrder(pool, { ...base, pickupDate: "2026-10-31", ipHash: "ip_b" }, NOW)),
     ]);
+    expect(tally(outcomes)).toEqual({ OK: 1, VALIDATION: 1 });
     expect(await db.order.count()).toBe(1);
-    expect(results[0].viewToken).toBe(results[1].viewToken);
-    expect(results.filter((r) => r.replayed)).toHaveLength(1);
+    const winner = outcomes.find((o) => o.ok) as { ok: true; order: CreatedOrder };
+    expect(winner.order.replayed).toBe(false);
     expect(await db.notification.count()).toBe(1);
+    expect(await db.auditLog.count()).toBe(1);
+    expect(await db.rateLimitHit.count()).toBe(1);
+  });
+
+  it("IP limit across dates: same ipHash, 6 orders on 6 open dates at once -> exactly 3 OK, 3 RATE_LIMITED", async () => {
+    // Each order holds a different day lock; only the IP advisory lock serializes them.
+    const dates: LocalDate[] = ["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"];
+    for (const d of dates) await createOpenDate(d);
+    const outcomes = await Promise.all(
+      dates.map((d, i) =>
+        settle(createCustomerOrder(
+          pool,
+          {
+            items: [{ productId: P.redBean, qty: 1 }],
+            pickupDate: d,
+            fulfillment: "PICKUP",
+            wechatId: `wx_ip_${i}`,
+            ipHash: "ip_shared",
+          },
+          NOW,
+        )),
+      ),
+    );
+    expect(tally(outcomes)).toEqual({ OK: 3, RATE_LIMITED: 3 });
+    expect(await db.rateLimitHit.count({ where: { key: "order_ip:ip_shared" } })).toBe(3);
+    expect(await db.order.count()).toBe(3);
+  });
+
+  it("WeChat limit: same wechatId, 5 orders on one date at once -> exactly 2 OK", async () => {
+    await createOpenDate(DATE);
+    const outcomes = await Promise.all(
+      Array.from({ length: 5 }, (_, i) =>
+        settle(createCustomerOrder(
+          pool,
+          {
+            items: [{ productId: P.redBean, qty: 1 }],
+            pickupDate: DATE,
+            fulfillment: "PICKUP",
+            wechatId: "wx_one",
+            ipHash: `ip_w_${i}`,
+          },
+          NOW,
+        )),
+      ),
+    );
+    expect(tally(outcomes)).toEqual({ OK: 2, RATE_LIMITED: 3 });
   });
 
   it("7: after concurrent creates, seq for the day is 1..N with no gaps or duplicates", async () => {

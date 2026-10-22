@@ -4,7 +4,7 @@
 
 import type { AvailabilityInput, OpenDay } from "@/domain/availability";
 import { addDays, localDateOf } from "@/domain/dates";
-import type { CartLine, DayLimits, Fulfillment } from "@/domain/types";
+import type { CartLine, DayLimits, DayOrder, Fulfillment, LocalDate } from "@/domain/types";
 import type { DbClient } from "./db";
 import { loadProductMap, loadSettings } from "./day";
 import { fromDbDate, toDbDate } from "./dbDates";
@@ -22,8 +22,8 @@ export interface LoadAvailabilityOptions {
  * Settings, ALL products (incl. PAUSED/ARCHIVED) and every open day with
  * today < date ≤ today + 60 (Chicago), each with all of its orders and resolved limits.
  *
- * Runs in one read-only REPEATABLE READ transaction so all reads see one consistent
- * snapshot. Takes no row locks.
+ * Runs in one REPEATABLE READ transaction declared READ ONLY, so all reads see one
+ * consistent snapshot and nothing can be written through it. Takes no row locks.
  */
 export async function loadAvailabilityInput(
   db: DbClient,
@@ -35,6 +35,8 @@ export async function loadAvailabilityInput(
 
   return db.$transaction(
     async (tx) => {
+      // Must be the first statement of the transaction.
+      await tx.$executeRaw`SET TRANSACTION READ ONLY`;
       const settings = await loadSettings(tx);
       const products = await loadProductMap(tx);
       const openDates = await tx.openDate.findMany({
@@ -45,6 +47,7 @@ export async function loadAvailabilityInput(
       const overrides = dbDates.length
         ? await tx.openDateProductLimit.findMany({ where: { date: { in: dbDates } } })
         : [];
+      const overrideLimit = new Map(overrides.map((o) => [`${fromDbDate(o.date)}|${o.productId}`, o.limit]));
       const orders = dbDates.length
         ? await tx.order.findMany({
             where: { pickupDate: { in: dbDates } },
@@ -58,6 +61,18 @@ export async function loadAvailabilityInput(
             orderBy: [{ pickupDate: "asc" }, { seq: "asc" }],
           })
         : [];
+      const ordersByDate = new Map<LocalDate, DayOrder[]>();
+      for (const o of orders) {
+        const d = fromDbDate(o.pickupDate);
+        const list = ordersByDate.get(d) ?? [];
+        list.push({
+          id: o.id,
+          status: o.status,
+          fulfillment: o.fulfillment,
+          items: o.items.map((i) => ({ productId: i.productId, qty: i.qty })),
+        });
+        ordersByDate.set(d, list);
+      }
 
       const days: OpenDay[] = openDates.map((od) => {
         const date = fromDbDate(od.date);
@@ -65,8 +80,7 @@ export async function loadAvailabilityInput(
         const productLimits: Record<string, number> = {};
         for (const p of Object.values(products)) {
           if (p.capacityMode !== "INDEPENDENT") continue;
-          const override = overrides.find((o) => o.productId === p.id && fromDbDate(o.date) === date);
-          const limit = override?.limit ?? p.dailyLimit;
+          const limit = overrideLimit.get(`${date}|${p.id}`) ?? p.dailyLimit;
           if (limit === null || limit === undefined) {
             throw new Error(`INDEPENDENT product "${p.id}" has no daily limit`);
           }
@@ -82,14 +96,7 @@ export async function loadAvailabilityInput(
           date,
           isOpen: od.isOpen,
           limits,
-          orders: orders
-            .filter((o) => fromDbDate(o.pickupDate) === date)
-            .map((o) => ({
-              id: o.id,
-              status: o.status,
-              fulfillment: o.fulfillment,
-              items: o.items.map((i) => ({ productId: i.productId, qty: i.qty })),
-            })),
+          orders: ordersByDate.get(date) ?? [],
         };
       });
 

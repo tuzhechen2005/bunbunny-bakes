@@ -23,7 +23,7 @@ import {
   type ProductInfoMap,
 } from "./day";
 import type { DbClient, Tx } from "./db";
-import { toDbDate } from "./dbDates";
+import { fromDbDate, toDbDate } from "./dbDates";
 import { AppError, isAppError } from "./errors";
 import { adminOrderSchema, customerOrderSchema, parseOrThrow } from "./orderSchemas";
 import { enqueueNotification } from "./outbox";
@@ -190,12 +190,26 @@ function isUniqueViolation(e: unknown): boolean {
   return e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
 }
 
-async function findByIdempotencyKey(client: DbClient | Tx, key: string): Promise<CreatedOrder | null> {
+/**
+ * The order already created with this idempotencyKey, as a replay, or null if there is none.
+ * Privacy (CLAUDE.md rule 8): the viewToken is handed back only when the request names the
+ * same wechatId and pickupDate as the stored order. A key reused by anything else (a buggy
+ * frontend, a stale key, another person) gets a generic VALIDATION and learns nothing.
+ */
+async function replayByIdempotencyKey(
+  client: DbClient | Tx,
+  key: string,
+  request: { wechatId: string; pickupDate: LocalDate },
+): Promise<CreatedOrder | null> {
   const existing = await client.order.findUnique({
     where: { idempotencyKey: key },
-    select: { id: true, orderNo: true, viewToken: true },
+    select: { id: true, orderNo: true, viewToken: true, wechatId: true, pickupDate: true },
   });
-  return existing ? { ...existing, notificationId: null, replayed: true } : null;
+  if (!existing) return null;
+  if (existing.wechatId !== request.wechatId || fromDbDate(existing.pickupDate) !== request.pickupDate) {
+    throw new AppError("VALIDATION", { message: copy.errors.fallback, extra: { fields: {} } });
+  }
+  return { id: existing.id, orderNo: existing.orderNo, viewToken: existing.viewToken, notificationId: null, replayed: true };
 }
 
 /** First DOUGH/PRODUCT violation -> FULL; DELIVERY/DELIVERY_DISABLED -> DELIVERY_FULL. */
@@ -228,7 +242,7 @@ export async function createCustomerOrder(
 
       // 2. Idempotent replay: no new writes.
       if (key) {
-        const existing = await findByIdempotencyKey(tx, key);
+        const existing = await replayByIdempotencyKey(tx, key, { wechatId: data.wechatId, pickupDate: date });
         if (existing) return existing;
       }
 
@@ -327,16 +341,23 @@ export async function createCustomerOrder(
   } catch (e) {
     if (isAppError(e) && e.code === "FULL") {
       // Display only, computed after the rollback without locks (DATA_MODEL §4 step 6).
-      const avail = await loadAvailabilityInput(db, { cart, fulfillment: data.fulfillment, now });
-      const suggestion = suggestNextDate(avail, date);
+      // A failure here must not turn FULL into a 500: fall back to "no suggestion".
+      let suggestion: LocalDate | null = null;
+      try {
+        const avail = await loadAvailabilityInput(db, { cart, fulfillment: data.fulfillment, now });
+        suggestion = suggestNextDate(avail, date);
+      } catch (suggestionError) {
+        console.error("createCustomerOrder: computing the FULL suggestion failed", suggestionError);
+      }
       throw new AppError("FULL", {
         message: suggestion ? copy.errors.FULL : copy.errors.FULL_NO_SUGGESTION,
         extra: { suggestion },
       });
     }
-    // The same key raced in on another pickup date (different day lock): return that order.
+    // The same key raced in under another day lock (a different pickup date): the winner's
+    // order is replayed only if it matches this request, which a different date never does.
     if (key && isUniqueViolation(e)) {
-      const existing = await findByIdempotencyKey(db, key);
+      const existing = await replayByIdempotencyKey(db, key, { wechatId: data.wechatId, pickupDate: date });
       if (existing) return existing;
     }
     throw e;
