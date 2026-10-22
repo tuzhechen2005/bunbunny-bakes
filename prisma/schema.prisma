@@ -1,0 +1,279 @@
+// Prisma schema (docs/DATA_MODEL.md §1, §3).
+// Connection URLs live in prisma.config.ts (Prisma 7).
+// Timestamps are UTC timestamptz; pickup dates are plain `date` (a Chicago calendar day).
+// Money is integer US cents. CHECK constraints live in the migration SQL.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CapacityMode {
+  DOUGH_PER_UNIT
+  DOUGH_PER_ROUND
+  INDEPENDENT
+}
+
+enum ProductStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum OrderStatus {
+  NEW
+  CONTACTED
+  CONFIRMED
+  BAKING
+  READY
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
+
+enum Fulfillment {
+  PICKUP
+  DELIVERY
+}
+
+enum OrderSource {
+  WEB
+  ADMIN
+}
+
+enum PaidMethod {
+  WECHAT
+  ZELLE
+  VENMO
+  CASH
+  OTHER
+}
+
+enum CancelledBy {
+  CUSTOMER
+  ADMIN
+}
+
+enum Actor {
+  ADMIN
+  CUSTOMER
+  SYSTEM
+}
+
+enum NotificationKind {
+  NEW_ORDER
+  CUSTOMER_CANCELLED
+  DAILY_SUMMARY
+  PASSWORD_RESET
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+/// Single row (CHECK id = 1).
+model Setting {
+  id                   Int      @id @default(1)
+  orderingEnabled      Boolean  @default(false)
+  cutoffTime           String   @default("20:00")
+  defaultDoughLimitG   Int      @default(1600)
+  defaultDeliveryLimit Int      @default(8)
+  deliveryFeeCents     Int      @default(500)
+  freeDeliveryMinCents Int      @default(2500)
+  maxQtyPerItem        Int      @default(8)
+  ownerWechatId        String   @default("")
+  showWechatOnHome     Boolean  @default(false)
+  pickupNote           String   @default("自提时间在下午 5 点以后，具体时间微信确认")
+  bakingTextBread      String   @default("正在为你制作大面包！")
+  bakingTextOther      String   @default("正在为你制作布蕾！")
+  updatedAt            DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+}
+
+model Product {
+  id               String        @id @default(uuid()) @db.Uuid
+  name             String
+  description      String        @default("")
+  imageUrl         String?
+  unitPriceCents   Int
+  bundleSize       Int           @default(4)
+  bundlePriceCents Int?
+  capacityMode     CapacityMode
+  doughG           Int?
+  roundG           Int?
+  piecesPerRound   Int?
+  dailyLimit       Int?
+  batchYield       Int?
+  leadDays         Int           @default(1)
+  status           ProductStatus @default(ACTIVE)
+  sortOrder        Int           @default(0)
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+
+  dateLimits OpenDateProductLimit[]
+  orderItems OrderItem[]
+}
+
+model OpenDate {
+  date            DateTime @id @db.Date
+  isOpen          Boolean  @default(true)
+  doughLimitG     Int?
+  deliveryEnabled Boolean  @default(true)
+  deliveryLimit   Int?
+  note            String?
+  /// Highest order seq handed out for this date (src/server/seq.ts); never decreases.
+  lastSeq         Int      @default(0)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  productLimits OpenDateProductLimit[]
+  orders        Order[]
+}
+
+model OpenDateProductLimit {
+  date      DateTime @db.Date
+  productId String   @db.Uuid
+  limit     Int
+
+  openDate OpenDate @relation(fields: [date], references: [date], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([date, productId])
+}
+
+model Order {
+  id               String       @id @default(uuid()) @db.Uuid
+  pickupDate       DateTime     @db.Date
+  seq              Int
+  orderNo          String
+  viewToken        String       @unique
+  wechatId         String
+  fulfillment      Fulfillment
+  status           OrderStatus  @default(NEW)
+  subtotalCents    Int
+  deliveryFeeCents Int
+  totalCents       Int
+  note             String?
+  cutoffAt         DateTime     @db.Timestamptz(3)
+  source           OrderSource
+  paid             Boolean      @default(false)
+  paidMethod       PaidMethod?
+  paidAt           DateTime?    @db.Timestamptz(3)
+  idempotencyKey   String?      @unique
+  ipHash           String?
+  createdAt        DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  confirmedAt      DateTime?    @db.Timestamptz(3)
+  cancelledAt      DateTime?    @db.Timestamptz(3)
+  cancelledBy      CancelledBy?
+
+  openDate OpenDate    @relation(fields: [pickupDate], references: [date], onDelete: Restrict)
+  items    OrderItem[]
+
+  @@unique([pickupDate, seq])
+  @@index([pickupDate, status])
+  @@index([wechatId, pickupDate])
+  @@index([createdAt(sort: Desc)])
+}
+
+model OrderItem {
+  id               String @id @default(uuid()) @db.Uuid
+  orderId          String @db.Uuid
+  productId        String @db.Uuid
+  nameSnapshot     String
+  qty              Int
+  unitPriceCents   Int
+  bundleSize       Int
+  bundlePriceCents Int?
+  lineTotalCents   Int
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  at         DateTime @db.Timestamptz(3)
+  actor      Actor
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  reason     String?
+
+  @@index([entityType, entityId])
+  @@index([at(sort: Desc)])
+}
+
+/// Outbox: enqueued in the same transaction as the business write, sent afterwards.
+model Notification {
+  id            String             @id @default(uuid()) @db.Uuid
+  kind          NotificationKind
+  dedupeKey     String             @unique
+  payload       Json
+  status        NotificationStatus @default(PENDING)
+  attempts      Int                @default(0)
+  lastError     String?
+  nextAttemptAt DateTime           @db.Timestamptz(3)
+  createdAt     DateTime           @default(now()) @db.Timestamptz(3)
+  sentAt        DateTime?          @db.Timestamptz(3)
+
+  @@index([status, nextAttemptAt])
+}
+
+model AdminUser {
+  id           String    @id @default(uuid()) @db.Uuid
+  username     String    @unique
+  passwordHash String
+  failedCount  Int       @default(0)
+  lockedUntil  DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  sessions       AdminSession[]
+  passwordResets PasswordReset[]
+}
+
+model AdminSession {
+  id         String   @id @default(uuid()) @db.Uuid
+  /// sha256 of the random cookie value; the raw value is never stored.
+  tokenHash  String   @unique
+  userId     String   @db.Uuid
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt  DateTime @db.Timestamptz(3)
+  lastSeenAt DateTime @db.Timestamptz(3)
+
+  user AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PasswordReset {
+  id        String    @id @default(uuid()) @db.Uuid
+  tokenHash String    @unique
+  userId    String    @db.Uuid
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  expiresAt DateTime  @db.Timestamptz(3)
+  usedAt    DateTime? @db.Timestamptz(3)
+
+  user AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model RateLimitHit {
+  id  BigInt   @id @default(autoincrement())
+  key String
+  at  DateTime @db.Timestamptz(3)
+
+  @@index([key, at])
+}

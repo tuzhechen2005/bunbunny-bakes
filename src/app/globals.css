@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+/* Warm, simple bakery palette. Components use these tokens only. */
+:root {
+  --background: #fdf8f1;
+  --foreground: #3d2b1f;
+  --card: #ffffff;
+  --muted: #8a7462;
+  --border: #ecdfcf;
+  --soft: #f6ebdc;
+  --accent: #c0743a;
+  --accent-strong: #a35f2c;
+  --accent-ink: #ffffff;
+  --danger: #b5432f;
+  --disabled: #d9cdbf;
+  --disabled-ink: #8f8174;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-line: var(--border);
+  --color-soft: var(--soft);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger: var(--danger);
+  --color-disabled: var(--disabled);
+  --color-disabled-ink: var(--disabled-ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1f1915;
+    --foreground: #f3e9dd;
+    --card: #2a221c;
+    --muted: #b5a291;
+    --border: #3d332b;
+    --soft: #342a22;
+    --accent: #d98a4e;
+    --accent-strong: #e79d63;
+    --accent-ink: #1f1915;
+    --danger: #ec7a64;
+    --disabled: #4a3f36;
+    --disabled-ink: #9c8e81;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}

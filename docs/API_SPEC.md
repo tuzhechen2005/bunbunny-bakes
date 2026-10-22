@@ -26,6 +26,7 @@
 | `STALE` | 409 | 店主在另一个页面已经改过这笔订单 |
 | `UNAUTHORIZED` | 401 | |
 | `NOT_FOUND` | 404 | 包括错误的订单链接 |
+| `INTERNAL` | 500 | 服务器内部错误（不返回任何细节，`message` 为「提交失败，请稍后再试」） |
 
 `message` 是可以直接显示给顾客或店主看的中文。
 
@@ -150,7 +151,7 @@
 | 路径 | 频率（America/Chicago） | 做什么 |
 |---|---|---|
 | POST `/api/cron/outbox` | 每 5 分钟 | 发送 `nextAttemptAt ≤ now` 的待发通知；清理过期的频率记录和登录会话 |
-| POST `/api/cron/summary` | 每天 20:05 | 生成生产汇总（`CAPACITY_RULES.md` 第 10 节）并入队，`dedupeKey = summary:<明天日期>`，重复调用只发一次 |
+| POST `/api/cron/summary` | 每天 20:05 | 生成生产汇总（`CAPACITY_RULES.md` 第 10 节）并入队，`dedupeKey = summary:<明天日期>`，入队后立即发送（响应里的 `send` 是发送结果，失败的由 outbox 重试），重复调用只发一次 |
 
 两个接口都必须可以安全地重复调用。
 
