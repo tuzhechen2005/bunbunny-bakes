@@ -186,7 +186,7 @@ export async function loadCalendar(
       over: {
         dough: u.doughG > limits.doughLimitG,
         products: overProducts,
-        delivery: limits.deliveryEnabled && u.deliveries > limits.deliveryLimit,
+        delivery: u.deliveries > (limits.deliveryEnabled ? limits.deliveryLimit : 0),
       },
     };
   });

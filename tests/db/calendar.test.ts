@@ -102,6 +102,13 @@ describe("GET calendar", () => {
     expect(day.over).toEqual({ dough: true, products: [], delivery: true });
   });
 
+  it("flags delivery over when deliveries exist but delivery is turned off", async () => {
+    await createOpenDate(D1, { deliveryEnabled: false });
+    await createOrder({ date: D1, items: [{ productId: P.brulee, qty: 1 }], fulfillment: "DELIVERY" });
+    const day = (await get(D1, D1)).days[0];
+    expect(day.over.delivery).toBe(true);
+  });
+
   it("uses CURRENT product settings (D45)", async () => {
     await createOpenDate(D1);
     await createOrder({ date: D1, items: [{ productId: P.redBean, qty: 10 }] });

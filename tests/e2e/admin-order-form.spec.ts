@@ -208,3 +208,48 @@ test("edit: STALE shows the message and a refresh button", async ({ page }) => {
   await expect(page.getByTestId("form-error")).toContainText(copy.errors.STALE);
   await expect(page.getByRole("button", { name: t.refresh })).toBeVisible();
 });
+
+test("new order: editing any field after OVER_LIMIT closes the panel; the button reads 仍然保存（请写原因）", async ({ page }) => {
+  const bodies: Record<string, unknown>[] = [];
+  await page.route("**/api/admin/orders", async (route) => {
+    bodies.push(route.request().postDataJSON());
+    return json(route, 409, {
+      error: "OVER_LIMIT",
+      message: copy.errors.OVER_LIMIT,
+      violations: [{ kind: "DOUGH", date: D1, limit: 1600, after: 1720, over: 120 }],
+    });
+  });
+  await page.goto("/admin/orders/new");
+  await page.getByRole("button", { name: /岩烧乳酪包 数量 增加/ }).click();
+  await pickDate(page, D1);
+  await page.getByLabel(t.wechatLabel).fill("wx_bob");
+
+  const panel = page.getByTestId("over-limit");
+  const reopen = async () => {
+    await page.getByTestId("submit").click();
+    await expect(panel).toBeVisible();
+  };
+
+  await reopen();
+  await expect(page.getByTestId("override-confirm")).toHaveText("仍然保存（请写原因）");
+  await page.getByTestId("reason").fill("because");
+
+  // Each kind of change closes the panel and clears the reason.
+  const changes: Array<() => Promise<void>> = [
+    () => page.getByRole("button", { name: /岩烧乳酪包 数量 增加/ }).click(),
+    () => pickDate(page, D2),
+    () => page.getByLabel(t.delivery).check(),
+    () => page.getByLabel(t.wechatLabel).fill("wx_bob2"),
+    () => page.getByLabel(t.noteLabel).fill("note"),
+  ];
+  for (const change of changes) {
+    await change();
+    await expect(panel).toBeHidden();
+    await expect(page.getByTestId("submit")).toBeVisible();
+    await reopen();
+    await expect(page.getByTestId("reason")).toHaveValue("");
+    await page.getByTestId("reason").fill("because");
+  }
+  // No request ever carried an override.
+  expect(bodies.every((b) => !("override" in b))).toBe(true);
+});

@@ -283,6 +283,18 @@ describe("order writes", () => {
     expect((await over.json()).error).toBe("OVER_LIMIT");
   });
 
+  it("PATCH: a different orderId in the body cannot redirect the edit", async () => {
+    const a = await fresh();
+    const b = await fresh();
+    const res = await detailPATCH(
+      write("PATCH", "/x", { orderId: b.id, wechatId: "only_a", expectedUpdatedAt: a.stamp }),
+      ctx(a.id),
+    );
+    expect(res.status).toBe(200);
+    expect((await db.order.findUniqueOrThrow({ where: { id: a.id } })).wechatId).toBe("only_a");
+    expect((await db.order.findUniqueOrThrow({ where: { id: b.id } })).wechatId).not.toBe("only_a");
+  });
+
   it("POST create: 201 with id, orderNo, viewUrl; OVER_LIMIT; VALIDATION", async () => {
     const res = await createPOST(
       write("POST", "/x", {

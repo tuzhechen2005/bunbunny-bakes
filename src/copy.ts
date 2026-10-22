@@ -155,6 +155,17 @@ export const copy = {
     NOT_FOUND: "找不到这个订单，请检查链接是否完整，或加微信联系店主",
     /** Unknown / unexpected errors. */
     fallback: "提交失败，请稍后再试",
+    /** VALIDATION `fields` messages, safe to show customers (orderSchemas.ts). */
+    fields: {
+      wechatId: "请填写微信号（最多 40 个字符）",
+      note: "备注最多 300 字",
+      items: "商品数量有误",
+      qty: "商品数量有误",
+      pickupDate: "请选择取货日期",
+      fulfillment: "请选择自提或配送",
+      reason: "请写超限的原因（最多 500 字）",
+      other: "填写的内容有误",
+    },
   },
 
   admin: {
@@ -421,6 +432,7 @@ export const copy = {
       save: "保存",
       saving: "保存中…",
       saveAnyway: "仍然保存",
+      archivedProduct: "已下架商品",
       cancelWarning: "再想想",
       overLimitMessage: "这样会让这天超过上限，请确认",
       warnTitle: "请确认：",
@@ -473,7 +485,7 @@ export const copy = {
       overHint: "你可以超限保存，但必须写原因，原因会记入日志。",
       overReasonLabel: "超限原因（必填）",
       overReasonRequired: "请写超限的原因",
-      overConfirm: "仍然保存",
+      overConfirm: "仍然保存（请写原因）",
       overCancel: "返回修改",
       violation: {
         dough: "{day} 面团：上限 {limit} g，保存后 {after} g，超出 {over} g",

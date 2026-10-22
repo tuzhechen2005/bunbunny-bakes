@@ -99,7 +99,7 @@ export function DaySheet({
   function warningText(w: DateWarning): string {
     if (w.kind === "HAS_ORDERS") return fill(t.warnHasOrders, { count: w.count });
     if (w.what === "PRODUCT") {
-      return fill(t.warnProduct, { name: names[w.productId] ?? "", limit: w.limit, used: w.used });
+      return fill(t.warnProduct, { name: names[w.productId] ?? t.archivedProduct, limit: w.limit, used: w.used });
     }
     return fill(w.what === "DOUGH" ? t.warnDough : t.warnDelivery, { limit: w.limit, used: w.used });
   }
