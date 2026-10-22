@@ -15,9 +15,14 @@ export type DbClient = InstanceType<typeof PrismaClient>;
  */
 export type Tx = Prisma.TransactionClient & { $connect?: never };
 
+/** How long a query waits for a free pool connection before failing (pg default: forever). */
+export const DEFAULT_CONNECTION_TIMEOUT_MS = 5000;
+
 export interface CreatePrismaClientOptions {
   /** Max connections in the node-postgres pool (pg default: 10). */
   max?: number;
+  /** Default DEFAULT_CONNECTION_TIMEOUT_MS. */
+  connectionTimeoutMillis?: number;
 }
 
 /** A new client for `url`. Tests use this with TEST_DATABASE_URL; call `$disconnect()` when done. */
@@ -26,8 +31,15 @@ export function createPrismaClient(url: string, options: CreatePrismaClientOptio
   if (options.max !== undefined && (!Number.isInteger(options.max) || options.max < 1)) {
     throw new Error(`createPrismaClient: max must be a positive integer (got ${options.max})`);
   }
+  const connectionTimeoutMillis = options.connectionTimeoutMillis ?? DEFAULT_CONNECTION_TIMEOUT_MS;
+  if (!Number.isInteger(connectionTimeoutMillis) || connectionTimeoutMillis < 1) {
+    throw new Error(
+      `createPrismaClient: connectionTimeoutMillis must be a positive integer (got ${connectionTimeoutMillis})`,
+    );
+  }
   const adapter = new PrismaPg({
     connectionString: url,
+    connectionTimeoutMillis,
     ...(options.max !== undefined ? { max: options.max } : {}),
   });
   return new PrismaClient({ adapter });

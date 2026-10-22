@@ -45,11 +45,15 @@ describe("processOutbox concurrency", () => {
       processOutbox(clientA, NOW, { render, transport: slow }),
       processOutbox(clientB, NOW, { render, transport: slow }),
     ]);
+    // How the work splits between the runs (and how many each skips) depends on timing;
+    // only "every notification exactly once" is the invariant.
+    const keys = Array.from({ length: 20 }, (_, i) => `new_order:${i}`);
+    expect(Object.fromEntries(keys.map((k) => [k, sends.get(k) ?? 0]))).toEqual(
+      Object.fromEntries(keys.map((k) => [k, 1])),
+    );
     expect(sends.size).toBe(20);
-    expect([...sends.values()].every((c) => c === 1)).toBe(true);
     expect(a.sent + b.sent).toBe(20);
     expect(a.failed + b.failed).toBe(0);
-    expect(a.skipped + b.skipped).toBe(20);
     expect(await db.notification.count({ where: { status: "SENT" } })).toBe(20);
     const rows = await db.notification.findMany();
     expect(rows.every((r) => r.attempts === 1)).toBe(true);

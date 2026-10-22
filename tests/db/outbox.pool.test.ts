@@ -3,7 +3,7 @@
 // goes through at once.
 
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { createPrismaClient } from "@/server/db";
+import { createPrismaClient, DEFAULT_CONNECTION_TIMEOUT_MS } from "@/server/db";
 import type { MailTransport } from "@/server/mailer";
 import { createCustomerOrder } from "@/server/orders";
 import { sendNotification, type SendDeps } from "@/server/outboxSend";
@@ -55,5 +55,28 @@ describe("outbox send and the connection pool", () => {
     expect(elapsed).toBeLessThan(1500);
 
     expect(await Promise.all(sends)).toEqual(["sent", "sent"]);
+  });
+});
+
+describe("pool connection timeout", () => {
+  it("defaults to 5 s", () => {
+    expect(DEFAULT_CONNECTION_TIMEOUT_MS).toBe(5000);
+    expect(() => createPrismaClient(TEST_DATABASE_URL, { connectionTimeoutMillis: 0 })).toThrow(/connectionTimeoutMillis/);
+  });
+
+  it("a query waiting for a busy pool fails after the timeout instead of waiting forever", async () => {
+    const one = createPrismaClient(TEST_DATABASE_URL, { max: 1, connectionTimeoutMillis: 300 });
+    try {
+      const holder = one.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT pg_sleep(1.5)`;
+      }, { timeout: 10_000 });
+      await new Promise((r) => setTimeout(r, 100));
+      const started = Date.now();
+      await expect(one.$queryRaw`SELECT 1`).rejects.toThrow();
+      expect(Date.now() - started).toBeLessThan(1200);
+      await holder;
+    } finally {
+      await one.$disconnect();
+    }
   });
 });

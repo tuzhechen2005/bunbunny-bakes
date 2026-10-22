@@ -6,6 +6,11 @@ vi.mock("next/server", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/server")>()),
   connection: async () => {},
 }));
+// The route now sends right away: never reach a real provider from tests.
+vi.mock("@/server/mailer", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/server/mailer")>()),
+  getTransport: () => ({ send: async () => ({ id: "test" }) }),
+}));
 
 import { POST as summaryPOST } from "@/app/api/cron/summary/route";
 import { prisma } from "@/server/db";

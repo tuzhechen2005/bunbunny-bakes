@@ -207,6 +207,93 @@ function withBrokenFinish(client: DbClient): DbClient {
   });
 }
 
+/** A transport whose sends block until the test settles them (gates[i] for call i). */
+function gatedTransport() {
+  const calls: string[] = [];
+  const gates: { resolve: () => void; reject: (e: Error) => void }[] = [];
+  const t: MailTransport = {
+    send(m) {
+      calls.push(m.idempotencyKey);
+      return new Promise((resolve, reject) => {
+        gates.push({ resolve: () => resolve({ id: "x" }), reject });
+      });
+    },
+  };
+  const waitForCall = async (n: number) => {
+    while (gates.length < n) await new Promise((r) => setTimeout(r, 5));
+  };
+  return { t, calls, gates, waitForCall };
+}
+
+describe("fencing by the claim's attempt number", () => {
+  it("a late failure does not overwrite a newer claim's lease", async () => {
+    const n = await createNotification();
+    const g = gatedTransport();
+    const late = sendNotification(db, n.id, NOW, { render, transport: g.t }); // attempt 1
+    await g.waitForCall(1);
+    const t2 = new Date(NOW.getTime() + LEASE_MS); // lease 1 expired
+    const newer = sendNotification(db, n.id, t2, { render, transport: g.t }); // attempt 2
+    await g.waitForCall(2);
+
+    g.gates[0].reject(new Error("late failure"));
+    expect(await late).toBe("failed");
+    let row = await db.notification.findUniqueOrThrow({ where: { id: n.id } });
+    expect(row.attempts).toBe(2);
+    expect(row.nextAttemptAt).toEqual(new Date(t2.getTime() + LEASE_MS));
+    expect(row.lastError).toBeNull();
+
+    g.gates[1].resolve();
+    expect(await newer).toBe("sent");
+    row = await db.notification.findUniqueOrThrow({ where: { id: n.id } });
+    expect(row.status).toBe("SENT");
+    expect(row.sentAt).toEqual(t2);
+  });
+
+  it("a late success does not finish a row a newer claim owns; the newer claim finishes it", async () => {
+    const n = await createNotification();
+    const g = gatedTransport();
+    const late = sendNotification(db, n.id, NOW, { render, transport: g.t });
+    await g.waitForCall(1);
+    const t2 = new Date(NOW.getTime() + LEASE_MS);
+    const newer = sendNotification(db, n.id, t2, { render, transport: g.t });
+    await g.waitForCall(2);
+    g.gates[0].resolve();
+    await late;
+    expect((await db.notification.findUniqueOrThrow({ where: { id: n.id } })).status).toBe("PENDING");
+    g.gates[1].reject(new Error("newer failed"));
+    expect(await newer).toBe("failed");
+    const row = await db.notification.findUniqueOrThrow({ where: { id: n.id } });
+    expect(row.attempts).toBe(2);
+    expect(row.lastError).toContain("newer failed");
+    expect(row.nextAttemptAt).toEqual(new Date(t2.getTime() + BACKOFF_MINUTES[1] * MIN));
+    // Both used the same Idempotency-Key, so the provider delivered it once.
+    expect(g.calls).toEqual([n.dedupeKey, n.dedupeKey]);
+  });
+
+  it("a confirmed send moves a row given up meanwhile from FAILED to SENT", async () => {
+    const n = await createNotification({
+      attempts: MAX_ATTEMPTS - 1,
+      kind: "PASSWORD_RESET",
+      dedupeKey: "password_reset:late",
+      payload: { url: "https://x/admin/reset?token=secret" },
+    });
+    const g = gatedTransport();
+    const last = sendNotification(db, n.id, NOW, { render, transport: g.t }); // attempt 8
+    await g.waitForCall(1);
+    // The lease runs out: the next claim gives up.
+    expect(await sendNotification(db, n.id, new Date(NOW.getTime() + LEASE_MS), { render, transport: g.t })).toBe("failed");
+    expect((await db.notification.findUniqueOrThrow({ where: { id: n.id } })).status).toBe("FAILED");
+    g.gates[0].resolve();
+    expect(await last).toBe("sent");
+    const row = await db.notification.findUniqueOrThrow({ where: { id: n.id } });
+    expect(row.status).toBe("SENT");
+    expect(row.sentAt).toEqual(NOW);
+    expect(row.lastError).toBeNull();
+    expect(row.payload).toEqual({ scrubbed: true });
+    expect(g.calls).toHaveLength(1);
+  });
+});
+
 describe("every attempt counts (no endless retries)", () => {
   it("a thrown non-Error counts as a failed attempt", async () => {
     const n = await createNotification();
