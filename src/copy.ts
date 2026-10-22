@@ -99,7 +99,8 @@ export const copy = {
     /** Order page /o/{token} (PAGES.md), also the "order submitted" page. */
     order: {
       newTitle: "预订提交成功！🎉",
-      newHint: "请收藏或截图这个页面，随时可以回来查看订单状态",
+      newHint: "复制下面的链接保存好，随时打开它查看订单状态",
+      copyLink: "复制订单链接",
       loading: "加载中…",
       loadFailed: "加载失败，请稍后刷新",
       retry: "重新加载",

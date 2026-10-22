@@ -7,6 +7,7 @@ import { formatCents } from "@/domain/pricing";
 import { CancelSection } from "./CancelSection";
 import { NotFoundMessage } from "./NotFoundMessage";
 import { OrderLoading } from "./OrderLoading";
+import { OrderLinkCopy } from "./OrderLinkCopy";
 import { WechatBlock } from "./WechatBlock";
 import { fill, type OrderViewData } from "./types";
 
@@ -102,6 +103,7 @@ export function OrderPage() {
         <section data-testid="new-banner" className="rounded-xl bg-amber-100 p-4 text-amber-950">
           <p className="text-lg font-semibold">{t.newTitle}</p>
           <p className="mt-1 text-sm leading-relaxed">{t.newHint}</p>
+          <OrderLinkCopy token={token} variant="banner" />
         </section>
       )}
 
@@ -161,6 +163,8 @@ export function OrderPage() {
       )}
 
       <p className="text-center text-sm text-neutral-600">{t.payOnReceipt}</p>
+
+      {!isNew && <OrderLinkCopy token={token} variant="secondary" />}
 
       {showCancel && (
         <CancelSection

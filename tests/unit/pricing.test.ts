@@ -12,7 +12,7 @@ import type { FeeSettings, PriceSnapshot } from "@/domain/types";
 const BUN: PriceSnapshot = { unitPriceCents: 249, bundleSize: 4, bundlePriceCents: 899 };
 const CHEESE_BUN: PriceSnapshot = { unitPriceCents: 249, bundleSize: 4, bundlePriceCents: 899 };
 const CHEESE_HORN: PriceSnapshot = { unitPriceCents: 299, bundleSize: 4, bundlePriceCents: 1099 };
-const BRULEE: PriceSnapshot = { unitPriceCents: 229, bundleSize: 4, bundlePriceCents: 799 };
+const BRULEE: PriceSnapshot = { unitPriceCents: 229, bundleSize: 4, bundlePriceCents: 899 };
 
 const PRICES: Record<string, PriceSnapshot> = {
   bun: BUN,
@@ -53,7 +53,7 @@ const ROWS: { name: string; items: [string, number][]; subtotal: number; fee: nu
     fee: 0,
     total: 2897,
   },
-  { name: "P8 brulee x8", items: [["brulee", 8]], subtotal: 1598, fee: 500, total: 2098 },
+  { name: "P8 brulee x8", items: [["brulee", 8]], subtotal: 1798, fee: 500, total: 2298 },
   {
     name: "P9 cheese horn x8 + bun x1",
     items: [["cheeseHorn", 8], ["bun", 1]],
