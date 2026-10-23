@@ -41,6 +41,8 @@ export const copy = {
       receiptLast: "面包已经在排队发酵啦！",
     },
     home: {
+      /** Shop name without the emoji: rendered next to BunnyMark as the wordmark. */
+      wordmark: "的大面包",
       orderingClosedHint: "下一轮预订开放时间请关注群内通知～",
       loading: "加载中…",
       loadFailed: "菜单加载失败，请稍后再试",
