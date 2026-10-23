@@ -11,9 +11,10 @@ const t = copy.customer.home;
 export function ProductPhoto({ product, className }: { product: MenuProduct; className: string }) {
   if (!product.imageUrl) return <BunnyPlaceholder className={className} />;
   return (
-    // Product photos come from Vercel Blob; a plain <img> avoids image-optimizer config.
+    // Product photos are served by /api/images (Netlify Blobs); a plain <img> avoids image-optimizer config.
+    // The caller's className fixes the box size, so lazy loading does not shift the layout.
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={product.imageUrl} alt={product.name} className={`${className} object-cover`} loading="lazy" />
+    <img src={product.imageUrl} alt={product.name} className={`${className} aspect-square object-cover`} loading="lazy" decoding="async" />
   );
 }
 
