@@ -359,19 +359,36 @@ test.describe("rope gestures with real touch events (CDP)", () => {
   });
 
   test("a stale gesture whose touchend never came does not swallow the next swipe", async ({ page }) => {
+    // Synthetic touch events: the browser itself would never leave a gesture open like this, but a
+    // lost touchend (detached node, host app) looks exactly like it to the page.
     const [cx, cy] = await centreOf(page, '.hm-card[data-card="0"] .hm-face:not(.hm-back)');
-    await f.down(cx + 100, cy);
-    for (let i = 1; i <= 4; i++) {
-      await f.wait(20);
-      await f.move(cx + 100 - 20 * i, cy);
-    }
-    // No touchend: the next touchstart (single finger) must close the old gesture and start over.
-    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: cx + 100, y: cy, id: 7 }] });
-    for (let i = 1; i <= 6; i++) {
-      await f.wait(10);
-      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: cx + 100 - 28 * i, y: cy, id: 7 }] });
-    }
-    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await page.evaluate(
+      async ([x, y]) => {
+        const target = document.querySelector('.hm-card[data-card="0"] .hm-face') as HTMLElement;
+        const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        const touch = (id: number, px: number) => new Touch({ identifier: id, target, clientX: px, clientY: y });
+        const fire = (type: string, id: number, px: number, live: boolean) => {
+          const t = touch(id, px);
+          target.dispatchEvent(
+            new TouchEvent(type, { bubbles: true, cancelable: true, touches: live ? [t] : [], targetTouches: live ? [t] : [], changedTouches: [t] }),
+          );
+        };
+        // gesture 1: moves, then nothing (no touchend)
+        fire("touchstart", 1, x + 100, true);
+        for (let i = 1; i <= 4; i++) {
+          await wait(16);
+          fire("touchmove", 1, x + 100 - 10 * i, true);
+        }
+        // gesture 2 on a new finger: must start over and fling one card
+        fire("touchstart", 2, x + 100, true);
+        for (let i = 1; i <= 6; i++) {
+          await wait(10);
+          fire("touchmove", 2, x + 100 - 28 * i, true);
+        }
+        fire("touchend", 2, x + 100 - 168, false);
+      },
+      [cx, cy],
+    );
     await expect.poll(() => selectedIndex(page)).toBe(1);
   });
 
@@ -535,7 +552,7 @@ test.describe("mouse and keyboard", () => {
     await page.getByTestId("hero-add").click();
     await page.getByTestId("hero-add").click();
     await expect(page.getByTestId("bag-count")).toContainText("2");
-    await expect(page.getByTestId("live")).toContainText("已放进纸袋：奶酥红豆包");
+    await expect(page.getByTestId("bag-live")).toContainText("已放进纸袋：奶酥红豆包");
     expect(await page.evaluate(() => localStorage.getItem("bb_cart_v1"))).toBe(JSON.stringify([{ productId: "p-redbean", qty: 2 }]));
     await page.getByTestId("rack").focus();
     for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowRight");
