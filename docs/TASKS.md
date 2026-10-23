@@ -7,7 +7,7 @@
 ## M0 准备（店主 + 助手，约 2 小时）
 
 店主要做的（助手可以一步步指导）：
-- [ ] 注册域名 bunbunnybakes.com（或最后选定的域名）
+- [x] 注册域名 bunbunnybakes.shop（Porkbun，D61）
 - [ ] 注册 Vercel、Neon、Resend、cron-job.org 账号（都用免费版）
 - [x] 在 GitHub 新建仓库（公开，D47），放入本套文档
 

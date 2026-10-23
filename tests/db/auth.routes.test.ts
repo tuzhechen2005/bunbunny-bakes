@@ -17,7 +17,7 @@ import { getSession, hashPassword } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { db, resetDb } from "./helpers";
 
-const SITE = "https://bunbunnybakes.com";
+const SITE = "https://bunbunnybakes.shop";
 const PASSWORD = "correct-horse-battery";
 let previousSiteUrl: string | undefined;
 
@@ -101,7 +101,7 @@ describe("POST /api/admin/login", () => {
     const variants: Record<string, string>[] = [
       {},
       { origin: "https://evil.example" },
-      { origin: "http://bunbunnybakes.com" },
+      { origin: "http://bunbunnybakes.shop" },
     ];
     for (const headers of variants) {
       const res = await loginPOST(post("/api/admin/login", { username: "owner", password: PASSWORD }, headers));

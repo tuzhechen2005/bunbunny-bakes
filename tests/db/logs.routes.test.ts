@@ -20,7 +20,7 @@ import { prisma } from "@/server/db";
 import { atLabelOf, dateBounds } from "@/server/logs";
 import { createDefaultProducts, createOpenDate, createOrder, createSettings, db, resetDb } from "./helpers";
 
-const SITE = "https://bunbunnybakes.com";
+const SITE = "https://bunbunnybakes.shop";
 
 interface Page {
   items: {

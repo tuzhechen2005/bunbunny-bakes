@@ -30,7 +30,7 @@ import {
   type DefaultProductIds,
 } from "./helpers";
 
-const SITE = "https://bunbunnybakes.com";
+const SITE = "https://bunbunnybakes.shop";
 // 10:00 on 2026-10-28 in Chicago (CDT).
 const NOW = new Date("2026-10-28T15:00:00Z");
 const TODAY = "2026-10-28";

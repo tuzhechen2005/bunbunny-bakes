@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { proxy } from "@/proxy";
 
-const SITE = "https://bunbunnybakes.com";
+const SITE = "https://bunbunnybakes.shop";
 let previousSiteUrl: string | undefined;
 
 beforeAll(() => {
@@ -85,7 +85,7 @@ describe("proxy: admin api", () => {
 
   it.each([...publicApis, ...protectedApis])("rejects non-GET %s with a missing or foreign Origin", async (path) => {
     for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
-      for (const origin of [null, "https://evil.example", "http://bunbunnybakes.com"]) {
+      for (const origin of [null, "https://evil.example", "http://bunbunnybakes.shop"]) {
         const res = call(path, { method, origin, cookie: true });
         expect(res.status).toBe(403);
         expect(await res.json()).toEqual({ error: "FORBIDDEN_ORIGIN" });

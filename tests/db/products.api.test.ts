@@ -23,7 +23,7 @@ import { createSession, hashPassword } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { createDefaultProducts, createSettings, db, resetDb, type DefaultProductIds } from "./helpers";
 
-const SITE = "https://bunbunnybakes.com";
+const SITE = "https://bunbunnybakes.shop";
 let previousSiteUrl: string | undefined;
 let P: DefaultProductIds;
 

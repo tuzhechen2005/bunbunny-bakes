@@ -21,7 +21,7 @@ import { createSession, getSession, hashPassword } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { createSettings, db, resetDb } from "./helpers";
 
-const SITE = "https://bunbunnybakes.com";
+const SITE = "https://bunbunnybakes.shop";
 const PASSWORD = "correct-horse-battery";
 let previousSiteUrl: string | undefined;
 let userId: string;

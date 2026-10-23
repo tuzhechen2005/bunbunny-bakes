@@ -13,7 +13,7 @@ import {
   type DefaultProductIds,
 } from "./helpers";
 
-const SITE = "https://bunbunnybakes.com";
+const SITE = "https://bunbunnybakes.shop";
 // 20:05 on 2026-10-29 in Chicago (CDT) -> X = 10/29, tomorrow = Fri 10/30.
 const NOW = new Date("2026-10-30T01:05:00Z");
 
@@ -71,7 +71,7 @@ describe("NEW_ORDER", () => {
         "取货：10/30 周五　自提",
         "备注：（无）",
         "",
-        `[打开订单] → https://bunbunnybakes.com/admin/orders/${o.id}`,
+        `[打开订单] → https://bunbunnybakes.shop/admin/orders/${o.id}`,
       ].join("\n"),
     );
   });
@@ -197,7 +197,7 @@ describe("DAILY_SUMMARY", () => {
         "1030-002　微信 xxx（新订单）",
         "1031-001　微信 yyy（已联系）",
         "",
-        "[打开后台] → https://bunbunnybakes.com/admin",
+        "[打开后台] → https://bunbunnybakes.shop/admin",
       ].join("\n"),
     );
   });
@@ -219,7 +219,7 @@ describe("DAILY_SUMMARY", () => {
         "【明晚要做的布蕾】（10/31 取货，刚截止）",
         "9 杯 → 3 批",
         "",
-        "[打开后台] → https://bunbunnybakes.com/admin",
+        "[打开后台] → https://bunbunnybakes.shop/admin",
       ].join("\n"),
     );
   });
@@ -242,7 +242,7 @@ describe("DAILY_SUMMARY", () => {
         "【明天的交付】",
         "自提 1 单　配送 0 单",
         "",
-        "[打开后台] → https://bunbunnybakes.com/admin",
+        "[打开后台] → https://bunbunnybakes.shop/admin",
       ].join("\n"),
     );
   });

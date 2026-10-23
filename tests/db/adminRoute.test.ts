@@ -22,7 +22,7 @@ import { prisma } from "@/server/db";
 import { AppError } from "@/server/errors";
 import { db, resetDb } from "./helpers";
 
-const SITE = "https://bunbunnybakes.com";
+const SITE = "https://bunbunnybakes.shop";
 let previousSiteUrl: string | undefined;
 let userId: string;
 
@@ -87,7 +87,7 @@ describe("adminHandler", () => {
     const fn = vi.fn(async () => Response.json({ ok: true }));
     const handler = adminHandler(fn);
     for (const method of ["POST", "PATCH", "PUT", "DELETE"]) {
-      for (const headers of [{} as Record<string, string>, { origin: "https://evil.example" }, { origin: "http://bunbunnybakes.com" }]) {
+      for (const headers of [{} as Record<string, string>, { origin: "https://evil.example" }, { origin: "http://bunbunnybakes.shop" }]) {
         const res = await handler(req(method, headers));
         expect(res.status).toBe(403);
         expect(await res.json()).toEqual({ error: "FORBIDDEN_ORIGIN" });

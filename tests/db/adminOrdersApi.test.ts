@@ -32,7 +32,7 @@ import {
   type DefaultProductIds,
 } from "./helpers";
 
-const SITE = "https://bunbunnybakes.com";
+const SITE = "https://bunbunnybakes.shop";
 const TODAY = localDateOf(new Date());
 const D1 = addDays(TODAY, 1);
 const D2 = addDays(TODAY, 2);

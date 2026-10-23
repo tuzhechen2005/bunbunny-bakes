@@ -34,7 +34,7 @@ let previousSiteUrl: string | undefined;
 
 beforeAll(() => {
   previousSiteUrl = process.env.SITE_URL;
-  process.env.SITE_URL = "https://bunbunnybakes.com";
+  process.env.SITE_URL = "https://bunbunnybakes.shop";
 });
 
 afterAll(async () => {
@@ -99,7 +99,7 @@ describe("loadOrderFormData", () => {
 
 describe("GET /api/admin/order-form", () => {
   it("is 401 without a session and 200 with one", async () => {
-    const anon = await GET(new Request("https://bunbunnybakes.com/api/admin/order-form"));
+    const anon = await GET(new Request("https://bunbunnybakes.shop/api/admin/order-form"));
     expect(anon.status).toBe(401);
 
     const user = await db.adminUser.create({
@@ -107,7 +107,7 @@ describe("GET /api/admin/order-form", () => {
     });
     const { token } = await createSession(db, user.id, new Date());
     cookieToken = token;
-    const res = await GET(new Request("https://bunbunnybakes.com/api/admin/order-form"));
+    const res = await GET(new Request("https://bunbunnybakes.shop/api/admin/order-form"));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(Array.isArray(body.products)).toBe(true);

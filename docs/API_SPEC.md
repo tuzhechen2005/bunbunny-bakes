@@ -162,10 +162,10 @@
 | `DATABASE_URL` | Neon 连接串（带连接池的那个） |
 | `DIRECT_URL` | Neon 直连串，给 Prisma 迁移用 |
 | `RESEND_API_KEY` | |
-| `MAIL_FROM` | 例如 `🐰的大面包 <orders@bunbunnybakes.com>` |
+| `MAIL_FROM` | 例如 `🐰的大面包 <orders@bunbunnybakes.shop>` |
 | `ADMIN_EMAIL` | 店主的通知邮箱（店主本人知道，不写进仓库） |
 | `ADMIN_USERNAME`、`ADMIN_INITIAL_PASSWORD` | 只在第一次初始化时用，之后在后台改密码 |
-| `SITE_URL` | 例如 `https://bunbunnybakes.com`，用于邮件链接和 Origin 检查 |
+| `SITE_URL` | 例如 `https://bunbunnybakes.shop`，用于邮件链接和 Origin 检查 |
 | `CRON_SECRET` | |
 | `IP_HASH_SECRET` | |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob |
