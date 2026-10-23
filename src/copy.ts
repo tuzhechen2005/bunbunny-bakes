@@ -60,6 +60,8 @@ export const copy = {
       qtyLabel: "已选 {qty} 个",
       barCount: "已选 {count} 件",
       barSubtotal: "小计 {amount}",
+      /** Label alone, for bars that render the amount as a separate (animated) element. */
+      barSubtotalLabel: "小计",
       goCheckout: "去结算",
       checkoutClosed: "暂未开放预订",
       footerContact: "联系店主：微信 {id}",

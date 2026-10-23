@@ -7,8 +7,9 @@ import type { ReactNode } from "react";
 const loadFeatures = (): Promise<FeatureBundle> => import("./motionFeatures").then((m) => m.default);
 
 /**
- * Mounted once in the root layout. Components animate with `m.*` from "motion/react"
- * (never the full `motion.*`), which keeps the bundle small (FRONTEND.md section 5).
+ * Wrap any component that animates with `m.*` from "motion/react" (never the full `motion.*`),
+ * which keeps the bundle small (FRONTEND.md section 5). Deliberately NOT in the root layout: it
+ * would add ~11 KB gzip to every route, admin included. BlurText wraps itself.
  */
 export function MotionProvider({ children }: { children: ReactNode }) {
   return (

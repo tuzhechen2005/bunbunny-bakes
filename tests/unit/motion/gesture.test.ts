@@ -1,5 +1,48 @@
 import { describe, expect, it } from "vitest";
-import { GestureTracker, rubberBand, snapTarget } from "@/lib/motion/gesture";
+import {
+  AXIS_LOCK_PX,
+  FLING_PAUSE_MS,
+  GestureTracker,
+  RUBBER_BAND_LIMIT,
+  VELOCITY_WINDOW_MS,
+  rubberBand,
+  snapTarget,
+} from "@/lib/motion/gesture";
+
+describe("FRONTEND.md section 5 gesture constants are pinned", () => {
+  it("values", () => {
+    expect(AXIS_LOCK_PX).toBe(8);
+    expect(RUBBER_BAND_LIMIT).toBe(0.45);
+    expect(VELOCITY_WINDOW_MS).toBe(100);
+    expect(FLING_PAUSE_MS).toBe(80);
+  });
+
+  it("axis lock happens at exactly 8 px, not 7.9", () => {
+    const under = new GestureTracker();
+    under.start(0, 0, 0);
+    expect(under.move(7.9, 0, 10)).toBeNull();
+    expect(under.axis).toBeNull();
+    const at = new GestureTracker();
+    at.start(0, 0, 0);
+    expect(at.move(8, 0, 10)).toBe(8);
+    expect(at.axis).toBe("x");
+  });
+
+  it("rubber band approaches 0.45 for a huge overshoot and is 0.225 at an overshoot of 0.45", () => {
+    expect(rubberBand(3 + 1e6, 0, 3) - 3).toBeCloseTo(0.45, 3);
+    expect(rubberBand(3.45, 0, 3) - 3).toBeCloseTo(0.225, 6);
+    expect(rubberBand(-1e6, 0, 3)).toBeCloseTo(-0.45, 3);
+  });
+
+  it("velocity uses a 100 ms window: older samples are ignored", () => {
+    const g = new GestureTracker();
+    g.start(0, 0, 0);
+    g.move(100, 0, 10);
+    g.move(101, 0, 120);
+    g.move(111, 0, 220); // inside the last 100 ms: 10 px over 100 ms
+    expect(g.end(225).velocity).toBeCloseTo(0.1, 6);
+  });
+});
 
 describe("GestureTracker axis lock", () => {
   it("stays undecided under 8 px, then locks horizontal", () => {

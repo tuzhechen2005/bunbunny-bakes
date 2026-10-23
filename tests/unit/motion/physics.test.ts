@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Pendulum, pivotAccel } from "@/lib/motion/pendulum";
-import { Spring, SUBSTEP } from "@/lib/motion/spring";
+import { Pendulum, PEG_PENDULUM, pivotAccel } from "@/lib/motion/pendulum";
+import { ROPE_SPRING, Spring, SUBSTEP } from "@/lib/motion/spring";
 
 const DEG = 180 / Math.PI;
 
@@ -103,5 +103,46 @@ describe("Pendulum", () => {
   it("pivotAccel converts px/s velocity change to m/s^2", () => {
     expect(pivotAccel(0, 3000, 1, 1000)).toBeCloseTo(3);
     expect(pivotAccel(0, 3000, 0, 1000)).toBe(0);
+  });
+});
+
+describe("FRONTEND.md section 5 constants are pinned", () => {
+  it("spring", () => {
+    expect(ROPE_SPRING).toEqual({ frequencyHz: 1.7, dampingRatio: 0.9 });
+    expect(SUBSTEP).toBe(1 / 240);
+  });
+
+  it("pendulum", () => {
+    expect(PEG_PENDULUM).toEqual({ length: 0.42, dampingRatio: 0.85, maxDrive: 5 });
+  });
+
+  it("spring step response is that of 1.7 Hz (0.5 s in: 0.991; 1.5 Hz or 1.9 Hz differ)", () => {
+    const s = new Spring(0);
+    s.target = 1;
+    run((dt) => s.step(dt), 0.5, 60);
+    expect(s.x).toBeGreaterThan(0.989);
+    expect(s.x).toBeLessThan(0.993);
+  });
+
+  /** One-sided pivot push of `drive` m/s^2 for `seconds`, then free swing; returns peak degrees. */
+  function push(drive: number, seconds: number) {
+    const p = new Pendulum();
+    let peak = 0;
+    for (let i = 0; i < 480; i++) {
+      p.step(1 / 120, i / 120 < seconds ? drive : 0);
+      peak = Math.max(peak, Math.abs(p.angle));
+    }
+    return peak * DEG;
+  }
+
+  it("capped push peaks: ~5.7 deg for 0.1 s, ~11.1 deg for 0.2 s (matches L = 0.42 m)", () => {
+    expect(push(5, 0.1)).toBeGreaterThan(5.4);
+    expect(push(5, 0.1)).toBeLessThan(6.0);
+    expect(push(5, 0.2)).toBeGreaterThan(10.8);
+    expect(push(5, 0.2)).toBeLessThan(11.4);
+  });
+
+  it("a request above the cap is clamped to the cap", () => {
+    expect(push(500, 0.2)).toBeCloseTo(push(5, 0.2), 6);
   });
 });

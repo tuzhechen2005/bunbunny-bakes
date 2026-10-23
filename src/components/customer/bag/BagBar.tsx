@@ -36,8 +36,7 @@ export function BagBar({ count, subtotalCents, disabled, onCheckout }: BagBarPro
             {fill(t.barCount, { count })}
           </p>
           <p className="text-lg font-semibold tabular-nums" data-testid="bag-subtotal">
-            {fill(t.barSubtotal, { amount: "" })}
-            <CountUp value={subtotalCents} format={formatCents} />
+            <span>{t.barSubtotalLabel}</span> <CountUp value={subtotalCents} format={formatCents} />
           </p>
         </div>
         <button
