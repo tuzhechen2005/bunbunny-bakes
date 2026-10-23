@@ -83,7 +83,7 @@ export const copy = {
     },
     checkout: {
       pageTitle: "确认预订",
-      backToMenu: "‹ 返回菜单",
+      backToMenu: "返回菜单",
       emptyCart: "购物车还是空的～",
       emptyCartLink: "回首页挑选面包",
       cartTitle: "购物车明细",
@@ -106,6 +106,8 @@ export const copy = {
       deliveryFee: "满 {min} 免运费",
       /** e.g. "还差 $5.02" (follows deliveryFee) */
       freeDeliveryGap: "还差 {gap}",
+      /** Joins deliveryFee and freeDeliveryGap on one line. */
+      deliveryGapJoin: "，",
       deliveryArrange: "具体配送时间和地点会在微信上和你确认",
       wechatLabel: "微信号",
       /** Placeholder of the WeChat input. */
