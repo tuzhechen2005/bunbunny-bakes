@@ -34,7 +34,10 @@ export function BagHarness() {
   const compact = q.get("compact") === "1";
   const noPhoto = q.get("nophoto") === "1";
   const max = Number(q.get("max") ?? 20);
-  const products = noPhoto ? PRODUCTS.map((p) => ({ ...p, imageUrl: null })) : PRODUCTS;
+  // ?late=1: the menu photos arrive only after the "late-photos" button (menu after the cart).
+  const late = q.get("late") === "1";
+  const [photosIn, setPhotosIn] = useState(false);
+  const products = noPhoto || (late && !photosIn) ? PRODUCTS.map((p) => ({ ...p, imageUrl: null })) : PRODUCTS;
 
   const items = useCart();
   const [checkedOut, setChecked] = useState(0);
@@ -85,6 +88,9 @@ export function BagHarness() {
       </div>
       <button type="button" className="mt-6 h-11 rounded bg-c-paper px-4 text-c-ink" data-testid="clear-cart" onClick={() => cart.clear()}>
         clear
+      </button>
+      <button type="button" className="mt-2 h-11 rounded bg-c-paper px-4 text-c-ink" data-testid="late-photos" onClick={() => setPhotosIn(true)}>
+        photos
       </button>
       <p data-testid="checkout-calls">{checkedOut}</p>
       <FlyLayer />
