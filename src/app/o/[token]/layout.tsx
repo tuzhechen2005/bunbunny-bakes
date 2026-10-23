@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function OrderLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <div className="flex min-h-full flex-1 flex-col bg-neutral-50 text-neutral-900">{children}</div>;
+  return <div className="flex min-h-full flex-1 flex-col bg-c-wash text-c-ink">{children}</div>;
 }

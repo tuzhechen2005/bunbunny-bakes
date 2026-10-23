@@ -39,9 +39,10 @@ async function fillCart(page: Page) {
   await expect(card(page, "奶酥红豆包")).toBeVisible();
   await add(page, "奶酥红豆包", 4);
   await add(page, "奶酪角", 4);
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 8 件");
-  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $19.98");
-  await page.getByTestId("go-checkout").click();
+  await expect(page.getByTestId("bag-count")).toContainText("8");
+  await expect(page.getByTestId("bag-subtotal")).toContainText("19.98");
+  await page.getByTestId("bag-pill").click(); // 去结算 lives in the bag sheet
+  await page.getByTestId("bag-checkout").click();
   await expect(page).toHaveURL(/\/checkout$/);
 }
 
@@ -67,7 +68,7 @@ test("1. customer happy path -> order page -> cancel", async ({ page }) => {
   await page.getByTestId("submit").click();
 
   await page.waitForURL(/\/o\/[^/?]+\?new=1$/);
-  await expect(page.getByTestId("new-banner")).toContainText(ordPage.newTitle);
+  await expect(page.getByTestId("new-title")).toContainText(ordPage.newTitle);
   await expect(page.getByTestId("status-text")).toHaveText(
     copy.customerStatus.pending.replace("{ownerWechatId}", "bunbunny_bakes"),
   );
@@ -129,8 +130,8 @@ test("3. delivery fee and the free-delivery nudge", async ({ page }) => {
   await dateCard(page, seeded.dates.d1).click();
   await expect(page.getByTestId("total-fee")).toHaveText("$5.00");
   await expect(page.getByTestId("total-total")).toHaveText("$24.98");
-  await expect(page.getByTestId("delivery-gap")).toHaveText("再买 $5.02 就免运费啦");
-  await expect(page.getByTestId("delivery-fee")).toHaveText("运费 $5，满 $25 免运费");
+  await expect(page.getByTestId("delivery-gap")).toHaveText("还差 $5.02");
+  await expect(page.getByTestId("delivery-fee")).toHaveText("满 $25 免运费");
 });
 
 test("4. admin: dashboard, contact, confirm, payment, audit log, auth", async ({ page, context, baseURL, request }) => {
@@ -235,7 +236,8 @@ test("6. ordering closed: home says so and checkout cannot submit", async ({ pag
 
   await page.goto("/");
   await expect(page.getByText(copy.home.orderingClosed)).toBeVisible();
-  const go = page.getByTestId("go-checkout");
+  await page.getByTestId("bag-pill").click();
+  const go = page.getByTestId("bag-checkout");
   await expect(go).toBeDisabled();
   await expect(go).toHaveText(copy.customer.home.checkoutClosed);
 

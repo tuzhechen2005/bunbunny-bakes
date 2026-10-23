@@ -12,7 +12,7 @@ import type { FeeSettings, PriceSnapshot } from "@/domain/types";
 const BUN: PriceSnapshot = { unitPriceCents: 249, bundleSize: 4, bundlePriceCents: 899 };
 const CHEESE_BUN: PriceSnapshot = { unitPriceCents: 249, bundleSize: 4, bundlePriceCents: 899 };
 const CHEESE_HORN: PriceSnapshot = { unitPriceCents: 299, bundleSize: 4, bundlePriceCents: 1099 };
-const BRULEE: PriceSnapshot = { unitPriceCents: 229, bundleSize: 4, bundlePriceCents: 899 };
+const BRULEE: PriceSnapshot = { unitPriceCents: 249, bundleSize: 4, bundlePriceCents: 899 };
 
 const PRICES: Record<string, PriceSnapshot> = {
   bun: BUN,

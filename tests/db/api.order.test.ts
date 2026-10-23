@@ -7,6 +7,7 @@ vi.mock("next/server", async (importOriginal) => ({
 import { GET } from "@/app/api/o/[token]/route";
 import { POST as CANCEL } from "@/app/api/o/[token]/cancel/route";
 import { prisma } from "@/server/db";
+import { imageUrlForKey, keyFromImageUrl } from "@/server/imageFormat";
 import {
   createDefaultProducts,
   createOpenDate,
@@ -70,7 +71,8 @@ describe("GET /api/o/{token}", () => {
         "totalCents",
       ].sort(),
     );
-    expect(Object.keys(j.items[0]).sort()).toEqual(["lineTotalCents", "name", "qty"]);
+    expect(Object.keys(j.items[0]).sort()).toEqual(["imageUrl", "lineTotalCents", "name", "qty"]);
+    expect(j.items[0].imageUrl).toBeNull();
     expect(j).toMatchObject({
       orderNo: o.orderNo,
       pickupDate: "2026-10-22",
@@ -101,6 +103,31 @@ describe("GET /api/o/{token}", () => {
     });
     const j = await (await view(o.viewToken)).json();
     expect(j.items.map((i: { name: string }) => i.name)).toEqual(["奶酥红豆包", "岩烧乳酪包", "奶酪角", "焦糖布蕾"]);
+  });
+
+  it("returns each item's own product photo (valid /api/images key), null when it has none", async () => {
+    const urlOf = (id: string, hex: string) => imageUrlForKey(`${id}/${hex}.webp`);
+    const redBeanUrl = urlOf(ids.redBean, "a".repeat(32));
+    const cheeseHornUrl = urlOf(ids.cheeseHorn, "b".repeat(32));
+    expect(keyFromImageUrl(redBeanUrl)).not.toBeNull();
+    expect(keyFromImageUrl(cheeseHornUrl)).not.toBeNull();
+    await db.product.update({ where: { id: ids.redBean }, data: { imageUrl: redBeanUrl } });
+    await db.product.update({ where: { id: ids.cheeseHorn }, data: { imageUrl: cheeseHornUrl } });
+    // Insertion order differs from the product sort order on purpose.
+    const o = await createOrder({
+      date: "2026-10-22",
+      items: [
+        { productId: ids.cheeseHorn, qty: 1 },
+        { productId: ids.brulee, qty: 1 },
+        { productId: ids.redBean, qty: 1 },
+      ],
+    });
+    const j = await (await view(o.viewToken)).json();
+    expect(j.items.map((i: { name: string; imageUrl: string | null }) => [i.name, i.imageUrl])).toEqual([
+      ["奶酥红豆包", redBeanUrl],
+      ["奶酪角", cheeseHornUrl],
+      ["焦糖布蕾", null],
+    ]);
   });
 
   it("shows REJECTED as cancelled", async () => {

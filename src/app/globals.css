@@ -1,22 +1,115 @@
 @import "tailwindcss";
 
-/* Warm, simple bakery palette. Components use these tokens only. */
+/*
+ * Customer theme v2 (docs/FRONTEND.md section 2, D74–D76): fixed light, never follows the OS.
+ * White page, warm black ink, one red for alerts and the stamp. The home hero takes the colour of
+ * the bread on the rope: --field (background) and --fink (text on it), set at runtime from
+ * src/lib/field.ts and animated by the registered properties below.
+ */
+@property --field {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #dcc5bb;
+}
+@property --fink {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #4a2723;
+}
 :root {
-  --background: #fdf8f1;
-  --foreground: #3d2b1f;
-  --card: #ffffff;
-  --muted: #8a7462;
-  --border: #ecdfcf;
-  --soft: #f6ebdc;
-  --accent: #c0743a;
-  --accent-strong: #a35f2c;
-  --accent-ink: #ffffff;
+  --field: #dcc5bb;
+  --fink: #4a2723;
+  --c-ink: #161412;
+  --c-grey: #8c867e;
+  --c-line: #ece8e2;
+  --c-paper: #ffffff;
+  --c-wash: #f5f3ef;
+  --c-red: #e0344b;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition:
+    --field 0.8s var(--ease),
+    --fink 0.8s var(--ease);
+}
+
+/*
+ * Admin / legacy palette (D65, still used by the admin and by pages not yet restyled).
+ * Base palette: paper / ink / caramel / muted / line. Components use tokens only (no hex values).
+ */
+:root {
+  /* base palette */
+  --paper: #f5f0e6;
+  --ink: #2a2420;
+  --caramel: #b5652a;
+  --gray: #8c8073;
+  --line: #e2d8c8;
+
+  /* derived */
+  --paper-raised: #fbf8f1; /* cards, bag bar: paper lifted toward white */
+  --paper-deep: #ece4d4; /* soft fills, placeholders */
+  --caramel-strong: #98521f; /* pressed / text on paper */
+  --caramel-tint: #f0dfca; /* light caramel wash */
+  --kraft: #c9a373; /* paper-bag body */
+}
+
+/* Semantic tokens (existing names kept so current pages keep working). Declared per scope so
+   var() resolves against that scope's palette (the admin scope overrides the palette below). */
+:root,
+.theme-admin {
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--paper-raised);
+  --muted: var(--gray);
+  --border: var(--line);
+  --soft: var(--paper-deep);
+  --accent: var(--caramel);
+  --accent-strong: var(--caramel-strong);
+  --accent-ink: var(--paper-raised);
   --danger: #b5432f;
-  --disabled: #d9cdbf;
+  --disabled: #ddd3c3;
   --disabled-ink: #8f8174;
 }
 
+/*
+ * Admin scope: same palette and fonts, with a dark variant that follows the OS.
+ * Put class="theme-admin" on the admin layout root (src/app/admin/layout.tsx).
+ */
+.theme-admin {
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  .theme-admin {
+    --paper: #1f1915;
+    --ink: #f3e9dd;
+    --gray: #b5a291;
+    --line: #3d332b;
+    --paper-raised: #2a221c;
+    --paper-deep: #342a22;
+    --caramel: #d98a4e;
+    --caramel-strong: #e79d63;
+    --caramel-tint: #4a3626;
+    --danger: #ec7a64;
+    --disabled: #4a3f36;
+    --disabled-ink: #9c8e81;
+    --accent-ink: #1f1915;
+    background: var(--background);
+    color: var(--foreground);
+  }
+}
+
 @theme inline {
+  --color-field: var(--field);
+  --color-fink: var(--fink);
+  --color-c-ink: var(--c-ink);
+  --color-c-grey: var(--c-grey);
+  --color-c-line: var(--c-line);
+  --color-c-paper: var(--c-paper);
+  --color-c-wash: var(--c-wash);
+  --color-c-red: var(--c-red);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-caramel: var(--caramel);
+  --color-caramel-tint: var(--caramel-tint);
+  --color-kraft: var(--kraft);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -31,25 +124,19 @@
   --color-disabled-ink: var(--disabled-ink);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #1f1915;
-    --foreground: #f3e9dd;
-    --card: #2a221c;
-    --muted: #b5a291;
-    --border: #3d332b;
-    --soft: #342a22;
-    --accent: #d98a4e;
-    --accent-strong: #e79d63;
-    --accent-ink: #1f1915;
-    --danger: #ec7a64;
-    --disabled: #4a3f36;
-    --disabled-ink: #9c8e81;
-  }
-}
-
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
   font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+/* Display face (Noto Sans SC 900 subset) and numerals (Fraunces), see layout.tsx. `font-serif` is
+   kept as an alias of the display face for pages that have not been restyled yet. */
+@theme {
+  --font-display: var(--font-display-face), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-num: var(--font-num-face), Georgia, serif;
+  --font-serif: var(--font-display-face), "PingFang SC", sans-serif;
+}
+.font-num {
+  font-feature-settings: "lnum" 1, "tnum" 1;
 }

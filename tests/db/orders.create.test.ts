@@ -524,7 +524,7 @@ describe("createCustomerOrder: pricing and merging", () => {
     );
     expect(o.items).toHaveLength(2);
     expect(o.items.find((i) => i.productId === P.redBean)).toMatchObject({ qty: 4, lineTotalCents: 899 });
-    expect(o.subtotalCents).toBe(899 + 229);
+    expect(o.subtotalCents).toBe(899 + 249);
   });
 });
 

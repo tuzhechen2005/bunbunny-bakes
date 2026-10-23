@@ -6,7 +6,7 @@ import { OrderPage } from "@/components/order/OrderPage";
 // so no order data is ever prerendered or cached on the server.
 export default function Page() {
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col">
+    <main className="mx-auto flex w-full max-w-[430px] flex-1 flex-col">
       <Suspense fallback={<OrderLoading />}>
         <OrderPage />
       </Suspense>

@@ -102,32 +102,34 @@ function card(page: Page, id: string) {
 
 async function fillAndPickDate(page: Page, date = "2026-10-30") {
   await page.locator(`[data-testid="date-card"][data-date="${date}"]`).click();
-  await page.getByLabel("你的微信号").fill("  bunny_fan_01  ");
+  await page.getByLabel("微信号").fill("  bunny_fan_01  ");
 }
 
-test("home: add items updates the bar; placeholder; open state", async ({ page }) => {
+test("home: add items updates the bag bar; placeholder; open state", async ({ page }) => {
   await mockApis(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "🐰的大面包" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "兔的大面包" }).first()).toBeVisible();
   await expect(page.getByTestId("ordering-state")).toHaveText("预订开放中");
-  await expect(card(page, "p-redbean").getByTestId("price")).toHaveText("$2.49 / 个　4 个 $8.99");
-  await expect(card(page, "p-brulee").getByTestId("price")).toHaveText("$4.50 / 个");
+  await expect(card(page, "p-redbean").getByTestId("price")).toHaveText("$2.49");
+  await expect(card(page, "p-redbean").getByTestId("bundle-price")).toHaveText("4 个 $8.99");
+  await expect(card(page, "p-brulee").getByTestId("price")).toHaveText("$4.50");
+  await expect(card(page, "p-brulee").getByTestId("bundle-price")).toHaveCount(0);
   await expect(card(page, "p-redbean").getByTestId("bunny-placeholder")).toBeVisible();
   await expect(page.getByTestId("footer-contact")).toHaveCount(0);
 
   const plus = card(page, "p-cheese").getByRole("button", { name: "增加一个" });
   for (let i = 0; i < 5; i++) await plus.click();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 5 件");
-  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $13.98");
+  await expect(page.getByTestId("bag-count")).toContainText("5");
+  await expect(page.getByTestId("bag-subtotal")).toContainText("13.98");
   await card(page, "p-redbean").getByRole("button", { name: "增加一个" }).click();
-  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $16.47");
+  await expect(page.getByTestId("bag-subtotal")).toContainText("16.47");
   await card(page, "p-cheese").getByRole("button", { name: "减少一个" }).click();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 5 件");
-  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $13.48");
+  await expect(page.getByTestId("bag-count")).toContainText("5");
+  await expect(page.getByTestId("bag-subtotal")).toContainText("13.48");
 
   // persisted across reloads
   await page.reload();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 5 件");
+  await expect(page.getByTestId("bag-count")).toContainText("5");
 });
 
 test("home: paused card disabled, max reached, footer wechat, vanished items dropped", async ({ page }) => {
@@ -135,7 +137,7 @@ test("home: paused card disabled, max reached, footer wechat, vanished items dro
   await page.goto("/");
   await page.evaluate((key) => localStorage.setItem(key, JSON.stringify([{ productId: "gone", qty: 3 }, { productId: "p-redbean", qty: 1 }])), CART_KEY);
   await page.reload();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 1 件");
+  await expect(page.getByTestId("bag-count")).toContainText("1");
   expect(await page.evaluate((key) => localStorage.getItem(key), CART_KEY)).toBe(JSON.stringify([{ productId: "p-redbean", qty: 1 }]));
 
   const paused = card(page, "p-paused");
@@ -149,21 +151,23 @@ test("home: paused card disabled, max reached, footer wechat, vanished items dro
   await expect(card(page, "p-redbean").getByTestId("qty")).toHaveText("8");
   await expect(plus).toBeDisabled();
   await expect(card(page, "p-redbean").getByTestId("max-hint")).toHaveText("大量订购请加微信联系");
-  await expect(page.getByTestId("footer-contact")).toHaveText("联系店主：微信 bunbunny_owner");
+  await expect(page.getByTestId("footer-contact")).toHaveText("微信 bunbunny_owner");
 
-  await page.getByTestId("go-checkout").click();
+  await page.getByTestId("bag-pill").click();
+  await page.getByTestId("bag-checkout").click();
   await expect(page).toHaveURL(/\/checkout$/);
   await expect(page.getByTestId("cart-line")).toHaveCount(1);
 });
 
-test("home: ordering closed disables the bar button but allows adding", async ({ page }) => {
+test("home: ordering closed disables the checkout button but allows adding", async ({ page }) => {
   await mockApis(page, { menu: { orderingEnabled: false } });
   await page.goto("/");
   await expect(page.getByText("暂未开放预订 🍞")).toBeVisible();
   await expect(page.getByText("下一轮预订开放时间请关注群内通知～")).toBeVisible();
   await card(page, "p-redbean").getByRole("button", { name: "增加一个" }).click();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 1 件");
-  const button = page.getByTestId("go-checkout");
+  await expect(page.getByTestId("bag-count")).toContainText("1");
+  await page.getByTestId("bag-pill").click();
+  const button = page.getByTestId("bag-checkout");
   await expect(button).toHaveText("暂未开放预订");
   await expect(button).toBeDisabled();
 });
@@ -174,7 +178,7 @@ test("checkout: lines, date states, brûlée hint, delivery gap", async ({ page 
   const cheese = page.locator('[data-testid="cart-line"][data-product-id="p-cheese"]');
   await expect(cheese).toContainText("奶酪角 ×5");
   await expect(cheese.getByTestId("line-breakdown")).toHaveText("$10.99 + $2.99 = $13.98");
-  await expect(page.getByTestId("lead-hint")).toHaveText("含布蕾的订单需提前两天预订");
+  await expect(page.getByTestId("lead-hint")).toHaveText("布蕾需提前两天");
 
   const date = (d: string) => page.locator(`[data-testid="date-card"][data-date="${d}"]`);
   await expect(date("2026-10-30")).toContainText("10/30 周五");
@@ -186,6 +190,7 @@ test("checkout: lines, date states, brûlée hint, delivery gap", async ({ page 
   await expect(date("2026-11-01")).toBeDisabled();
   await expect(page.getByTestId("pickup-note")).toHaveText("自提时间在下午 5 点以后，具体时间微信确认");
   await expect(page.getByTestId("total-total")).toHaveText("$18.48");
+  await expect(page.getByTestId("total-fee")).toHaveCount(0); // delivery fee row only for delivery
 
   // select 11/2, then switch to delivery: 11/2 becomes DELIVERY_FULL and is deselected
   await date("2026-11-02").click();
@@ -194,8 +199,8 @@ test("checkout: lines, date states, brûlée hint, delivery gap", async ({ page 
   await expect(date("2026-11-02")).toContainText("配送已满，可选自提");
   await expect(date("2026-11-02")).toBeDisabled();
   await expect(date("2026-11-02")).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByTestId("delivery-fee")).toHaveText("运费 $5，满 $25 免运费");
-  await expect(page.getByTestId("delivery-gap")).toHaveText("再买 $6.52 就免运费啦");
+  await expect(page.getByTestId("delivery-fee")).toHaveText("满 $25 免运费");
+  await expect(page.getByTestId("delivery-gap")).toHaveText("还差 $6.52");
   await expect(page.getByText("具体配送时间和地点会在微信上和你确认")).toBeVisible();
   await expect(page.getByTestId("total-fee")).toHaveText("$5.00");
   await expect(page.getByTestId("total-total")).toHaveText("$23.48");
@@ -204,7 +209,9 @@ test("checkout: lines, date states, brûlée hint, delivery gap", async ({ page 
   const brulee = page.locator('[data-testid="cart-line"][data-product-id="p-brulee"]');
   await brulee.getByRole("button", { name: "减少一个" }).click();
   await expect(page.getByTestId("lead-hint")).toHaveCount(0);
-  await expect(page.getByTestId("total-subtotal")).toHaveText("$13.98");
+  // delivery stays selected: $13.98 + $5.00 fee (the subtotal row is gone in v2, the total says it all)
+  await expect(page.getByTestId("total-fee")).toHaveText("$5.00");
+  await expect(page.getByTestId("total-total")).toHaveText("$18.98");
 
   // honeypot present, hidden and empty
   const honeypot = page.locator('input[name="website"]');
@@ -223,7 +230,7 @@ test("checkout: happy path submits once, navigates and clears the cart", async (
   });
   await seedCart(page, [{ productId: "p-redbean", qty: 4 }]);
   await fillAndPickDate(page);
-  await page.getByLabel("备注（选填）").fill("谢谢");
+  await page.getByLabel("备注").fill("谢谢");
   await expect(page.getByTestId("note-counter")).toHaveText("2/300");
 
   // double tap: two clicks in the same task, before React re-renders
@@ -246,6 +253,32 @@ test("checkout: happy path submits once, navigates and clears the cart", async (
   expect(body.idempotencyKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   expect(Object.keys(body).sort()).toEqual(["fulfillment", "idempotencyKey", "items", "note", "pickupDate", "website", "wechatId"]);
   expect(await page.evaluate((key) => localStorage.getItem(key), CART_KEY)).toBe("[]");
+  // the order page draws the ordered bread in the bag: best-effort sessionStorage hand-off
+  const lastBag = await page.evaluate(() => sessionStorage.getItem("bunbunny:lastBag"));
+  expect(JSON.parse(lastBag ?? "null")).toEqual({
+    orderNo: "1030-001",
+    items: [{ name: "奶酥红豆包", imageUrl: null, qty: 4 }],
+  });
+});
+
+test("checkout: errors sit under their block", async ({ page }) => {
+  await mockApis(page, {
+    orders: (route) => route.fulfill({ status: 409, json: { error: "RATE_LIMITED", message: "x" } }),
+  });
+  await seedCart(page, [{ productId: "p-redbean", qty: 1 }]);
+  await expect(page.getByTestId("date-card").first()).toBeVisible();
+  await page.getByTestId("submit").click();
+  // missing date: inside the date block; missing WeChat id: right under the input
+  await expect(page.getByTestId("dates").getByTestId("submit-error")).toHaveText("请先选择取货日期");
+  await expect(page.getByTestId("wechat-error")).toHaveText("请填写你的微信号");
+  await page.locator('[data-testid="date-card"][data-date="2026-10-30"]').click();
+  await expect(page.getByTestId("submit-error")).toHaveCount(0);
+  await page.getByLabel("微信号").fill("bunny_fan_01");
+  await expect(page.getByTestId("wechat-error")).toHaveCount(0);
+  // a whole-order error (not about the date) shows just above the submit button
+  await page.getByTestId("submit").click();
+  await expect(page.getByTestId("submit-error")).toHaveText("提交太频繁了，请稍后再试，或加微信联系店主");
+  await expect(page.getByTestId("dates").getByTestId("submit-error")).toHaveCount(0);
 });
 
 test("checkout: FULL with suggestion offers a date switch, without auto-submitting", async ({ page }) => {
@@ -347,7 +380,7 @@ test("checkout: VALIDATION gets a new idempotency key; network error keeps it", 
   await expect(page.getByTestId("submit-error")).toHaveText("提交失败，请稍后再试");
   await page.getByTestId("submit").click();
   await expect(page.getByTestId("wechat-error")).toHaveText("微信号格式不对");
-  await page.getByLabel("你的微信号").fill("bunny_fan_02");
+  await page.getByLabel("微信号").fill("bunny_fan_02");
   await page.getByTestId("submit").click();
   await page.waitForURL(/\/o\/tok456\?new=1$/);
 
