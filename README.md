@@ -52,8 +52,10 @@ DIRECT_URL=postgresql://<user>:<password>@<endpoint>.<region>.aws.neon.tech/<db>
   (`pg_advisory_lock(72707369)`). Through the pooler that lock lands on a shared server connection and is never
   released, and every later `migrate deploy` (even via the direct URL) then fails with `P1002 … Timed out trying to
   acquire a postgres advisory lock` until that pooler connection is closed. If that ever happens: on the direct
-  URL, `SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND objid = 72707369`, then
-  `SELECT pg_terminate_backend(<pid>)`.
+  URL, `SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND objid = 72707369
+  AND database = (SELECT oid FROM pg_database WHERE datname = current_database()) AND granted`, then
+  `SELECT pg_terminate_backend(<pid>)`. Only do this when no migration is running: the same lock is
+  held legitimately while a `prisma migrate deploy` is in progress.
 
 Running the db tests against a Neon branch (database name must end in `_test`):
 
