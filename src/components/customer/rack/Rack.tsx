@@ -25,6 +25,9 @@ const t = copy.customer.brand;
 const SWAY_SPRING = { frequencyHz: 1.3, dampingRatio: 0.3 };
 const DROP_SPRING = { frequencyHz: 1.25, dampingRatio: 0.55 };
 const SPIN_MS = 640;
+/** A touch that travels less than this and is shorter than TAP_MS is a tap, whatever axis it briefly locked to. */
+const TAP_PX = 8;
+const TAP_MS = 600;
 
 /** What the home page can ask of the rack (take a card down, hang it back, nudge the pegs). */
 export interface RackHandle {
@@ -177,9 +180,12 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
           else act = true;
         }
       } else act = true;
-      s.sway.step(dt);
-      if (s.sway.isAtRest(0.02, 0.05)) s.sway.settle();
-      else act = true;
+      if (rm) s.sway.settle();
+      else {
+        s.sway.step(dt);
+        if (s.sway.isAtRest(0.02, 0.05)) s.sway.settle();
+        else act = true;
+      }
       const pos = s.rope.x;
       const idx = nearestIndex(pos, n);
       if (idx !== s.idx) {
@@ -286,14 +292,21 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
       onEnd: (end) => {
         const s = sim.current;
         if (!s) return;
+        // A finger rolling a few px is still a tap (browsers allow about 10 px).
+        const isTap = !end.cancelled && end.travel < TAP_PX && end.duration < TAP_MS;
+        if (s.drag && isTap) {
+          s.drag = false;
+          s.rope.set(s.g0, 0);
+          s.rope.target = Math.round(s.g0);
+        }
         if (s.drag) {
           s.drag = false;
           const start = Math.round(s.g0);
           s.rope.target = snapTarget(s.rope.x, start, end.cancelled ? 0 : (-end.fling as -1 | 0 | 1), n);
           s.rope.v = clamp((-end.velocity * 1000) / s.m.spacing, -12, 12);
-          s.sway.v += Math.min(Math.abs(s.rope.v) * 5, 40);
+          if (!latest.current.reduced) s.sway.v += Math.min(Math.abs(s.rope.v) * 5, 40);
           loop.current?.start();
-        } else if (!end.cancelled && end.axis === null && s.tap !== null && !s.moving) {
+        } else if (isTap && s.tap !== null && !s.moving) {
           const i = s.tap;
           if (i === nearestIndex(s.rope.x, n) && s.rope.isAtRest(0.06, 0.6)) latest.current.onOpen(i);
           else {

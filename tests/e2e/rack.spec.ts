@@ -111,6 +111,38 @@ async function drag(
   await f.up();
 }
 
+/** Distance (px) between the middle of card `i` and the middle of the screen. */
+const offCentre = (page: Page, i: number) =>
+  page.evaluate((k) => {
+    const r = document.querySelector(`.hm-card[data-card="${k}"]`)!.getBoundingClientRect();
+    return Math.abs(r.left + r.width / 2 - window.innerWidth / 2);
+  }, i);
+
+/** Counts requestAnimationFrame calls from now on; resolves once a 500 ms window had none. */
+async function expectLoopAsleep(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as { __raf?: number; __rafPatched?: boolean };
+    w.__raf = 0;
+    if (w.__rafPatched) return;
+    w.__rafPatched = true;
+    const orig = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (cb) => {
+      w.__raf = (w.__raf ?? 0) + 1;
+      return orig(cb);
+    };
+  });
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate(() => ((window as unknown as { __raf: number }).__raf = 0));
+        await page.waitForTimeout(500);
+        return page.evaluate(() => (window as unknown as { __raf: number }).__raf);
+      },
+      { timeout: 12000, intervals: [50] },
+    )
+    .toBe(0);
+}
+
 async function centreOf(page: Page, selector: string): Promise<[number, number]> {
   const box = await page.locator(selector).boundingBox();
   if (!box) throw new Error(`no box for ${selector}`);
@@ -298,6 +330,99 @@ test.describe("rope gestures with real touch events (CDP)", () => {
     await drag(f, [cx, 500], [cx, 200], { steps: 8, ms: 140 });
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(20);
   });
+  // ---- regressions found in review (real-phone failures) ----
+
+  test("a finger that started on the bread's name keeps working after the name node is swapped out", async ({ page }) => {
+    // The old name <span> is removed from the page while the finger is still down; touch events keep
+    // going to it. The gesture must still end: the rope snaps onto a card, the loop sleeps, the next
+    // swipe works.
+    const name = await page.locator(".hm-name span").first().boundingBox();
+    const nx = name!.x + 20;
+    const ny = name!.y + name!.height / 2;
+    await f.down(nx, ny);
+    for (let i = 1; i <= 20; i++) {
+      await f.wait(30);
+      await f.move(nx - 8 * i, ny + (i % 3));
+    }
+    await expect(page.locator(".hm-name span")).toHaveCount(1, { timeout: 3000 }); // swapped
+    await f.wait(500);
+    await f.move(nx - 175, ny);
+    await f.wait(60);
+    await f.up();
+    await expect.poll(() => selectedIndex(page)).toBe(1);
+    await expect.poll(() => offCentre(page, 1), { timeout: 4000 }).toBeLessThan(2);
+    await expectLoopAsleep(page);
+    // the very next fling still moves exactly one card
+    const [cx, cy] = await centreOf(page, '.hm-card[data-card="1"] .hm-face:not(.hm-back)');
+    await drag(f, [cx + 100, cy], [cx - 60, cy], { steps: 6, ms: 70 });
+    await expect.poll(() => selectedIndex(page)).toBe(2);
+  });
+
+  test("a stale gesture whose touchend never came does not swallow the next swipe", async ({ page }) => {
+    const [cx, cy] = await centreOf(page, '.hm-card[data-card="0"] .hm-face:not(.hm-back)');
+    await f.down(cx + 100, cy);
+    for (let i = 1; i <= 4; i++) {
+      await f.wait(20);
+      await f.move(cx + 100 - 20 * i, cy);
+    }
+    // No touchend: the next touchstart (single finger) must close the old gesture and start over.
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: cx + 100, y: cy, id: 7 }] });
+    for (let i = 1; i <= 6; i++) {
+      await f.wait(10);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: cx + 100 - 28 * i, y: cy, id: 7 }] });
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect.poll(() => selectedIndex(page)).toBe(1);
+  });
+
+  test("a second finger mid-drag gives the gesture up: the rope snaps to a card and the next fling works", async ({ page }) => {
+    const [cx, cy] = await centreOf(page, '.hm-card[data-card="0"] .hm-face:not(.hm-back)');
+    await f.down(cx + 100, cy);
+    for (let i = 1; i <= 8; i++) {
+      await f.wait(25);
+      await f.move(cx + 100 - 12 * i, cy); // 96 px: less than half a card
+    }
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [
+        { x: cx + 4, y: cy, id: 0 },
+        { x: cx + 150, y: cy + 80, id: 1 },
+      ],
+    });
+    await f.wait(100);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect.poll(() => selectedIndex(page)).toBe(0);
+    await expect.poll(() => offCentre(page, 0), { timeout: 4000 }).toBeLessThan(2);
+    await expectLoopAsleep(page);
+    await drag(f, [cx + 100, cy], [cx - 60, cy], { steps: 6, ms: 70 });
+    await expect.poll(() => selectedIndex(page)).toBe(1);
+  });
+
+  test("touchcancel mid-drag (the host app took the gesture) snaps to the nearest card and the next fling works", async ({ page }) => {
+    const [cx, cy] = await centreOf(page, '.hm-card[data-card="0"] .hm-face:not(.hm-back)');
+    await f.down(cx + 100, cy);
+    for (let i = 1; i <= 8; i++) {
+      await f.wait(25);
+      await f.move(cx + 100 - 20 * i, cy); // 160 px: more than half a card
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
+    await expect.poll(() => selectedIndex(page)).toBe(1); // nearest card, no fling
+    await expect.poll(() => offCentre(page, 1), { timeout: 4000 }).toBeLessThan(2);
+    await expectLoopAsleep(page);
+    const [x1, y1] = await centreOf(page, '.hm-card[data-card="1"] .hm-face:not(.hm-back)');
+    await drag(f, [x1 + 100, y1], [x1 - 60, y1], { steps: 6, ms: 70 });
+    await expect.poll(() => selectedIndex(page)).toBe(2);
+  });
+
+  test("a tap whose finger rolls up to ~6 px is still a tap", async ({ page }) => {
+    const [cx, cy] = await centreOf(page, '.hm-card[data-card="0"] .hm-face:not(.hm-back)');
+    await f.down(cx, cy);
+    await f.wait(30);
+    await f.move(cx + 6, cy + 3);
+    await f.wait(60);
+    await f.up();
+    await expect(page.getByTestId("detail")).toBeVisible({ timeout: 2000 });
+  });
 });
 
 test.describe("mouse and keyboard", () => {
@@ -318,6 +443,36 @@ test.describe("mouse and keyboard", () => {
     const [x1, y1] = await centreOf(page, '.hm-card[data-card="1"] .hm-face:not(.hm-back)');
     await page.mouse.click(x1, y1);
     await expect(page.getByTestId("detail-name")).toHaveText("岩烧乳酪包", { timeout: 2000 });
+  });
+
+  test("a mouse press released outside the column does not jam the next drag", async ({ page }) => {
+    await page.setViewportSize({ width: 1000, height: 800 });
+    await page.reload();
+    await settled(page);
+    const [cx, cy] = await centreOf(page, '.hm-card[data-card="0"] .hm-face:not(.hm-back)');
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx, cy + 30, { steps: 4 }); // vertical: never captured
+    await page.mouse.move(60, cy + 30, { steps: 6 }); // out of the 430 px column
+    await page.mouse.up();
+    expect(await selectedIndex(page)).toBe(0);
+    await page.mouse.move(cx + 100, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx - 60, cy, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(() => selectedIndex(page)).toBe(1);
+  });
+
+  test("prev / next pressed while the detail hangs back leaves no card hidden", async ({ page }) => {
+    await page.getByTestId("rack").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("detail")).toBeVisible({ timeout: 2000 });
+    await page.getByTestId("detail-next").focus();
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Enter"); // "next" while closing
+    await expect(page.getByTestId("detail")).toHaveCount(0, { timeout: 3000 });
+    await expect(page.locator(".hm-card.is-taken")).toHaveCount(0);
+    expect(await selectedIndex(page)).toBe(0);
   });
 
   test("keyboard: arrows move, Enter takes down, Esc hangs back and returns focus to the rope", async ({ page }) => {
@@ -489,6 +644,23 @@ test.describe("reduced motion", () => {
     ).toBe(0);
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("detail")).toHaveCount(0, { timeout: 2000 });
+  });
+  test("the rope does not sway after a swipe: every card keeps its height", async ({ page, context }) => {
+    await mockHome(page);
+    await page.goto("/");
+    await settled(page);
+    const cdp = await context.newCDPSession(page);
+    const f = finger(cdp);
+    const [cx, cy] = await centreOf(page, '.hm-card[data-card="0"] .hm-face:not(.hm-back)');
+    await drag(f, [cx + 120, cy], [cx - 40, cy], { steps: 5, ms: 60 });
+    await expect.poll(() => selectedIndex(page)).toBe(1);
+    await settled(page);
+    const ys: number[] = [];
+    for (let i = 0; i < 8; i++) {
+      ys.push(await page.evaluate(() => document.querySelector('.hm-card[data-card="1"]')!.getBoundingClientRect().top));
+      await page.waitForTimeout(120);
+    }
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThan(0.5);
   });
 });
 

@@ -48,7 +48,7 @@ The home rope (`src/components/customer/rack/drag.ts`, `bindDrag`) is the refere
 decided at 4 px with bias 0.75, `preventDefault` on every `touchmove` once the gesture is claimed, mouse and pen
 through pointer events only (`pointerType !== "touch"`). `tests/e2e/rack.spec.ts` drives it with real touch
 events through CDP (`Input.dispatchTouchEvent`, Chromium only).
-=======
+
 ## Pile (`pile.ts`): the bread in the paper bag window
 
 `new PileWorld({ random? })` is a pure, deterministic 2D world for the round thumbnails inside the
@@ -74,4 +74,3 @@ radius. `radiusFor(n)` exposes the rule. The view (`PaperBag`) maps world units 
 - `BagBar` (props unchanged) renders the mini bag + pill and, in a portal while open, `BagSheet`.
 - `FlyLayer` draws the flights; `bagFlights.ts` keeps the breads in the air (`pending`) so the bags show the cart minus the flying bread and a landing drops them in exactly once.
 - A bag window is found by `[data-bag-target="sheet" | "bar"] [data-pb-window]` (sheet first), so flights land in whichever bag is visible.
->>>>>>> origin/integration/frontend

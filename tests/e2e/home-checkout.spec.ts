@@ -153,6 +153,7 @@ test("home: paused card disabled, max reached, footer wechat, vanished items dro
   await expect(card(page, "p-redbean").getByTestId("max-hint")).toHaveText("大量订购请加微信联系");
   await expect(page.getByTestId("footer-contact")).toHaveText("微信 bunbunny_owner");
 
+  await page.getByTestId("bag-pill").click();
   await page.getByTestId("bag-checkout").click();
   await expect(page).toHaveURL(/\/checkout$/);
   await expect(page.getByTestId("cart-line")).toHaveCount(1);
@@ -165,6 +166,7 @@ test("home: ordering closed disables the checkout button but allows adding", asy
   await expect(page.getByText("下一轮预订开放时间请关注群内通知～")).toBeVisible();
   await card(page, "p-redbean").getByRole("button", { name: "增加一个" }).click();
   await expect(page.getByTestId("bag-count")).toContainText("1");
+  await page.getByTestId("bag-pill").click();
   const button = page.getByTestId("bag-checkout");
   await expect(button).toHaveText("暂未开放预订");
   await expect(button).toBeDisabled();

@@ -160,6 +160,7 @@ export function HomePage() {
   }, [phase, hangBack]);
 
   const onDetailIndex = useCallback((i: number) => {
+    if (phaseRef.current !== "detail") return;
     const rack = rackRef.current;
     rack?.setTaken(curRef.current, false);
     curRef.current = i;
@@ -169,15 +170,10 @@ export function HomePage() {
   }, []);
 
   // ---- adding ----
-  const [live, setLive] = useState("");
-  const announce = (name: string, qty: number) => {
-    setLive((prev) => fill(b.addedToBag, { name, qty }) + (prev.endsWith("​") ? "" : "​"));
-  };
   const addOne = (p: MenuProduct, from: DOMRect | null) => {
     if (p.status === "PAUSED" || qtyOf(p.id) >= maxQty) return;
     cart.increment(p.id, maxQty);
     flyToBag({ from: from ?? new DOMRect(0, 0, 0, 0), imageUrl: p.imageUrl, productId: p.id });
-    announce(p.name, 1);
   };
   const addFromRope = () => {
     if (!current) return;
@@ -191,7 +187,6 @@ export function HomePage() {
     if (p.status === "PAUSED" || added <= 0) return;
     cart.setQty(p.id, next, maxQty);
     flyToBag({ from, imageUrl: p.imageUrl, productId: p.id, count: added });
-    announce(p.name, added);
   };
 
   const orderingEnabled = menu?.orderingEnabled ?? false;
@@ -316,7 +311,7 @@ export function HomePage() {
               </ul>
             </section>
           ) : null}
-          {menu ? <SiteFooter ownerWechatId={menu.ownerWechatId} /> : null}
+          {menu ? <SiteFooter ownerWechatId={menu.ownerWechatId} home /> : null}
         </div>
       </div>
 
@@ -347,9 +342,6 @@ export function HomePage() {
         compact={phase === "detail"}
       />
       <FlyLayer />
-      <div className="hm-sr" aria-live="polite" data-testid="live">
-        {live}
-      </div>
     </div>
   );
 }

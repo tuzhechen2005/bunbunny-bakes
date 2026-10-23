@@ -7,7 +7,7 @@ import { MinusIcon, PlusIcon } from "./rack/icons";
 const t = copy.customer.home;
 
 const btn =
-  "grid h-[42px] w-11 shrink-0 place-items-center transition-transform duration-150 active:scale-95 " +
+  "relative grid h-[42px] w-11 shrink-0 place-items-center after:absolute after:inset-x-0 after:-inset-y-px after:content-[''] transition-transform duration-150 active:scale-95 " +
   "disabled:cursor-not-allowed disabled:opacity-35 disabled:active:scale-100";
 
 /**

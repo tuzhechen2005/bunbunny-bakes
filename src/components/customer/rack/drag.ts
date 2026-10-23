@@ -22,6 +22,8 @@ export interface DragEnd {
   target: Element | null;
   dx: number;
   dy: number;
+  /** Longest distance from the start point during the gesture (px): a tap is a gesture with little travel. */
+  travel: number;
   /** Release velocity along x (px/ms), see GestureTracker.end. */
   velocity: number;
   fling: -1 | 0 | 1;
@@ -56,6 +58,7 @@ export function bindDrag(el: HTMLElement, opts: DragOptions): () => void {
   let dx = 0;
   let dy = 0;
   let dragged = false;
+  let travel = 0;
   let startTarget: Element | null = null;
 
   function begin(k: "touch" | "mouse", pid: number, x: number, y: number, t: number, target: Element | null) {
@@ -65,6 +68,7 @@ export function bindDrag(el: HTMLElement, opts: DragOptions): () => void {
     y0 = y;
     t0 = t;
     dx = dy = 0;
+    travel = 0;
     dragged = false;
     startTarget = target;
     tracker.start(x, y, t);
@@ -76,6 +80,7 @@ export function bindDrag(el: HTMLElement, opts: DragOptions): () => void {
     tracker.move(x, y, t);
     dx = x - x0;
     dy = y - y0;
+    travel = Math.max(travel, Math.hypot(dx, dy));
     if (tracker.axis !== opts.axis) return false;
     // A pull may refuse some moves (e.g. upwards); it only becomes `dragged` once it accepts one.
     if (opts.shouldClaim && !dragged && !opts.shouldClaim(dx, dy)) return false;
@@ -94,6 +99,7 @@ export function bindDrag(el: HTMLElement, opts: DragOptions): () => void {
       target: startTarget,
       dx,
       dy,
+      travel,
       velocity: cancelled ? 0 : res.velocity,
       fling: cancelled ? 0 : res.fling,
       duration: t - t0,
@@ -106,37 +112,58 @@ export function bindDrag(el: HTMLElement, opts: DragOptions): () => void {
   }
 
   // ---- touch ----
-  const onTouchStart = (e: TouchEvent) => {
-    if (kind === "touch") {
-      // A second finger: give the gesture up so nothing half-finished is flung.
-      finish(e.timeStamp, true);
-      return;
-    }
-    if (e.touches.length > 1) return;
-    const target = e.target instanceof Element ? e.target : null;
-    if (!opts.canStart(target, "touch")) return;
-    const t = e.changedTouches[0];
-    begin("touch", t.identifier, t.clientX, t.clientY, e.timeStamp, target);
-  };
+  // Touch events keep going to the element the finger landed on, even after that element has left
+  // the document (React replaces nodes mid-gesture, e.g. the swapping bread name). Listening on the
+  // hero alone would lose the touchend of such a gesture, so the move / end / cancel listeners sit on
+  // the touchstart target itself for the lifetime of the gesture.
+  let touchTarget: Element | null = null;
   const find = (list: TouchList): Touch | null => {
     for (let i = 0; i < list.length; i++) if (list[i].identifier === id) return list[i];
     return null;
   };
-  const onTouchMove = (e: TouchEvent) => {
+  const detachTouch = () => {
+    if (!touchTarget) return;
+    touchTarget.removeEventListener("touchmove", onTouchMove as EventListener);
+    touchTarget.removeEventListener("touchend", onTouchEnd as EventListener);
+    touchTarget.removeEventListener("touchcancel", onTouchCancel as EventListener);
+    touchTarget = null;
+  };
+  function onTouchMove(e: TouchEvent) {
     if (kind !== "touch") return;
     const t = find(e.changedTouches);
     if (!t) return;
     move(t.clientX, t.clientY, e.timeStamp);
     // Once claimed, every move is ours: the page must not start scrolling halfway through.
     if (dragged && e.cancelable) e.preventDefault();
-  };
-  const onTouchEnd = (e: TouchEvent) => {
+  }
+  function onTouchEnd(e: TouchEvent) {
     if (kind !== "touch" || !find(e.changedTouches)) return;
+    detachTouch();
     finish(e.timeStamp, false);
-  };
-  const onTouchCancel = (e: TouchEvent) => {
+  }
+  function onTouchCancel(e: TouchEvent) {
     if (kind !== "touch" || !find(e.changedTouches)) return;
+    detachTouch();
     finish(e.timeStamp, true);
+  }
+  const onTouchStart = (e: TouchEvent) => {
+    if (kind === "touch") {
+      // A gesture is still open. Either a second finger arrived (give the gesture up so nothing
+      // half-finished is flung), or its touchend never came (the old finger is gone): in that case
+      // close the stale gesture and let this touch start a fresh one.
+      detachTouch();
+      finish(e.timeStamp, true);
+      if (e.touches.length > 1) return;
+    }
+    if (e.touches.length > 1) return;
+    const target = e.target instanceof Element ? e.target : null;
+    if (!target || !opts.canStart(target, "touch")) return;
+    const t = e.changedTouches[0];
+    touchTarget = target;
+    target.addEventListener("touchmove", onTouchMove as EventListener, { passive: false });
+    target.addEventListener("touchend", onTouchEnd as EventListener);
+    target.addEventListener("touchcancel", onTouchCancel as EventListener);
+    begin("touch", t.identifier, t.clientX, t.clientY, e.timeStamp, target);
   };
 
   // ---- mouse / pen ----
@@ -145,6 +172,14 @@ export function bindDrag(el: HTMLElement, opts: DragOptions): () => void {
     const target = e.target instanceof Element ? e.target : null;
     if (!opts.canStart(target, "mouse")) return;
     begin("mouse", e.pointerId, e.clientX, e.clientY, e.timeStamp, target);
+    // The button may be released anywhere (off the 430 px column, over another element) before the
+    // gesture is captured: listen on the window so the gesture always ends.
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
+  };
+  const detachMouse = () => {
+    window.removeEventListener("pointerup", onPointerUp);
+    window.removeEventListener("pointercancel", onPointerCancel);
   };
   let captured = false;
   const onPointerMove = (e: PointerEvent) => {
@@ -158,33 +193,27 @@ export function bindDrag(el: HTMLElement, opts: DragOptions): () => void {
       }
     }
   };
-  const onPointerUp = (e: PointerEvent) => {
+  function onPointerUp(e: PointerEvent) {
     if (kind !== "mouse" || e.pointerId !== id) return;
     captured = false;
+    detachMouse();
     finish(e.timeStamp, false);
-  };
-  const onPointerCancel = (e: PointerEvent) => {
+  }
+  function onPointerCancel(e: PointerEvent) {
     if (kind !== "mouse" || e.pointerId !== id) return;
     captured = false;
+    detachMouse();
     finish(e.timeStamp, true);
-  };
+  }
 
   el.addEventListener("touchstart", onTouchStart, { passive: true });
-  el.addEventListener("touchmove", onTouchMove, { passive: false });
-  el.addEventListener("touchend", onTouchEnd);
-  el.addEventListener("touchcancel", onTouchCancel);
   el.addEventListener("pointerdown", onPointerDown);
   el.addEventListener("pointermove", onPointerMove);
-  el.addEventListener("pointerup", onPointerUp);
-  el.addEventListener("pointercancel", onPointerCancel);
   return () => {
     el.removeEventListener("touchstart", onTouchStart);
-    el.removeEventListener("touchmove", onTouchMove);
-    el.removeEventListener("touchend", onTouchEnd);
-    el.removeEventListener("touchcancel", onTouchCancel);
     el.removeEventListener("pointerdown", onPointerDown);
     el.removeEventListener("pointermove", onPointerMove);
-    el.removeEventListener("pointerup", onPointerUp);
-    el.removeEventListener("pointercancel", onPointerCancel);
+    detachTouch();
+    detachMouse();
   };
 }

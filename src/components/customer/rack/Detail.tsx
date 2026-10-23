@@ -64,6 +64,8 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
   const hang = useRef<HTMLButtonElement>(null);
   const dir = useRef(0);
   const busy = useRef(false);
+  /** Set once hanging back has started: prev / next must not change anything any more. */
+  const closing = useRef(false);
   /** A prev/next tap that arrived while the photo was still changing: applied right after. */
   const queued = useRef(0);
   const mounted = useRef(false);
@@ -156,6 +158,7 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
   }, [i]);
 
   async function go(d: number) {
+    if (closing.current) return;
     if (busy.current) {
       queued.current += d;
       return;
@@ -231,6 +234,7 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
         const r = root.current;
         const el = ph.current;
         if (!r || !el) return;
+        closing.current = true;
         r.style.pointerEvents = "none";
         dock.current?.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 150, fill: "forwards" });
         if (latest.current.reduced || !to || typeof el.animate !== "function") {

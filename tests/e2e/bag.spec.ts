@@ -1,6 +1,5 @@
-// The paper bag (bar, pile physics, flights, bag sheet) on the test-only harness page
-// /dev/bag (src/app/dev/bag), which stands in for the home page. The server must run with
-// BAG_HARNESS=1 (the harness 404s otherwise). Photos are mocked with a fixture image.
+// The paper bag (bar, pile physics, flights, bag sheet) on the real home page, with /api/menu
+// mocked as the other home specs do. Photos are mocked with a fixture image.
 import fs from "node:fs";
 import path from "node:path";
 import { chromium, devices, expect, test, type Page } from "@playwright/test";
@@ -8,32 +7,77 @@ import { chromium, devices, expect, test, type Page } from "@playwright/test";
 const CART_KEY = "bb_cart_v1";
 const PHOTO = fs.readFileSync(path.join(__dirname, "../fixtures/bun.jpg"));
 
-// The harness page only exists when the server runs with BAG_HARNESS=1 (it 404s otherwise, e.g. in
-// the default config or other tasks' configs). Skip with a clear reason instead of failing.
-test.beforeAll(async ({ browser }, workerInfo) => {
-  const baseURL = workerInfo.project.use.baseURL;
-  let status = 0;
-  const context = await browser.newContext();
-  try {
-    status = (await context.request.get(`${baseURL}/dev/bag`)).status();
-  } catch {
-    status = 0;
-  } finally {
-    await context.close();
-  }
-  test.skip(status !== 200, `/dev/bag is not served (status ${status}); start the server with BAG_HARNESS=1`);
-});
+const BASE_PRODUCTS = [
+  ["hd", "奶酥红豆包", 249, 899, 1],
+  ["rs", "岩烧乳酪包", 249, 899, 1],
+  ["nj", "奶酪角", 299, 1099, 1],
+  ["bl", "焦糖布蕾", 249, 899, 2],
+] as const;
 
-test.beforeEach(async ({ page }) => {
+interface MenuOpts {
+  closed?: boolean;
+  noPhoto?: boolean;
+  max?: number;
+  /** Hold /api/menu back until this promise resolves (the menu arrives after the cart). */
+  gate?: Promise<void>;
+}
+
+async function mockMenu(page: Page, o: MenuOpts = {}) {
+  const products = BASE_PRODUCTS.map(([id, name, unit, bundle, lead]) => ({
+    id,
+    name,
+    description: null,
+    imageUrl: o.noPhoto ? null : `/test-photos/${id}.jpg`,
+    unitPriceCents: unit,
+    bundleSize: 4,
+    bundlePriceCents: bundle,
+    status: "ACTIVE",
+    leadDays: lead,
+  }));
+  await page.route("**/api/menu", async (route) => {
+    await o.gate;
+    await route.fulfill({
+      json: {
+        orderingEnabled: !o.closed,
+        products,
+        pickupNote: "",
+        deliveryFeeCents: 500,
+        freeDeliveryMinCents: 2500,
+        maxQtyPerItem: o.max ?? 20,
+      },
+    });
+  });
   await page.route("**/test-photos/*.jpg", (route) => route.fulfill({ body: PHOTO, contentType: "image/jpeg" }));
-});
+}
 
 const barPile = (page: Page) => page.locator('[data-bag-target="bar"] .pb-pi');
 const sheetPile = (page: Page) => page.locator('[data-bag-target="sheet"] .pb-pi');
 
-async function openHarness(page: Page, query = "") {
-  await page.goto(`/dev/bag${query}`);
+async function openHome(page: Page, o: MenuOpts = {}) {
+  await mockMenu(page, o);
+  await page.goto("/");
   await expect(page.getByTestId("bag-bar")).toBeVisible();
+  if (!o.gate) await expect(page.getByTestId("rack")).toBeVisible();
+}
+
+const tile = (page: Page, id: string) => page.locator(`[data-testid="product-card"][data-product-id="${id}"]`);
+
+/** Puts `n` of a product in the bag with the little "+" of its list tile (one flight per tap). */
+async function add(page: Page, id: string, n = 1) {
+  const plus = tile(page, id).getByRole("button", { name: "增加一个" });
+  for (let i = 0; i < n; i++) await plus.click();
+}
+
+/** Puts `qty` of the product at rope position `index` in the bag in ONE flight, from its detail view. */
+async function addViaDetail(page: Page, index: number, qty: number) {
+  await page.getByTestId("rack").focus();
+  for (let i = 0; i < index; i++) await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("detail")).toBeVisible({ timeout: 3000 });
+  for (let i = 1; i < qty; i++) await page.getByTestId("detail-inc").click();
+  await page.getByTestId("detail-add").click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("detail")).toHaveCount(0, { timeout: 3000 });
 }
 
 async function pileCount(page: Page, which: "bar" | "sheet" = "bar") {
@@ -41,14 +85,14 @@ async function pileCount(page: Page, which: "bar" | "sheet" = "bar") {
 }
 
 test("empty bag: no badge, $0.00, the bag opens and says it is empty", async ({ page }) => {
-  await openHarness(page);
+  await openHome(page);
   await expect(page.getByTestId("bag-subtotal")).toHaveText("$0.00");
   await expect(page.getByTestId("bag-badge")).toHaveText("0");
   await expect(page.getByTestId("bag-badge")).toHaveClass(/scale-0/);
   await expect(page.getByTestId("bag-count")).toHaveText("已选 0 件"); // the spoken count
   expect(await pileCount(page)).toBe(0);
   await page.getByTestId("bag-pill").click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "你的纸袋" })).toBeVisible();
   await expect(page.getByTestId("bag-empty")).toBeVisible();
   await expect(page.getByTestId("bag-checkout")).toBeDisabled();
 });
@@ -56,11 +100,11 @@ test("empty bag: no badge, $0.00, the bag opens and says it is empty", async ({ 
 test("an add flies: the cart and amount update at once, the bread drops in on landing, never twice", async ({
   page,
 }) => {
-  await openHarness(page);
+  await openHome(page);
   // In one synchronous step: click, then read the page. The bread must be in the air, not yet in
   // the bag, while badge and amount are already right.
   const atClick = await page.evaluate(async () => {
-    const click = document.querySelector<HTMLElement>('[data-testid="add-rs"]')!;
+    const click = document.querySelector<HTMLElement>('[data-testid="product-card"][data-product-id="rs"] button[aria-label="增加一个"]')!;
     click.click();
     await new Promise((r) => setTimeout(r, 120)); // staggered start of the first disc
     return {
@@ -80,12 +124,12 @@ test("an add flies: the cart and amount update at once, the bread drops in on la
 });
 
 test("adding several at once flies several discs and the pile matches the cart", async ({ page }) => {
-  await openHarness(page);
-  await page.getByTestId("add3-hd").click();
+  await openHome(page);
+  await addViaDetail(page, 0, 3); // one flight carrying three breads
   await expect(page.getByTestId("bag-badge")).toHaveText("3");
   await expect(page.getByTestId("bag-count")).toHaveText("已选 3 件");
   await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(3);
-  await page.getByTestId("add-bl").click();
+  await add(page, "bl");
   await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(4);
   await page.waitForTimeout(1000);
   expect(await pileCount(page)).toBe(4);
@@ -93,11 +137,11 @@ test("adding several at once flies several discs and the pile matches the cart",
 });
 
 test("the pile is capped at 24 bodies while the count keeps going", async ({ page }) => {
-  await openHarness(page);
-  for (let i = 0; i < 9; i++) await page.getByTestId("add3-nj").click();
+  await openHome(page);
+  await add(page, "nj", 20);
   await expect(page.getByTestId("bag-badge")).toHaveText("20"); // max per item 20
   await expect.poll(() => pileCount(page), { timeout: 8000 }).toBe(20);
-  for (let i = 0; i < 3; i++) await page.getByTestId("add3-hd").click();
+  await add(page, "hd", 9);
   await expect(page.getByTestId("bag-badge")).toHaveText("29");
   await expect.poll(() => pileCount(page), { timeout: 8000 }).toBe(24);
   await page.waitForTimeout(800);
@@ -114,8 +158,8 @@ test("the frame loop sleeps when everything rests", async ({ page }) => {
       return raf(cb);
     };
   });
-  await openHarness(page);
-  await page.getByTestId("add3-hd").click();
+  await openHome(page);
+  await add(page, "hd", 3);
   await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(3);
   const frames = () => page.evaluate(() => (window as unknown as { __raf: number }).__raf);
   await expect.poll(async () => {
@@ -139,12 +183,15 @@ test("discs get their photo when the menu arrives after the cart; a cart line of
       ),
     [CART_KEY],
   );
-  await openHarness(page, "?late=1");
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  await openHome(page, { gate });
+  await expect(page.getByTestId("bag-badge")).toHaveText("0"); // no menu yet: nothing to show
+  expect(await pileCount(page)).toBe(0);
+  release(); // the menu arrives with photo URLs
   await expect(page.getByTestId("bag-badge")).toHaveText("2");
   await expect.poll(() => pileCount(page)).toBe(2); // "gone" is not on the menu: no discs for it
-  await expect(page.locator('[data-bag-target="bar"] .pb-pi.pb-ph')).toHaveCount(2); // no photos yet
-  await page.getByTestId("late-photos").click(); // the menu arrives with photo URLs
-  await expect(page.locator('[data-bag-target="bar"] .pb-pi.pb-ph')).toHaveCount(0);
+  await expect(page.locator('[data-bag-target="bar"] .pb-pi.pb-ph')).toHaveCount(0); // they got their photo
   const bg = await barPile(page).first().evaluate((e) => (e as HTMLElement).style.backgroundImage);
   expect(bg).toContain("/test-photos/hd.jpg");
   expect(await pileCount(page)).toBe(2);
@@ -155,7 +202,7 @@ test("the pile starts settled from the saved cart", async ({ page }) => {
     ([key]) => localStorage.setItem(key, JSON.stringify([{ productId: "hd", qty: 4 }, { productId: "bl", qty: 2 }])),
     [CART_KEY],
   );
-  await openHarness(page);
+  await openHome(page);
   await expect(page.getByTestId("bag-badge")).toHaveText("6");
   await expect.poll(() => pileCount(page)).toBe(6);
   // Settled: nothing moves between two frames.
@@ -169,9 +216,9 @@ test("the pile starts settled from the saved cart", async ({ page }) => {
 test("bag sheet: opens from the pill and from the little bag, shows lines, closes with Esc, backdrop and the button", async ({
   page,
 }) => {
-  await openHarness(page);
-  await page.getByTestId("add3-rs").click();
-  await page.getByTestId("add-bl").click();
+  await openHome(page);
+  await add(page, "rs", 3);
+  await add(page, "bl");
   await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(4);
 
   const dialog = page.getByRole("dialog", { name: "你的纸袋" });
@@ -198,8 +245,8 @@ test("bag sheet: opens from the pill and from the little bag, shows lines, close
 });
 
 test("bag sheet: − n + changes the cart, the pile follows, a bread pops out at zero", async ({ page }) => {
-  await openHarness(page);
-  await page.getByTestId("add3-hd").click();
+  await openHome(page);
+  await add(page, "hd", 3);
   await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(3);
   await page.getByTestId("bag-pill").click();
   const line = page.getByTestId("bag-line").first();
@@ -224,8 +271,8 @@ test("bag sheet: − n + changes the cart, the pile follows, a bread pops out at
 });
 
 test("bag sheet: max per item disables + and shows the hint", async ({ page }) => {
-  await openHarness(page, "?max=3");
-  await page.getByTestId("add3-hd").click();
+  await openHome(page, { max: 3 });
+  await add(page, "hd", 3);
   await page.getByTestId("bag-pill").click();
   const line = page.getByTestId("bag-line").first();
   await expect(line.getByTestId("bag-line-inc")).toBeDisabled();
@@ -235,58 +282,62 @@ test("bag sheet: max per item disables + and shows the hint", async ({ page }) =
 });
 
 test("去结算 zooms the arrow and calls onCheckout; it is disabled when ordering is closed", async ({ page }) => {
-  await openHarness(page);
-  await page.getByTestId("add-hd").click();
+  await openHome(page);
+  await add(page, "hd");
   await page.getByTestId("bag-pill").click();
   const go = page.getByTestId("bag-checkout");
   await expect(go).toBeEnabled();
   await expect(go).toContainText("去结算");
   await go.click();
-  await expect(page.getByTestId("checkout-calls")).toHaveText("1");
+  await expect(page).toHaveURL(/\/checkout$/);
 
-  await openHarness(page, "?closed=1");
-  await page.getByTestId("add-hd").click();
+  await openHome(page, { closed: true });
+  await add(page, "hd");
   await page.getByTestId("bag-pill").click(); // the bag still opens
   await expect(page.getByTestId("bag-checkout")).toBeDisabled();
   await expect(page.getByTestId("bag-checkout")).toContainText("暂未开放预订");
-  await expect(page.getByTestId("checkout-calls")).toHaveText("0");
+  await page.getByTestId("bag-checkout").click({ force: true });
+  await expect(page).toHaveURL(/\/$/);
 });
 
-test("compact: the pill hides, the little bag stays and still opens the sheet", async ({ page }) => {
-  await openHarness(page, "?compact=1");
+test("compact (detail open): the pill hides, the little bag stays and still opens the sheet", async ({ page }) => {
+  await openHome(page);
+  await page.getByTestId("rack").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("detail")).toBeVisible({ timeout: 3000 });
   await expect(page.getByTestId("bag-pill")).toHaveCSS("opacity", "0");
-  await page.getByTestId("add-hd").click();
+  await page.getByTestId("detail-add").click();
   await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(1); // flights still land
   await page.getByRole("button", { name: /打开你的纸袋/ }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "你的纸袋" })).toBeVisible();
 });
 
 test("products without a photo drop in as plain discs", async ({ page }) => {
-  await openHarness(page, "?nophoto=1");
-  await page.getByTestId("add3-hd").click();
+  await openHome(page, { noPhoto: true });
+  await add(page, "hd", 3);
   await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(3);
   await expect(page.locator('[data-bag-target="bar"] .pb-pi.pb-ph')).toHaveCount(3);
 });
 
 test("reduced motion: no flight, the bread is in the bag at once, the sheet fades", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await openHarness(page);
-  await page.getByTestId("add3-hd").click();
+  await openHome(page);
+  await addViaDetail(page, 0, 3);
   await expect(page.locator(".bag-fly")).toHaveCount(0);
   await expect.poll(() => pileCount(page), { timeout: 1000 }).toBe(3);
   await expect(page.getByTestId("bag-live")).toHaveText("已放进纸袋：奶酥红豆包 ×3");
   await page.getByTestId("bag-pill").click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "你的纸袋" })).toBeVisible();
   const line = page.getByTestId("bag-line").first();
   await line.getByTestId("bag-line-inc").click();
   await expect.poll(() => pileCount(page, "sheet")).toBe(4);
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "你的纸袋" })).toHaveCount(0);
 });
 
 test("shaking the big bag with the mouse moves the bag and rolls the bread", async ({ page }) => {
-  await openHarness(page);
-  await page.getByTestId("add3-hd").click();
+  await openHome(page);
+  await add(page, "hd", 3);
   await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(3);
   await page.getByTestId("bag-pill").click();
   await expect.poll(() => pileCount(page, "sheet")).toBe(3);
@@ -319,8 +370,8 @@ test("touch drag on the big bag shakes it, the page stays put, it springs back",
   try {
     await context.route("**/test-photos/*.jpg", (route) => route.fulfill({ body: PHOTO, contentType: "image/jpeg" }));
     const page = await context.newPage();
-    await openHarness(page);
-    await page.getByTestId("add3-hd").click();
+    await openHome(page);
+    await add(page, "hd", 3);
     await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(3);
     await page.getByTestId("bag-pill").click();
     await expect.poll(() => pileCount(page, "sheet")).toBe(3);
@@ -366,11 +417,11 @@ test("the sheet keeps Tab and Shift+Tab inside the dialog", async ({ baseURL }) 
   try {
     await context.route("**/test-photos/*.jpg", (route) => route.fulfill({ body: PHOTO, contentType: "image/jpeg" }));
     const page = await context.newPage();
-    await openHarness(page);
-    await page.getByTestId("add3-hd").click();
-    await page.getByTestId("add-bl").click();
+    await openHome(page);
+    await add(page, "hd", 3);
+    await add(page, "bl");
     await page.getByTestId("bag-pill").click();
-    const dialog = page.getByRole("dialog");
+    const dialog = page.getByRole("dialog", { name: "你的纸袋" });
     await expect(dialog).toBeVisible();
     await expect(page.getByTestId("bag-close")).toBeFocused();
     const inside = () => dialog.evaluate((d) => d.contains(document.activeElement));
@@ -391,11 +442,11 @@ test("the sheet keeps Tab and Shift+Tab inside the dialog", async ({ baseURL }) 
 
 test("the sheet fits a 320 px screen with 44 px touch targets", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 640 });
-  await openHarness(page);
-  await page.getByTestId("add3-hd").click();
-  await page.getByTestId("add-bl").click();
+  await openHome(page);
+  await add(page, "hd", 3);
+  await add(page, "bl");
   await page.getByTestId("bag-pill").click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "你的纸袋" })).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
   // Touch targets are at least 44 px.
