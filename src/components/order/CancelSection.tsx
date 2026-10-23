@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { copy } from "@/copy";
 
 const t = copy.customer.order;
+const focusRing = "focus-visible:outline-[2.5px] focus-visible:outline-offset-[3px] focus-visible:outline-c-red";
 
 type Props = {
   token: string;
@@ -79,15 +80,16 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
   }
 
   // Not cancellable: the closed message says it all (no duplicated alert after a 409).
-  if (!canCancel) return <p className="text-sm text-muted">{t.cancelClosed}</p>;
+  if (!canCancel) return <p className="text-center text-[13px] leading-relaxed text-c-grey">{t.cancelClosed}</p>;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col items-center gap-1 text-center">
       {error && (
-        <p role="alert" className="rounded-lg bg-soft p-3 text-sm text-danger">
+        <p role="alert" className="rounded-xl bg-c-paper p-3 text-sm font-semibold text-c-red">
           {error}
         </p>
       )}
+      {cancelDeadlineLabel && <p className="text-[13px] leading-relaxed text-c-grey">{cancelDeadlineLabel}</p>}
       <button
         ref={triggerRef}
         type="button"
@@ -95,14 +97,13 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
           setError(null);
           setSheetOpen(true);
         }}
-        className="min-h-11 w-full rounded-full border border-line bg-card text-base text-ink active:bg-soft"
+        className={`min-h-11 px-4 text-[13px] font-semibold text-c-ink underline underline-offset-[3px] ${focusRing}`}
       >
         {t.cancelOrder}
       </button>
-      {cancelDeadlineLabel && <p className="text-center text-sm text-muted">{cancelDeadlineLabel}</p>}
 
       {sheetOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-c-ink/40">
           <button
             type="button"
             aria-hidden="true"
@@ -114,9 +115,9 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
             role="dialog"
             aria-modal="true"
             aria-labelledby="cancel-sheet-title"
-            className="relative w-full max-w-md rounded-t-2xl bg-card p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-ink"
+            className="relative w-full max-w-[430px] rounded-t-[24px] bg-c-paper p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-c-ink"
           >
-            <p id="cancel-sheet-title" className="mb-5 text-center font-serif text-lg">
+            <p id="cancel-sheet-title" className="mb-5 text-center font-display text-lg">
               {t.cancelConfirmTitle}
             </p>
             <div className="flex flex-col gap-3">
@@ -124,7 +125,7 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
                 type="button"
                 onClick={onConfirm}
                 disabled={busy}
-                className="min-h-11 w-full rounded-full bg-danger text-base font-semibold text-accent-ink disabled:opacity-50"
+                className={`min-h-[52px] w-full rounded-full bg-c-red text-base font-bold text-c-paper disabled:opacity-50 ${focusRing}`}
               >
                 {busy ? t.cancelling : t.cancelConfirm}
               </button>
@@ -133,7 +134,7 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
                 type="button"
                 onClick={() => setSheetOpen(false)}
                 disabled={busy}
-                className="min-h-11 w-full rounded-full border border-line text-base text-ink disabled:opacity-50"
+                className={`min-h-[52px] w-full rounded-full border-[1.5px] border-c-ink text-base font-bold text-c-ink disabled:opacity-50 ${focusRing}`}
               >
                 {t.cancelBack}
               </button>

@@ -6,6 +6,7 @@ import { fill } from "./types";
 import { useCopied } from "./useCopied";
 
 const t = copy.customer.order;
+const focusRing = "focus-visible:outline-[2.5px] focus-visible:outline-offset-[3px] focus-visible:outline-c-red";
 
 export function WechatBlock({ ownerWechatId, prominent }: { ownerWechatId: string; prominent: boolean }) {
   const [copied, setCopied] = useCopied();
@@ -15,35 +16,26 @@ export function WechatBlock({ ownerWechatId, prominent }: { ownerWechatId: strin
   }
 
   const label = fill(t.addOwnerWechat, { ownerWechatId });
-  const button = (
-    <button
-      type="button"
-      onClick={onCopy}
-      aria-live="polite"
-      className={
-        prominent
-          ? "min-h-11 shrink-0 rounded-full bg-accent px-4 text-base font-semibold text-accent-ink active:bg-accent-strong"
-          : "min-h-11 shrink-0 rounded-full border border-line bg-card px-3 text-sm text-ink active:bg-soft"
-      }
-    >
-      {copied ? t.copied : t.copyWechat}
-    </button>
-  );
 
   return (
     <section
       data-testid="owner-wechat"
       data-prominent={prominent ? "true" : "false"}
-      className={
-        prominent
-          ? "flex items-center gap-3 rounded-2xl border-2 border-accent bg-caramel-tint p-4"
-          : "flex items-center gap-3 px-1"
-      }
+      className="mt-[18px] flex items-center justify-between gap-3"
     >
-      <p className={prominent ? "min-w-0 flex-1 break-words text-lg font-semibold" : "min-w-0 flex-1 break-words text-sm text-muted"}>
+      <p
+        className={`min-w-0 flex-1 break-words text-sm leading-snug ${prominent ? "font-bold text-c-ink" : "font-medium text-c-grey"}`}
+      >
         {label}
       </p>
-      {button}
+      <button
+        type="button"
+        onClick={onCopy}
+        aria-live="polite"
+        className={`min-h-11 shrink-0 rounded-full px-4 text-[13px] font-bold ${prominent ? "bg-c-ink text-c-paper" : "border-[1.5px] border-c-ink text-c-ink"} ${focusRing}`}
+      >
+        {copied ? t.copied : t.copyWechat}
+      </button>
     </section>
   );
 }
