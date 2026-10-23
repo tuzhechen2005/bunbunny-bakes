@@ -1,0 +1,264 @@
+/*
+ * Paper bag art, pile, rolling digits and flight discs (FRONTEND.md 4.3, D78). Ported from the v2
+ * prototype (.bag … .pi, .roll, .fly). The bag colours below are the two printing tones of the
+ * kraft photo (window shade and the ink printed on the flap), declared once as local tokens; every
+ * other colour comes from the global tokens.
+ */
+
+.pb {
+  --pb-win: #b8915f;
+  --pb-print: #5a3c1e;
+  --pb-kraft: var(--kraft);
+  --bw: 100px;
+  position: relative;
+  width: var(--bw);
+  height: calc(var(--bw) * 1.497);
+  font-size: calc(var(--bw) / 10);
+  isolation: isolate;
+}
+.pb::after {
+  content: "";
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: -5%;
+  height: 10%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.28), transparent);
+  z-index: -1;
+}
+.pb-sw {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+}
+.pb-in {
+  position: absolute;
+  inset: 0;
+  perspective: calc(var(--bw) * 4);
+}
+.pb-kraft {
+  background: var(--pb-kraft) url("/brand/kraft.jpg") 0 0 / 180px;
+}
+.pb-body {
+  position: absolute;
+  inset: 26% 0 0;
+  background: url("/brand/bag.webp") 0 100% / 100% 135.14% no-repeat;
+}
+.pb-top {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 26%;
+  transform-origin: 50% 100%;
+  transform-style: preserve-3d;
+}
+.pb-top > i {
+  position: absolute;
+  inset: 0 0 -1px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.pb-top .pb-ft {
+  background: url("/brand/bag.webp") 0 0 / 100% 384.6% no-repeat;
+}
+.pb-top .pb-bk {
+  transform: rotateX(180deg);
+  filter: brightness(0.8);
+  left: 2%;
+  right: 2%;
+}
+.pb-print {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 0 0.35em;
+  color: var(--pb-print);
+  opacity: 0.82;
+  mix-blend-mode: multiply;
+}
+.pb-print .pb-logo {
+  height: 1.9em;
+  width: auto;
+}
+.pb-print span {
+  font-size: 0.62em;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  margin-top: 0.25em;
+  white-space: nowrap;
+}
+.pb-sm .pb-print {
+  padding-bottom: 0.5em;
+}
+.pb-sm .pb-print span {
+  display: none;
+}
+.pb-sm .pb-print .pb-logo {
+  height: 2.5em;
+}
+.pb-win {
+  position: absolute;
+  left: 13.6%;
+  right: 13.4%;
+  top: 30.5%;
+  bottom: 12.5%;
+  border-radius: 0.9em;
+  overflow: hidden;
+  background:
+    linear-gradient(to bottom, rgba(40, 22, 8, 0.5), rgba(40, 22, 8, 0.22) 60%, rgba(40, 22, 8, 0.32)),
+    var(--pb-win) url("/brand/kraft.jpg") 0 0 / 120px;
+  box-shadow: inset 0 0.6em 0.9em -0.5em rgba(60, 40, 20, 0.45);
+}
+.pb-win::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(118deg, rgba(255, 255, 255, 0.5) 0 10%, transparent 10% 27%, rgba(255, 255, 255, 0.22) 27% 33%, transparent 33%),
+    rgba(255, 255, 255, 0.08);
+}
+.pb-pile {
+  position: absolute;
+  inset: 0;
+}
+.pb-pi {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  background-size: 175%;
+  background-position: center;
+  will-change: transform;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+/* Product without a photo: a plain disc. */
+.pb-ph {
+  background-color: color-mix(in srgb, var(--pb-kraft) 45%, var(--c-wash));
+  background-image: none;
+}
+.pb-imprint {
+  position: absolute;
+  left: 10%;
+  top: 33.5%;
+  width: 80%;
+  aspect-ratio: 1;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  color: var(--c-red);
+}
+.pb-imprint > svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.pb-shakeable {
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ---------- flight disc (FlyLayer) ---------- */
+.bag-fly {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 64px;
+  height: 64px;
+  pointer-events: none;
+}
+.bag-fly i {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background-size: 175%;
+  background-position: center;
+  box-shadow: 0 12px 20px -8px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- rolling digits ---------- */
+.rl {
+  display: inline-flex;
+  overflow: hidden;
+  vertical-align: bottom;
+  padding: 0.08em 0;
+  margin: -0.08em 0;
+}
+.rl-s {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+}
+.rl-s i {
+  display: block;
+  font-style: normal;
+}
+.rl-s i.o {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.rl-s i.o::before {
+  content: attr(data-ch);
+}
+@keyframes rl-out-up {
+  to {
+    transform: translateY(-110%);
+  }
+}
+@keyframes rl-out-down {
+  to {
+    transform: translateY(110%);
+  }
+}
+@keyframes rl-in-up {
+  from {
+    transform: translateY(110%);
+  }
+}
+@keyframes rl-in-down {
+  from {
+    transform: translateY(-110%);
+  }
+}
+.rl-up .o {
+  animation: rl-out-up 300ms var(--ease) var(--d) forwards;
+}
+.rl-up .nw {
+  animation: rl-in-up 300ms var(--ease) var(--d) backwards;
+}
+.rl-down .o {
+  animation: rl-out-down 300ms var(--ease) var(--d) forwards;
+}
+.rl-down .nw {
+  animation: rl-in-down 300ms var(--ease) var(--d) backwards;
+}
+
+/* ---------- bag sheet lines ---------- */
+@keyframes bag-ln-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+.bag-ln {
+  animation: bag-ln-in 420ms var(--ease) calc(120ms + var(--i, 0) * 50ms) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rl .o,
+  .rl .nw,
+  .bag-ln {
+    animation: none;
+  }
+  .rl .o {
+    display: none;
+  }
+}

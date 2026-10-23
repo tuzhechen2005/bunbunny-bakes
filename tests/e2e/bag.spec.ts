@@ -1,0 +1,365 @@
+// The paper bag (bar, pile physics, flights, bag sheet) on the test-only harness page
+// /dev/bag (src/app/dev/bag), which stands in for the home page. The server must run with
+// BAG_HARNESS=1 (the harness 404s otherwise). Photos are mocked with a fixture image.
+import fs from "node:fs";
+import path from "node:path";
+import { chromium, devices, expect, test, type Page } from "@playwright/test";
+
+const CART_KEY = "bb_cart_v1";
+const PHOTO = fs.readFileSync(path.join(__dirname, "../fixtures/bun.jpg"));
+
+test.beforeEach(async ({ page }) => {
+  await page.route("**/test-photos/*.jpg", (route) => route.fulfill({ body: PHOTO, contentType: "image/jpeg" }));
+});
+
+const barPile = (page: Page) => page.locator('[data-bag-target="bar"] .pb-pi');
+const sheetPile = (page: Page) => page.locator('[data-bag-target="sheet"] .pb-pi');
+
+async function openHarness(page: Page, query = "") {
+  await page.goto(`/dev/bag${query}`);
+  await expect(page.getByTestId("bag-bar")).toBeVisible();
+}
+
+async function pileCount(page: Page, which: "bar" | "sheet" = "bar") {
+  return (which === "bar" ? barPile(page) : sheetPile(page)).count();
+}
+
+test("empty bag: no badge, $0.00, the bag opens and says it is empty", async ({ page }) => {
+  await openHarness(page);
+  await expect(page.getByTestId("bag-subtotal")).toHaveText("$0.00");
+  await expect(page.getByTestId("bag-badge")).toHaveText("0");
+  await expect(page.getByTestId("bag-badge")).toHaveClass(/scale-0/);
+  await expect(page.getByTestId("bag-count")).toHaveText("已选 0 件"); // the spoken count
+  expect(await pileCount(page)).toBe(0);
+  await page.getByTestId("bag-pill").click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByTestId("bag-empty")).toBeVisible();
+  await expect(page.getByTestId("bag-checkout")).toBeDisabled();
+});
+
+test("an add flies: the cart and amount update at once, the bread drops in on landing, never twice", async ({
+  page,
+}) => {
+  await openHarness(page);
+  // In one synchronous step: click, then read the page. The bread must be in the air, not yet in
+  // the bag, while badge and amount are already right.
+  const atClick = await page.evaluate(async () => {
+    const click = document.querySelector<HTMLElement>('[data-testid="add-rs"]')!;
+    click.click();
+    await new Promise((r) => setTimeout(r, 120)); // staggered start of the first disc
+    return {
+      discs: document.querySelectorAll(".bag-fly").length,
+      pile: document.querySelectorAll('[data-bag-target="bar"] .pb-pi').length,
+      count: document.querySelector('[data-testid="bag-badge"]')!.textContent,
+      subtotal: document.querySelector('[data-testid="bag-subtotal"]')!.textContent,
+    };
+  });
+  expect(atClick).toEqual({ discs: 1, pile: 0, count: "1", subtotal: "$2.49" });
+  // It lands inside the window about 0.62 s after take-off.
+  await expect.poll(() => pileCount(page), { timeout: 3000 }).toBe(1);
+  await expect(page.locator(".bag-fly")).toHaveCount(0);
+  await page.waitForTimeout(1200);
+  expect(await pileCount(page)).toBe(1); // not counted twice
+  await expect(page.getByTestId("bag-live")).toHaveText("已放进纸袋：岩烧乳酪包 ×1");
+});
+
+test("adding several at once flies several discs and the pile matches the cart", async ({ page }) => {
+  await openHarness(page);
+  await page.getByTestId("add3-hd").click();
+  await expect(page.getByTestId("bag-badge")).toHaveText("3");
+  await expect(page.getByTestId("bag-count")).toHaveText("已选 3 件");
+  await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(3);
+  await page.getByTestId("add-bl").click();
+  await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(4);
+  await page.waitForTimeout(1000);
+  expect(await pileCount(page)).toBe(4);
+  await expect(page.getByTestId("bag-subtotal")).toHaveText("$9.96"); // 3 x 2.49 + 2.49
+});
+
+test("the pile is capped at 24 bodies while the count keeps going", async ({ page }) => {
+  await openHarness(page);
+  for (let i = 0; i < 9; i++) await page.getByTestId("add3-nj").click();
+  await expect(page.getByTestId("bag-badge")).toHaveText("20"); // max per item 20
+  await expect.poll(() => pileCount(page), { timeout: 8000 }).toBe(20);
+  for (let i = 0; i < 3; i++) await page.getByTestId("add3-hd").click();
+  await expect(page.getByTestId("bag-badge")).toHaveText("29");
+  await expect.poll(() => pileCount(page), { timeout: 8000 }).toBe(24);
+  await page.waitForTimeout(800);
+  expect(await pileCount(page)).toBe(24);
+});
+
+test("the frame loop sleeps when everything rests", async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __raf: number };
+    w.__raf = 0;
+    const raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = (cb) => {
+      w.__raf++;
+      return raf(cb);
+    };
+  });
+  await openHarness(page);
+  await page.getByTestId("add3-hd").click();
+  await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(3);
+  const frames = () => page.evaluate(() => (window as unknown as { __raf: number }).__raf);
+  await expect.poll(async () => {
+    const a = await frames();
+    await page.waitForTimeout(400);
+    return (await frames()) - a;
+  }, { timeout: 8000 }).toBe(0); // bread settled, bag swing done: not one frame requested
+});
+
+test("the pile starts settled from the saved cart", async ({ page }) => {
+  await page.addInitScript(
+    ([key]) => localStorage.setItem(key, JSON.stringify([{ productId: "hd", qty: 4 }, { productId: "bl", qty: 2 }])),
+    [CART_KEY],
+  );
+  await openHarness(page);
+  await expect(page.getByTestId("bag-badge")).toHaveText("6");
+  await expect.poll(() => pileCount(page)).toBe(6);
+  // Settled: nothing moves between two frames.
+  const snap = () => barPile(page).evaluateAll((els) => els.map((e) => (e as HTMLElement).style.transform).join("|"));
+  const a = await snap();
+  await page.waitForTimeout(300);
+  expect(await snap()).toBe(a);
+  await expect(page.getByTestId("bag-subtotal")).toHaveText("$13.97"); // 4 for $8.99 + 2 x 2.49
+});
+
+test("bag sheet: opens from the pill and from the little bag, shows lines, closes with Esc, backdrop and the button", async ({
+  page,
+}) => {
+  await openHarness(page);
+  await page.getByTestId("add3-rs").click();
+  await page.getByTestId("add-bl").click();
+  await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(4);
+
+  const dialog = page.getByRole("dialog", { name: "你的纸袋" });
+  await page.getByTestId("bag-pill").click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
+  await expect(page.getByTestId("bag-close")).toBeFocused();
+  await expect(page.getByTestId("bag-line")).toHaveCount(2);
+  await expect(page.getByTestId("bag-sheet-subtotal")).toHaveText("$9.96");
+  await expect.poll(() => pileCount(page, "sheet")).toBe(4); // the big bag starts with the same bread
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+
+  await page.getByRole("button", { name: /打开你的纸袋/ }).click();
+  await expect(dialog).toBeVisible();
+  await page.getByTestId("bag-backdrop").click({ position: { x: 10, y: 10 } });
+  await expect(dialog).toHaveCount(0);
+
+  await page.getByTestId("bag-pill").click();
+  await page.getByTestId("bag-close").click();
+  await expect(dialog).toHaveCount(0);
+  // Focus goes back to what opened it.
+  await expect(page.getByTestId("bag-pill")).toBeFocused();
+});
+
+test("bag sheet: − n + changes the cart, the pile follows, a bread pops out at zero", async ({ page }) => {
+  await openHarness(page);
+  await page.getByTestId("add3-hd").click();
+  await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(3);
+  await page.getByTestId("bag-pill").click();
+  const line = page.getByTestId("bag-line").first();
+  await expect(line.getByTestId("bag-line-qty")).toHaveText("3");
+
+  await line.getByTestId("bag-line-inc").click();
+  await expect(line.getByTestId("bag-line-qty")).toHaveText("4");
+  await expect(page.getByTestId("bag-sheet-subtotal")).toHaveText("$8.99"); // 4 for the bundle price
+  await expect.poll(() => pileCount(page, "sheet")).toBe(4);
+  await expect.poll(() => pileCount(page, "bar")).toBe(4); // the little bag behind keeps up
+
+  await line.getByTestId("bag-line-dec").click();
+  await line.getByTestId("bag-line-dec").click();
+  await expect(line.getByTestId("bag-line-qty")).toHaveText("2");
+  await expect.poll(() => pileCount(page, "sheet"), { timeout: 3000 }).toBe(2);
+  await line.getByTestId("bag-line-dec").click();
+  await line.getByTestId("bag-line-dec").click();
+  await expect(page.getByTestId("bag-empty")).toBeVisible();
+  await expect.poll(() => pileCount(page, "sheet"), { timeout: 3000 }).toBe(0);
+  await expect(page.getByTestId("bag-checkout")).toBeDisabled();
+  await expect(page.getByTestId("bag-badge")).toHaveText("0");
+});
+
+test("bag sheet: max per item disables + and shows the hint", async ({ page }) => {
+  await openHarness(page, "?max=3");
+  await page.getByTestId("add3-hd").click();
+  await page.getByTestId("bag-pill").click();
+  const line = page.getByTestId("bag-line").first();
+  await expect(line.getByTestId("bag-line-inc")).toBeDisabled();
+  await expect(line).toContainText("大量订购请加微信联系");
+  await line.getByTestId("bag-line-dec").click();
+  await expect(line.getByTestId("bag-line-inc")).toBeEnabled();
+});
+
+test("去结算 zooms the arrow and calls onCheckout; it is disabled when ordering is closed", async ({ page }) => {
+  await openHarness(page);
+  await page.getByTestId("add-hd").click();
+  await page.getByTestId("bag-pill").click();
+  const go = page.getByTestId("bag-checkout");
+  await expect(go).toBeEnabled();
+  await expect(go).toContainText("去结算");
+  await go.click();
+  await expect(page.getByTestId("checkout-calls")).toHaveText("1");
+
+  await openHarness(page, "?closed=1");
+  await page.getByTestId("add-hd").click();
+  await page.getByTestId("bag-pill").click(); // the bag still opens
+  await expect(page.getByTestId("bag-checkout")).toBeDisabled();
+  await expect(page.getByTestId("bag-checkout")).toContainText("暂未开放预订");
+  await expect(page.getByTestId("checkout-calls")).toHaveText("0");
+});
+
+test("compact: the pill hides, the little bag stays and still opens the sheet", async ({ page }) => {
+  await openHarness(page, "?compact=1");
+  await expect(page.getByTestId("bag-pill")).toHaveCSS("opacity", "0");
+  await page.getByTestId("add-hd").click();
+  await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(1); // flights still land
+  await page.getByRole("button", { name: /打开你的纸袋/ }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+});
+
+test("products without a photo drop in as plain discs", async ({ page }) => {
+  await openHarness(page, "?nophoto=1");
+  await page.getByTestId("add3-hd").click();
+  await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(3);
+  await expect(page.locator('[data-bag-target="bar"] .pb-pi.pb-ph')).toHaveCount(3);
+});
+
+test("reduced motion: no flight, the bread is in the bag at once, the sheet fades", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openHarness(page);
+  await page.getByTestId("add3-hd").click();
+  await expect(page.locator(".bag-fly")).toHaveCount(0);
+  await expect.poll(() => pileCount(page), { timeout: 1000 }).toBe(3);
+  await expect(page.getByTestId("bag-live")).toHaveText("已放进纸袋：奶酥红豆包 ×3");
+  await page.getByTestId("bag-pill").click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  const line = page.getByTestId("bag-line").first();
+  await line.getByTestId("bag-line-inc").click();
+  await expect.poll(() => pileCount(page, "sheet")).toBe(4);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("shaking the big bag with the mouse moves the bag and rolls the bread", async ({ page }) => {
+  await openHarness(page);
+  await page.getByTestId("add3-hd").click();
+  await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(3);
+  await page.getByTestId("bag-pill").click();
+  await expect.poll(() => pileCount(page, "sheet")).toBe(3);
+  await page.waitForTimeout(1200); // let the opening hop settle
+  const bag = page.locator('[data-bag-target="sheet"] .pb');
+  const box = (await bag.boundingBox())!;
+  const snap = () => sheetPile(page).evaluateAll((els) => els.map((e) => (e as HTMLElement).style.transform).join("|"));
+  const before = await snap();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  for (let i = 0; i < 12; i++) {
+    await page.mouse.move(box.x + box.width / 2 + (i % 2 ? -50 : 50), box.y + box.height / 2, { steps: 2 });
+  }
+  const sw = bag.locator(".pb-sw");
+  expect(await sw.evaluate((e) => (e as HTMLElement).style.transform)).toContain("translate(");
+  await page.mouse.up();
+  expect(await snap()).not.toBe(before);
+  // It springs back and everything rests again.
+  await expect.poll(() => sw.evaluate((e) => (e as HTMLElement).style.transform), { timeout: 6000 }).toBe("");
+});
+
+// Real touch events through the Chrome DevTools protocol (WebKit has no equivalent): a finger on
+// the big bag shakes it in any direction and the page must not scroll or pull along.
+test("touch drag on the big bag shakes it, the page stays put, it springs back", async ({ baseURL }) => {
+  const { defaultBrowserType: _ignored, ...phone } = devices["iPhone 13"];
+  void _ignored;
+  const browser = await chromium.launch();
+  const context = await browser.newContext({ ...phone, hasTouch: true, baseURL });
+  try {
+    await context.route("**/test-photos/*.jpg", (route) => route.fulfill({ body: PHOTO, contentType: "image/jpeg" }));
+    const page = await context.newPage();
+    await openHarness(page);
+    await page.getByTestId("add3-hd").click();
+    await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(3);
+    await page.getByTestId("bag-pill").click();
+    await expect.poll(() => pileCount(page, "sheet")).toBe(3);
+    await page.waitForTimeout(1500); // the opening hop settles
+    const bag = page.locator('[data-bag-target="sheet"] .pb');
+    const box = (await bag.boundingBox())!;
+    const cdp = await context.newCDPSession(page);
+    const touch = (type: "touchStart" | "touchMove" | "touchEnd", x: number, y: number) =>
+      cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x, y }] });
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    const snap = () => sheetPile(page).evaluateAll((els) => els.map((e) => (e as HTMLElement).style.transform).join("|"));
+    const before = await snap();
+    const scrollBefore = await page.evaluate(() => window.scrollY);
+
+    await touch("touchStart", cx, cy);
+    // Mostly vertical first (the page would scroll if the touch were not ours), then side to side.
+    for (let i = 1; i <= 6; i++) {
+      await touch("touchMove", cx + 4 * i, cy + 12 * i);
+      await page.waitForTimeout(16);
+    }
+    for (let i = 0; i < 10; i++) {
+      await touch("touchMove", cx + (i % 2 ? -45 : 45), cy);
+      await page.waitForTimeout(16);
+    }
+    const sw = bag.locator(".pb-sw");
+    expect(await sw.evaluate((e) => (e as HTMLElement).style.transform)).toContain("translate(");
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+    await touch("touchEnd", cx, cy);
+    expect(await snap()).not.toBe(before); // the bread rolled around
+    await expect.poll(() => sw.evaluate((e) => (e as HTMLElement).style.transform), { timeout: 6000 }).toBe("");
+  } finally {
+    await browser.close();
+  }
+});
+
+// Safari does not Tab to buttons by default, so the focus trap is checked in Chrome.
+test("the sheet keeps Tab and Shift+Tab inside the dialog", async ({ baseURL }) => {
+  const { defaultBrowserType: _ignored, ...phone } = devices["iPhone 13"];
+  void _ignored;
+  const browser = await chromium.launch();
+  const context = await browser.newContext({ ...phone, baseURL });
+  try {
+    await context.route("**/test-photos/*.jpg", (route) => route.fulfill({ body: PHOTO, contentType: "image/jpeg" }));
+    const page = await context.newPage();
+    await openHarness(page);
+    await page.getByTestId("add3-hd").click();
+    await page.getByTestId("add-bl").click();
+    await page.getByTestId("bag-pill").click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect(page.getByTestId("bag-close")).toBeFocused();
+    const inside = () => dialog.evaluate((d) => d.contains(document.activeElement));
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press("Tab");
+      expect(await inside()).toBe(true);
+    }
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press("Shift+Tab");
+      expect(await inside()).toBe(true);
+    }
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+  } finally {
+    await browser.close();
+  }
+});
+
+test("the sheet fits a 320 px screen with 44 px touch targets", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await openHarness(page);
+  await page.getByTestId("add3-hd").click();
+  await page.getByTestId("add-bl").click();
+  await page.getByTestId("bag-pill").click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  // Touch targets are at least 44 px.
+  for (const id of ["bag-line-inc", "bag-line-dec", "bag-close"]) {
+    const box = (await page.getByTestId(id).first().boundingBox())!;
+    expect(box.width).toBeGreaterThanOrEqual(43.5);
+    expect(box.height).toBeGreaterThanOrEqual(43.5);
+  }
+});
