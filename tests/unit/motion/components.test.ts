@@ -33,19 +33,24 @@ describe("stubs and brand components render", () => {
     expect(labelled).toContain('width="40"');
   });
 
-  it("Rack lists products with the add-to-bag copy and disables paused ones", () => {
+  it("Rack lists the products as options of one listbox and marks paused ones", () => {
     const html = renderToStaticMarkup(
       createElement(Rack, {
         products: [product(), product({ id: "p2", name: "焦糖布蕾", status: "PAUSED" })],
-        maxQty: 10,
-        cart: [{ productId: "p1", qty: 1 }],
-        onAdd: () => {},
+        index: 0,
+        onIndexChange: () => {},
+        onOpen: () => {},
+        hostRef: { current: null },
+        active: true,
+        hintOff: false,
       }),
     );
-    expect(html).toContain("奶酥红豆包");
-    expect(html).toContain(copy.customer.brand.addToBag);
-    expect(html).toContain(copy.customer.brand.rackTitle);
-    expect(html).toContain("disabled");
+    expect(html).toContain('aria-label="奶酥红豆包"');
+    expect(html).toContain('aria-label="焦糖布蕾"');
+    expect(html).toContain(copy.customer.brand.rackLabel);
+    expect(html).toContain(copy.customer.brand.tryMe);
+    expect(html.match(/role="option"/g)).toHaveLength(2);
+    expect(html.match(/is-paused/g)).toHaveLength(1);
   });
 
   it("BagBar shows the count and amount and disables checkout when ordering is closed", () => {

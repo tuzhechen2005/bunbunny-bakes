@@ -6,9 +6,9 @@ tested in `tests/unit/motion/`. React glue is only in `react.ts`. Import from `@
 
 | File | API |
 |---|---|
-| `spring.ts` | `class Spring(initial, config = ROPE_SPRING)`: `.target`, `.x`, `.v`, `.step(dtSeconds)`, `.set(x, v?)`, `.isAtRest()`, `.settle()`. Fixed `SUBSTEP = 1/240` s with carried remainder, so 60 and 120 Hz agree. `ROPE_SPRING = {1.7 Hz, 0.9}`. |
+| `spring.ts` | `class Spring(initial, config = ROPE_SPRING)`: `.target`, `.x`, `.v`, `.step(dtSeconds)`, `.set(x, v?)`, `.isAtRest(epsX?, epsV?)`, `.settle()`. Fixed `SUBSTEP = 1/240` s with carried remainder, so 60 and 120 Hz agree. `ROPE_SPRING = {1.7 Hz, 0.9}`. |
 | `pendulum.ts` | `class Pendulum(config = PEG_PENDULUM)`: `.angle` (rad, 0 = down, +x tilt), `.step(dt, pivotAccel)`, `.isAtRest()`, `.settle()`. `PEG_PENDULUM = {length 0.42 m, damping 0.85, maxDrive 5 m/s^2}`. `pivotAccel(prevV, v, dt, pxPerMetre)` converts a pivot velocity change (px/s) to m/s^2. Pivot accelerating toward +x tilts the photo toward -x. A hard capped flick peaks at about 6 deg for a 0.1 s push at the cap and 11 deg for 0.2 s (spec: 10-15 deg for a hard flick); a sustained cap-level push tops out below 30 and rests in about a second. |
-| `gesture.ts` | `class GestureTracker`: `start(x,y,t)`, `move(x,y,t)` returns dx once locked to the x axis (8 px) else `null` (leave the page to scroll), `end(t)` returns `{velocity px/ms, fling -1/0/1}` (last 100 ms; no fling after an 80 ms pause). `rubberBand(pos, min, max, limit = 0.45)` and `snapTarget(position, startIndex, flingDir, count)` work in item units; a fling moves at most one item. Use `touch-action: pan-y` on the rack. |
+| `gesture.ts` | `class GestureTracker`: `start(x,y,t)`, `move(x,y,t)` returns dx once locked to the x axis (8 px) else `null` (leave the page to scroll), `end(t)` returns `{velocity px/ms, fling -1/0/1}` (last 100 ms; no fling after an 80 ms pause). `rubberBand(pos, min, max, limit = 0.45)` and `snapTarget(position, startIndex, flingDir, count)` work in item units; a fling moves at most one item. Use `touch-action: pan-y` on the rack. `new GestureTracker({ lockPx, horizontalBias })` changes the lock distance (default 8) and the axis bias (default 1); `decideAxis(dx, dy, bias)` is the same rule as a function. The home rack uses `lockPx 4`, `horizontalBias 0.75` (see below). |
 | `loop.ts` | `createLoop(step(dt, now) => boolean)` returns `{start, stop, running}`. Return `true` while anything moves; returning `false` stops rAF entirely. Call `start()` again on the next input. `dt` is clamped to 0.1 s. Frames feed `motionHealth`. |
 | `fps.ts` | `FpsMonitor` and the shared `motionHealth`: sticky `degraded` after fps stays under 45 for 1.5 s. Idle gaps (> 250 ms) are ignored. |
 | `react.ts` | `useMotionPrefs()` returns `{ reduced, degraded }`; `haptic(ms = 15)` (never throws). |
@@ -42,3 +42,9 @@ On phones (and inside WeChat / app web views) pointer events lose horizontal dra
 Use touch events for touch: decide the axis on the first move (horizontal when |dx| >= 0.75 |dy|),
 then `preventDefault()` every `touchmove` of a horizontal gesture (listener with `passive: false`);
 vertical gestures are left to the page. Use pointer events for mouse and pen only.
+
+The home rope (`src/components/customer/rack/drag.ts`, `bindDrag`) is the reference implementation: native
+`touchstart` (passive) / `touchmove` (`passive: false`) / `touchend` / `touchcancel` on the whole hero, axis
+decided at 4 px with bias 0.75, `preventDefault` on every `touchmove` once the gesture is claimed, mouse and pen
+through pointer events only (`pointerType !== "touch"`). `tests/e2e/rack.spec.ts` drives it with real touch
+events through CDP (`Input.dispatchTouchEvent`, Chromium only).

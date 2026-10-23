@@ -6,6 +6,8 @@
 //   names (scripts/fontChars.mjs), plus printable ASCII. Body text uses the system font.
 // - public/fonts/fraunces-num.subset.woff2: Fraunces pinned to SOFT 100 / WONK 0 / opsz 72 / wght 700
 //   (prices, dates, order numbers). Printable ASCII and "×".
+// - public/fonts/long-cang-hint.subset.woff2: Long Cang (handwriting), only the characters of the tiny
+//   "try me" hint above the rope (copy.customer.brand.tryMe, D77).
 //
 // The variable source fonts (SIL OFL, see assets-src/fonts/OFL*.txt) are large, so they are not in
 // git: they are downloaded once into assets-src/fonts/.cache and checked against a pinned sha256.
@@ -30,6 +32,11 @@ const SOURCES = {
     url: `https://raw.githubusercontent.com/google/fonts/${REV}/ofl/fraunces/Fraunces%5BSOFT,WONK,opsz,wght%5D.ttf`,
     sha256: "177ff6c0f14e5550a3c624247cd1189611d4eb65d000b14944c63d967958abbb",
   },
+  hand: {
+    file: "LongCang-Regular.ttf",
+    url: `https://raw.githubusercontent.com/google/fonts/${REV}/ofl/longcang/LongCang-Regular.ttf`,
+    sha256: "e5bf2c3f24ef2327c6f136d8f73e2f9dfdf44896fdbeb35a9515f44777bb91bc",
+  },
 };
 
 async function source({ file, url, sha256 }) {
@@ -49,6 +56,13 @@ async function source({ file, url, sha256 }) {
 let ascii = "";
 for (let c = 0x20; c < 0x7f; c++) ascii += String.fromCharCode(c);
 
+/** The characters of copy.customer.brand.tryMe (read from the source so a copy change is picked up). */
+function tryMeText() {
+  const m = readFileSync(resolve(root, "src/copy.ts"), "utf8").match(/tryMe: "([^"]+)"/);
+  if (!m) throw new Error("copy.customer.brand.tryMe not found in src/copy.ts");
+  return m[1];
+}
+
 const jobs = [
   {
     src: SOURCES.sans,
@@ -61,6 +75,12 @@ const jobs = [
     text: ascii + "×",
     axes: { SOFT: 100, WONK: 0, opsz: 72, wght: 700 },
     out: "public/fonts/fraunces-num.subset.woff2",
+  },
+  {
+    src: SOURCES.hand,
+    text: tryMeText(),
+    axes: {},
+    out: "public/fonts/long-cang-hint.subset.woff2",
   },
 ];
 

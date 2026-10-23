@@ -57,8 +57,9 @@ export class Spring {
     this.acc = 0;
   }
 
-  isAtRest(): boolean {
-    return Math.abs(this.target - this.x) < EPS_X && Math.abs(this.v) < EPS_V;
+  /** `epsX` / `epsV` loosen the rest test (e.g. a tap is only a tap once the rope is nearly still). */
+  isAtRest(epsX = EPS_X, epsV = EPS_V): boolean {
+    return Math.abs(this.target - this.x) < epsX && Math.abs(this.v) < epsV;
   }
 
   /** Snap exactly onto the target once at rest, so nothing drifts forever. */
