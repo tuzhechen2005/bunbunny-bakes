@@ -29,6 +29,17 @@ export const copy = {
 
   /** Customer pages: home (menu + cart) and checkout (PAGES.md). */
   customer: {
+    /** Brand copy of the redesign (FRONTEND.md section 3, D71). */
+    brand: {
+      slogan: "今日出炉，限量手作。",
+      subLine: "每轮现做，当天出炉！",
+      rackTitle: "今日出炉",
+      listTitle: "全部面包",
+      bagName: "你的纸袋",
+      addToBag: "放进纸袋",
+      emptyBag: "纸袋还是空的，去绳子上挑一个吧。",
+      receiptLast: "面包已经在排队发酵啦！",
+    },
     home: {
       orderingClosedHint: "下一轮预订开放时间请关注群内通知～",
       loading: "加载中…",
@@ -49,6 +60,8 @@ export const copy = {
       qtyLabel: "已选 {qty} 个",
       barCount: "已选 {count} 件",
       barSubtotal: "小计 {amount}",
+      /** Label alone, for bars that render the amount as a separate (animated) element. */
+      barSubtotalLabel: "小计",
       goCheckout: "去结算",
       checkoutClosed: "暂未开放预订",
       footerContact: "联系店主：微信 {id}",
