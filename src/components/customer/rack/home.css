@@ -1,0 +1,751 @@
+/*
+ * Home page v2 (FRONTEND.md 4.1 / 4.2, ported from prototype-v2). Colours come from the tokens in
+ * globals.css (--field/--fink follow the bread on the rope); the few decorative constants below
+ * (jute rope, wooden peg, linen photo mat) are the only literal colours.
+ */
+@font-face {
+  font-family: "Hand Hint";
+  src: url("/fonts/long-cang-hint.subset.woff2") format("woff2");
+  font-display: swap;
+}
+
+.hm-page {
+  --rope-base: #c7ae86;
+  --rope-dark: #7e6340;
+  --rope-light: #eadbc0;
+  --peg-a: #a97e52;
+  --peg-b: #d8b489;
+  --peg-c: #9c7146;
+  --peg-line: #7a5634;
+  --peg-steel: #6f7378;
+  --peg-steel-hi: #c9cdd1;
+  --tint: color-mix(in srgb, var(--field) 7%, var(--c-paper));
+  background: var(--field);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  -webkit-tap-highlight-color: transparent;
+}
+.hm-app {
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  background: var(--c-paper);
+  min-height: 100svh;
+  position: relative;
+  overflow-x: clip;
+  flex: 1;
+}
+/* Tailwind's preflight already resets buttons (transparent, no border, inherited font). */
+.hm-app button,
+.hm-detail button {
+  cursor: pointer;
+}
+.hm-app :is(button, [tabindex]):focus-visible,
+.hm-detail :is(button, [tabindex]):focus-visible {
+  outline: 2.5px solid var(--c-red);
+  outline-offset: 3px;
+}
+.hm-n {
+  font-family: var(--font-num);
+  font-feature-settings: "lnum" 1, "tnum" 1;
+}
+
+/* ---------- hero ---------- */
+.hm-hero {
+  background: var(--field);
+  color: var(--fink);
+  padding: 0 20px 30px;
+  position: relative;
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.hm-hdr {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.hm-wm {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  font: 900 18px/1 var(--font-display);
+  letter-spacing: -0.01em;
+}
+.hm-wm img {
+  height: 40px;
+  width: auto;
+  margin-bottom: -4px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.12));
+  pointer-events: none;
+}
+.hm-open {
+  font: 500 13px/1 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  opacity: 0.85;
+}
+.hm-open i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.hm-slogan {
+  margin: 16px 0 0;
+  font: 900 clamp(24px, 8.6vw, 31px) / 1.15 var(--font-display);
+  letter-spacing: -0.045em;
+  white-space: nowrap;
+}
+.hm-sub {
+  margin: 6px 0 0;
+  font: 500 15px/1.5 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  opacity: 0.8;
+}
+.hm-closed {
+  margin: 10px 0 0;
+  font: 500 13.5px/1.5 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.hm-closed p {
+  margin: 0;
+}
+.hm-closed p + p {
+  opacity: 0.75;
+}
+.hm-state {
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  font: 500 15px/1.5 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.hm-state button {
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 22px;
+  background: var(--fink);
+  color: var(--field);
+  font-weight: 700;
+}
+
+/* ---------- rack: rope, pegs, photos ---------- */
+.hm-rack {
+  position: relative;
+  margin: 10px -20px 0;
+  height: var(--rh, 330px);
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+  cursor: grab;
+}
+.hm-rack:active {
+  cursor: grabbing;
+}
+.hm-rope {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.hm-rope path {
+  fill: none;
+  stroke-linecap: butt;
+}
+.hm-rope .rsh {
+  stroke: #000;
+  stroke-width: 3;
+  opacity: 0.16;
+  transform: translateY(9px);
+}
+.hm-rope .rb {
+  stroke: var(--rope-base);
+  stroke-width: 3.6;
+}
+.hm-rope .rt {
+  stroke: var(--rope-dark);
+  stroke-width: 1.15;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+.hm-rope .rt2 {
+  stroke: var(--rope-light);
+  stroke-width: 0.8;
+  stroke-linecap: round;
+  opacity: 0.8;
+}
+.hm-rope .rh {
+  stroke: var(--c-paper);
+  stroke-width: 0.7;
+  opacity: 0.35;
+  transform: translateY(-1.4px);
+}
+.hm-card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--cw);
+  transform-origin: 50% 0;
+  will-change: transform;
+  perspective: 900px;
+}
+.hm-hang {
+  position: relative;
+  transform-origin: 50% 0;
+  padding-top: 10px;
+}
+.hm-peg {
+  position: absolute;
+  left: 50%;
+  top: -14px;
+  width: 16px;
+  height: 38px;
+  margin-left: -8px;
+  z-index: 3;
+  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+}
+.hm-peg svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.hm-flip {
+  position: relative;
+  transform-style: preserve-3d;
+  transform-origin: 50% 0;
+}
+.hm-face {
+  border-radius: 3px;
+  overflow: hidden;
+  aspect-ratio: 1;
+  background: var(--c-wash);
+  box-shadow:
+    0 26px 34px -20px rgba(0, 0, 0, 0.55),
+    0 6px 12px -6px rgba(0, 0, 0, 0.3);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.hm-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+.hm-face > span {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.hm-back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+}
+.hm-back img,
+.hm-back > span {
+  transform: scaleX(-1);
+  filter: brightness(0.9) saturate(0.95);
+}
+.hm-card.is-taken .hm-hang {
+  visibility: hidden;
+}
+.hm-card.is-paused .hm-face img {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.hm-try {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  color: var(--fink);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  opacity: 0.85;
+  transition: opacity 0.4s;
+}
+.hm-try.is-off {
+  opacity: 0;
+}
+.hm-try span {
+  font: 400 14px/1 "Hand Hint", system-ui, sans-serif;
+  transform: rotate(-5deg);
+  white-space: nowrap;
+}
+.hm-try svg {
+  width: 26px;
+  height: 22px;
+  margin: 1px 10px 0 0;
+  animation: hm-nudge 1.8s var(--ease) infinite;
+}
+@keyframes hm-nudge {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: translate(-3px, 3px);
+  }
+}
+
+/* ---------- current bread ---------- */
+.hm-info {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 0 12px;
+  margin-top: -4px;
+}
+.hm-name {
+  grid-column: 1 / -1;
+  margin: 0 0 12px;
+  font: 900 clamp(22px, 7.7vw, 29px) / 1.15 var(--font-display);
+  letter-spacing: -0.035em;
+  height: 1.15em;
+  position: relative;
+  overflow: hidden;
+}
+.hm-name span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hm-price b {
+  font-size: 36px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.hm-price > span {
+  display: block;
+  margin-top: 6px;
+  font: 500 13px/1.3 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  opacity: 0.75;
+}
+.hm-price > .hm-warn {
+  opacity: 1;
+  font-weight: 700;
+}
+.hm-addp {
+  width: 60px;
+  height: 60px;
+  border-radius: 30px;
+  background: var(--fink);
+  color: var(--field);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.18s var(--ease);
+}
+.hm-addp:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.hm-addp svg {
+  width: 24px;
+  height: 24px;
+}
+.hm-addp:active:not(:disabled),
+.hm-plus:active:not(:disabled),
+.hm-cta:active:not(:disabled) {
+  transform: scale(0.95);
+}
+.hm-dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 20px;
+}
+.hm-dots i {
+  height: 4px;
+  width: 4px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.3;
+  transition:
+    width 0.45s var(--ease),
+    opacity 0.45s;
+}
+.hm-dots i.is-on {
+  width: 22px;
+  opacity: 1;
+}
+
+/* ---------- list ---------- */
+.hm-list {
+  padding: 40px 20px 34px;
+  background: var(--tint);
+}
+.hm-sec-t {
+  margin: 0 0 8px;
+  font: 900 30px/1.1 var(--font-display);
+  letter-spacing: -0.04em;
+}
+.hm-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px 14px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.hm-tile {
+  position: relative;
+  min-width: 0;
+}
+.hm-ph {
+  position: relative;
+}
+.hm-ph-img {
+  border-radius: 4px;
+  overflow: hidden;
+  aspect-ratio: 1;
+  background: var(--c-wash);
+  box-shadow: 0 18px 26px -18px rgba(0, 0, 0, 0.45);
+}
+.hm-ph-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.hm-ph-img > span {
+  width: 100%;
+  height: 100%;
+}
+.hm-tile.is-paused .hm-ph-img img {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.hm-ctl {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+}
+.hm-t-name {
+  font: 700 15px/1.3 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  margin: 12px 0 0;
+}
+.hm-t-p {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.hm-t-p b {
+  font-size: 18px;
+  font-weight: 700;
+}
+.hm-t-p small {
+  font: 500 11.5px/1.2 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--c-grey);
+}
+.hm-t-note {
+  margin: 4px 0 0;
+  font: 500 12px/1.4 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--c-grey);
+}
+.hm-t-note.is-warn {
+  color: var(--c-red);
+}
+.hm-plus {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  background: var(--c-ink);
+  color: var(--c-paper);
+  display: grid;
+  place-items: center;
+  position: relative;
+  transition: transform 0.18s var(--ease);
+  box-shadow: 0 8px 16px -6px rgba(0, 0, 0, 0.45);
+}
+.hm-plus::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+.hm-plus:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.hm-plus svg {
+  width: 18px;
+  height: 18px;
+}
+.hm-stp {
+  display: flex;
+  align-items: center;
+  height: 42px;
+  border-radius: 21px;
+  background: var(--c-wash);
+}
+.hm-stp button {
+  width: 44px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  position: relative;
+}
+/* The pill looks 42 px tall (prototype); the hit area is 44 px. */
+.hm-stp button::after {
+  content: "";
+  position: absolute;
+  inset: -1px 0;
+}
+.hm-stp button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.hm-stp button svg {
+  width: 16px;
+  height: 16px;
+}
+.hm-stp b {
+  min-width: 20px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* ---------- footer ---------- */
+.hm-foot {
+  background: var(--tint);
+  border-top: 1px solid color-mix(in srgb, var(--field) 12%, var(--c-paper));
+  padding: 40px 20px 150px;
+  color: var(--c-grey);
+  font: 400 13px/1.8 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.hm-foot .big {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  color: var(--c-ink);
+  font: 900 26px/1 var(--font-display);
+  letter-spacing: -0.03em;
+  margin-bottom: 16px;
+}
+.hm-foot .big img {
+  height: 54px;
+  width: auto;
+  margin-bottom: -6px;
+}
+.hm-foot p {
+  margin: 0;
+}
+
+/* ---------- detail (taken off the rope) ---------- */
+.hm-detail {
+  position: fixed;
+  inset: 0;
+  margin: 0 auto;
+  max-width: 430px;
+  z-index: 45;
+  color: var(--fink);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.hm-detail-bg {
+  position: fixed;
+  inset: 0;
+  margin: 0 auto;
+  max-width: 430px;
+  background: var(--field);
+  z-index: -1;
+}
+.hm-dt-content {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.hm-dt-dock {
+  margin-top: auto;
+}
+.hm-dt-top {
+  height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  touch-action: pan-x;
+}
+.hm-tbtn {
+  height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 700 15px/1 system-ui, sans-serif;
+}
+.hm-tbtn svg {
+  width: 20px;
+  height: 20px;
+}
+.hm-dt-nav {
+  display: flex;
+  align-items: center;
+}
+.hm-dt-nav .hm-n {
+  font-size: 15px;
+  font-weight: 600;
+  min-width: 44px;
+  text-align: center;
+}
+.hm-dt-nav button {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+}
+.hm-dt-nav button:disabled {
+  opacity: 0.3;
+}
+.hm-dt-nav svg {
+  width: 20px;
+  height: 20px;
+}
+.hm-dt-ph {
+  margin: 12px 48px 0;
+  position: relative;
+  touch-action: pan-x;
+}
+.hm-dt-ph .hm-peg {
+  top: -16px;
+}
+.hm-dt-ph .hm-face {
+  box-shadow:
+    0 40px 50px -26px rgba(0, 0, 0, 0.6),
+    0 8px 16px -8px rgba(0, 0, 0, 0.3);
+}
+.hm-dt-ph.is-paused .hm-face img {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.hm-dt-body {
+  padding: 26px 24px 8px;
+}
+.hm-dt-dock {
+  position: sticky;
+  bottom: 0;
+  padding: 22px 16px calc(14px + env(safe-area-inset-bottom)) 92px;
+  background: linear-gradient(to bottom, transparent, var(--field) 40%);
+}
+.hm-dt-dock .hm-cta {
+  background: var(--fink);
+  color: var(--field);
+  height: 60px;
+  border-radius: 30px;
+}
+.hm-dt-name {
+  margin: 0;
+  font: 900 clamp(28px, 10vw, 38px) / 1.12 var(--font-display);
+  letter-spacing: -0.045em;
+}
+.hm-dt-desc {
+  margin: 12px 0 0;
+  font: 400 16px/1.7 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  opacity: 0.86;
+  white-space: pre-line;
+}
+.hm-dt-prices {
+  display: flex;
+  gap: 28px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in srgb, var(--fink) 22%, transparent);
+}
+.hm-dt-prices b {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+}
+.hm-dt-prices small {
+  display: block;
+  font: 500 12.5px/1 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  opacity: 0.72;
+  margin-top: 7px;
+}
+.hm-dt-lead {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--fink) 14%, transparent);
+  font: 500 14px/1.5 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.hm-dt-act {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 24px;
+}
+.hm-dt-act .hm-stp {
+  background: color-mix(in srgb, var(--fink) 14%, transparent);
+  height: 58px;
+  border-radius: 29px;
+}
+.hm-dt-act .hm-stp button {
+  width: 50px;
+  height: 58px;
+}
+.hm-dt-note {
+  margin: 10px 0 0;
+  font: 600 13px/1.4 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.hm-cta {
+  flex: 1;
+  width: 100%;
+  height: 58px;
+  border-radius: 29px;
+  background: var(--c-ink);
+  color: var(--c-paper);
+  font: 700 16px/1 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: transform 0.18s var(--ease);
+}
+.hm-cta:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.hm-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hm-page *,
+  .hm-page *::before,
+  .hm-page *::after,
+  .hm-detail *,
+  .hm-detail *::before,
+  .hm-detail *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

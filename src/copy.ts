@@ -42,6 +42,8 @@ export const copy = {
       /** Wordmark next to the logo image (the logo stands for 兔, D80); brandName is its accessible name. */
       wordmark: "的大面包",
       brandName: "兔的大面包",
+      /** Between "放进纸袋" and the amount on the detail's add button. */
+      addSeparator: "·",
       /** Tiny handwritten hint above the rope (D77). */
       tryMe: "点击试试！",
       hangBack: "挂回去",
@@ -65,6 +67,8 @@ export const copy = {
       unitPrice: "{price} / 个",
       /** e.g. "4 个 $8.99" */
       bundlePrice: "{size} 个 {price}",
+      /** Bundle size under the bundle price on the detail, e.g. "4 个" */
+      bundleSize: "{size} 个",
       /** Joins unitPrice and bundlePrice (full-width space). */
       priceSeparator: "　",
       paused: "暂停供应",

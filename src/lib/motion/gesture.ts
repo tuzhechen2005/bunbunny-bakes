@@ -10,7 +10,23 @@ export const FLING_PAUSE_MS = 80;
 /** Minimum release speed (px/ms) that counts as a fling. */
 export const FLING_MIN_SPEED = 0.3;
 
+/**
+ * Axis decision for a touch gesture (D77): horizontal when |dx| >= bias * |dy|. The default bias 1 is
+ * the plain "more horizontal than vertical"; the rope uses 0.75 so a diagonal flick still belongs
+ * to the rope instead of leaking to page scrolling.
+ */
+export function decideAxis(dx: number, dy: number, horizontalBias = 1): Axis {
+  return Math.abs(dx) >= horizontalBias * Math.abs(dy) ? "x" : "y";
+}
+
 export type Axis = "x" | "y";
+
+export interface GestureTrackerOptions {
+  /** Distance (px, Euclidean) at which the axis is decided. Default AXIS_LOCK_PX (8). */
+  lockPx?: number;
+  /** Horizontal when |dx| >= bias * |dy|. Default 1. */
+  horizontalBias?: number;
+}
 
 interface Sample {
   x: number;
@@ -54,6 +70,18 @@ export class GestureTracker {
   private startY = 0;
   private samples: Sample[] = [];
   private active = false;
+  private readonly lockPx: number;
+  private readonly bias: number;
+
+  constructor(opts: GestureTrackerOptions = {}) {
+    this.lockPx = opts.lockPx ?? AXIS_LOCK_PX;
+    this.bias = opts.horizontalBias ?? 1;
+  }
+
+  /** True between start() and end()/cancel(). */
+  get isActive(): boolean {
+    return this.active;
+  }
 
   start(x: number, y: number, t: number): void {
     this.active = true;
@@ -71,8 +99,8 @@ export class GestureTracker {
     if (!this.active) return null;
     const dx = x - this.startX;
     const dy = y - this.startY;
-    if (this.axis === null && Math.hypot(dx, dy) >= AXIS_LOCK_PX) {
-      this.axis = Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+    if (this.axis === null && Math.hypot(dx, dy) >= this.lockPx) {
+      this.axis = decideAxis(dx, dy, this.bias);
     }
     if (this.axis !== "x") return null;
     this.samples.push({ x, t });

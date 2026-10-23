@@ -105,29 +105,31 @@ async function fillAndPickDate(page: Page, date = "2026-10-30") {
   await page.getByLabel("微信号").fill("  bunny_fan_01  ");
 }
 
-test("home: add items updates the bar; placeholder; open state", async ({ page }) => {
+test("home: add items updates the bag bar; placeholder; open state", async ({ page }) => {
   await mockApis(page);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "🐰的大面包" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "兔的大面包" }).first()).toBeVisible();
   await expect(page.getByTestId("ordering-state")).toHaveText("预订开放中");
-  await expect(card(page, "p-redbean").getByTestId("price")).toHaveText("$2.49 / 个　4 个 $8.99");
-  await expect(card(page, "p-brulee").getByTestId("price")).toHaveText("$4.50 / 个");
+  await expect(card(page, "p-redbean").getByTestId("price")).toHaveText("$2.49");
+  await expect(card(page, "p-redbean").getByTestId("bundle-price")).toHaveText("4 个 $8.99");
+  await expect(card(page, "p-brulee").getByTestId("price")).toHaveText("$4.50");
+  await expect(card(page, "p-brulee").getByTestId("bundle-price")).toHaveCount(0);
   await expect(card(page, "p-redbean").getByTestId("bunny-placeholder")).toBeVisible();
   await expect(page.getByTestId("footer-contact")).toHaveCount(0);
 
   const plus = card(page, "p-cheese").getByRole("button", { name: "增加一个" });
   for (let i = 0; i < 5; i++) await plus.click();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 5 件");
-  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $13.98");
+  await expect(page.getByTestId("bag-count")).toContainText("5");
+  await expect(page.getByTestId("bag-subtotal")).toContainText("13.98");
   await card(page, "p-redbean").getByRole("button", { name: "增加一个" }).click();
-  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $16.47");
+  await expect(page.getByTestId("bag-subtotal")).toContainText("16.47");
   await card(page, "p-cheese").getByRole("button", { name: "减少一个" }).click();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 5 件");
-  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $13.48");
+  await expect(page.getByTestId("bag-count")).toContainText("5");
+  await expect(page.getByTestId("bag-subtotal")).toContainText("13.48");
 
   // persisted across reloads
   await page.reload();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 5 件");
+  await expect(page.getByTestId("bag-count")).toContainText("5");
 });
 
 test("home: paused card disabled, max reached, footer wechat, vanished items dropped", async ({ page }) => {
@@ -135,7 +137,7 @@ test("home: paused card disabled, max reached, footer wechat, vanished items dro
   await page.goto("/");
   await page.evaluate((key) => localStorage.setItem(key, JSON.stringify([{ productId: "gone", qty: 3 }, { productId: "p-redbean", qty: 1 }])), CART_KEY);
   await page.reload();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 1 件");
+  await expect(page.getByTestId("bag-count")).toContainText("1");
   expect(await page.evaluate((key) => localStorage.getItem(key), CART_KEY)).toBe(JSON.stringify([{ productId: "p-redbean", qty: 1 }]));
 
   const paused = card(page, "p-paused");
@@ -151,19 +153,21 @@ test("home: paused card disabled, max reached, footer wechat, vanished items dro
   await expect(card(page, "p-redbean").getByTestId("max-hint")).toHaveText("大量订购请加微信联系");
   await expect(page.getByTestId("footer-contact")).toHaveText("微信 bunbunny_owner");
 
-  await page.getByTestId("go-checkout").click();
+  await page.getByTestId("bag-pill").click();
+  await page.getByTestId("bag-checkout").click();
   await expect(page).toHaveURL(/\/checkout$/);
   await expect(page.getByTestId("cart-line")).toHaveCount(1);
 });
 
-test("home: ordering closed disables the bar button but allows adding", async ({ page }) => {
+test("home: ordering closed disables the checkout button but allows adding", async ({ page }) => {
   await mockApis(page, { menu: { orderingEnabled: false } });
   await page.goto("/");
   await expect(page.getByText("暂未开放预订 🍞")).toBeVisible();
   await expect(page.getByText("下一轮预订开放时间请关注群内通知～")).toBeVisible();
   await card(page, "p-redbean").getByRole("button", { name: "增加一个" }).click();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 1 件");
-  const button = page.getByTestId("go-checkout");
+  await expect(page.getByTestId("bag-count")).toContainText("1");
+  await page.getByTestId("bag-pill").click();
+  const button = page.getByTestId("bag-checkout");
   await expect(button).toHaveText("暂未开放预订");
   await expect(button).toBeDisabled();
 });
