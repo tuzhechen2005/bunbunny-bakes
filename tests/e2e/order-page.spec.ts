@@ -176,7 +176,7 @@ test.describe("order page /o/{token}", () => {
     await mockOrder(page, () => makeOrder());
     await page.goto(ORDER_PATH);
     const block = page.getByTestId("owner-wechat");
-    await expect(block).toContainText("请加店主微信：bunbunny_bakes");
+    await expect(block).toContainText("店主微信 bunbunny_bakes");
     await block.getByRole("button", { name: t.copyWechat }).click();
     await expect(block.getByRole("button", { name: t.copied })).toBeVisible();
     expect(await page.evaluate(() => (window as unknown as { __copied: string[] }).__copied)).toEqual([

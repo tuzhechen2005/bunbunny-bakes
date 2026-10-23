@@ -129,8 +129,8 @@ test("3. delivery fee and the free-delivery nudge", async ({ page }) => {
   await dateCard(page, seeded.dates.d1).click();
   await expect(page.getByTestId("total-fee")).toHaveText("$5.00");
   await expect(page.getByTestId("total-total")).toHaveText("$24.98");
-  await expect(page.getByTestId("delivery-gap")).toHaveText("再买 $5.02 就免运费啦");
-  await expect(page.getByTestId("delivery-fee")).toHaveText("运费 $5，满 $25 免运费");
+  await expect(page.getByTestId("delivery-gap")).toHaveText("还差 $5.02");
+  await expect(page.getByTestId("delivery-fee")).toHaveText("满 $25 免运费");
 });
 
 test("4. admin: dashboard, contact, confirm, payment, audit log, auth", async ({ page, context, baseURL, request }) => {

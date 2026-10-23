@@ -15,14 +15,13 @@ tested in `tests/unit/motion/`. React glue is only in `react.ts`. Import from `@
 
 ## Rules for consumers
 
-- `reduced`: no swing, flight or 3D, use fades only; BlurText/ShinyText/CountUp already render the final state.
+- `reduced`: no swing, flight, spin or screen shake, use fades only; numbers change in place.
 - `degraded`: keep translation, drop the pendulum and the side tilt.
 - Drive DOM from refs inside the loop (`style.transform`), not React state per frame.
 - Animation library: `m.*` from `motion/react`, never `motion.*`. `m` needs a LazyMotion
   ancestor: wrap your page/component in `components/reactbits/MotionProvider` (features load as
   a separate lazy chunk, ~19 KB gzip). It is deliberately NOT in the root layout (it costs about
-  11 KB gzip of first-load JS on every route, admin included). `BlurText` wraps itself; `CountUp`
-  (uses `animate`) and `ShinyText` (CSS only) need no provider.
+  11 KB gzip of first-load JS on every route, admin included).
 
 ## Fly-to-bag (`src/lib/flyToBag.ts`)
 
@@ -37,7 +36,9 @@ clicks are never blocked, flights may overlap, the cart is updated by the caller
 (not on arrival), `onArrive` is decoration only (bag swing, haptic). Under reduced motion the
 flight is skipped and `onArrive` fires immediately.
 
-## React Bits (`src/components/reactbits/`)
+## Touch dragging (D77)
 
-`BlurText`, `CountUp`, `ShinyText` only (D68), adapted from React Bits under MIT + Commons Clause
-(`LICENSE.md` there). All take the final state immediately when `reduced`.
+On phones (and inside WeChat / app web views) pointer events lose horizontal drags to the page.
+Use touch events for touch: decide the axis on the first move (horizontal when |dx| >= 0.75 |dy|),
+then `preventDefault()` every `touchmove` of a horizontal gesture (listener with `passive: false`);
+vertical gestures are left to the page. Use pointer events for mouse and pen only.

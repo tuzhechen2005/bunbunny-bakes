@@ -4,8 +4,7 @@ import { describe, expect, it } from "vitest";
 import { BunnyMark } from "@/components/brand/BunnyMark";
 import { BagBar } from "@/components/customer/bag/BagBar";
 import { Rack } from "@/components/customer/rack/Rack";
-import { CountUp } from "@/components/reactbits/CountUp";
-import { ShinyText } from "@/components/reactbits/ShinyText";
+import { Logo } from "@/components/brand/Logo";
 import { copy } from "@/copy";
 import type { MenuProduct } from "@/lib/api";
 import { flyToBag } from "@/lib/flyToBag";
@@ -49,33 +48,39 @@ describe("stubs and brand components render", () => {
     expect(html).toContain("disabled");
   });
 
-  it("BagBar shows the count and amount", () => {
-    const html = renderToStaticMarkup(
-      createElement(BagBar, { count: 3, subtotalCents: 899, disabled: false, onCheckout: () => {} }),
-    );
-    expect(html).toContain("已选 3 件");
-    expect(html).toContain("$8.99");
-    expect(html).toContain(copy.customer.home.goCheckout);
+  it("BagBar shows the count and amount and disables checkout when ordering is closed", () => {
+    const props = {
+      products: [product()],
+      maxQty: 10,
+      cart: [{ productId: "p1", qty: 3 }],
+      count: 3,
+      subtotalCents: 899,
+      onIncrease: () => {},
+      onDecrease: () => {},
+      onCheckout: () => {},
+    };
+    const open = renderToStaticMarkup(createElement(BagBar, { ...props, orderingEnabled: true }));
+    expect(open).toContain("$8.99");
+    expect(open).not.toContain("disabled=\"\"");
+    const closed = renderToStaticMarkup(createElement(BagBar, { ...props, orderingEnabled: false }));
+    expect(closed).toContain("disabled=\"\"");
   });
 
-  it("CountUp and ShinyText render their final text on the server", () => {
-    expect(
-      renderToStaticMarkup(createElement(CountUp, { value: 1250, format: (n: number) => `$${n / 100}` })),
-    ).toContain("$12.5");
-    expect(renderToStaticMarkup(createElement(ShinyText, { text: "今日出炉" }))).toContain("今日出炉");
+  it("Logo is the brand image, decorative unless labelled", () => {
+    expect(renderToStaticMarkup(createElement(Logo, {}))).toContain('alt=""');
+    expect(renderToStaticMarkup(createElement(Logo, { label: "兔的大面包" }))).toContain('alt="兔的大面包"');
   });
 
   it("brand copy matches FRONTEND.md section 3", () => {
-    expect(copy.customer.brand).toEqual({
-      slogan: "今日出炉，限量手作。",
-      subLine: "每轮现做，当天出炉！",
-      rackTitle: "今日出炉",
-      listTitle: "全部面包",
-      bagName: "你的纸袋",
-      addToBag: "放进纸袋",
-      emptyBag: "纸袋还是空的，去绳子上挑一个吧。",
-      receiptLast: "面包已经在排队发酵啦！",
-    });
+    const b = copy.customer.brand;
+    expect(b.slogan).toBe("今日出炉，限量手作。");
+    expect(b.subLine).toBe("每轮现做，当天出炉！");
+    expect(b.listTitle).toBe("全部面包");
+    expect(b.bagName).toBe("你的纸袋");
+    expect(b.emptyBag).toBe("纸袋还是空的");
+    expect(b.receiptLast).toBe("面包已经在排队发酵啦！");
+    expect(b.wordmark).toBe("的大面包");
+    expect(b.tryMe).toBe("点击试试！");
   });
 });
 

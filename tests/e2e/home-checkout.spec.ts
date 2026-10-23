@@ -102,7 +102,7 @@ function card(page: Page, id: string) {
 
 async function fillAndPickDate(page: Page, date = "2026-10-30") {
   await page.locator(`[data-testid="date-card"][data-date="${date}"]`).click();
-  await page.getByLabel("你的微信号").fill("  bunny_fan_01  ");
+  await page.getByLabel("微信号").fill("  bunny_fan_01  ");
 }
 
 test("home: add items updates the bar; placeholder; open state", async ({ page }) => {
@@ -149,7 +149,7 @@ test("home: paused card disabled, max reached, footer wechat, vanished items dro
   await expect(card(page, "p-redbean").getByTestId("qty")).toHaveText("8");
   await expect(plus).toBeDisabled();
   await expect(card(page, "p-redbean").getByTestId("max-hint")).toHaveText("大量订购请加微信联系");
-  await expect(page.getByTestId("footer-contact")).toHaveText("联系店主：微信 bunbunny_owner");
+  await expect(page.getByTestId("footer-contact")).toHaveText("微信 bunbunny_owner");
 
   await page.getByTestId("go-checkout").click();
   await expect(page).toHaveURL(/\/checkout$/);
@@ -174,7 +174,7 @@ test("checkout: lines, date states, brûlée hint, delivery gap", async ({ page 
   const cheese = page.locator('[data-testid="cart-line"][data-product-id="p-cheese"]');
   await expect(cheese).toContainText("奶酪角 ×5");
   await expect(cheese.getByTestId("line-breakdown")).toHaveText("$10.99 + $2.99 = $13.98");
-  await expect(page.getByTestId("lead-hint")).toHaveText("含布蕾的订单需提前两天预订");
+  await expect(page.getByTestId("lead-hint")).toHaveText("布蕾需提前两天");
 
   const date = (d: string) => page.locator(`[data-testid="date-card"][data-date="${d}"]`);
   await expect(date("2026-10-30")).toContainText("10/30 周五");
@@ -194,8 +194,8 @@ test("checkout: lines, date states, brûlée hint, delivery gap", async ({ page 
   await expect(date("2026-11-02")).toContainText("配送已满，可选自提");
   await expect(date("2026-11-02")).toBeDisabled();
   await expect(date("2026-11-02")).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByTestId("delivery-fee")).toHaveText("运费 $5，满 $25 免运费");
-  await expect(page.getByTestId("delivery-gap")).toHaveText("再买 $6.52 就免运费啦");
+  await expect(page.getByTestId("delivery-fee")).toHaveText("满 $25 免运费");
+  await expect(page.getByTestId("delivery-gap")).toHaveText("还差 $6.52");
   await expect(page.getByText("具体配送时间和地点会在微信上和你确认")).toBeVisible();
   await expect(page.getByTestId("total-fee")).toHaveText("$5.00");
   await expect(page.getByTestId("total-total")).toHaveText("$23.48");
@@ -223,7 +223,7 @@ test("checkout: happy path submits once, navigates and clears the cart", async (
   });
   await seedCart(page, [{ productId: "p-redbean", qty: 4 }]);
   await fillAndPickDate(page);
-  await page.getByLabel("备注（选填）").fill("谢谢");
+  await page.getByLabel("备注").fill("谢谢");
   await expect(page.getByTestId("note-counter")).toHaveText("2/300");
 
   // double tap: two clicks in the same task, before React re-renders
@@ -347,7 +347,7 @@ test("checkout: VALIDATION gets a new idempotency key; network error keeps it", 
   await expect(page.getByTestId("submit-error")).toHaveText("提交失败，请稍后再试");
   await page.getByTestId("submit").click();
   await expect(page.getByTestId("wechat-error")).toHaveText("微信号格式不对");
-  await page.getByLabel("你的微信号").fill("bunny_fan_02");
+  await page.getByLabel("微信号").fill("bunny_fan_02");
   await page.getByTestId("submit").click();
   await page.waitForURL(/\/o\/tok456\?new=1$/);
 

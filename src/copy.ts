@@ -37,8 +37,23 @@ export const copy = {
       listTitle: "全部面包",
       bagName: "你的纸袋",
       addToBag: "放进纸袋",
-      emptyBag: "纸袋还是空的，去绳子上挑一个吧。",
+      emptyBag: "纸袋还是空的",
       receiptLast: "面包已经在排队发酵啦！",
+      /** Wordmark next to the logo image (the logo stands for 兔, D80); brandName is its accessible name. */
+      wordmark: "的大面包",
+      brandName: "兔的大面包",
+      /** Tiny handwritten hint above the rope (D77). */
+      tryMe: "点击试试！",
+      hangBack: "挂回去",
+      prevProduct: "上一款",
+      nextProduct: "下一款",
+      rackLabel: "今日出炉的面包，左右滑动或用方向键，回车查看",
+      openBag: "打开你的纸袋",
+      closeBag: "关上",
+      /** Screen-reader announcement after an add, e.g. "已放进纸袋：奶酪角 ×2" */
+      addedToBag: "已放进纸袋：{name} ×{qty}",
+      /** Ring text of the order stamp (D79). */
+      stampRing: "BUNBUNNY BAKES · 现做现烤 · 当天出炉 ·",
     },
     home: {
       orderingClosedHint: "下一轮预订开放时间请关注群内通知～",
@@ -64,7 +79,7 @@ export const copy = {
       barSubtotalLabel: "小计",
       goCheckout: "去结算",
       checkoutClosed: "暂未开放预订",
-      footerContact: "联系店主：微信 {id}",
+      footerContact: "微信 {id}",
     },
     checkout: {
       pageTitle: "确认预订",
@@ -75,8 +90,8 @@ export const copy = {
       /** e.g. "奶酪角 ×5" */
       lineName: "{name} ×{qty}",
       remove: "移除",
-      datesTitle: "选择取货日期",
-      leadDaysHint: "含布蕾的订单需提前两天预订",
+      datesTitle: "取货日期",
+      leadDaysHint: "布蕾需提前两天",
       noDates: "暂时没有可以预订的日期，请关注群内通知～",
       datesLoading: "正在查询可以预订的日期…",
       datesFailed: "日期加载失败，请稍后再试",
@@ -87,22 +102,24 @@ export const copy = {
       fulfillmentTitle: "自提或配送",
       pickup: "自提",
       delivery: "配送",
-      /** e.g. "运费 $5，满 $25 免运费" */
-      deliveryFee: "运费 {fee}，满 {min} 免运费",
-      /** e.g. "再买 $5.02 就免运费啦" */
-      freeDeliveryGap: "再买 {gap} 就免运费啦",
+      /** e.g. "满 $25 免运费" */
+      deliveryFee: "满 {min} 免运费",
+      /** e.g. "还差 $5.02" (follows deliveryFee) */
+      freeDeliveryGap: "还差 {gap}",
       deliveryArrange: "具体配送时间和地点会在微信上和你确认",
-      wechatLabel: "你的微信号",
-      wechatHint: "店主会加你微信确认订单",
+      wechatLabel: "微信号",
+      /** Placeholder of the WeChat input. */
+      wechatHint: "店主会加你确认订单",
       wechatRequired: "请填写你的微信号",
-      noteLabel: "备注（选填）",
+      noteLabel: "备注",
+      noteOptional: "选填",
       /** e.g. "12/300" */
       noteCounter: "{count}/{max}",
       totalsTitle: "金额",
       subtotal: "小计",
       deliveryFeeLabel: "运费",
       total: "总额",
-      payLater: "无需在线付款，收到货后再付款。",
+      payLater: "收到货再付款",
       submit: "确认提交预订",
       submitting: "提交中…",
       pickDate: "请先选择取货日期",
@@ -111,13 +128,13 @@ export const copy = {
     },
     /** Order page /o/{token} (PAGES.md), also the "order submitted" page. */
     order: {
-      newTitle: "预订提交成功！🎉",
-      newHint: "复制下面的链接保存好，随时打开它查看订单状态",
+      newTitle: "预订成功",
+      newHint: "用这个链接随时查看订单",
       copyLink: "复制订单链接",
       loading: "加载中…",
       loadFailed: "加载失败，请稍后刷新",
       retry: "重新加载",
-      addOwnerWechat: "请加店主微信：{ownerWechatId}",
+      addOwnerWechat: "店主微信 {ownerWechatId}",
       copyWechat: "复制",
       copied: "已复制",
       orderNo: "订单号：{orderNo}",
@@ -130,7 +147,7 @@ export const copy = {
       deliveryFee: "运费",
       total: "总额",
       note: "备注：{note}",
-      payOnReceipt: "无需在线付款，收到货后再付款。",
+      payOnReceipt: "收到货再付款",
       cancelOrder: "取消订单",
       cancelConfirmTitle: "确定要取消这个订单吗？",
       cancelConfirm: "确定取消",

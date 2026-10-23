@@ -1,9 +1,39 @@
 @import "tailwindcss";
 
 /*
- * Customer theme (docs/FRONTEND.md section 2, D65): fixed light, never follows the OS dark mode.
- * Base palette: paper / ink / caramel / muted / line. Everything else is derived from these.
- * Components use the tokens only (no hex values in components).
+ * Customer theme v2 (docs/FRONTEND.md section 2, D74–D76): fixed light, never follows the OS.
+ * White page, warm black ink, one red for alerts and the stamp. The home hero takes the colour of
+ * the bread on the rope: --field (background) and --fink (text on it), set at runtime from
+ * src/lib/field.ts and animated by the registered properties below.
+ */
+@property --field {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #dcc5bb;
+}
+@property --fink {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #4a2723;
+}
+:root {
+  --field: #dcc5bb;
+  --fink: #4a2723;
+  --c-ink: #161412;
+  --c-grey: #8c867e;
+  --c-line: #ece8e2;
+  --c-paper: #ffffff;
+  --c-wash: #f5f3ef;
+  --c-red: #e0344b;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition:
+    --field 0.8s var(--ease),
+    --fink 0.8s var(--ease);
+}
+
+/*
+ * Admin / legacy palette (D65, still used by the admin and by pages not yet restyled).
+ * Base palette: paper / ink / caramel / muted / line. Components use tokens only (no hex values).
  */
 :root {
   /* base palette */
@@ -67,6 +97,14 @@
 }
 
 @theme inline {
+  --color-field: var(--field);
+  --color-fink: var(--fink);
+  --color-c-ink: var(--c-ink);
+  --color-c-grey: var(--c-grey);
+  --color-c-line: var(--c-line);
+  --color-c-paper: var(--c-paper);
+  --color-c-wash: var(--c-wash);
+  --color-c-red: var(--c-red);
   --color-paper: var(--paper);
   --color-ink: var(--ink);
   --color-caramel: var(--caramel);
@@ -92,45 +130,13 @@ body {
   font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
-/* Headline face: subsetted Noto Serif SC 600 (--font-serif-face, see layout.tsx), Songti fallback. */
+/* Display face (Noto Sans SC 900 subset) and numerals (Fraunces), see layout.tsx. `font-serif` is
+   kept as an alias of the display face for pages that have not been restyled yet. */
 @theme {
-  --font-serif: var(--font-serif-face), "Songti SC", "STSong", serif;
+  --font-display: var(--font-display-face), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-num: var(--font-num-face), Georgia, serif;
+  --font-serif: var(--font-display-face), "PingFang SC", sans-serif;
 }
-
-/* Static paper grain: inline SVG feTurbulence noise, no canvas, no network. */
-.paper-grain {
-  background-color: var(--paper);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.16 0 0 0 0 0.14 0 0 0 0 0.12 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 160px 160px;
-}
-
-/* ShinyText (src/components/reactbits): a highlight sweeps across, then rests until the next cycle. */
-.shiny-text {
-  color: transparent;
-  /* top layer: the moving highlight; bottom layer: solid base colour so text is never invisible */
-  background-image:
-    linear-gradient(110deg, transparent 40%, var(--shiny-hi) 50%, transparent 60%),
-    linear-gradient(var(--shiny-base), var(--shiny-base));
-  background-size: 250% 100%, 100% 100%;
-  background-position: 150% 0, 0 0;
-  background-repeat: no-repeat;
-  -webkit-background-clip: text;
-  background-clip: text;
-  animation: shiny-sweep var(--shiny-cycle, 6s) ease-in-out infinite;
-}
-@keyframes shiny-sweep {
-  0% {
-    background-position: 150% 0, 0 0;
-  }
-  20%,
-  100% {
-    background-position: -50% 0, 0 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .shiny-text {
-    animation: none;
-    color: var(--shiny-base);
-    background-image: none;
-  }
+.font-num {
+  font-feature-settings: "lnum" 1, "tnum" 1;
 }

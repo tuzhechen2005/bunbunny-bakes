@@ -30,7 +30,7 @@ async function seed(date: string): Promise<string> {
     );
     await c.query(
       `INSERT INTO "Product" (id,name,"unitPriceCents","capacityMode","dailyLimit","updatedAt")
-       VALUES (gen_random_uuid(),'焦糖布蕾',229,'INDEPENDENT',24,now())`,
+       VALUES (gen_random_uuid(),'焦糖布蕾',249,'INDEPENDENT',24,now())`,
     );
     await c.query(`INSERT INTO "OpenDate" ("date") VALUES ($1::date)`, [date]);
     const { rows } = await c.query<{ id: string }>(`SELECT id FROM "Product" WHERE name='红豆包'`);

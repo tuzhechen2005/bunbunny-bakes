@@ -39,3 +39,6 @@ next-env.d.ts
 
 # Local Netlify folder
 .netlify
+
+# font sources downloaded by npm run fonts
+/assets-src/fonts/.cache/
