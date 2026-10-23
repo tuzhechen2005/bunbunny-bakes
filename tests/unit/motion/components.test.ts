@@ -34,7 +34,7 @@ describe("stubs and brand components render", () => {
     expect(labelled).toContain('width="40"');
   });
 
-  it("Rack lists products with the add-to-bag copy and disables paused ones", () => {
+  it("Rack lists products on the rope and marks paused ones", () => {
     const html = renderToStaticMarkup(
       createElement(Rack, {
         products: [product(), product({ id: "p2", name: "焦糖布蕾", status: "PAUSED" })],
@@ -44,9 +44,9 @@ describe("stubs and brand components render", () => {
       }),
     );
     expect(html).toContain("奶酥红豆包");
-    expect(html).toContain(copy.customer.brand.addToBag);
     expect(html).toContain(copy.customer.brand.rackTitle);
-    expect(html).toContain("disabled");
+    expect(html).toContain('data-paused="true"');
+    expect(html).toContain(copy.customer.home.paused);
   });
 
   it("BagBar shows the count and amount", () => {
@@ -66,7 +66,7 @@ describe("stubs and brand components render", () => {
   });
 
   it("brand copy matches FRONTEND.md section 3", () => {
-    expect(copy.customer.brand).toEqual({
+    expect(copy.customer.brand).toMatchObject({
       slogan: "今日出炉，限量手作。",
       subLine: "每轮现做，当天出炉！",
       rackTitle: "今日出炉",

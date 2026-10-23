@@ -39,6 +39,21 @@ export const copy = {
       addToBag: "放进纸袋",
       emptyBag: "纸袋还是空的，去绳子上挑一个吧。",
       receiptLast: "面包已经在排队发酵啦！",
+      /** Rope rack and the "take down" detail (task f1). */
+      rack: {
+        listLabel: "今日出炉的面包，左右滑动选择",
+        hint: "左右滑动挑选，点中间的面包取下来",
+        /** e.g. "奶酥红豆包，$2.49 / 个" */
+        cardLabel: "{name}，{price}",
+        hangBack: "挂回去",
+        pullHint: "往下拉也可以挂回去",
+        prev: "上一款",
+        next: "下一款",
+        /** e.g. "2 / 4" */
+        position: "{index} / {total}",
+        /** e.g. "纸袋里已有 3 个" */
+        inBag: "纸袋里已有 {qty} 个",
+      },
     },
     home: {
       orderingClosedHint: "下一轮预订开放时间请关注群内通知～",
