@@ -115,8 +115,9 @@ model Product {
   createdAt        DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
 
-  dateLimits OpenDateProductLimit[]
-  orderItems OrderItem[]
+  dateLimits  OpenDateProductLimit[]
+  orderItems  OrderItem[]
+  manualItems ManualIncomeItem[]
 }
 
 model OpenDate {
@@ -276,4 +277,33 @@ model RateLimitHit {
   at  DateTime @db.Timestamptz(3)
 
   @@index([key, at])
+}
+
+/// Hand-entered income for bookkeeping (D87).
+model ManualIncome {
+  id          String     @id @default(uuid()) @db.Uuid
+  date        DateTime   @db.Date
+  amountCents Int
+  note        String
+  paidMethod  PaidMethod
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime   @default(now()) @updatedAt @db.Timestamptz(3)
+
+  items ManualIncomeItem[]
+
+  @@index([date])
+}
+
+model ManualIncomeItem {
+  id           String  @id @default(uuid()) @db.Uuid
+  incomeId     String  @db.Uuid
+  productId    String? @db.Uuid
+  nameSnapshot String
+  qty          Int
+
+  income  ManualIncome @relation(fields: [incomeId], references: [id], onDelete: Cascade)
+  product Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([incomeId])
+  @@index([productId])
 }

@@ -127,9 +127,32 @@
 - **AdminSession**：`tokenHash`（cookie 里存原始随机值，表里只存 sha256）、`userId`、`expiresAt`（30 天）、`lastSeenAt`。
 - **PasswordReset**：`tokenHash`、`expiresAt`（15 分钟）、`usedAt`。
 
+### ManualIncome（手动记账，D87）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | uuid | |
+| date | date | 记在哪一天（和订单的取货日同一口径） |
+| amountCents | int | > 0，美分 |
+| note | text | 1–100 字 |
+| paidMethod | PaidMethod | 微信 / Zelle / Venmo / 现金 / 其他 |
+| createdAt / updatedAt | timestamptz | |
+
+### ManualIncomeItem（手动记账里选填的商品）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | uuid | |
+| incomeId | uuid → ManualIncome | 删除记录时一起删 |
+| productId | uuid → Product，可空 | 商品被删时置空 |
+| nameSnapshot | text | 记录时的商品名 |
+| qty | int | 1–999 |
+
+增删改都写 AuditLog（entity `manual_income`）。
+
 ### RateLimitHit
 
-`key`（例如 `order_ip:<ipHash>`）、`at`。查询最近一小时的条数；超过 24 小时的记录在每 5 分钟的定时任务里清理。
+`key`（例如 `order_ip:<ipHash>`）、`at`。查询最近 10 分钟的条数（D86）；超过 24 小时的记录在每 5 分钟的定时任务里清理。
 
 ## 2. 订单状态机
 
@@ -174,7 +197,7 @@ NEW ──▶ CONTACTED ──▶ CONFIRMED ──▶ BAKING ──▶ READY ─
 2. 读 `Setting`：`orderingEnabled = false` → 拒绝。
 3. 读购物车里的商品：有不在售的 → 拒绝；数量超过 `maxQtyPerItem` → 拒绝。
 4. 算 `cutoffAt`；`now ≥ cutoffAt` → 拒绝。`now` 由调用方传入，便于测试。
-5. 频率限制：IP 最近一小时 ≥ 3 笔，或这个微信号这天已有 2 笔 `NEW`/`CONTACTED` → 拒绝。
+5. 频率限制：IP 最近 10 分钟 ≥ 5 笔（D86），或这个微信号这天已有 2 笔 `NEW`/`CONTACTED` → 拒绝。
 6. 读这一天所有占名额订单的明细，用 `CAPACITY_RULES.md` 的纯函数算 before / after：面团、每个独立限额商品、配送单数。任何一项超 → 拒绝，并返回推荐日期（推荐日期在事务外另算即可，只是展示）。
 7. `seq = coalesce(max(seq), 0) + 1`（这一天已被锁住，所以安全）；生成 `orderNo`、`viewToken`。
 8. 插入 Order、OrderItem、AuditLog（`order.create`）、Notification（`new_order:<id>`）。
