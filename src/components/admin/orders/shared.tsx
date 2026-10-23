@@ -102,7 +102,7 @@ export function Sheet({
         onClick={(e) => e.stopPropagation()}
         className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-t-2xl bg-card p-4 pb-6 text-foreground"
       >
-        <h2 className="mb-3 text-lg font-semibold">{title}</h2>
+        <h2 className="mb-3 font-serif text-lg font-semibold">{title}</h2>
         {children}
       </div>
     </div>

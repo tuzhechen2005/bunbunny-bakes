@@ -46,7 +46,7 @@ export function AdminShell({ children }: Readonly<{ children: ReactNode }>) {
     <div className="flex min-h-full flex-1 flex-col bg-background text-foreground">
       <header className="sticky top-0 z-30 border-b border-line bg-card">
         <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between px-4">
-          <Link href="/admin" className="text-lg font-semibold">
+          <Link href="/admin" className="font-serif text-lg font-semibold">
             {copy.shopName}
           </Link>
           <button

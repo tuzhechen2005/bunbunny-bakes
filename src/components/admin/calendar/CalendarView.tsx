@@ -114,7 +114,7 @@ export function CalendarView() {
         <button type="button" className={navBtn} aria-label={t.prevMonth} onClick={() => go(-1)}>
           ‹
         </button>
-        <h2 className="text-lg font-semibold" aria-live="polite">
+        <h2 className="font-serif text-lg font-semibold" aria-live="polite">
           {fill(t.monthLabel, { year, month })}
         </h2>
         <button type="button" className={navBtn} aria-label={t.nextMonth} onClick={() => go(1)}>

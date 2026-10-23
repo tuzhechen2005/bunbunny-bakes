@@ -9,13 +9,13 @@ const t = copy.admin.auth;
 const MIN_PASSWORD_LENGTH = 10; // = MIN_PASSWORD_LENGTH in src/server/auth.ts
 
 const inputClass =
-  "w-full rounded-lg border border-neutral-300 px-3 py-3 text-base focus:border-neutral-900 focus:outline-none";
+  "w-full rounded-lg border border-line bg-card px-3 py-3 text-base focus:border-accent focus:outline-none";
 const buttonClass =
-  "w-full rounded-lg bg-neutral-900 py-3 text-base font-medium text-white disabled:opacity-50";
+  "w-full rounded-lg bg-accent py-3 text-base font-medium text-accent-ink disabled:opacity-50";
 
 function BackToLogin() {
   return (
-    <Link href="/admin/login" className="self-center py-2 text-sm text-neutral-600 underline">
+    <Link href="/admin/login" className="self-center py-2 text-sm text-muted underline">
       {t.backToLogin}
     </Link>
   );
@@ -32,7 +32,7 @@ export function ResetForm() {
   if (!token) {
     return (
       <div className="flex flex-col gap-4">
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-danger">
           {t.resetInvalid}
         </p>
         <BackToLogin />
@@ -86,7 +86,7 @@ export function ResetForm() {
     <div className="flex flex-col gap-4">
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <label className="flex flex-col gap-1">
-          <span className="text-sm text-neutral-700">{t.newPassword}</span>
+          <span className="text-sm text-foreground">{t.newPassword}</span>
           <input
             className={inputClass}
             type="password"
@@ -98,7 +98,7 @@ export function ResetForm() {
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-sm text-neutral-700">{t.confirmPassword}</span>
+          <span className="text-sm text-foreground">{t.confirmPassword}</span>
           <input
             className={inputClass}
             type="password"
@@ -110,7 +110,7 @@ export function ResetForm() {
           />
         </label>
         {error ? (
-          <p role="alert" className="text-sm text-red-600">
+          <p role="alert" className="text-sm text-danger">
             {error}
           </p>
         ) : null}

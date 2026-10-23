@@ -63,7 +63,7 @@ export function OrderingSwitch({
             className="w-full rounded-t-2xl bg-card p-4 pb-8"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 id="pause-title" className="text-lg font-semibold">
+            <h2 id="pause-title" className="font-serif text-lg font-semibold">
               {t.pauseConfirmTitle}
             </h2>
             <p className="mt-2 text-base text-muted">{t.pauseConfirmBody}</p>

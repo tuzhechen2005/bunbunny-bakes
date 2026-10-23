@@ -7,9 +7,9 @@ import { copy } from "@/copy";
 const t = copy.admin.auth;
 
 const inputClass =
-  "w-full rounded-lg border border-neutral-300 px-3 py-3 text-base focus:border-neutral-900 focus:outline-none";
+  "w-full rounded-lg border border-line bg-card px-3 py-3 text-base focus:border-accent focus:outline-none";
 const buttonClass =
-  "w-full rounded-lg bg-neutral-900 py-3 text-base font-medium text-white disabled:opacity-50";
+  "w-full rounded-lg bg-accent py-3 text-base font-medium text-accent-ink disabled:opacity-50";
 
 async function messageOf(response: Response): Promise<string> {
   try {
@@ -68,7 +68,7 @@ export function LoginForm() {
     <div className="flex flex-col gap-4">
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <label className="flex flex-col gap-1">
-          <span className="text-sm text-neutral-700">{t.username}</span>
+          <span className="text-sm text-foreground">{t.username}</span>
           <input
             className={inputClass}
             name="username"
@@ -81,7 +81,7 @@ export function LoginForm() {
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-sm text-neutral-700">{t.password}</span>
+          <span className="text-sm text-foreground">{t.password}</span>
           <input
             className={inputClass}
             name="password"
@@ -93,7 +93,7 @@ export function LoginForm() {
           />
         </label>
         {error ? (
-          <p role="alert" className="text-sm text-red-600">
+          <p role="alert" className="text-sm text-danger">
             {error}
           </p>
         ) : null}
@@ -103,14 +103,14 @@ export function LoginForm() {
       </form>
       <button
         type="button"
-        className="self-center py-2 text-sm text-neutral-600 underline disabled:opacity-50"
+        className="self-center py-2 text-sm text-muted underline disabled:opacity-50"
         onClick={onForgot}
         disabled={resetBusy}
       >
         {t.forgotPassword}
       </button>
       {resetMessage ? (
-        <p role="status" className="text-center text-sm text-neutral-700">
+        <p role="status" className="text-center text-sm text-foreground">
           {resetMessage}
         </p>
       ) : null}

@@ -121,7 +121,7 @@ export function DaySheet({
         }}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{dayLabel(day.date)}</h2>
+          <h2 className="font-serif text-lg font-semibold">{dayLabel(day.date)}</h2>
           <button type="button" className="min-h-11 min-w-11 text-muted" onClick={onClose} aria-label={t.close}>
             ✕
           </button>

@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 };
 
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <div className="theme-admin flex min-h-full flex-1 flex-col bg-white text-neutral-900">{children}</div>;
+  return <div className="theme-admin flex min-h-full flex-1 flex-col bg-background text-foreground">{children}</div>;
 }
