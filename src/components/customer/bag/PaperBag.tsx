@@ -66,9 +66,18 @@ const ZIGZAG = buildZigzag();
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const restsAt = (s: Spring) => Math.abs(s.target - s.x) < 0.2 && Math.abs(s.v) < 1;
 
+/** Idempotent: also used to refresh a disc when its product photo URL arrives or changes. */
 function setImage(el: HTMLElement, url: string | null | undefined) {
-  if (url) el.style.backgroundImage = `url("${url.replace(/"/g, "%22")}")`;
-  else el.classList.add("pb-ph");
+  const next = url ?? "";
+  if (el.dataset.img === next) return;
+  el.dataset.img = next;
+  if (url) {
+    el.style.backgroundImage = `url("${url.replace(/"/g, "%22")}")`;
+    el.classList.remove("pb-ph");
+  } else {
+    el.style.backgroundImage = "";
+    el.classList.add("pb-ph");
+  }
 }
 
 interface ShakeState {
@@ -282,6 +291,11 @@ export const PaperBag = forwardRef<PaperBagHandle, PaperBagProps>(function Paper
     }
     const initial = first || (world.size === 0 && !dropped.current && now - mountedAt.current < 800);
     images.current = new Map(items.map((it) => [it.productId, it.imageUrl]));
+    // The menu can arrive after the cart: refresh the photo of discs that already exist.
+    for (const b of world.bodies) {
+      const el = els.current.get(b.id);
+      if (el) setImage(el, images.current.get(b.tag));
+    }
     const want = new Map<string, number>();
     for (const it of items) {
       const q = Math.max(0, Math.floor(it.qty));

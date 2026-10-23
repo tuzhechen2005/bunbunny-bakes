@@ -79,11 +79,14 @@ export function BagBar({
   // The bags show the cart minus the breads still in the air; a landing drops them in.
   const items = useMemo<PaperBagItem[]>(
     () =>
-      cart.map((i) => ({
-        productId: i.productId,
-        imageUrl: byId.get(i.productId)?.imageUrl ?? null,
-        qty: Math.max(0, i.qty - (pending.get(i.productId) ?? 0)),
-      })),
+      // Only products on the menu: the same set the count, subtotal and sheet lines use.
+      cart
+        .filter((i) => byId.has(i.productId))
+        .map((i) => ({
+          productId: i.productId,
+          imageUrl: byId.get(i.productId)?.imageUrl ?? null,
+          qty: Math.max(0, i.qty - (pending.get(i.productId) ?? 0)),
+        })),
     [cart, byId, pending],
   );
 

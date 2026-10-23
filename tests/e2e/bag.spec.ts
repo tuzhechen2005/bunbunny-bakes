@@ -8,6 +8,22 @@ import { chromium, devices, expect, test, type Page } from "@playwright/test";
 const CART_KEY = "bb_cart_v1";
 const PHOTO = fs.readFileSync(path.join(__dirname, "../fixtures/bun.jpg"));
 
+// The harness page only exists when the server runs with BAG_HARNESS=1 (it 404s otherwise, e.g. in
+// the default config or other tasks' configs). Skip with a clear reason instead of failing.
+test.beforeAll(async ({ browser }, workerInfo) => {
+  const baseURL = workerInfo.project.use.baseURL;
+  let status = 0;
+  const context = await browser.newContext();
+  try {
+    status = (await context.request.get(`${baseURL}/dev/bag`)).status();
+  } catch {
+    status = 0;
+  } finally {
+    await context.close();
+  }
+  test.skip(status !== 200, `/dev/bag is not served (status ${status}); start the server with BAG_HARNESS=1`);
+});
+
 test.beforeEach(async ({ page }) => {
   await page.route("**/test-photos/*.jpg", (route) => route.fulfill({ body: PHOTO, contentType: "image/jpeg" }));
 });
@@ -107,6 +123,31 @@ test("the frame loop sleeps when everything rests", async ({ page }) => {
     await page.waitForTimeout(400);
     return (await frames()) - a;
   }, { timeout: 8000 }).toBe(0); // bread settled, bag swing done: not one frame requested
+});
+
+test("discs get their photo when the menu arrives after the cart; a cart line off the menu adds no disc", async ({
+  page,
+}) => {
+  await page.addInitScript(
+    ([key]) =>
+      localStorage.setItem(
+        key,
+        JSON.stringify([
+          { productId: "hd", qty: 2 },
+          { productId: "gone", qty: 3 },
+        ]),
+      ),
+    [CART_KEY],
+  );
+  await openHarness(page, "?late=1");
+  await expect(page.getByTestId("bag-badge")).toHaveText("2");
+  await expect.poll(() => pileCount(page)).toBe(2); // "gone" is not on the menu: no discs for it
+  await expect(page.locator('[data-bag-target="bar"] .pb-pi.pb-ph')).toHaveCount(2); // no photos yet
+  await page.getByTestId("late-photos").click(); // the menu arrives with photo URLs
+  await expect(page.locator('[data-bag-target="bar"] .pb-pi.pb-ph')).toHaveCount(0);
+  const bg = await barPile(page).first().evaluate((e) => (e as HTMLElement).style.backgroundImage);
+  expect(bg).toContain("/test-photos/hd.jpg");
+  expect(await pileCount(page)).toBe(2);
 });
 
 test("the pile starts settled from the saved cart", async ({ page }) => {
@@ -261,8 +302,9 @@ test("shaking the big bag with the mouse moves the bag and rolls the bread", asy
   }
   const sw = bag.locator(".pb-sw");
   expect(await sw.evaluate((e) => (e as HTMLElement).style.transform)).toContain("translate(");
+  // The bread rolls around while (or shortly after) the bag is shaken.
+  await expect.poll(snap, { timeout: 3000 }).not.toBe(before);
   await page.mouse.up();
-  expect(await snap()).not.toBe(before);
   // It springs back and everything rests again.
   await expect.poll(() => sw.evaluate((e) => (e as HTMLElement).style.transform), { timeout: 6000 }).toBe("");
 });
