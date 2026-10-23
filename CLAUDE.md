@@ -44,7 +44,7 @@ tests/           unit/、db/（需要 Postgres）、e2e/（Playwright）
 - 标题字体用 `font-serif`（子集化的思源宋体 600，`npm run fonts` 重新生成；新增文案后要重跑）。
 - 所有可见文字只写在 `src/copy.ts`（品牌文案在 `copy.customer.brand`）。
 - 动效必须尊重 `prefers-reduced-motion`（用 `useMotionPrefs().reduced`，只淡入淡出、不晃不飞不旋转）和自动降级（`degraded`：关闭钟摆和侧转）。动效永远不能挡住或延迟下单；全部静止后停止 rAF。
-- 首页首屏 JS + CSS + 字体压缩后 ≤ 200 KB；`motion` 只用 `m.*`，外面包 `MotionProvider`（LazyMotion，特性按需加载，不放在根 layout）。
+- 性能预算（D73）：首页首屏改版新增的 JS + CSS 压缩后 ≤ 60 KB（对比 main，框架本身约 203 KB 不计），标题字体子集 ≤ 125 KB；`motion` 只用 `m.*`，外面包 `MotionProvider`（LazyMotion，特性按需加载，不放在根 layout）。
 - 不用 GSAP、WebGL、持续运行的 Canvas；纸张颗粒是静态 SVG 背景。
 
 ## 工作方式
