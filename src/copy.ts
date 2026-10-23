@@ -142,6 +142,9 @@ export const copy = {
       cancelDeadline: "{label} 前可以自己取消",
       cancelFailed: "取消失败，请稍后再试",
       backHome: "返回首页",
+      /** Thermal receipt (FRONTEND.md 4.5): the stamp and the closing line, only on a fresh order. */
+      stamp: "已预订",
+      queueLine: "面包已经在排队发酵啦！",
     },
   },
 

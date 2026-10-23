@@ -1,0 +1,72 @@
+/* Thermal receipt (FRONTEND.md 4.5). About 1.2 s in total; plays once, only with data-print="on". */
+.receipt {
+  position: relative;
+  background-color: var(--card);
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  --tooth: 10px;
+  padding-bottom: var(--tooth);
+  /* torn paper edge along the bottom */
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% 100% / calc(var(--tooth) * 2) 100% repeat-x;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% 100% / calc(var(--tooth) * 2) 100% repeat-x;
+}
+
+.receipt[data-print="on"] {
+  animation: receipt-feed 0.7s cubic-bezier(0.22, 0.8, 0.3, 1) both;
+}
+.receipt[data-print="on"] .receipt-line {
+  animation: receipt-line 0.16s ease-out both;
+  animation-delay: calc(var(--i, 0) * var(--step, 0.07s));
+}
+.receipt[data-print="on"] .receipt-stamp {
+  animation: receipt-stamp 0.26s cubic-bezier(0.3, 0, 0.2, 1) 0.94s both;
+}
+
+.receipt-stamp {
+  position: absolute;
+  right: 1rem;
+  top: 5.5rem;
+  transform: rotate(-12deg);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+@keyframes receipt-feed {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 -20px 0);
+  }
+}
+@keyframes receipt-line {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes receipt-stamp {
+  from {
+    opacity: 0;
+    transform: rotate(-24deg) scale(2.2);
+  }
+  70% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-12deg) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .receipt[data-print="on"],
+  .receipt[data-print="on"] .receipt-line,
+  .receipt[data-print="on"] .receipt-stamp {
+    animation: none;
+  }
+}
