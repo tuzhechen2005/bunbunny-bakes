@@ -19,6 +19,7 @@ import {
   resetDb,
   type DefaultProductIds,
 } from "./helpers";
+import { dbTimeout } from "./testDbUrl";
 
 const pool = createPrismaClient(TEST_DATABASE_URL, { max: 10 });
 
@@ -104,7 +105,7 @@ describe("DATA_MODEL §5 test 6: swapping dates A<->B concurrently", () => {
     }
     expect((tally.OK ?? 0) + (tally.OVER_LIMIT ?? 0)).toBe(40);
     expect(tally.OK ?? 0).toBeGreaterThan(0);
-  }, 60_000);
+  }, dbTimeout(60_000));
 
   it("a swap where neither order fits the other day: both OVER_LIMIT, no deadlock (20 rounds)", async () => {
     await db.openDate.update({ where: { date: toDbDate(A) }, data: { doughLimitG: 210 } });
@@ -123,7 +124,7 @@ describe("DATA_MODEL §5 test 6: swapping dates A<->B concurrently", () => {
       expect(await doughOf(A)).toBeLessThanOrEqual(210);
       expect(await doughOf(B)).toBeLessThanOrEqual(210);
     }
-  }, 60_000);
+  }, dbTimeout(60_000));
 });
 
 describe("customer cancel racing an owner edit", () => {
@@ -161,7 +162,7 @@ describe("customer cancel racing an owner edit", () => {
       expect(await db.notification.count({ where: { dedupeKey: `customer_cancelled:${o.id}` } })).toBe(1);
     }
     expect((seen.editFirst ?? 0) + (seen.cancelFirst ?? 0)).toBe(20);
-  }, 60_000);
+  }, dbTimeout(60_000));
 
   it("date-moving edit vs cancel: the cancel follows the order to its new day (20 rounds)", async () => {
     for (let round = 0; round < 20; round++) {
@@ -183,5 +184,5 @@ describe("customer cancel racing an owner edit", () => {
         expect(row.status).toBe("CANCELLED");
       }
     }
-  }, 60_000);
+  }, dbTimeout(60_000));
 });
