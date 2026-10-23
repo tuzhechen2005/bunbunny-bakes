@@ -150,3 +150,36 @@ test("reachable from the admin menu, 320 px without horizontal scroll", async ({
   await expect(page.getByTestId("ledger-month-empty")).toBeVisible();
   expect(await noHorizontalScroll(page)).toBe(true);
 });
+
+test("editing an entry whose product is archived keeps the product link", async ({ page, context, baseURL }) => {
+  const seeded = await resetAndSeed();
+  await withDb((c) => c.query(`TRUNCATE "ManualIncomeItem","ManualIncome" CASCADE`));
+  const date = seeded.dates.d1;
+  const id = await withDb(async (db) => {
+    const r = await db.query<{ id: string }>(
+      `INSERT INTO "ManualIncome" (id, date, "amountCents", note, "paidMethod", "updatedAt")
+       VALUES (gen_random_uuid(), $1, 500, 'market', 'CASH', now()) RETURNING id`,
+      [date],
+    );
+    await db.query(
+      `INSERT INTO "ManualIncomeItem" (id, "incomeId", "productId", "nameSnapshot", qty)
+       VALUES (gen_random_uuid(), $1, $2, '奶酥红豆包', 3)`,
+      [r.rows[0].id, seeded.products.red],
+    );
+    await db.query(`UPDATE "Product" SET status = 'ARCHIVED' WHERE id = $1`, [seeded.products.red]);
+    return r.rows[0].id;
+  });
+  await context.addCookies([{ name: "bb_session", value: await createAdminSession("e2e-ledger"), url: baseURL! }]);
+  await openMonthOf(page, date);
+  await page.getByTestId(`ledger-day-${date}`).click();
+  await page.getByRole("button", { name: t.edit }).click();
+  const form = page.getByTestId("ledger-form");
+  await form.getByLabel(t.amount).fill("6");
+  await form.getByRole("button", { name: t.save }).click();
+  await expect(form).toBeHidden();
+  const item = await withDb(async (db) =>
+    (await db.query<{ productId: string | null; qty: number }>(
+      `SELECT "productId", qty FROM "ManualIncomeItem" WHERE "incomeId" = $1`, [id])).rows,
+  );
+  expect(item).toEqual([{ productId: seeded.products.red, qty: 3 }]);
+});

@@ -138,6 +138,18 @@ describe("dayDetail", () => {
     expect(d.manual.map((m) => m.id)).toEqual(["m1", "m2"]);
   });
 
+  it("a paid order with a delivery fee and no method: fee counted, method OTHER", () => {
+    // 2 x 500 = 1000 + 500 fee = 1500
+    const e = dayDetail("2026-11-07", [
+      order({ orderNo: "x", paidMethod: null, totalCents: 1500, deliveryFeeCents: 500, items: [bean(2, 1000)] }),
+    ], []);
+    expect(e.revenueCents).toBe(1500);
+    expect(e.deliveryFeeCents).toBe(500);
+    expect(e.byMethod.OTHER).toBe(1500);
+    expect(e.orders[0].method).toBe("OTHER");
+    expect(e.products[0].amountCents).toBe(1000);
+  });
+
   it("an empty day is all zeros", () => {
     const e = dayDetail("2026-11-20", orders, entries);
     expect(e).toMatchObject({ revenueCents: 0, qty: 0, deliveryFeeCents: 0, receivableCents: 0, orders: [], manual: [], products: [] });

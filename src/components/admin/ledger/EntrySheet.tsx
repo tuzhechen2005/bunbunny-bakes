@@ -28,6 +28,7 @@ interface Row {
 let rowKey = 0;
 const newRow = (over: Partial<Row> = {}): Row => ({ key: ++rowKey, productId: "", name: "", qty: "1", ...over });
 
+const qtyClass = `${inputClass.replace("w-full", "")} w-16 shrink-0`;
 const labelClass = "mb-1 block text-sm font-medium";
 
 /** Add / edit form. `entry` set = edit; otherwise a new entry on `defaultDate`. */
@@ -71,8 +72,10 @@ export function EntryFormSheet({
     for (const r of rows) {
       const qty = /^\d{1,3}$/.test(r.qty.trim()) ? Number(r.qty) : 0;
       const name = r.name.trim();
-      // A row whose product is not in the list any more (deleted) keeps its saved name.
-      const linked = r.productId !== "" && known.has(r.productId);
+      // A linked row keeps its product even when the product is not in the dropdown
+      // (archived, or the list did not load); the server checks it exists. Deleted
+      // products already come back with no productId.
+      const linked = r.productId !== "";
       if (qty < 1 || qty > 999 || (!linked && (name.length < 1 || name.length > 60))) {
         next.items = t.errItems;
         break;
@@ -157,17 +160,18 @@ export function EntryFormSheet({
         <fieldset className="flex flex-col gap-2">
           <legend className={labelClass}>{t.items}</legend>
           {rows.map((r, idx) => {
-            const linked = r.productId !== "" && known.has(r.productId);
+            const linked = r.productId !== "";
             return (
               <div key={r.key} className="flex flex-wrap items-center gap-2" data-testid="ledger-item-row">
                 <select
                   aria-label={t.itemProduct}
                   className={`${inputClass} min-w-0 flex-[1_1_0%]`}
-                  value={linked ? r.productId : ""}
+                  value={r.productId}
                   onChange={(e) => updateRow(r.key, { productId: e.target.value })}
                   data-testid={`ledger-item-product-${idx}`}
                 >
                   <option value="">{t.itemOther}</option>
+                  {linked && !known.has(r.productId) && <option value={r.productId}>{r.name}</option>}
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
@@ -177,7 +181,7 @@ export function EntryFormSheet({
                 <input
                   aria-label={t.itemQty}
                   inputMode="numeric"
-                  className={`${inputClass} w-16 shrink-0`}
+                  className={qtyClass}
                   value={r.qty}
                   onChange={(e) => updateRow(r.key, { qty: e.target.value })}
                   data-testid={`ledger-item-qty-${idx}`}
