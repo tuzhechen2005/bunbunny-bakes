@@ -1,6 +1,6 @@
 # 通知
 
-> 第一版只发邮件，只发给店主（`ADMIN_EMAIL`）。通过 Resend 发送，发件域名为 bunbunnybakes.com（需要在 Resend 里验证域名）。
+> 第一版只发邮件，只发给店主（`ADMIN_EMAIL`）。通过 Resend 发送，发件域名为 bunbunnybakes.shop（需要在 Resend 里验证域名）。
 > 免费额度：每天 100 封、每月 3,000 封。按每天几十单估算，够用。
 
 ## 1. 发送机制（outbox）

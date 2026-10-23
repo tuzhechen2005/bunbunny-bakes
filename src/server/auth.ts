@@ -235,7 +235,7 @@ export async function login(db: DbClient, input: LoginInput): Promise<LoginResul
 // Password reset
 
 export interface PasswordResetRequestInput {
-  /** e.g. "https://bunbunnybakes.com"; the emailed link is SITE_URL + "/admin/reset?token=…". */
+  /** e.g. "https://bunbunnybakes.shop"; the emailed link is SITE_URL + "/admin/reset?token=…". */
   siteUrl: string;
   now: Date;
 }

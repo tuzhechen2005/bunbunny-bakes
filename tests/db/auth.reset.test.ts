@@ -14,7 +14,7 @@ import * as outbox from "@/server/outbox";
 import { isAppError } from "@/server/errors";
 import { db, resetDb } from "./helpers";
 
-const SITE = "https://bunbunnybakes.com";
+const SITE = "https://bunbunnybakes.shop";
 const T0 = new Date("2026-10-22T15:00:00Z");
 const at = (ms: number) => new Date(T0.getTime() + ms);
 const MIN = 60 * 1000;
@@ -75,7 +75,7 @@ describe("requestPasswordReset", () => {
     expect(n.kind).toBe("PASSWORD_RESET");
     expect(n.status).toBe("PENDING");
     const url = (n.payload as { url: string }).url;
-    expect(url).toMatch(/^https:\/\/bunbunnybakes\.com\/admin\/reset\?token=[A-Za-z0-9_-]{43}$/);
+    expect(url).toMatch(/^https:\/\/bunbunnybakes\.shop\/admin\/reset\?token=[A-Za-z0-9_-]{43}$/);
     const token = new URL(url).searchParams.get("token")!;
     expect(reset.tokenHash).toBe(hashToken(token));
     expect(reset.tokenHash).not.toBe(token);

@@ -20,7 +20,7 @@ import { createSession, hashPassword } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { createDefaultProducts, createOpenDate, createOrder, createSettings, db, resetDb, type DefaultProductIds } from "./helpers";
 
-const SITE = "https://bunbunnybakes.com";
+const SITE = "https://bunbunnybakes.shop";
 const DATE = "2026-10-30";
 let previousSiteUrl: string | undefined;
 let P: DefaultProductIds;

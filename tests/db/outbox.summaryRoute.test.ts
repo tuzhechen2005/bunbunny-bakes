@@ -40,7 +40,7 @@ beforeEach(async () => {
   vi.spyOn(console, "warn").mockImplementation(() => {});
   h.sent.length = 0;
   h.fail = false;
-  process.env.SITE_URL = "https://bunbunnybakes.com";
+  process.env.SITE_URL = "https://bunbunnybakes.shop";
   process.env.CRON_SECRET = SECRET;
   await resetDb();
   await createSettings({ orderingEnabled: true });

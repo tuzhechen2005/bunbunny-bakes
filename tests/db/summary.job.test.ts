@@ -27,7 +27,7 @@ import {
   type DefaultProductIds,
 } from "./helpers";
 
-const SITE = "https://bunbunnybakes.com";
+const SITE = "https://bunbunnybakes.shop";
 // 20:05 on 2026-10-29 in Chicago (CDT).
 const NOW = new Date("2026-10-30T01:05:00Z");
 const SECRET = "cron-secret-for-tests";
