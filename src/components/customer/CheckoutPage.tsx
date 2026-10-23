@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { copy } from "@/copy";
 import { dayLabel } from "@/domain/dates";
 import { formatCents } from "@/domain/pricing";
@@ -16,6 +16,8 @@ import {
   type MenuProduct,
 } from "@/lib/api";
 import { cart, useCart, useHydrated } from "@/lib/cart";
+import { useMotionPrefs } from "@/lib/motion/react";
+import { CountUp } from "@/components/reactbits/CountUp";
 import { breakdownText, fill, formatDollars } from "./format";
 import { ProductPhoto } from "./ProductCard";
 import { QtyStepper } from "./QtyStepper";
@@ -36,8 +38,34 @@ interface SubmitError {
   suggestion?: string;
 }
 
-const sectionClass = "rounded-2xl border border-line bg-card p-4";
-const sectionTitle = "mb-3 text-base font-semibold";
+const sectionClass = "border-t border-line pt-6";
+const sectionTitle = "mb-4 font-serif text-xl text-foreground";
+const inputClass =
+  "mt-2 w-full rounded-xl border border-line bg-card px-4 text-base transition-colors focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
+const pressClass = "transition-transform duration-150 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100";
+
+/** Page fade-in on mount (Web Animations API: no library cost, never blocks input). Reduced motion: plain fade. */
+function FadeIn({ children, className }: { children: ReactNode; className?: string }) {
+  const { reduced } = useMotionPrefs();
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof el.animate !== "function") return;
+    const frames = reduced
+      ? [{ opacity: 0 }, { opacity: 1 }]
+      : [
+          { opacity: 0, transform: "translateY(8px)" },
+          { opacity: 1, transform: "none" },
+        ];
+    const anim = el.animate(frames, { duration: reduced ? 200 : 380, easing: "ease-out" });
+    return () => anim.cancel();
+  }, [reduced]);
+  return (
+    <div ref={ref} className={className}>
+      {children}
+    </div>
+  );
+}
 
 function safeDayLabel(date: string): string {
   try {
@@ -67,7 +95,7 @@ function DateCard({
           : t.stateDeliveryFull;
   const tone = available
     ? selected
-      ? "border-accent bg-soft ring-2 ring-accent"
+      ? "scale-[1.02] border-accent bg-caramel-tint ring-2 ring-accent motion-reduce:scale-100"
       : "border-line bg-card"
     : option.state === "DELIVERY_FULL"
       ? "border-line bg-card opacity-70"
@@ -75,7 +103,7 @@ function DateCard({
   return (
     <button
       type="button"
-      className={`flex min-h-16 flex-col items-start justify-center rounded-xl border px-3 py-2 text-left ${tone}`}
+      className={`flex min-h-16 flex-col items-start justify-center rounded-xl border px-3 py-2 text-left transition-[transform,background-color,box-shadow,border-color] duration-200 motion-reduce:transition-none ${available ? "active:scale-[0.97] motion-reduce:active:scale-100" : ""} ${tone}`}
       disabled={!available}
       aria-pressed={selected}
       onClick={onSelect}
@@ -83,7 +111,7 @@ function DateCard({
       data-date={option.date}
       data-state={option.state}
     >
-      <span className="text-base font-semibold">{safeDayLabel(option.date)}</span>
+      <span className="font-serif text-base">{safeDayLabel(option.date)}</span>
       <span className={`text-xs ${available ? "text-muted" : ""}`}>{stateText}</span>
     </button>
   );
@@ -181,7 +209,7 @@ export function CheckoutPage() {
   if (items.length === 0) {
     return (
       <main className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center" data-testid="empty-cart">
-        <p className="text-lg">{t.emptyCart}</p>
+        <p className="font-serif text-xl">{t.emptyCart}</p>
         <Link
           href="/"
           className="flex min-h-11 items-center rounded-full bg-accent px-6 font-semibold text-accent-ink"
@@ -284,12 +312,12 @@ export function CheckoutPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="px-4 pt-4 pb-2">
+    <FadeIn className="flex flex-1 flex-col">
+      <header className="px-5 pt-4 pb-4">
         <Link href="/" className="inline-flex min-h-11 items-center text-sm text-muted">
           {t.backToMenu}
         </Link>
-        <h1 className="text-2xl font-bold">{t.pageTitle}</h1>
+        <h1 className="mt-1 font-serif text-3xl">{t.pageTitle}</h1>
         {!orderingEnabled ? (
           <p className="mt-1 text-sm font-medium" data-testid="ordering-closed">
             {copy.home.orderingClosed}
@@ -297,7 +325,7 @@ export function CheckoutPage() {
         ) : null}
       </header>
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-4 px-4 pb-8" noValidate>
+      <form onSubmit={onSubmit} className="flex flex-col gap-7 px-5 pb-10" noValidate>
         {/* 1. Cart lines */}
         <section className={sectionClass}>
           <h2 className={sectionTitle}>{t.cartTitle}</h2>
@@ -308,10 +336,10 @@ export function CheckoutPage() {
               const overLimit = problem === "QTY_LIMIT" || qty > menu.maxQtyPerItem;
               const atMax = qty >= menu.maxQtyPerItem;
               return (
-                <li key={productId} className="flex gap-3 py-3" data-testid="cart-line" data-product-id={productId}>
+                <li key={productId} className="flex gap-4 py-4" data-testid="cart-line" data-product-id={productId}>
                   <ProductPhoto product={product} className="h-14 w-14 shrink-0 overflow-hidden rounded-lg" />
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium break-words">{fill(t.lineName, { name: product.name, qty })}</p>
+                    <p className="font-serif break-words">{fill(t.lineName, { name: product.name, qty })}</p>
                     <p className="text-sm text-muted tabular-nums" data-testid="line-breakdown">
                       {breakdownText(qty, product)}
                     </p>
@@ -352,7 +380,7 @@ export function CheckoutPage() {
         <section className={sectionClass} data-testid="dates">
           <h2 className={sectionTitle}>{t.datesTitle}</h2>
           {needsLeadHint ? (
-            <p className="mb-3 rounded-lg bg-soft px-3 py-2 text-sm" data-testid="lead-hint">
+            <p className="mb-4 rounded-xl bg-caramel-tint px-4 py-3 text-sm" data-testid="lead-hint">
               {t.leadDaysHint}
             </p>
           ) : null}
@@ -400,7 +428,7 @@ export function CheckoutPage() {
               return (
                 <label
                   key={f}
-                  className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${checked ? "border-accent bg-soft" : "border-line"}`}
+                  className={`flex min-h-12 cursor-pointer gap-3 rounded-xl border p-4 transition-colors duration-200 motion-reduce:transition-none ${checked ? "border-accent bg-caramel-tint" : "border-line bg-card"}`}
                 >
                   <input
                     type="radio"
@@ -442,11 +470,11 @@ export function CheckoutPage() {
         {/* 4. WeChat ID */}
         <section className={sectionClass}>
           <label className="flex flex-col gap-1">
-            <span className="text-base font-semibold">{t.wechatLabel}</span>
+            <span className="font-serif text-xl">{t.wechatLabel}</span>
             <span className="text-sm text-muted">{t.wechatHint}</span>
             <input
               name="wechatId"
-              className="mt-1 min-h-12 w-full rounded-lg border border-line bg-background px-3 text-base focus:border-accent focus:outline-none"
+              className={`${inputClass} min-h-12`}
               value={wechatId}
               maxLength={WECHAT_MAX}
               required
@@ -471,11 +499,11 @@ export function CheckoutPage() {
         {/* 5. Note */}
         <section className={sectionClass}>
           <label className="flex flex-col gap-1">
-            <span className="text-base font-semibold">{t.noteLabel}</span>
+            <span className="font-serif text-xl">{t.noteLabel}</span>
             <textarea
               name="note"
               rows={3}
-              className="mt-1 w-full rounded-lg border border-line bg-background px-3 py-2 text-base focus:border-accent focus:outline-none"
+              className={`${inputClass} py-3`}
               value={note}
               maxLength={NOTE_MAX}
               onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
@@ -503,18 +531,18 @@ export function CheckoutPage() {
         <section className={sectionClass} data-testid="totals">
           <h2 className={sectionTitle}>{t.totalsTitle}</h2>
           {data ? (
-            <dl className="flex flex-col gap-1 text-sm tabular-nums">
+            <dl className="flex flex-col gap-2 rounded-2xl border border-line bg-card p-5 text-sm tabular-nums">
               <div className="flex justify-between">
                 <dt>{t.subtotal}</dt>
-                <dd data-testid="total-subtotal">{formatCents(data.pricing.subtotalCents)}</dd>
+                <dd><CountUp value={data.pricing.subtotalCents} format={formatCents} data-testid="total-subtotal" /></dd>
               </div>
               <div className="flex justify-between">
                 <dt>{t.deliveryFeeLabel}</dt>
-                <dd data-testid="total-fee">{formatCents(data.pricing.deliveryFeeCents)}</dd>
+                <dd><CountUp value={data.pricing.deliveryFeeCents} format={formatCents} data-testid="total-fee" /></dd>
               </div>
-              <div className="flex justify-between text-base font-semibold">
+              <div className="mt-1 flex justify-between border-t border-line pt-3 font-serif text-xl">
                 <dt>{t.total}</dt>
-                <dd data-testid="total-total">{formatCents(data.pricing.totalCents)}</dd>
+                <dd><CountUp value={data.pricing.totalCents} format={formatCents} data-testid="total-total" /></dd>
               </div>
             </dl>
           ) : (
@@ -522,15 +550,15 @@ export function CheckoutPage() {
           )}
         </section>
 
-        <p className="text-center text-sm">{t.payLater}</p>
+        <p className="text-center text-sm text-muted">{t.payLater}</p>
 
         {submitError ? (
-          <div role="alert" className="rounded-xl bg-soft p-3 text-sm text-danger" data-testid="submit-error">
+          <div role="alert" className="rounded-xl bg-caramel-tint p-4 text-sm text-danger" data-testid="submit-error">
             <p>{submitError.message}</p>
             {submitError.suggestion ? (
               <button
                 type="button"
-                className="mt-2 min-h-11 rounded-full border border-accent px-4 font-medium text-accent"
+                className={`mt-2 min-h-11 rounded-full border border-accent px-4 font-medium text-accent ${pressClass}`}
                 data-testid="suggestion"
                 onClick={() => {
                   setSelectedDate(submitError.suggestion!);
@@ -545,7 +573,7 @@ export function CheckoutPage() {
 
         <button
           type="submit"
-          className="min-h-12 w-full rounded-full bg-accent text-base font-semibold text-accent-ink active:bg-accent-strong disabled:bg-disabled disabled:text-disabled-ink"
+          className={`min-h-12 w-full rounded-full bg-accent text-base font-semibold text-accent-ink active:bg-accent-strong disabled:bg-disabled disabled:text-disabled-ink ${pressClass}`}
           disabled={submitting || !orderingEnabled || hasCartProblem}
           data-testid="submit"
         >
@@ -553,6 +581,6 @@ export function CheckoutPage() {
         </button>
       </form>
       <SiteFooter ownerWechatId={menu.ownerWechatId} />
-    </div>
+    </FadeIn>
   );
 }
