@@ -117,8 +117,8 @@ describe("POST /api/orders", () => {
     expect((await res.json()).error).toBe("ORDERING_DISABLED");
   });
 
-  it("rate limited -> 429 after 3 orders from one IP", async () => {
-    for (let i = 0; i < 3; i++) expect((await post(body())).status).toBe(201);
+  it("rate limited -> 429 after 5 orders from one IP (D86)", async () => {
+    for (let i = 0; i < 5; i++) expect((await post(body())).status).toBe(201);
     const res = await post(body());
     expect(res.status).toBe(429);
     expect((await res.json()).error).toBe("RATE_LIMITED");
@@ -142,10 +142,10 @@ describe("POST /api/orders", () => {
       expect((await db.order.findFirstOrThrow()).ipHash).toBe(hashIp("192.0.2.5", SECRET));
       expect(warn).not.toHaveBeenCalled();
 
-      for (let i = 0; i < 3; i++) expect((await post(body(), {})).status).toBe(201);
+      for (let i = 0; i < 5; i++) expect((await post(body(), {})).status).toBe(201);
       expect(warn).toHaveBeenCalled();
       const hashes = (await db.order.findMany({ orderBy: { createdAt: "asc" } })).map((o) => o.ipHash);
-      expect(hashes.slice(1)).toEqual(Array(3).fill(hashIp("unknown", SECRET)));
+      expect(hashes.slice(1)).toEqual(Array(5).fill(hashIp("unknown", SECRET)));
       const res = await post(body(), {});
       expect(res.status).toBe(429);
     } finally {

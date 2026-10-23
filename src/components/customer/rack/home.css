@@ -68,6 +68,32 @@
   align-items: center;
   justify-content: space-between;
 }
+.hm-hr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* "Orders" entry (D84): always visible, in the ink colour of the hero. 44px tap target. */
+.hm-orders {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  margin-right: -8px;
+  padding: 0 8px;
+  color: var(--fink);
+  text-decoration: none;
+  font: 800 14px/1 var(--font-display);
+}
+.hm-orders svg {
+  width: 20px;
+  height: 20px;
+}
+.hm-orders:focus-visible {
+  outline: 2.5px solid var(--c-red);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
 .hm-wm {
   display: flex;
   align-items: flex-end;
