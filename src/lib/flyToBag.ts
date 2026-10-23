@@ -18,6 +18,8 @@ export interface FlyRequest {
   /** Small product image; null shows the bunny placeholder. */
   imageUrl: string | null;
   productId: string;
+  /** How many items this add represents (detail page adds the chosen quantity). Default 1. */
+  count?: number;
 }
 
 export const FLY_EVENT = "bunbunny:fly-to-bag";
