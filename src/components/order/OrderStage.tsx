@@ -54,8 +54,11 @@ interface Props {
   fresh: boolean;
   /** The page column that shakes on impact. */
   shakeRef: RefObject<HTMLElement | null>;
-  /** Called at the impact: the title and cards may rise now. */
-  onImpact: () => void;
+  /**
+   * Called at the impact: the title and cards may rise now. `played` is false when the sequence
+   * could not run and everything was shown at once.
+   */
+  onImpact: (played: boolean) => void;
 }
 
 /**
@@ -112,7 +115,7 @@ export function OrderStage({ order, fresh, shakeRef, onImpact }: Props) {
     if (!stage || !wrap || !stamper || !imp || !wave) {
       // Cannot play: show everything at once rather than leave the page hidden.
       setFolded(true);
-      impactRef.current();
+      impactRef.current(false);
       return;
     }
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -224,7 +227,7 @@ export function OrderStage({ order, fresh, shakeRef, onImpact }: Props) {
         ],
         { duration: 820, easing: "cubic-bezier(.5,0,.3,1)", fill: "forwards" },
       );
-      impactRef.current();
+      impactRef.current(true);
       later(840, () => setStamperGone(true));
     });
 

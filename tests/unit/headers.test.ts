@@ -8,6 +8,7 @@ describe("next.config headers()", () => {
     const noReferrer = { key: "Referrer-Policy", value: "no-referrer" };
     const noIndex = { key: "X-Robots-Tag", value: "noindex" };
     expect(find("/o/:path*")).toEqual(expect.arrayContaining([noReferrer, noIndex]));
+    expect(find("/orders")).toEqual(expect.arrayContaining([noReferrer, noIndex]));
     expect(find("/admin/:path*")).toEqual(expect.arrayContaining([noReferrer, noIndex]));
     expect(find("/api/o/:path*")).toEqual([noReferrer]);
   });

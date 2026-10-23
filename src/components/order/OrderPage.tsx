@@ -6,11 +6,13 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { copy } from "@/copy";
 import { formatCents } from "@/domain/pricing";
 import { useMotionPrefs } from "@/lib/motion/react";
+import { myOrders } from "@/lib/myOrders";
 import { CancelSection } from "./CancelSection";
 import { NotFoundMessage } from "./NotFoundMessage";
 import { OrderLoading } from "./OrderLoading";
 import { OrderLinkCopy } from "./OrderLinkCopy";
 import { OrderStage } from "./OrderStage";
+import { SaveLinkModal } from "./SaveLinkModal";
 import { WechatBlock } from "./WechatBlock";
 import { fill, type OrderViewData } from "./types";
 
@@ -18,6 +20,8 @@ const t = copy.customer.order;
 const focusRing = "focus-visible:outline-[2.5px] focus-visible:outline-offset-[3px] focus-visible:outline-c-red";
 /** Stagger index of a title / card that rises after the stamp. */
 const rest = (i: number): CSSProperties => ({ ["--i" as string]: i });
+/** The save-link modal opens this long after the stamp lands (D83). */
+const MODAL_DELAY_MS = 800;
 
 type LoadState =
   | { kind: "loading" }
@@ -43,7 +47,12 @@ export function OrderPage() {
   const { reduced } = useMotionPrefs();
   const [stamped, setStamped] = useState(false);
   const columnRef = useRef<HTMLDivElement>(null);
-  const onImpact = useCallback(() => setStamped(true), []);
+  const [modalDone, setModalDone] = useState(false);
+  const [modalDue, setModalDue] = useState<"after-stamp" | "now" | null>(null);
+  const onImpact = useCallback((played: boolean) => {
+    setStamped(true);
+    setModalDue(played ? "after-stamp" : "now");
+  }, []);
 
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   /** Set when the order on screen is known to be out of date (a cancel just succeeded). */
@@ -63,7 +72,9 @@ export function OrderPage() {
         }
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const order = (await response.json()) as OrderViewData;
-        if (active) setState({ kind: "ready", order });
+        if (!active) return;
+        myOrders.record(token, order.orderNo, Date.now());
+        setState({ kind: "ready", order });
       } catch {
         // A background re-fetch failure keeps the order on screen, except right after a
         // cancel: then the shown order is known to be stale, so offer a retry instead.
@@ -78,6 +89,17 @@ export function OrderPage() {
       active = false;
     };
   }, [token, reloadKey]);
+
+  const ready = state.kind === "ready";
+  // Save-link modal: only on the fresh visit (same once-only rule as the stamp). It follows the
+  // stamp by ~0.8 s; with reduced motion, or when the stamp cannot play, it opens at once.
+  const [delayElapsed, setDelayElapsed] = useState(false);
+  useEffect(() => {
+    if (!isNew || !ready || reduced || modalDue !== "after-stamp") return;
+    const timer = setTimeout(() => setDelayElapsed(true), MODAL_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [isNew, ready, reduced, modalDue]);
+  const modalOpen = isNew && ready && !modalDone && (reduced || modalDue === "now" || delayElapsed);
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
   const retry = useCallback(() => {
@@ -117,6 +139,14 @@ export function OrderPage() {
       data-seq={seq}
       className="flex flex-col overflow-x-clip px-5 pb-[calc(30px+env(safe-area-inset-bottom))]"
     >
+      {modalOpen && (
+        <SaveLinkModal
+          token={token}
+          backgroundRef={columnRef}
+          onDone={() => setModalDone(true)}
+        />
+      )}
+
       {justCancelled && (
         <p role="status" className="mt-5 rounded-2xl bg-c-paper p-3 text-center text-[15px] font-bold">
           {t.cancelled}

@@ -195,9 +195,9 @@ describe("DATA_MODEL §5 concurrency", () => {
     expect(await db.rateLimitHit.count()).toBe(1);
   });
 
-  it("IP limit across dates: same ipHash, 6 orders on 6 open dates at once -> exactly 3 OK, 3 RATE_LIMITED", async () => {
+  it("IP limit across dates: same ipHash, 8 orders on 8 open dates at once -> exactly 5 OK, 3 RATE_LIMITED", async () => {
     // Each order holds a different day lock; only the IP advisory lock serializes them.
-    const dates: LocalDate[] = ["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"];
+    const dates: LocalDate[] = ["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06"];
     for (const d of dates) await createOpenDate(d);
     const outcomes = await Promise.all(
       dates.map((d, i) =>
@@ -214,9 +214,9 @@ describe("DATA_MODEL §5 concurrency", () => {
         )),
       ),
     );
-    expect(tally(outcomes)).toEqual({ OK: 3, RATE_LIMITED: 3 });
-    expect(await db.rateLimitHit.count({ where: { key: "order_ip:ip_shared" } })).toBe(3);
-    expect(await db.order.count()).toBe(3);
+    expect(tally(outcomes)).toEqual({ OK: 5, RATE_LIMITED: 3 });
+    expect(await db.rateLimitHit.count({ where: { key: "order_ip:ip_shared" } })).toBe(5);
+    expect(await db.order.count()).toBe(5);
   });
 
   it("WeChat limit: same wechatId, 5 orders on one date at once -> exactly 2 OK", async () => {

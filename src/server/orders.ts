@@ -59,11 +59,11 @@ export interface AdminCreateInput extends Omit<CreateOrderInput, "idempotencyKey
 /** Long enough for 20-way contention on one day's lock. */
 const TX_OPTIONS = { maxWait: 20_000, timeout: 20_000 } as const;
 
-/** D38: at most 3 orders per IP per rolling hour. */
-const IP_LIMIT_PER_HOUR = 3;
+/** D86: at most 5 orders per IP per rolling 10 minutes (replaces D38's 3 per hour). */
+const IP_LIMIT_PER_WINDOW = 5;
 /** D38: at most 2 unconfirmed (NEW / CONTACTED) orders per WeChat id per pickup date. */
 const WECHAT_UNCONFIRMED_LIMIT = 2;
-const HOUR_MS = 60 * 60 * 1000;
+const IP_WINDOW_MS = 10 * 60 * 1000;
 
 /** Sums qty per product, keeping first-seen order. */
 export function mergeLines(lines: CartLine[]): CartLine[] {
@@ -274,15 +274,15 @@ export async function createCustomerOrder(
       const cutoffAt = cartCutoff(cart, date, products, settings);
       if (!isBeforeCutoff(now, cutoffAt)) throw new AppError("CUTOFF_PASSED");
 
-      // 7. Rate limits (D38).
+      // 7. Rate limits (D38, D86).
       if (ipHash) {
         const rlKey = `order_ip:${ipHash}`;
         // Serialize orders from one IP across dates (the day lock alone does not).
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${rlKey}, 0))`;
         const hits = await tx.rateLimitHit.count({
-          where: { key: rlKey, at: { gt: new Date(now.getTime() - HOUR_MS) } },
+          where: { key: rlKey, at: { gt: new Date(now.getTime() - IP_WINDOW_MS) } },
         });
-        if (hits >= IP_LIMIT_PER_HOUR) throw new AppError("RATE_LIMITED");
+        if (hits >= IP_LIMIT_PER_WINDOW) throw new AppError("RATE_LIMITED");
       }
       const unconfirmed = await tx.order.count({
         where: {

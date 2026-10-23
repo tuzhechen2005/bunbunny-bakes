@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
     const noIndex = { key: "X-Robots-Tag", value: "noindex" };
     return [
       { source: "/o/:path*", headers: [noReferrer, noIndex] },
+      { source: "/orders", headers: [noReferrer, noIndex] },
       { source: "/admin/:path*", headers: [noReferrer, noIndex] },
       { source: "/api/o/:path*", headers: [noReferrer] },
     ];
