@@ -53,9 +53,24 @@ export function createNetlifyImageStore(): ImageStore {
   };
 }
 
-/** True on Netlify (build and function runtime set NETLIFY / NETLIFY_BLOBS_CONTEXT). */
-export function onNetlify(env: Record<string, string | undefined> = process.env): boolean {
-  return Boolean(env.NETLIFY || env.NETLIFY_BLOBS_CONTEXT);
+/**
+ * Which store to use. Detects exactly what @netlify/blobs reads
+ * (`globalThis.netlifyBlobsContext || env.NETLIFY_BLOBS_CONTEXT`). Production without a
+ * Blobs context fails closed (photos in one instance's memory would silently vanish),
+ * unless IMAGE_STORE=memory is set explicitly. Dev and tests get memory automatically.
+ */
+export function selectStoreKind(
+  env: Record<string, string | undefined> = process.env,
+  blobsGlobal: unknown = (globalThis as { netlifyBlobsContext?: unknown }).netlifyBlobsContext,
+): "netlify" | "memory" {
+  if (blobsGlobal || env.NETLIFY_BLOBS_CONTEXT) return "netlify";
+  if (env.IMAGE_STORE === "memory") return "memory";
+  if (env.NODE_ENV === "production") {
+    throw new Error(
+      "Image storage is not configured: no Netlify Blobs context in production (IMAGE_STORE=memory opts out)",
+    );
+  }
+  return "memory";
 }
 
 const globalForStore = globalThis as unknown as { __bbImageStore?: ImageStore };
@@ -65,5 +80,6 @@ const globalForStore = globalThis as unknown as { __bbImageStore?: ImageStore };
  * reloads) shares one in-memory store.
  */
 export function getImageStore(): ImageStore {
-  return (globalForStore.__bbImageStore ??= onNetlify() ? createNetlifyImageStore() : createMemoryImageStore());
+  return (globalForStore.__bbImageStore ??=
+    selectStoreKind() === "netlify" ? createNetlifyImageStore() : createMemoryImageStore());
 }

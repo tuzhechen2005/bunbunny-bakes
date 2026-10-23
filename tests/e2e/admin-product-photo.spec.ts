@@ -66,6 +66,17 @@ test("upload a (large) photo, see it on the home card, then delete it back to th
   await expect(home.locator("img")).toHaveCount(0);
 });
 
+test("a small PNG is re-encoded as JPEG before upload (strips metadata)", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto(`/admin/products/${seeded.products.red}`);
+  await expect(page.getByTestId("photo-input")).toBeAttached();
+  await page.getByTestId("photo-input").setInputFiles("tests/fixtures/bun.png");
+  await expect(page.getByTestId("photo-preview")).toHaveAttribute("src", /\.jpg$/);
+  const src = await page.getByTestId("photo-preview").getAttribute("src");
+  const res = await page.request.get(src!);
+  expect(res.headers()["content-type"]).toBe("image/jpeg");
+});
+
 test("a non-image file is refused with a Chinese message", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 800 });
   await page.goto(`/admin/products/${seeded.products.red}`);

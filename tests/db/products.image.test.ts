@@ -184,6 +184,13 @@ describe("delete", () => {
     expect(last).toMatchObject({ action: "product.update", before: { imageUrl: url }, after: { imageUrl: null } });
     expect((await del(UNKNOWN_ID)).status).toBe(404);
   });
+
+  it("is a no-op without a photo: 200, no audit row", async () => {
+    const res = await del(P.redBean);
+    expect(res.status).toBe(200);
+    expect((await res.json()).product.imageUrl).toBeNull();
+    expect(await db.auditLog.count()).toBe(0);
+  });
 });
 
 describe("GET /api/images/{key}", () => {
@@ -195,7 +202,16 @@ describe("GET /api/images/{key}", () => {
     expect(res.headers.get("content-type")).toBe("image/png");
     expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("content-security-policy")).toBe("default-src 'none'; sandbox");
     expect(Buffer.from(await res.arrayBuffer()).equals(Buffer.from(fixture("bun.png")))).toBe(true);
+  });
+
+  it("derives Content-Type from the key extension, ignoring stored metadata", async () => {
+    const id = P.redBean;
+    const key = `${id}/${"a".repeat(32)}.png`;
+    await getImageStore().put(key, fixture("bun.png"), "text/html");
+    const res = await GET_IMAGE(new Request(SITE + "/api/images/" + key), keyCtx(key));
+    expect(res.headers.get("content-type")).toBe("image/png");
   });
 
   it("404s unknown and malformed keys, including path traversal", async () => {

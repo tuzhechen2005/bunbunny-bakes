@@ -98,5 +98,8 @@ export async function uploadProductImage(
 
 export async function deleteProductImage(db: DbClient, store: ImageStore, id: string, now: Date): Promise<Product> {
   if (!z.uuid().safeParse(id).success) throw notFound();
+  const current = await db.product.findUnique({ where: { id } });
+  if (!current) throw notFound();
+  if (current.imageUrl === null) return current; // nothing to remove: no write, no audit row
   return changeImage(db, store, id, null, now);
 }

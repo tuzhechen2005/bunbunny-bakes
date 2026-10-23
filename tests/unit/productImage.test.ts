@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { needsResize, scaledSize } from "@/lib/imageResize";
 import { isValidImageKey, keyFromImageUrl, sniffImage } from "@/server/imageFormat";
-import { createMemoryImageStore, onNetlify } from "@/server/imageStore";
+import { createMemoryImageStore, selectStoreKind } from "@/server/imageStore";
 
 const fixture = (name: string) => new Uint8Array(readFileSync(`tests/fixtures/${name}`));
 const ID = "0b8c2f4e-1a2b-4c3d-8e9f-0123456789ab";
@@ -57,10 +57,21 @@ describe("image keys", () => {
 });
 
 describe("image store selection and memory store", () => {
-  it("uses Netlify only when its env is present", () => {
-    expect(onNetlify({})).toBe(false);
-    expect(onNetlify({ NETLIFY: "true" })).toBe(true);
-    expect(onNetlify({ NETLIFY_BLOBS_CONTEXT: "x" })).toBe(true);
+  it("uses Netlify when the Blobs context is a global or an env var", () => {
+    expect(selectStoreKind({ NODE_ENV: "production" }, { siteID: "x" })).toBe("netlify");
+    expect(selectStoreKind({ NODE_ENV: "production", NETLIFY_BLOBS_CONTEXT: "abc" }, undefined)).toBe("netlify");
+  });
+  it("does not treat the build-time NETLIFY variable as a Blobs context", () => {
+    expect(() => selectStoreKind({ NODE_ENV: "production", NETLIFY: "true" }, undefined)).toThrow();
+  });
+  it("fails closed in production without a context, unless IMAGE_STORE=memory", () => {
+    expect(() => selectStoreKind({ NODE_ENV: "production" }, undefined)).toThrow(/not configured/);
+    expect(selectStoreKind({ NODE_ENV: "production", IMAGE_STORE: "memory" }, undefined)).toBe("memory");
+  });
+  it("uses memory in development and tests", () => {
+    expect(selectStoreKind({ NODE_ENV: "development" }, undefined)).toBe("memory");
+    expect(selectStoreKind({ NODE_ENV: "test" }, undefined)).toBe("memory");
+    expect(selectStoreKind({}, undefined)).toBe("memory");
   });
   it("puts, gets (with content type) and deletes", async () => {
     const s = createMemoryImageStore();

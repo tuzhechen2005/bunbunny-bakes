@@ -42,11 +42,11 @@ async function decode(file: File): Promise<{ source: CanvasImageSource; width: n
   }
 }
 
-/** Returns the original file when it is small enough, otherwise a downscaled JPEG. Throws if it cannot be read. */
+/** Re-encodes the photo as a JPEG (longer edge at most 1600 px, orientation applied, metadata stripped). Throws if it cannot be read. */
 export async function prepareImage(file: File): Promise<File> {
   const image = await decode(file);
   try {
-    if (!needsResize(file.size, image.width, image.height)) return file;
+    // Always redrawn, even when small: the canvas drops EXIF/GPS metadata from phone photos.
     const { width, height } = scaledSize(image.width, image.height);
     const canvas = document.createElement("canvas");
     canvas.width = width;
