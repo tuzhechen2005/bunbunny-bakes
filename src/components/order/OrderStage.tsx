@@ -165,8 +165,8 @@ export function OrderStage({ order, fresh, shakeRef, onImpact }: Props) {
         ],
         { duration: 340, easing: "linear" },
       );
-      later(150, () =>
-        run(
+      later(150, () => {
+        const a = run(
           imp,
           [
             { opacity: 0, filter: "blur(3px)", transform: "rotate(-12deg) scale(1.12)" },
@@ -174,8 +174,10 @@ export function OrderStage({ order, fresh, shakeRef, onImpact }: Props) {
             { opacity: 0.95, filter: "blur(0)", transform: "rotate(-12deg) scale(1)" },
           ],
           { duration: 700, easing: "ease-out", fill: "forwards" },
-        ),
-      );
+        );
+        // No Web Animations: show the seal at once.
+        if (!a) imp.style.opacity = "0.95";
+      });
       run(
         wave,
         [

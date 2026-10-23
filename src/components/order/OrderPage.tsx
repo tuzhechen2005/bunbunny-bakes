@@ -148,15 +148,15 @@ export function OrderPage() {
       </h1>
 
       <section data-testid="order-card" data-rest="" style={rest(2)} className="mt-[26px] rounded-[24px] bg-c-paper p-5">
-        <div className="mb-2 flex items-center justify-between gap-3 border-b border-dashed border-c-line pb-3.5">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-dashed border-c-line pb-3.5">
           <span
             data-testid="order-no"
             aria-label={fill(t.orderNo, { orderNo: order.orderNo })}
-            className="min-w-0 break-all font-num text-[34px] leading-none font-bold tracking-[-0.01em]"
+            className="whitespace-nowrap font-num text-[34px] leading-none font-bold tracking-[-0.01em]"
           >
             {order.orderNo}
           </span>
-          <b className="shrink-0 text-right text-base leading-tight font-bold">
+          <b className="ml-auto shrink-0 text-right text-base leading-tight font-bold">
             <span>{order.pickupDateLabel}</span>
             <span aria-hidden="true"> · </span>
             <span>{order.fulfillment === "DELIVERY" ? t.delivery : t.pickup}</span>
