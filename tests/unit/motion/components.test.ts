@@ -48,7 +48,9 @@ describe("stubs and brand components render", () => {
     expect(html).toContain("disabled");
   });
 
-  it("BagBar shows the count and amount and disables checkout when ordering is closed", () => {
+  // The disabled checkout (ordering closed or empty bag) lives in the bag sheet now: see
+  // tests/unit/bag.test.ts. The bar itself always opens the sheet.
+  it("BagBar shows the count and amount and stays tappable when ordering is closed", () => {
     const props = {
       products: [product()],
       maxQty: 10,
@@ -63,7 +65,8 @@ describe("stubs and brand components render", () => {
     expect(open).toContain("$8.99");
     expect(open).not.toContain("disabled=\"\"");
     const closed = renderToStaticMarkup(createElement(BagBar, { ...props, orderingEnabled: false }));
-    expect(closed).toContain("disabled=\"\"");
+    expect(closed).toContain("$8.99");
+    expect(closed).not.toContain("disabled=\"\"");
   });
 
   it("Logo is the brand image, decorative unless labelled", () => {
