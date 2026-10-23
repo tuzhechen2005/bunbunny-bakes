@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
@@ -18,7 +19,7 @@ import { Detail, type DetailHandle } from "./rack/Detail";
 import { NameSwap } from "./rack/NameSwap";
 import { Rack, type RackHandle } from "./rack/Rack";
 import { RollingText } from "./rack/RollingText";
-import { PlusIcon } from "./rack/icons";
+import { OrdersIcon, PlusIcon } from "./rack/icons";
 import { SiteFooter } from "./SiteFooter";
 import { useMenu } from "./useMenu";
 import "./rack/home.css";
@@ -204,13 +205,19 @@ export function HomePage() {
                 <Logo />
                 <span aria-hidden="true">{b.wordmark}</span>
               </div>
-              {menu ? (
-                // Open: nothing to look at (D75), but still announced. Closed: a small status in the corner.
-                <span className={menu.orderingEnabled ? "hm-sr" : "hm-open"} data-testid="ordering-state">
-                  <i aria-hidden="true" />
-                  {menu.orderingEnabled ? copy.home.orderingOpen : copy.home.orderingClosed}
-                </span>
-              ) : null}
+              <div className="hm-hr">
+                {menu ? (
+                  // Open: nothing to look at (D75), but still announced. Closed: a small status in the corner.
+                  <span className={menu.orderingEnabled ? "hm-sr" : "hm-open"} data-testid="ordering-state">
+                    <i aria-hidden="true" />
+                    {menu.orderingEnabled ? copy.home.orderingOpen : copy.home.orderingClosed}
+                  </span>
+                ) : null}
+                <Link href="/orders" className="hm-orders" data-testid="my-orders-link" aria-label={t.myOrdersLabel}>
+                  <OrdersIcon />
+                  <span aria-hidden="true">{t.myOrdersEntry}</span>
+                </Link>
+              </div>
             </header>
             <h1 className="hm-slogan">{b.slogan}</h1>
             <p className="hm-sub">{b.subLine}</p>

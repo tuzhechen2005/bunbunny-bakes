@@ -44,3 +44,11 @@ export const RightIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M9 6l6 6-6 6" />
   </Svg>
 );
+
+/** A small receipt: the "my orders" entry in the home header. */
+export const OrdersIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Svg strokeWidth={2} {...p}>
+    <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+    <path d="M9.5 8.5h5M9.5 12.5h5" />
+  </Svg>
+);

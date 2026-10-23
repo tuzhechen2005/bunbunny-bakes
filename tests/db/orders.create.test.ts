@@ -343,14 +343,14 @@ describe("createCustomerOrder: errors in step order", () => {
 
   it("CUTOFF_PASSED beats RATE_LIMITED and FULL", async () => {
     await createOpenDate(DATE, { doughLimitG: 0 });
-    for (let i = 0; i < 3; i++) await db.rateLimitHit.create({ data: { key: "order_ip:same", at: NOW } });
+    for (let i = 0; i < 5; i++) await db.rateLimitHit.create({ data: { key: "order_ip:same", at: NOW } });
     const late = new Date(BREAD_CUTOFF.getTime() + 1);
     expect(await codeOf(create({ ipHash: "same" }, late))).toBe("CUTOFF_PASSED");
   });
 
   it("RATE_LIMITED beats FULL", async () => {
     await createOpenDate(DATE, { doughLimitG: 0 });
-    for (let i = 0; i < 3; i++) await db.rateLimitHit.create({ data: { key: "order_ip:same", at: NOW } });
+    for (let i = 0; i < 5; i++) await db.rateLimitHit.create({ data: { key: "order_ip:same", at: NOW } });
     expect(await codeOf(create({ ipHash: "same" }))).toBe("RATE_LIMITED");
   });
 
@@ -379,23 +379,25 @@ describe("createCustomerOrder: errors in step order", () => {
   });
 });
 
-describe("createCustomerOrder: rate limits (D38)", () => {
-  it("4th order from the same IP within an hour -> RATE_LIMITED; ok again after an hour", async () => {
+describe("createCustomerOrder: rate limits (D38, D86)", () => {
+  it("6th order from the same IP within 10 minutes -> RATE_LIMITED; the window rolls (D86)", async () => {
     await createOpenDate(DATE);
-    await createOpenDate("2026-10-31");
-    await create({ ipHash: "same" }, NOW);
-    await create({ ipHash: "same", pickupDate: "2026-10-31" }, new Date(NOW.getTime() + 10 * 60_000));
-    await create({ ipHash: "same" }, new Date(NOW.getTime() + 20 * 60_000));
-    const fourth = new Date(NOW.getTime() + 30 * 60_000);
-    const e = await errorOf(create({ ipHash: "same", pickupDate: "2026-10-31" }, fourth));
+    const min = (n: number) => new Date(NOW.getTime() + n * 60_000);
+    // Distinct WeChat ids so only the IP rule is in play.
+    for (let i = 0; i < 5; i++) await create({ ipHash: "same", wechatId: `wx_${i}` }, min(i * 2));
+    const sixth = min(9);
+    const e = await errorOf(create({ ipHash: "same", wechatId: "wx_6" }, sixth));
     expect(e.code).toBe("RATE_LIMITED");
     expect(e.httpStatus).toBe(429);
-    expect(await db.rateLimitHit.count()).toBe(3);
+    expect(await db.rateLimitHit.count()).toBe(5);
     // Other IPs and a null ipHash are unaffected.
-    await expect(create({ ipHash: "other" }, fourth)).resolves.toBeTruthy();
-    await expect(create({ ipHash: null }, fourth)).resolves.toBeTruthy();
-    // Exactly one hour after the first hit it no longer counts.
-    await expect(create({ ipHash: "same" }, new Date(NOW.getTime() + 60 * 60_000))).resolves.toBeTruthy();
+    await expect(create({ ipHash: "other" }, sixth)).resolves.toBeTruthy();
+    await expect(create({ ipHash: null }, sixth)).resolves.toBeTruthy();
+    // Rolling: exactly 10 minutes after the first hit it no longer counts (4 hits remain).
+    await expect(create({ ipHash: "same", wechatId: "wx_7" }, min(10))).resolves.toBeTruthy();
+    // Now 5 hits again inside the window (t=2,4,6,8,10) -> blocked until t=12 frees one.
+    expect(await codeOf(create({ ipHash: "same", wechatId: "wx_8" }, min(11)))).toBe("RATE_LIMITED");
+    await expect(create({ ipHash: "same", wechatId: "wx_9" }, min(12))).resolves.toBeTruthy();
   });
 
   it("3rd unconfirmed order for the same wechat/date -> RATE_LIMITED", async () => {

@@ -20,7 +20,7 @@
 | `QTY_LIMIT` | 409 | 超过每单上限 |
 | `FULL` | 409 | 面团或独立限额已满（附 `suggestion` 或 null） |
 | `DELIVERY_FULL` | 409 | 配送已满，自提仍可 |
-| `RATE_LIMITED` | 429 | 太频繁 |
+| `RATE_LIMITED` | 429 | 太频繁（同一 IP 10 分钟最多 5 笔，D86；同一微信号同一取货日最多 2 笔未确认订单） |
 | `NOT_CANCELLABLE` | 409 | 当前状态不能取消 |
 | `OVER_LIMIT` | 409 | 店主操作超限，附 `violations`，可带 `override` 重试 |
 | `STALE` | 409 | 店主在另一个页面已经改过这笔订单 |

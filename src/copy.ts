@@ -58,6 +58,9 @@ export const copy = {
       stampRing: "BUNBUNNY BAKES · 现做现烤 · 当天出炉 ·",
     },
     home: {
+      /** Header entry to /orders (D84): visible word and accessible name. */
+      myOrdersEntry: "订单",
+      myOrdersLabel: "我的订单",
       orderingClosedHint: "下一轮预订开放时间请关注群内通知～",
       loading: "加载中…",
       loadFailed: "菜单加载失败，请稍后再试",
@@ -167,6 +170,28 @@ export const copy = {
       backHome: "返回首页",
       /** The seal on the bag (FRONTEND.md 4.6). */
       stamp: "已预订",
+      /** Save-link modal after ordering (D83). */
+      saveTitle: "保存订单链接",
+      saveHint: "点开查看订单进度！妥善保存，丢失请联系店主",
+      saveCopy: "复制订单链接",
+      saveCopied: "已复制 ✓",
+      /** Shown with the selectable link when copying failed. */
+      saveCopyFailed: "复制失败，请长按下面的链接复制",
+      saveDone: "我已保存",
+    },
+
+    /** `/orders`: the orders opened on this phone (D84). */
+    myOrders: {
+      pageTitle: "我的订单",
+      loading: "加载中…",
+      empty: "还没有订单",
+      /** A row whose request failed. */
+      rowFailed: "没加载出来",
+      retry: "重新加载",
+      /** Shown below the list; the WeChat id follows when the menu returns it. */
+      footerHint: "找不到订单？加店主微信要链接",
+      footerHintWithId: "找不到订单？加店主微信 {id} 要链接",
+      backHome: "返回首页",
     },
   },
 
