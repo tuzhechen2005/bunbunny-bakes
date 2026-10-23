@@ -188,6 +188,7 @@ test("checkout: lines, date states, brûlée hint, delivery gap", async ({ page 
   await expect(date("2026-11-01")).toBeDisabled();
   await expect(page.getByTestId("pickup-note")).toHaveText("自提时间在下午 5 点以后，具体时间微信确认");
   await expect(page.getByTestId("total-total")).toHaveText("$18.48");
+  await expect(page.getByTestId("total-fee")).toHaveCount(0); // delivery fee row only for delivery
 
   // select 11/2, then switch to delivery: 11/2 becomes DELIVERY_FULL and is deselected
   await date("2026-11-02").click();
@@ -206,7 +207,9 @@ test("checkout: lines, date states, brûlée hint, delivery gap", async ({ page 
   const brulee = page.locator('[data-testid="cart-line"][data-product-id="p-brulee"]');
   await brulee.getByRole("button", { name: "减少一个" }).click();
   await expect(page.getByTestId("lead-hint")).toHaveCount(0);
-  await expect(page.getByTestId("total-subtotal")).toHaveText("$13.98");
+  // delivery stays selected: $13.98 + $5.00 fee (the subtotal row is gone in v2, the total says it all)
+  await expect(page.getByTestId("total-fee")).toHaveText("$5.00");
+  await expect(page.getByTestId("total-total")).toHaveText("$18.98");
 
   // honeypot present, hidden and empty
   const honeypot = page.locator('input[name="website"]');
@@ -248,6 +251,32 @@ test("checkout: happy path submits once, navigates and clears the cart", async (
   expect(body.idempotencyKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   expect(Object.keys(body).sort()).toEqual(["fulfillment", "idempotencyKey", "items", "note", "pickupDate", "website", "wechatId"]);
   expect(await page.evaluate((key) => localStorage.getItem(key), CART_KEY)).toBe("[]");
+  // the order page draws the ordered bread in the bag: best-effort sessionStorage hand-off
+  const lastBag = await page.evaluate(() => sessionStorage.getItem("bunbunny:lastBag"));
+  expect(JSON.parse(lastBag ?? "null")).toEqual({
+    orderNo: "1030-001",
+    items: [{ name: "奶酥红豆包", imageUrl: null, qty: 4 }],
+  });
+});
+
+test("checkout: errors sit under their block", async ({ page }) => {
+  await mockApis(page, {
+    orders: (route) => route.fulfill({ status: 409, json: { error: "RATE_LIMITED", message: "x" } }),
+  });
+  await seedCart(page, [{ productId: "p-redbean", qty: 1 }]);
+  await expect(page.getByTestId("date-card").first()).toBeVisible();
+  await page.getByTestId("submit").click();
+  // missing date: inside the date block; missing WeChat id: right under the input
+  await expect(page.getByTestId("dates").getByTestId("submit-error")).toHaveText("请先选择取货日期");
+  await expect(page.getByTestId("wechat-error")).toHaveText("请填写你的微信号");
+  await page.locator('[data-testid="date-card"][data-date="2026-10-30"]').click();
+  await expect(page.getByTestId("submit-error")).toHaveCount(0);
+  await page.getByLabel("微信号").fill("bunny_fan_01");
+  await expect(page.getByTestId("wechat-error")).toHaveCount(0);
+  // a whole-order error (not about the date) shows just above the submit button
+  await page.getByTestId("submit").click();
+  await expect(page.getByTestId("submit-error")).toHaveText("提交太频繁了，请稍后再试，或加微信联系店主");
+  await expect(page.getByTestId("dates").getByTestId("submit-error")).toHaveCount(0);
 });
 
 test("checkout: FULL with suggestion offers a date switch, without auto-submitting", async ({ page }) => {

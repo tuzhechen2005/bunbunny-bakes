@@ -48,3 +48,30 @@ The home rope (`src/components/customer/rack/drag.ts`, `bindDrag`) is the refere
 decided at 4 px with bias 0.75, `preventDefault` on every `touchmove` once the gesture is claimed, mouse and pen
 through pointer events only (`pointerType !== "touch"`). `tests/e2e/rack.spec.ts` drives it with real touch
 events through CDP (`Input.dispatchTouchEvent`, Chromium only).
+=======
+## Pile (`pile.ts`): the bread in the paper bag window
+
+`new PileWorld({ random? })` is a pure, deterministic 2D world for the round thumbnails inside the
+bag (FRONTEND.md 4.3, D78). World units: `PILE_WIDTH = 116` wide, `PILE_HEIGHT` (135.6, the window aspect)
+tall, y grows downward.
+
+| API | |
+|---|---|
+| `spawn(tag, x?, y?)` | Drop a body in from above the box (`x` clamped to the walls). Returns `null` at the cap (`PILE_CAP = 24`). A little random height jitter keeps simultaneous bodies from landing in one exact row. |
+| `remove(tag, count)` | Removes the topmost bodies of a tag and returns them (the view pops them out of the bag top). |
+| `advance(dt)` | Real-time step (any `dt`): fixed `PILE_STEP = 1/120` s Verlet steps with the remainder carried, gravity 1500, 4 constraint iterations, wall and floor friction. Returns `true` while awake: feed it to `createLoop` and return it from the step. |
+| `settle()` | Run to rest at once: reduced motion and the initial state from the cart. |
+| `ax`, `ay` | External acceleration in units/s^2 (shaking the bag, a `jolt`). Non-zero keeps the world awake. |
+| `wake()` | Wake a sleeping world (it sleeps after 40 quiet steps and `advance` then costs nothing). |
+
+Radius is 20 up to 5 bodies, then `20 * sqrt(5 / n)` (min 9.5); existing bodies ease toward the new
+radius. `radiusFor(n)` exposes the rule. The view (`PaperBag`) maps world units to px with
+`bagWidth * 0.73 / PILE_WIDTH` and writes `transform` on one `<i>` per body from the loop.
+
+## Bag components (`src/components/customer/bag/`)
+
+- `PaperBag` `{ width, items, folded?, imprint?, shakeable? }` + ref `{ jolt(ay, ms?), squash(kind?), windowRect(), drop(productId, count, xFrac?) }`. The pile follows `items` (initial state settled, growth drops in, shrinking pops out). `drop` is for the home bag only (a flight landed at `xFrac`).
+- `BagBar` (props unchanged) renders the mini bag + pill and, in a portal while open, `BagSheet`.
+- `FlyLayer` draws the flights; `bagFlights.ts` keeps the breads in the air (`pending`) so the bags show the cart minus the flying bread and a landing drops them in exactly once.
+- A bag window is found by `[data-bag-target="sheet" | "bar"] [data-pb-window]` (sheet first), so flights land in whichever bag is visible.
+>>>>>>> origin/integration/frontend
