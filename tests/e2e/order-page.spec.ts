@@ -12,8 +12,8 @@ function makeOrder(overrides: Order = {}): Order {
   return {
     orderNo: "B-1042",
     items: [
-      { name: "奶酥红豆包", qty: 4, lineTotalCents: 899 },
-      { name: "奶酪角", qty: 2, lineTotalCents: 1200 },
+      { name: "奶酥红豆包", qty: 4, lineTotalCents: 899, imageUrl: null },
+      { name: "奶酪角", qty: 2, lineTotalCents: 1200, imageUrl: null },
     ],
     subtotalCents: 2099,
     deliveryFeeCents: 0,
@@ -78,7 +78,7 @@ test.describe("order page /o/{token}", () => {
     await mockOrder(page, () => makeOrder());
     await page.goto(`${ORDER_PATH}?new=1`);
     const banner = page.getByTestId("new-banner");
-    await expect(banner).toContainText(t.newTitle);
+    await expect(page.getByTestId("new-title")).toHaveText(t.newTitle);
     await expect(banner).toContainText(t.newHint);
     // The banner shows the plain order link (no ?new=1).
     await expect(banner.getByRole("textbox")).toHaveValue(new URL(ORDER_PATH, page.url()).href);
@@ -92,32 +92,83 @@ test.describe("order page /o/{token}", () => {
     await expect(page.getByTestId("new-banner")).toHaveCount(0);
   });
 
-  test("?new=1 prints the receipt and stamps it, once; a plain visit shows no animation", async ({ page }) => {
+  test("?new=1 folds the bag and stamps it, once; a plain visit shows it already stamped", async ({ page }) => {
     await mockOrder(page, () => makeOrder());
     await page.goto(`${ORDER_PATH}?new=1`);
-    const receipt = page.getByTestId("receipt");
-    await expect(receipt).toHaveAttribute("data-print", "on");
-    await expect(page.getByTestId("receipt-stamp")).toHaveText(t.stamp);
-    await expect(receipt).toContainText(t.queueLine);
-    // After the print finishes (about 1.2 s) everything is in its final, fully visible state.
-    await expect(page.getByTestId("receipt-stamp")).toHaveCSS("opacity", "1", { timeout: 3000 });
-    await expect(page.getByTestId("total")).toHaveCSS("opacity", "1");
+    const column = page.locator("[data-seq]");
+    await expect(column).toHaveAttribute("data-seq", "hide");
+    await expect(page.locator(".ord-stamper")).toHaveCount(1);
+    // After the impact (about 1.25 s) the title and cards rise and the stamper is gone.
+    await expect(column).toHaveAttribute("data-seq", "show", { timeout: 3000 });
+    await expect(page.getByTestId("new-title")).toHaveText(t.newTitle);
+    await expect(page.getByText(copy.customer.brand.receiptLast)).toBeVisible();
+    await expect(page.getByTestId("order-stamp")).toContainText(t.stamp);
+    await expect(page.getByTestId("order-stamp")).toContainText("B-1042");
+    await expect(page.getByTestId("order-stamp")).toHaveCSS("opacity", "0.95", { timeout: 3000 });
+    await expect(page.locator(".ord-stamper")).toHaveCount(0, { timeout: 3000 });
+    await expect(page.getByTestId("total")).toHaveCSS("opacity", "1", { timeout: 3000 });
 
     await page.reload();
-    await expect(page.getByTestId("receipt")).toHaveAttribute("data-print", "off");
-    await expect(page.getByTestId("receipt-stamp")).toHaveCount(0);
-    await expect(page.getByText(t.queueLine)).toHaveCount(0);
+    await expect(page.getByTestId("status-text")).toBeVisible();
+    await expect(page.locator("[data-seq]")).toHaveCount(0);
+    await expect(page.locator(".ord-stamper")).toHaveCount(0);
+    await expect(page.getByTestId("new-title")).toHaveCount(0);
+    await expect(page.getByTestId("order-stamp")).toHaveCSS("opacity", "0.92");
     await expect(page.getByTestId("total")).toHaveText("$20.99");
   });
 
-  test("reduced motion shows the receipt and stamp instantly", async ({ page }) => {
+  test("reduced motion shows the folded, stamped bag and the cards instantly", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await mockOrder(page, () => makeOrder());
     await page.goto(`${ORDER_PATH}?new=1`);
-    await expect(page.getByTestId("receipt")).toHaveAttribute("data-print", "off");
-    await expect(page.getByTestId("receipt-stamp")).toBeVisible();
-    await expect(page.getByTestId("receipt-stamp")).toHaveCSS("opacity", "1");
-    await expect(page.getByText(t.queueLine)).toBeVisible();
+    await expect(page.getByTestId("new-title")).toBeVisible();
+    await expect(page.locator("[data-seq]")).toHaveCount(0);
+    await expect(page.locator(".ord-stamper")).toHaveCount(0);
+    await expect(page.getByTestId("order-stamp")).toHaveCSS("opacity", "0.92");
+    await expect(page.getByTestId("new-title")).toHaveCSS("opacity", "1");
+    await expect(page.getByText(copy.customer.brand.receiptLast)).toBeVisible();
+  });
+
+  test("a cancelled order's bag carries no stamp", async ({ page }) => {
+    await mockOrder(page, () => makeOrder(CANCELLED));
+    await page.goto(ORDER_PATH);
+    await expect(page.getByTestId("status-text")).toHaveText(copy.customerStatus.cancelled);
+    await expect(page.getByTestId("paper-bag")).toBeVisible();
+    await expect(page.getByTestId("order-stamp")).toHaveCount(0);
+  });
+
+  test("the bag shows the ordered bread: product photos, else the bread saved at checkout, else plain discs", async ({ page }) => {
+    const photo = (name: string) => ({ name, qty: 2, lineTotalCents: 600, imageUrl: "/brand/logo.webp" });
+    await mockOrder(page, () => makeOrder({ items: [photo("奶酥红豆包"), photo("奶酪角")] }));
+    await page.goto(ORDER_PATH);
+    const discs = page.locator(".pb-pi");
+    await expect(discs).toHaveCount(4);
+    await expect(page.locator(".pb-pi.pb-ph")).toHaveCount(0);
+    await expect(discs.first()).toHaveCSS("background-image", /logo\.webp/);
+
+    // No photo in the order: plain discs ...
+    await page.unroute("**/api/o/**");
+    await mockOrder(page, () => makeOrder());
+    await page.goto(ORDER_PATH);
+    await expect(page.locator(".pb-pi")).toHaveCount(6);
+    await expect(page.locator(".pb-pi.pb-ph")).toHaveCount(6);
+
+    // ... unless checkout saved this order's bread in sessionStorage.
+    await page.evaluate(() =>
+      sessionStorage.setItem(
+        "bunbunny:lastBag",
+        JSON.stringify({
+          orderNo: "B-1042",
+          items: [
+            { name: "奶酥红豆包", imageUrl: "/brand/logo.webp", qty: 4 },
+            { name: "奶酪角", imageUrl: "/brand/logo.webp", qty: 2 },
+          ],
+        }),
+      ),
+    );
+    await page.reload();
+    await expect(page.locator(".pb-pi")).toHaveCount(6);
+    await expect(page.locator(".pb-pi.pb-ph")).toHaveCount(0);
   });
 
   const statuses: [string, string][] = [
@@ -144,13 +195,15 @@ test.describe("order page /o/{token}", () => {
   test("shows order details, money as dollars, pay-on-receipt note", async ({ page }) => {
     await mockOrder(page, () => makeOrder());
     await page.goto(ORDER_PATH);
-    await expect(page.getByText("订单号：B-1042")).toBeVisible();
-    await expect(page.getByText("取货：10/30 周五")).toBeVisible();
+    await expect(page.getByTestId("order-no")).toHaveText("B-1042");
+    await expect(page.getByTestId("order-no")).toHaveAttribute("aria-label", "订单号：B-1042");
+    await expect(page.getByText("10/30 周五")).toBeVisible();
     await expect(page.getByText(t.pickup, { exact: true })).toBeVisible();
     await expect(page.getByText("自提时间在下午 5 点以后，具体时间微信确认")).toBeVisible();
     await expect(page.getByText("奶酥红豆包 × 4")).toBeVisible();
     await expect(page.getByText("$8.99")).toBeVisible();
-    await expect(page.getByText("$0.00")).toBeVisible();
+    // Pickup has no fee row.
+    await expect(page.getByText(t.deliveryFee)).toHaveCount(0);
     await expect(page.getByTestId("total")).toHaveText("$20.99");
     await expect(page.getByText("备注：少糖，谢谢")).toBeVisible();
     await expect(page.getByText(t.payOnReceipt)).toBeVisible();
@@ -161,6 +214,8 @@ test.describe("order page /o/{token}", () => {
     await page.goto(ORDER_PATH);
     await expect(page.getByText(t.delivery, { exact: true })).toBeVisible();
     await expect(page.getByText("自提时间在下午 5 点以后")).toHaveCount(0);
+    await expect(page.getByText(t.deliveryFee)).toBeVisible();
+    await expect(page.getByText("$5.00")).toBeVisible();
     await expect(page.getByTestId("total")).toHaveText("$25.99");
   });
 

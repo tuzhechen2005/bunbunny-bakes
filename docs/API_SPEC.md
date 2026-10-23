@@ -94,7 +94,7 @@
 
 ### GET /api/o/{token}
 
-返回顾客能看到的内容：订单号、明细（名称、数量、行金额）、小计、运费、总额、取货日期、自提或配送、顾客版状态文案（`DATA_MODEL.md` 第 2 节）、店主微信号、`pickupNote`、`canCancel`、`cancelDeadlineLabel`。
+返回顾客能看到的内容：订单号、明细（名称、数量、行金额、`imageUrl`：商品的公开照片，没有照片或商品已删除时为 `null`）、小计、运费、总额、取货日期、自提或配送、顾客版状态文案（`DATA_MODEL.md` 第 2 节）、店主微信号、`pickupNote`、`canCancel`、`cancelDeadlineLabel`。
 
 **不返回**：内部状态枚举以外的任何内部字段、付款信息、其他订单的任何信息。token 不存在一律返回 404，不区分"格式错"和"不存在"。
 

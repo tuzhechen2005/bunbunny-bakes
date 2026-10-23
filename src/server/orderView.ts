@@ -16,7 +16,8 @@ export type StatusKind = "PENDING" | "CONFIRMED" | "BAKING" | "READY" | "COMPLET
 
 export interface CustomerOrderView {
   orderNo: string;
-  items: { name: string; qty: number; lineTotalCents: number }[];
+  /** `imageUrl`: the public product photo (null: none, or the product is gone). */
+  items: { name: string; qty: number; lineTotalCents: number; imageUrl: string | null }[];
   subtotalCents: number;
   deliveryFeeCents: number;
   totalCents: number;
@@ -84,9 +85,10 @@ export async function getCustomerOrderView(
   if (!settings) throw new Error("Setting row (id = 1) is missing; run `npm run db:seed`");
   const products = await db.product.findMany({
     where: { id: { in: order.items.map((i) => i.productId) } },
-    select: { id: true, capacityMode: true, sortOrder: true },
+    select: { id: true, capacityMode: true, sortOrder: true, imageUrl: true },
   });
   const mode = new Map(products.map((p) => [p.id, p.capacityMode]));
+  const imageOf = new Map(products.map((p) => [p.id, p.imageUrl]));
   const sortOf = new Map(products.map((p) => [p.id, p.sortOrder]));
   // Stable display order: product sortOrder, then name (a gone product sorts last).
   const sortedItems = [...order.items].sort(
@@ -101,7 +103,12 @@ export async function getCustomerOrderView(
   const pickupDate = fromDbDate(order.pickupDate);
   return {
     orderNo: order.orderNo,
-    items: sortedItems.map((i) => ({ name: i.nameSnapshot, qty: i.qty, lineTotalCents: i.lineTotalCents })),
+    items: sortedItems.map((i) => ({
+      name: i.nameSnapshot,
+      qty: i.qty,
+      lineTotalCents: i.lineTotalCents,
+      imageUrl: imageOf.get(i.productId) ?? null,
+    })),
     subtotalCents: order.subtotalCents,
     deliveryFeeCents: order.deliveryFeeCents,
     totalCents: order.totalCents,
