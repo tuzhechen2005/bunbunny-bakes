@@ -79,12 +79,12 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
   }
 
   // Not cancellable: the closed message says it all (no duplicated alert after a 409).
-  if (!canCancel) return <p className="text-sm text-neutral-600">{t.cancelClosed}</p>;
+  if (!canCancel) return <p className="text-sm text-muted">{t.cancelClosed}</p>;
 
   return (
     <div className="flex flex-col gap-2">
       {error && (
-        <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        <p role="alert" className="rounded-lg bg-soft p-3 text-sm text-danger">
           {error}
         </p>
       )}
@@ -95,14 +95,14 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
           setError(null);
           setSheetOpen(true);
         }}
-        className="min-h-11 w-full rounded-lg border border-neutral-300 bg-white text-base text-neutral-700"
+        className="min-h-11 w-full rounded-full border border-line bg-card text-base text-ink active:bg-soft"
       >
         {t.cancelOrder}
       </button>
-      {cancelDeadlineLabel && <p className="text-center text-sm text-neutral-500">{cancelDeadlineLabel}</p>}
+      {cancelDeadlineLabel && <p className="text-center text-sm text-muted">{cancelDeadlineLabel}</p>}
 
       {sheetOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40">
           <button
             type="button"
             aria-hidden="true"
@@ -114,9 +114,9 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
             role="dialog"
             aria-modal="true"
             aria-labelledby="cancel-sheet-title"
-            className="relative w-full max-w-md rounded-t-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-neutral-900"
+            className="relative w-full max-w-md rounded-t-2xl bg-card p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-ink"
           >
-            <p id="cancel-sheet-title" className="mb-5 text-center text-lg font-semibold">
+            <p id="cancel-sheet-title" className="mb-5 text-center font-serif text-lg">
               {t.cancelConfirmTitle}
             </p>
             <div className="flex flex-col gap-3">
@@ -124,7 +124,7 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
                 type="button"
                 onClick={onConfirm}
                 disabled={busy}
-                className="min-h-11 w-full rounded-lg bg-red-600 text-base font-medium text-white disabled:opacity-50"
+                className="min-h-11 w-full rounded-full bg-danger text-base font-semibold text-accent-ink disabled:opacity-50"
               >
                 {busy ? t.cancelling : t.cancelConfirm}
               </button>
@@ -133,7 +133,7 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
                 type="button"
                 onClick={() => setSheetOpen(false)}
                 disabled={busy}
-                className="min-h-11 w-full rounded-lg border border-neutral-300 text-base text-neutral-700 disabled:opacity-50"
+                className="min-h-11 w-full rounded-full border border-line text-base text-ink disabled:opacity-50"
               >
                 {t.cancelBack}
               </button>

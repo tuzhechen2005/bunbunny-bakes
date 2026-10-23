@@ -22,8 +22,8 @@ export function WechatBlock({ ownerWechatId, prominent }: { ownerWechatId: strin
       aria-live="polite"
       className={
         prominent
-          ? "min-h-11 shrink-0 rounded-lg bg-emerald-600 px-4 text-base font-medium text-white"
-          : "min-h-11 shrink-0 rounded-lg border border-neutral-300 px-3 text-sm text-neutral-700"
+          ? "min-h-11 shrink-0 rounded-full bg-accent px-4 text-base font-semibold text-accent-ink active:bg-accent-strong"
+          : "min-h-11 shrink-0 rounded-full border border-line bg-card px-3 text-sm text-ink active:bg-soft"
       }
     >
       {copied ? t.copied : t.copyWechat}
@@ -36,11 +36,11 @@ export function WechatBlock({ ownerWechatId, prominent }: { ownerWechatId: strin
       data-prominent={prominent ? "true" : "false"}
       className={
         prominent
-          ? "flex items-center gap-3 rounded-xl border-2 border-emerald-500 bg-emerald-50 p-4"
+          ? "flex items-center gap-3 rounded-2xl border-2 border-accent bg-caramel-tint p-4"
           : "flex items-center gap-3 px-1"
       }
     >
-      <p className={prominent ? "min-w-0 flex-1 break-words text-lg font-semibold" : "min-w-0 flex-1 break-words text-sm text-neutral-600"}>
+      <p className={prominent ? "min-w-0 flex-1 break-words text-lg font-semibold" : "min-w-0 flex-1 break-words text-sm text-muted"}>
         {label}
       </p>
       {button}

@@ -92,6 +92,34 @@ test.describe("order page /o/{token}", () => {
     await expect(page.getByTestId("new-banner")).toHaveCount(0);
   });
 
+  test("?new=1 prints the receipt and stamps it, once; a plain visit shows no animation", async ({ page }) => {
+    await mockOrder(page, () => makeOrder());
+    await page.goto(`${ORDER_PATH}?new=1`);
+    const receipt = page.getByTestId("receipt");
+    await expect(receipt).toHaveAttribute("data-print", "on");
+    await expect(page.getByTestId("receipt-stamp")).toHaveText(t.stamp);
+    await expect(receipt).toContainText(t.queueLine);
+    // After the print finishes (about 1.2 s) everything is in its final, fully visible state.
+    await expect(page.getByTestId("receipt-stamp")).toHaveCSS("opacity", "1", { timeout: 3000 });
+    await expect(page.getByTestId("total")).toHaveCSS("opacity", "1");
+
+    await page.reload();
+    await expect(page.getByTestId("receipt")).toHaveAttribute("data-print", "off");
+    await expect(page.getByTestId("receipt-stamp")).toHaveCount(0);
+    await expect(page.getByText(t.queueLine)).toHaveCount(0);
+    await expect(page.getByTestId("total")).toHaveText("$20.99");
+  });
+
+  test("reduced motion shows the receipt and stamp instantly", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await mockOrder(page, () => makeOrder());
+    await page.goto(`${ORDER_PATH}?new=1`);
+    await expect(page.getByTestId("receipt")).toHaveAttribute("data-print", "off");
+    await expect(page.getByTestId("receipt-stamp")).toBeVisible();
+    await expect(page.getByTestId("receipt-stamp")).toHaveCSS("opacity", "1");
+    await expect(page.getByText(t.queueLine)).toBeVisible();
+  });
+
   const statuses: [string, string][] = [
     ["PENDING", copy.customerStatus.pending.replace("{ownerWechatId}", "bunbunny_bakes")],
     ["CONFIRMED", copy.customerStatus.confirmed],

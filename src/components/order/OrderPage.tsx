@@ -3,13 +3,13 @@
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copy } from "@/copy";
-import { formatCents } from "@/domain/pricing";
 import { CancelSection } from "./CancelSection";
 import { NotFoundMessage } from "./NotFoundMessage";
 import { OrderLoading } from "./OrderLoading";
 import { OrderLinkCopy } from "./OrderLinkCopy";
+import { Receipt } from "./Receipt";
 import { WechatBlock } from "./WechatBlock";
-import { fill, type OrderViewData } from "./types";
+import { type OrderViewData } from "./types";
 
 const t = copy.customer.order;
 
@@ -78,13 +78,13 @@ export function OrderPage() {
   if (state.kind === "failed") {
     return (
       <div className="flex flex-col items-center gap-4 px-4 py-16 text-center">
-        <p role="alert" className="text-base text-neutral-700">
+        <p role="alert" className="text-base text-ink">
           {t.loadFailed}
         </p>
         <button
           type="button"
           onClick={retry}
-          className="min-h-11 rounded-lg bg-neutral-900 px-6 text-base font-medium text-white"
+          className="min-h-11 rounded-full bg-accent px-6 text-base font-semibold text-accent-ink active:bg-accent-strong"
         >
           {t.retry}
         </button>
@@ -98,71 +98,28 @@ export function OrderPage() {
   const showCancel = order.canCancel || !finished;
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-6">
-      {isNew && (
-        <section data-testid="new-banner" className="rounded-xl bg-amber-100 p-4 text-amber-950">
-          <p className="text-lg font-semibold">{t.newTitle}</p>
-          <p className="mt-1 text-sm leading-relaxed">{t.newHint}</p>
-          <OrderLinkCopy token={token} variant="banner" />
-        </section>
-      )}
-
+    <div className="flex flex-col gap-4 overflow-x-clip px-4 py-6">
       {justCancelled && (
-        <p role="status" className="rounded-xl bg-neutral-200 p-3 text-center text-base font-medium">
+        <p role="status" className="rounded-xl bg-soft p-3 text-center text-base font-medium">
           {t.cancelled}
         </p>
       )}
 
-      <h1 data-testid="status-text" className="break-words text-2xl font-bold leading-snug">
+      <h1 data-testid="status-text" className="break-words font-serif text-2xl leading-snug">
         {order.statusText}
       </h1>
 
       {order.ownerWechatId && <WechatBlock ownerWechatId={order.ownerWechatId} prominent={pending} />}
 
-      <section className="flex flex-col gap-1 rounded-xl bg-white p-4 text-base shadow-sm">
-        <p className="text-sm text-neutral-500">{fill(t.orderNo, { orderNo: order.orderNo })}</p>
-        <p className="font-medium">{fill(t.pickupDate, { pickupDateLabel: order.pickupDateLabel })}</p>
-        <p>{order.fulfillment === "DELIVERY" ? t.delivery : t.pickup}</p>
-        {order.fulfillment === "PICKUP" && order.pickupNote && (
-          <p className="text-sm text-neutral-600">{order.pickupNote}</p>
-        )}
-      </section>
+      <Receipt order={order} fresh={isNew} />
 
-      <section className="rounded-xl bg-white p-4 shadow-sm">
-        <h2 className="mb-2 text-sm text-neutral-500">{t.itemsTitle}</h2>
-        <ul className="flex flex-col gap-2">
-          {order.items.map((item, i) => (
-            <li key={i} className="flex justify-between gap-3 text-base">
-              <span className="min-w-0 break-words">{fill(t.itemLine, { name: item.name, qty: item.qty })}</span>
-              <span className="shrink-0 tabular-nums">{formatCents(item.lineTotalCents)}</span>
-            </li>
-          ))}
-        </ul>
-        <dl className="mt-3 flex flex-col gap-1 border-t border-neutral-200 pt-3 text-base">
-          <div className="flex justify-between">
-            <dt className="text-neutral-600">{t.subtotal}</dt>
-            <dd className="tabular-nums">{formatCents(order.subtotalCents)}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-neutral-600">{t.deliveryFee}</dt>
-            <dd className="tabular-nums">{formatCents(order.deliveryFeeCents)}</dd>
-          </div>
-          <div className="flex justify-between text-lg font-semibold">
-            <dt>{t.total}</dt>
-            <dd data-testid="total" className="tabular-nums">
-              {formatCents(order.totalCents)}
-            </dd>
-          </div>
-        </dl>
-      </section>
-
-      {order.note && (
-        <p className="break-words rounded-xl bg-white p-4 text-sm text-neutral-700 shadow-sm">
-          {fill(t.note, { note: order.note })}
-        </p>
+      {isNew && (
+        <section data-testid="new-banner" className="rounded-2xl bg-caramel-tint p-4 text-ink">
+          <p className="font-serif text-lg">{t.newTitle}</p>
+          <p className="mt-1 text-sm leading-relaxed">{t.newHint}</p>
+          <OrderLinkCopy token={token} variant="banner" />
+        </section>
       )}
-
-      <p className="text-center text-sm text-neutral-600">{t.payOnReceipt}</p>
 
       {!isNew && <OrderLinkCopy token={token} variant="secondary" />}
 
@@ -180,7 +137,7 @@ export function OrderPage() {
         />
       )}
 
-      <footer className="pt-4 text-center text-xs text-neutral-400">{copy.shopName}</footer>
+      <footer className="pt-4 text-center text-xs text-muted">{copy.shopName}</footer>
     </div>
   );
 }

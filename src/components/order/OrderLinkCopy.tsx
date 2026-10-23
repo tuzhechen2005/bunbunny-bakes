@@ -27,7 +27,7 @@ export function OrderLinkCopy({ token, variant }: { token: string; variant: "ban
           data-testid="copy-link-secondary"
           onClick={onCopy}
           aria-live="polite"
-          className="min-h-11 rounded-lg border border-neutral-300 px-4 text-sm text-neutral-700"
+          className="min-h-11 rounded-full border border-line bg-card px-4 text-sm text-ink active:bg-soft"
         >
           {copied ? t.copied : t.copyLink}
         </button>
@@ -42,14 +42,14 @@ export function OrderLinkCopy({ token, variant }: { token: string; variant: "ban
         value={link}
         aria-label={t.copyLink}
         onFocus={(e) => e.currentTarget.select()}
-        className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-neutral-800"
+        className="w-full rounded-lg border border-line bg-card px-3 py-2 text-base text-ink"
       />
       <button
         type="button"
         data-testid="copy-link-primary"
         onClick={onCopy}
         aria-live="polite"
-        className="min-h-12 w-full rounded-lg bg-emerald-600 px-4 text-base font-semibold text-white"
+        className="min-h-12 w-full rounded-full bg-accent px-4 text-base font-semibold text-accent-ink active:bg-accent-strong"
       >
         {copied ? t.copied : t.copyLink}
       </button>
