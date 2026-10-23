@@ -74,6 +74,7 @@
 | D60 | 店主确认 D48：店主强制超过面团上限的那天，只买布蕾（或其他不占面团的商品）的顾客订单仍可以下 | [你] 10/22 |
 | D61 | 域名为 **bunbunnybakes.shop**（Porkbun 注册，2026-10-22；取代 D21 中的 bunbunnybakes.com，P1 已解决）。发件地址 orders@bunbunnybakes.shop；网址只来自环境变量 SITE_URL。到期日 2027-10-23，店主选择不自动续费，需要时在 Porkbun 手动续 | [你] 10/22 |
 | D62 | 部署平台改为 **Netlify 免费版**（取代 D20 中的 Vercel）：Vercel 免费版只限个人非商业用途，Pro 版 $20/月；Netlify 免费版允许商业项目，支持 Next.js 的 `after()` 和缓存组件。正式环境变量只设在 production 上下文；PR 预览版仍需 Netlify 团队登录才能访问。商品照片改用 Netlify Blobs（T5.2 待做）。函数区域 us-east-2，Neon 在 us-east-1 | [你] 10/22 |
+| D63 | 商品照片存在 Netlify Blobs（store `product-images`），通过 `/api/images/*` 公开访问；上传前在手机上统一重新压缩成 JPEG（最长边 1600 px），去掉拍摄地点等 EXIF 信息；只接受 jpg/png/webp，最大 5 MB；正式环境找不到 Blobs 时直接报错，不会退回内存 | [自定] 10/22；T5.2 |
 
 ## 待店主确认（不阻塞开发）
 

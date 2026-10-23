@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { AdminCard } from "@/components/admin/AdminCard";
-import { BunnyPlaceholder } from "@/components/customer/BunnyPlaceholder";
 import { copy } from "@/copy";
 import type { CapacityMode, ProductStatus } from "@/domain/types";
 import { adminApi } from "@/lib/adminApi";
 import { fill, shortDate, type OverLimitDateDto, type ProductDto } from "./describe";
+import { PhotoField } from "./PhotoField";
 import { centsToDollarInput, parseDollarsToCents } from "./money";
 
 const t = copy.admin.products;
@@ -174,6 +174,7 @@ export function ProductForm({ product }: Readonly<{ product?: ProductDto }>) {
   const router = useRouter();
   const editing = product !== undefined;
   const [form, setForm] = useState<FormState>(() => initialState(product));
+  const [imageUrl, setImageUrl] = useState<string | null>(product?.imageUrl ?? null);
   const [leadTouched, setLeadTouched] = useState(editing);
   const [errors, setErrors] = useState<Errors>({});
   const [pending, setPending] = useState(false);
@@ -251,17 +252,7 @@ export function ProductForm({ product }: Readonly<{ product?: ProductDto }>) {
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       <AdminCard>
         <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-3">
-            {product?.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={product.imageUrl} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
-            ) : (
-              <BunnyPlaceholder className="h-16 w-16 shrink-0 rounded-lg" />
-            )}
-            <button type="button" disabled className="min-h-11 rounded-lg border border-line px-3 text-sm text-muted opacity-70">
-              {t.photoNote}
-            </button>
-          </div>
+          <PhotoField productId={product?.id ?? null} imageUrl={imageUrl} onChange={setImageUrl} />
           <Field label={t.fieldName} error={errors.name}>
             <input
               className={inputClass}

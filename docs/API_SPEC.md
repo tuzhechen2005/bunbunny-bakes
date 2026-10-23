@@ -105,6 +105,10 @@
 - 已经是已取消状态：`200`（幂等）。
 - 已截止：`409 CUTOFF_PASSED`，`message` 为"已过取消时间，请微信联系店主"。
 
+### GET /api/images/{key}
+
+商品照片（公开，不需要登录）。`key` 形如 `<商品id>/<32位随机十六进制>.<jpg|png|webp>`，格式不对或不存在返回 404（`..` 等路径一律 404）。返回文件本身，带 `Cache-Control: public, max-age=31536000, immutable`（key 是随机的，换照片就换 key）和 `X-Content-Type-Options: nosniff`。文件存在 Netlify Blobs（store `product-images`），在 Netlify 上不需要任何密钥；本地开发和测试用内存存储。
+
 ## 3. 店主接口（`/api/admin/**`，需要登录）
 
 **认证**：httpOnly、Secure、SameSite=Lax 的 session cookie。所有非 GET 请求检查 `Origin` 头必须是本站，防跨站请求伪造。
@@ -128,7 +132,8 @@
 | PUT | `/api/admin/dates/{date}` | `{ isOpen, doughLimitG, deliveryEnabled, deliveryLimit, productLimits: { productId: n }, note }`；把上限调到低于已用量时返回警告，要店主确认 |
 | GET/POST | `/api/admin/products` | 列表 / 新增 |
 | PATCH | `/api/admin/products/{id}` | 修改；改了名额相关字段时，返回因此超限的开放日期 |
-| POST | `/api/admin/products/{id}/image` | 上传图片（Vercel Blob），最大 5 MB，jpg/png/webp |
+| POST | `/api/admin/products/{id}/image` | 上传商品照片（Netlify Blobs，store `product-images`）。`multipart/form-data`，字段 `file`；最大 5 MB，只收 jpg/png/webp（按文件头字节判断，不看文件名）；成功返回 `{ product }`，并把 `imageUrl` 改成 `/api/images/<key>`、写 `product.update` 日志、删除旧照片；不合格返回 `VALIDATION`（中文提示） |
+| DELETE | `/api/admin/products/{id}/image` | 删除照片：`imageUrl` 变回 null（显示兔子占位图），删除文件并写日志 |
 | GET/PUT | `/api/admin/settings` | |
 | GET | `/api/admin/logs?entityId=&from=&to=` | |
 
@@ -168,6 +173,5 @@
 | `SITE_URL` | 例如 `https://bunbunnybakes.shop`，用于邮件链接和 Origin 检查 |
 | `CRON_SECRET` | |
 | `IP_HASH_SECRET` | |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob |
 
 `.env.example` 进仓库（只有名称，没有值）；`.env` 不进仓库。
