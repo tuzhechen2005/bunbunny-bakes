@@ -117,17 +117,17 @@ test("home: add items updates the bar; placeholder; open state", async ({ page }
 
   const plus = card(page, "p-cheese").getByRole("button", { name: "增加一个" });
   for (let i = 0; i < 5; i++) await plus.click();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 5 件");
-  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $13.98");
+  await expect(page.getByTestId("bag-count")).toHaveText("已选 5 件");
+  await expect(page.getByTestId("bag-subtotal")).toHaveText("小计 $13.98");
   await card(page, "p-redbean").getByRole("button", { name: "增加一个" }).click();
-  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $16.47");
+  await expect(page.getByTestId("bag-subtotal")).toHaveText("小计 $16.47");
   await card(page, "p-cheese").getByRole("button", { name: "减少一个" }).click();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 5 件");
-  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $13.48");
+  await expect(page.getByTestId("bag-count")).toHaveText("已选 5 件");
+  await expect(page.getByTestId("bag-subtotal")).toHaveText("小计 $13.48");
 
   // persisted across reloads
   await page.reload();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 5 件");
+  await expect(page.getByTestId("bag-count")).toHaveText("已选 5 件");
 });
 
 test("home: paused card disabled, max reached, footer wechat, vanished items dropped", async ({ page }) => {
@@ -135,7 +135,7 @@ test("home: paused card disabled, max reached, footer wechat, vanished items dro
   await page.goto("/");
   await page.evaluate((key) => localStorage.setItem(key, JSON.stringify([{ productId: "gone", qty: 3 }, { productId: "p-redbean", qty: 1 }])), CART_KEY);
   await page.reload();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 1 件");
+  await expect(page.getByTestId("bag-count")).toHaveText("已选 1 件");
   expect(await page.evaluate((key) => localStorage.getItem(key), CART_KEY)).toBe(JSON.stringify([{ productId: "p-redbean", qty: 1 }]));
 
   const paused = card(page, "p-paused");
@@ -151,7 +151,7 @@ test("home: paused card disabled, max reached, footer wechat, vanished items dro
   await expect(card(page, "p-redbean").getByTestId("max-hint")).toHaveText("大量订购请加微信联系");
   await expect(page.getByTestId("footer-contact")).toHaveText("联系店主：微信 bunbunny_owner");
 
-  await page.getByTestId("go-checkout").click();
+  await page.getByTestId("bag-checkout").click();
   await expect(page).toHaveURL(/\/checkout$/);
   await expect(page.getByTestId("cart-line")).toHaveCount(1);
 });
@@ -162,8 +162,8 @@ test("home: ordering closed disables the bar button but allows adding", async ({
   await expect(page.getByText("暂未开放预订 🍞")).toBeVisible();
   await expect(page.getByText("下一轮预订开放时间请关注群内通知～")).toBeVisible();
   await card(page, "p-redbean").getByRole("button", { name: "增加一个" }).click();
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 1 件");
-  const button = page.getByTestId("go-checkout");
+  await expect(page.getByTestId("bag-count")).toHaveText("已选 1 件");
+  const button = page.getByTestId("bag-checkout");
   await expect(button).toHaveText("暂未开放预订");
   await expect(button).toBeDisabled();
 });

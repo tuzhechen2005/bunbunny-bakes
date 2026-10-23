@@ -31,7 +31,11 @@ flyToBag({ from: el.getBoundingClientRect(), imageUrl, productId }); // fire and
 const { ref, onArrive } = useBagTarget(); // in the bag; onArrive(cb) returns an unsubscribe fn
 ```
 
-Mount `<FlyLayer/>` (`components/customer/bag/FlyLayer.tsx`) once on a page that has a bag.
+`<FlyLayer/>` (`components/customer/bag/FlyLayer.tsx`) must be mounted once on any page that has a
+bag; `onArrive` only fires while it is mounted. The F2 task mounts it in `HomePage` next to
+`<BagBar/>`, whose `onIncrease(anchor)` callback path (QtyStepper -> ProductCard -> HomePage) calls
+`flyToBag` from the product photo. The detail view (F1) must call `flyToBag` too, but needs no
+second FlyLayer.
 Timing contract: about 0.6 s arc (`FLY_DURATION_MS`), fixed `pointer-events: none` overlay so
 clicks are never blocked, flights may overlap, the cart is updated by the caller at click time
 (not on arrival), `onArrive` is decoration only (bag swing, haptic). Under reduced motion the

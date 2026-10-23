@@ -1,11 +1,13 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { copy } from "@/copy";
-import { formatCents } from "@/domain/pricing";
 import type { MenuProduct } from "@/lib/api";
 import { cart, useCart } from "@/lib/cart";
-import { fill, safeLineTotal } from "./format";
+import { flyToBag } from "@/lib/flyToBag";
+import { BagBar } from "./bag/BagBar";
+import { FlyLayer } from "./bag/FlyLayer";
+import { safeLineTotal } from "./format";
 import { ProductCard } from "./ProductCard";
 import { SiteFooter } from "./SiteFooter";
 import { useMenu } from "./useMenu";
@@ -15,6 +17,7 @@ const t = copy.customer.home;
 export function HomePage() {
   const { status, menu, reload } = useMenu();
   const items = useCart();
+  const router = useRouter();
 
   const byId = new Map<string, MenuProduct>((menu?.products ?? []).map((p) => [p.id, p]));
   const known = items.filter((i) => byId.has(i.productId));
@@ -68,8 +71,15 @@ export function HomePage() {
                 qty={items.find((i) => i.productId === p.id)?.qty ?? 0}
                 max={menu.maxQtyPerItem}
                 onDecrease={() => cart.decrement(p.id)}
-                onIncrease={() => {
-                  if (p.status !== "PAUSED") cart.increment(p.id, menu.maxQtyPerItem);
+                onIncrease={(anchor) => {
+                  if (p.status === "PAUSED") return;
+                  cart.increment(p.id, menu.maxQtyPerItem);
+                  const photo = anchor.closest("li")?.querySelector("img, svg");
+                  flyToBag({
+                    from: (photo ?? anchor).getBoundingClientRect(),
+                    imageUrl: p.imageUrl,
+                    productId: p.id,
+                  });
                 }}
               />
             ))}
@@ -78,39 +88,14 @@ export function HomePage() {
         {menu ? <SiteFooter ownerWechatId={menu.ownerWechatId} /> : null}
       </main>
 
-      <div
-        className="fixed inset-x-0 bottom-0 z-10 border-t border-line bg-card/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur"
-        data-testid="cart-bar"
-      >
-        <div className="mx-auto flex max-w-xl items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm text-muted" data-testid="bar-count">
-              {fill(t.barCount, { count })}
-            </p>
-            <p className="text-lg font-semibold tabular-nums" data-testid="bar-subtotal">
-              {fill(t.barSubtotal, { amount: formatCents(subtotal) })}
-            </p>
-          </div>
-          {orderingEnabled && count > 0 ? (
-            <Link
-              href="/checkout"
-              className="flex min-h-12 items-center rounded-full bg-accent px-6 text-base font-semibold text-accent-ink active:bg-accent-strong"
-              data-testid="go-checkout"
-            >
-              {t.goCheckout}
-            </Link>
-          ) : (
-            <button
-              type="button"
-              disabled
-              className="min-h-12 rounded-full bg-disabled px-6 text-base font-semibold text-disabled-ink"
-              data-testid="go-checkout"
-            >
-              {menu && !orderingEnabled ? t.checkoutClosed : t.goCheckout}
-            </button>
-          )}
-        </div>
-      </div>
+      <BagBar
+        count={count}
+        subtotalCents={subtotal}
+        disabled={!(orderingEnabled && count > 0)}
+        closed={!!menu && !orderingEnabled}
+        onCheckout={() => router.push("/checkout")}
+      />
+      <FlyLayer />
     </div>
   );
 }

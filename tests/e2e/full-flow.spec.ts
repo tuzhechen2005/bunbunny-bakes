@@ -39,9 +39,9 @@ async function fillCart(page: Page) {
   await expect(card(page, "奶酥红豆包")).toBeVisible();
   await add(page, "奶酥红豆包", 4);
   await add(page, "奶酪角", 4);
-  await expect(page.getByTestId("bar-count")).toHaveText("已选 8 件");
-  await expect(page.getByTestId("bar-subtotal")).toHaveText("小计 $19.98");
-  await page.getByTestId("go-checkout").click();
+  await expect(page.getByTestId("bag-count")).toHaveText("已选 8 件");
+  await expect(page.getByTestId("bag-subtotal")).toHaveText("小计 $19.98");
+  await page.getByTestId("bag-checkout").click();
   await expect(page).toHaveURL(/\/checkout$/);
 }
 
@@ -235,7 +235,7 @@ test("6. ordering closed: home says so and checkout cannot submit", async ({ pag
 
   await page.goto("/");
   await expect(page.getByText(copy.home.orderingClosed)).toBeVisible();
-  const go = page.getByTestId("go-checkout");
+  const go = page.getByTestId("bag-checkout");
   await expect(go).toBeDisabled();
   await expect(go).toHaveText(copy.customer.home.checkoutClosed);
 

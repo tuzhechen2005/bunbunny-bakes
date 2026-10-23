@@ -19,7 +19,8 @@ export function QtyStepper({
   qty: number;
   canIncrease: boolean;
   onDecrease: () => void;
-  onIncrease: () => void;
+  /** Receives the clicked button so callers can start a fly-to-bag flight from it. */
+  onIncrease: (anchor: HTMLElement) => void;
 }) {
   return (
     <div className="flex items-center gap-1">
@@ -33,7 +34,7 @@ export function QtyStepper({
       >
         {qty}
       </span>
-      <button type="button" className={btn} aria-label={t.increase} disabled={!canIncrease} onClick={onIncrease}>
+      <button type="button" className={btn} aria-label={t.increase} disabled={!canIncrease} onClick={(e) => onIncrease(e.currentTarget)}>
         +
       </button>
     </div>

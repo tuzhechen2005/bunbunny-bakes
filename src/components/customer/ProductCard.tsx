@@ -29,7 +29,7 @@ export function ProductCard({
   qty: number;
   max: number;
   onDecrease: () => void;
-  onIncrease: () => void;
+  onIncrease: (anchor: HTMLElement) => void;
 }) {
   const paused = product.status === "PAUSED";
   const atMax = qty >= max;
