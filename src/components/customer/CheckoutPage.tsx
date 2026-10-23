@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { copy } from "@/copy";
 import { dayLabel } from "@/domain/dates";
 import { formatCents } from "@/domain/pricing";
@@ -16,15 +16,21 @@ import {
   type MenuProduct,
 } from "@/lib/api";
 import { cart, useCart, useHydrated } from "@/lib/cart";
+import { useMotionPrefs } from "@/lib/motion/react";
+import { FieldError } from "./checkout/FieldError";
+import { RollNumber } from "./checkout/RollNumber";
 import { breakdownText, fill, formatDollars } from "./format";
 import { ProductPhoto } from "./ProductCard";
-import { QtyStepper } from "./QtyStepper";
 import { SiteFooter } from "./SiteFooter";
 import { useMenu } from "./useMenu";
 
 const t = copy.customer.checkout;
+const home = copy.customer.home;
 const WECHAT_MAX = 40;
 const NOTE_MAX = 300;
+const EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
+/** sessionStorage key the order page reads to draw the bag (G4). */
+const LAST_BAG_KEY = "bunbunny:lastBag";
 
 type AvailState =
   | { status: "idle" | "loading" | "error"; data: Availability | null }
@@ -34,10 +40,11 @@ interface SubmitError {
   message: string;
   /** FULL: the suggested date (YYYY-MM-DD). */
   suggestion?: string;
+  /** Which block shows it: the date block, or just above the submit button. */
+  where: "date" | "submit";
 }
 
-const sectionClass = "rounded-2xl border border-line bg-card p-4";
-const sectionTitle = "mb-3 text-base font-semibold";
+const focusRing = "focus-visible:outline-[2.5px] focus-visible:outline-offset-[3px] focus-visible:outline-c-red";
 
 function safeDayLabel(date: string): string {
   try {
@@ -47,13 +54,74 @@ function safeDayLabel(date: string): string {
   }
 }
 
+/** "10/30 周五" -> ["10/30", "周五"] (display only). */
+function splitDayLabel(date: string): [string, string] {
+  const label = safeDayLabel(date);
+  const i = label.indexOf(" ");
+  return i < 0 ? [label, ""] : [label.slice(0, i), label.slice(i + 1)];
+}
+
+function Icon({ children }: { children: ReactNode }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-[18px] w-[18px]"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {children}
+    </svg>
+  );
+}
+
+/** Numbered block (prototype `.blk`): number, title, optional note on the right. */
+function Block({
+  n,
+  title,
+  note,
+  noteTestId,
+  testId,
+  children,
+}: {
+  n: number;
+  title: string;
+  note?: string;
+  noteTestId?: string;
+  testId?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="mt-[34px]" data-rise="" data-testid={testId}>
+      <h2 className="mb-3.5 flex items-baseline gap-2.5 font-display text-[19px] leading-[1.2] tracking-[-0.02em]">
+        <span className="w-3.5 font-num text-[15px] font-semibold text-c-grey" aria-hidden="true">
+          {n}
+        </span>
+        {title}
+        {note ? (
+          <small className="ml-auto font-sans text-[12.5px] leading-none font-medium tracking-normal text-c-grey" data-testid={noteTestId}>
+            {note}
+          </small>
+        ) : null}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
 function DateCard({
   option,
   selected,
+  reduced,
   onSelect,
 }: {
   option: DateOption;
   selected: boolean;
+  reduced: boolean;
   onSelect: () => void;
 }) {
   const available = option.state === "AVAILABLE";
@@ -65,27 +133,105 @@ function DateCard({
         : option.state === "FULL"
           ? t.stateFull
           : t.stateDeliveryFull;
+  const [md, weekday] = splitDayLabel(option.date);
+  // Closed days (cutoff, full) strike the date through; delivery-only-full stays readable.
+  const struck = option.state === "CUTOFF" || option.state === "FULL";
   const tone = available
     ? selected
-      ? "border-accent bg-soft ring-2 ring-accent"
-      : "border-line bg-card"
-    : option.state === "DELIVERY_FULL"
-      ? "border-line bg-card opacity-70"
-      : "border-line bg-soft text-disabled-ink opacity-70";
+      ? "border-c-ink bg-c-ink text-c-paper"
+      : "border-c-line bg-c-paper text-c-ink"
+    : "cursor-not-allowed border-c-wash bg-c-wash text-c-grey/70";
   return (
     <button
       type="button"
-      className={`flex min-h-16 flex-col items-start justify-center rounded-xl border px-3 py-2 text-left ${tone}`}
+      className={`flex min-h-[112px] w-[100px] flex-none flex-col items-start justify-between rounded-[20px] border-[1.5px] px-3.5 pt-3.5 pb-[13px] text-left transition-[background-color,border-color,color,transform] duration-[250ms] ${tone} ${available ? "active:scale-[0.96] motion-reduce:active:scale-100" : ""} ${focusRing}`}
       disabled={!available}
       aria-pressed={selected}
-      onClick={onSelect}
+      onClick={(e) => {
+        const el = e.currentTarget;
+        if (!reduced && typeof el.animate === "function") {
+          el.animate([{ transform: "scale(.94)" }, { transform: "scale(1.03)", offset: 0.5 }, { transform: "none" }], {
+            duration: 360,
+            easing: EASE,
+          });
+        }
+        onSelect();
+      }}
       data-testid="date-card"
       data-date={option.date}
       data-state={option.state}
     >
-      <span className="text-base font-semibold">{safeDayLabel(option.date)}</span>
-      <span className={`text-xs ${available ? "text-muted" : ""}`}>{stateText}</span>
+      <span className={`font-num text-[27px] leading-none font-bold ${struck ? "line-through decoration-2" : ""}`}>{md}</span>
+      {" "}
+      <span className="text-sm leading-none font-bold">{weekday}</span>
+      <small className={`text-[11.5px] leading-tight font-medium ${available ? (selected ? "text-c-paper/65" : "text-c-grey") : ""}`}>
+        {stateText}
+      </small>
     </button>
+  );
+}
+
+function RoundButton({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className={`grid h-11 w-11 place-items-center rounded-full text-c-ink transition-transform duration-[180ms] active:scale-95 disabled:opacity-35 motion-reduce:active:scale-100 ${focusRing}`}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <span className="grid h-8 w-8 place-items-center rounded-full border-[1.5px] border-c-line">{children}</span>
+    </button>
+  );
+}
+
+/** − qty + for a cart line, 44px touch targets. */
+function LineStepper({
+  qty,
+  canIncrease,
+  onDecrease,
+  onIncrease,
+}: {
+  qty: number;
+  canIncrease: boolean;
+  onDecrease: () => void;
+  onIncrease: () => void;
+}) {
+  return (
+    <div className="flex shrink-0 items-center">
+      <RoundButton label={home.decrease} disabled={qty <= 0} onClick={onDecrease}>
+        <Icon>
+          <path d="M5 12h14" />
+        </Icon>
+      </RoundButton>
+      <span className="min-w-5 text-center font-num text-base font-bold" aria-label={fill(home.qtyLabel, { qty })} data-testid="qty">
+        {qty}
+      </span>
+      <RoundButton label={home.increase} disabled={!canIncrease} onClick={onIncrease}>
+        <Icon>
+          <path d="M12 5v14M5 12h14" />
+        </Icon>
+      </RoundButton>
+    </div>
+  );
+}
+
+/** White page in the centred 430px column (the desktop shows the same column). */
+function Shell({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-1 flex-col bg-c-wash text-c-ink">
+      <div className="mx-auto flex w-full max-w-[430px] flex-1 flex-col overflow-x-clip bg-c-paper">{children}</div>
+    </div>
   );
 }
 
@@ -94,6 +240,7 @@ export function CheckoutPage() {
   const { status: menuStatus, menu, reload: reloadMenu } = useMenu();
   const items = useCart();
   const hydrated = useHydrated();
+  const { reduced } = useMotionPrefs();
 
   const [fulfillment, setFulfillment] = useState<Fulfillment>("PICKUP");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -104,15 +251,28 @@ export function CheckoutPage() {
   const [website, setWebsite] = useState("");
   const [wechatError, setWechatError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<SubmitError | null>(null);
+  // Bumped whenever an error is raised, so the error line shakes again even with the same text.
+  const [errorSeq, setErrorSeq] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
   const submittingRef = useRef(false);
   const keyRef = useRef<string>("");
   const availSeq = useRef(0);
+  const pageRef = useRef<HTMLDivElement>(null);
 
   const cartKey = JSON.stringify(items);
   const menuReady = menuStatus === "ready";
+  const showForm = hydrated && menuReady && !!menu && items.length > 0 && !submitted;
+
+  const raiseSubmitError = (error: SubmitError) => {
+    setSubmitError(error);
+    setErrorSeq((n) => n + 1);
+  };
+  const raiseWechatError = (message: string) => {
+    setWechatError(message);
+    setErrorSeq((n) => n + 1);
+  };
 
   // One idempotency key per submission: new on mount and whenever cart, date or fulfillment change.
   useEffect(() => {
@@ -143,52 +303,88 @@ export function CheckoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartKey, fulfillment, menuReady, availTick]);
 
+  // Blocks rise in one after another when the form first shows (reduced motion: fade only).
+  useEffect(() => {
+    if (!showForm) return;
+    const nodes = pageRef.current?.querySelectorAll<HTMLElement>("[data-rise]");
+    nodes?.forEach((node, k) => {
+      if (typeof node.animate !== "function") return;
+      node.animate(
+        [
+          { opacity: 0, transform: reduced ? "none" : "translateY(16px)" },
+          { opacity: 1, transform: "none" },
+        ],
+        { duration: 480, delay: 80 + k * 60, easing: EASE, fill: "backwards" },
+      );
+    });
+    // Once per appearance of the form, not on every motion-pref change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showForm]);
+
+  // Keep the chosen date card in view in the horizontal list (e.g. after "switch to this date").
+  useEffect(() => {
+    if (!selectedDate) return;
+    const card = pageRef.current?.querySelector<HTMLElement>(`[data-testid="date-card"][data-date="${selectedDate}"]`);
+    if (card && typeof card.scrollIntoView === "function") {
+      card.scrollIntoView({ block: "nearest", inline: "nearest", behavior: reduced ? "auto" : "smooth" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
+
   const requery = () => setAvailTick((n) => n + 1);
 
   if (submitted) {
     return (
-      <main className="flex flex-1 items-center justify-center p-8 text-muted">
-        <p role="status">{t.submitting}</p>
-      </main>
+      <Shell>
+        <main className="flex flex-1 items-center justify-center p-8 text-c-grey">
+          <p role="status">{t.submitting}</p>
+        </main>
+      </Shell>
     );
   }
 
   if (!hydrated || menuStatus === "loading") {
     return (
-      <main className="flex flex-1 items-center justify-center p-8 text-muted">
-        <p>{copy.customer.home.loading}</p>
-      </main>
+      <Shell>
+        <main className="flex flex-1 items-center justify-center p-8 text-c-grey">
+          <p>{copy.customer.home.loading}</p>
+        </main>
+      </Shell>
     );
   }
 
   if (menuStatus === "error" || !menu) {
     return (
-      <main className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-        <p role="alert" className="text-danger">
-          {copy.customer.home.loadFailed}
-        </p>
-        <button
-          type="button"
-          className="min-h-11 rounded-full border border-accent px-5 text-accent"
-          onClick={reloadMenu}
-        >
-          {copy.customer.home.retry}
-        </button>
-      </main>
+      <Shell>
+        <main className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+          <p role="alert" className="font-semibold text-c-red">
+            {copy.customer.home.loadFailed}
+          </p>
+          <button
+            type="button"
+            className={`min-h-11 rounded-full border-[1.5px] border-c-ink px-5 font-bold ${focusRing}`}
+            onClick={reloadMenu}
+          >
+            {copy.customer.home.retry}
+          </button>
+        </main>
+      </Shell>
     );
   }
 
   if (items.length === 0) {
     return (
-      <main className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center" data-testid="empty-cart">
-        <p className="text-lg">{t.emptyCart}</p>
-        <Link
-          href="/"
-          className="flex min-h-11 items-center rounded-full bg-accent px-6 font-semibold text-accent-ink"
-        >
-          {t.emptyCartLink}
-        </Link>
-      </main>
+      <Shell>
+        <main className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center" data-testid="empty-cart">
+          <p className="font-display text-xl">{t.emptyCart}</p>
+          <Link
+            href="/"
+            className={`flex min-h-11 items-center rounded-full bg-c-ink px-6 font-bold text-c-paper ${focusRing}`}
+          >
+            {t.emptyCartLink}
+          </Link>
+        </main>
+      </Shell>
     );
   }
 
@@ -217,11 +413,11 @@ export function CheckoutPage() {
     const trimmed = wechatId.trim();
     let invalid = false;
     if (!trimmed) {
-      setWechatError(t.wechatRequired);
+      raiseWechatError(t.wechatRequired);
       invalid = true;
     }
     if (!selectedDate) {
-      setSubmitError({ message: t.pickDate });
+      raiseSubmitError({ message: t.pickDate, where: "date" });
       invalid = true;
     }
     if (invalid || !selectedDate) return;
@@ -239,6 +435,18 @@ export function CheckoutPage() {
     });
 
     if (result.ok) {
+      // Best effort: the order page draws the ordered bread in the bag (G4). Never blocks the redirect.
+      try {
+        sessionStorage.setItem(
+          LAST_BAG_KEY,
+          JSON.stringify({
+            orderNo: result.data.orderNo,
+            items: lines.map((l) => ({ name: l.product.name, imageUrl: l.product.imageUrl, qty: l.qty })),
+          }),
+        );
+      } catch {
+        /* storage unavailable (private mode, quota): the order page falls back */
+      }
       setSubmitted(true);
       keyRef.current = uuidV4();
       cart.clear();
@@ -251,208 +459,246 @@ export function CheckoutPage() {
     const err = result.error;
     if (err.error === "NETWORK") {
       // No response: the order may exist; retry with the same key.
-      setSubmitError({ message: copy.errors.fallback });
+      raiseSubmitError({ message: copy.errors.fallback, where: "submit" });
       return;
     }
     requery();
     switch (err.error) {
       case "FULL":
-        setSubmitError(
+        raiseSubmitError(
           typeof err.suggestion === "string" && err.suggestion
-            ? { message: copy.errors.FULL, suggestion: err.suggestion }
-            : { message: copy.errors.FULL_NO_SUGGESTION },
+            ? { message: copy.errors.FULL, suggestion: err.suggestion, where: "date" }
+            : { message: copy.errors.FULL_NO_SUGGESTION, where: "date" },
         );
         break;
       case "DELIVERY_FULL":
       case "CUTOFF_PASSED":
+      case "DATE_CLOSED":
+        raiseSubmitError({ message: copy.errors[err.error], where: "date" });
+        break;
       case "ORDERING_DISABLED":
       case "RATE_LIMITED":
       case "PRODUCT_UNAVAILABLE":
       case "QTY_LIMIT":
-      case "DATE_CLOSED":
-        setSubmitError({ message: copy.errors[err.error] });
+        raiseSubmitError({ message: copy.errors[err.error], where: "submit" });
         break;
       case "VALIDATION":
         // The server rejects a reused key with different contents: always start a new one.
         keyRef.current = uuidV4();
-        if (err.fields?.wechatId) setWechatError(err.fields.wechatId);
-        else setSubmitError({ message: copy.errors.fallback });
+        if (err.fields?.wechatId) raiseWechatError(err.fields.wechatId);
+        else raiseSubmitError({ message: copy.errors.fallback, where: "submit" });
         break;
       default:
-        setSubmitError({ message: copy.errors.fallback });
+        raiseSubmitError({ message: copy.errors.fallback, where: "submit" });
     }
   }
 
+  const delivery = fulfillment === "DELIVERY";
+  const dateError = submitError?.where === "date" ? submitError : null;
+  const bottomError = submitError?.where === "submit" ? submitError : null;
+
   return (
-    <div className="flex flex-1 flex-col">
-      <header className="px-4 pt-4 pb-2">
-        <Link href="/" className="inline-flex min-h-11 items-center text-sm text-muted">
-          {t.backToMenu}
-        </Link>
-        <h1 className="text-2xl font-bold">{t.pageTitle}</h1>
+    <Shell>
+      <main ref={pageRef} className="flex flex-1 flex-col px-5 pb-[calc(30px+env(safe-area-inset-bottom))]">
+        <div className="-mx-2.5 flex h-[62px] items-center">
+          <Link
+            href="/"
+            className={`grid h-11 w-11 place-items-center rounded-full text-c-ink ${focusRing}`}
+            aria-label={t.backToMenu}
+          >
+            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+          </Link>
+        </div>
+        <h1 className="mt-1.5 font-display text-[38px] leading-[1.1] tracking-[-0.05em]">{t.pageTitle}</h1>
         {!orderingEnabled ? (
-          <p className="mt-1 text-sm font-medium" data-testid="ordering-closed">
+          <p className="mt-2.5 text-sm font-semibold text-c-red" data-testid="ordering-closed">
             {copy.home.orderingClosed}
           </p>
         ) : null}
-      </header>
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-4 px-4 pb-8" noValidate>
-        {/* 1. Cart lines */}
-        <section className={sectionClass}>
-          <h2 className={sectionTitle}>{t.cartTitle}</h2>
-          <ul className="flex flex-col divide-y divide-line">
+        <form onSubmit={onSubmit} className="flex flex-col" noValidate>
+          {/* Cart lines */}
+          <ul className="mt-6 flex flex-col divide-y divide-c-line" aria-label={t.cartTitle} data-rise="">
             {lines.map(({ productId, qty, product }) => {
               const problem = problems.get(productId);
               const unavailable = product.status === "PAUSED" || problem === "PRODUCT_UNAVAILABLE";
               const overLimit = problem === "QTY_LIMIT" || qty > menu.maxQtyPerItem;
               const atMax = qty >= menu.maxQtyPerItem;
               return (
-                <li key={productId} className="flex gap-3 py-3" data-testid="cart-line" data-product-id={productId}>
-                  <ProductPhoto product={product} className="h-14 w-14 shrink-0 overflow-hidden rounded-lg" />
+                <li key={productId} className="flex items-center gap-3 py-3" data-testid="cart-line" data-product-id={productId}>
+                  <ProductPhoto
+                    product={product}
+                    className={`h-14 w-14 shrink-0 overflow-hidden rounded-[14px] ${unavailable ? "opacity-50 grayscale" : ""}`}
+                  />
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium break-words">{fill(t.lineName, { name: product.name, qty })}</p>
-                    <p className="text-sm text-muted tabular-nums" data-testid="line-breakdown">
+                    <p className="text-[15px] leading-snug font-bold break-words">{fill(t.lineName, { name: product.name, qty })}</p>
+                    <p className="font-num text-[13px] leading-snug font-semibold text-c-grey" data-testid="line-breakdown">
                       {breakdownText(qty, product)}
                     </p>
                     {unavailable ? (
-                      <div className="mt-1 flex items-center gap-3">
-                        <span className="text-sm text-danger">{copy.customer.home.paused}</span>
-                        <button
-                          type="button"
-                          className="min-h-11 px-2 text-sm text-accent underline"
-                          onClick={() => cart.remove(productId)}
-                        >
-                          {t.remove}
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="mt-1 flex justify-end">
-                          <QtyStepper
-                            qty={qty}
-                            canIncrease={!atMax}
-                            onDecrease={() => cart.decrement(productId)}
-                            onIncrease={() => cart.increment(productId, menu.maxQtyPerItem)}
-                          />
-                        </div>
-                        {overLimit || atMax ? (
-                          <p className="text-right text-xs text-danger">{copy.customer.home.maxReached}</p>
-                        ) : null}
-                      </>
-                    )}
+                      <p className="text-xs font-semibold text-c-red">{home.paused}</p>
+                    ) : overLimit || atMax ? (
+                      <p className="text-xs font-semibold text-c-red">{home.maxReached}</p>
+                    ) : null}
                   </div>
+                  {unavailable ? (
+                    <button
+                      type="button"
+                      className={`min-h-11 shrink-0 px-2 text-sm font-bold underline ${focusRing}`}
+                      onClick={() => cart.remove(productId)}
+                    >
+                      {t.remove}
+                    </button>
+                  ) : (
+                    <LineStepper
+                      qty={qty}
+                      canIncrease={!atMax}
+                      onDecrease={() => cart.decrement(productId)}
+                      onIncrease={() => cart.increment(productId, menu.maxQtyPerItem)}
+                    />
+                  )}
                 </li>
               );
             })}
           </ul>
-        </section>
 
-        {/* 2. Dates */}
-        <section className={sectionClass} data-testid="dates">
-          <h2 className={sectionTitle}>{t.datesTitle}</h2>
-          {needsLeadHint ? (
-            <p className="mb-3 rounded-lg bg-soft px-3 py-2 text-sm" data-testid="lead-hint">
-              {t.leadDaysHint}
-            </p>
-          ) : null}
-          {data ? (
-            data.dates.length === 0 ? (
-              <p className="text-sm text-muted" data-testid="no-dates">
-                {t.noDates}
-              </p>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {data.dates.map((d) => (
-                  <DateCard
-                    key={d.date}
-                    option={d}
-                    selected={selectedDate === d.date}
-                    onSelect={() => {
-                      setSelectedDate(d.date);
+          {/* 1. Dates */}
+          <Block
+            n={1}
+            title={t.datesTitle}
+            note={needsLeadHint ? t.leadDaysHint : undefined}
+            noteTestId="lead-hint"
+            testId="dates"
+          >
+            {data ? (
+              data.dates.length === 0 ? (
+                <p className="text-sm text-c-grey" data-testid="no-dates">
+                  {t.noDates}
+                </p>
+              ) : (
+                <div className="-mx-5 flex gap-2.5 overflow-x-auto px-5 pt-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {data.dates.map((d) => (
+                    <DateCard
+                      key={d.date}
+                      option={d}
+                      selected={selectedDate === d.date}
+                      reduced={reduced}
+                      onSelect={() => {
+                        setSelectedDate(d.date);
+                        setSubmitError(null);
+                      }}
+                    />
+                  ))}
+                </div>
+              )
+            ) : avail.status === "error" ? null : (
+              <p className="text-sm text-c-grey">{t.datesLoading}</p>
+            )}
+            {avail.status === "error" ? (
+              <div className="mt-2 flex items-center gap-3">
+                <p role="alert" className="text-sm font-semibold text-c-red">
+                  {t.datesFailed}
+                </p>
+                <button type="button" className={`min-h-11 px-2 text-sm font-bold underline ${focusRing}`} onClick={requery}>
+                  {t.retry}
+                </button>
+              </div>
+            ) : null}
+            {dateError ? (
+              <FieldError message={dateError.message} seq={errorSeq} testId="submit-error">
+                {dateError.suggestion ? (
+                  <button
+                    type="button"
+                    className={`mt-2 min-h-11 rounded-full border-[1.5px] border-c-red px-4 text-sm font-bold text-c-red ${focusRing}`}
+                    data-testid="suggestion"
+                    onClick={() => {
+                      setSelectedDate(dateError.suggestion!);
                       setSubmitError(null);
                     }}
-                  />
-                ))}
-              </div>
-            )
-          ) : avail.status === "error" ? null : (
-            <p className="text-sm text-muted">{t.datesLoading}</p>
-          )}
-          {avail.status === "error" ? (
-            <div className="mt-2 flex items-center gap-3">
-              <p role="alert" className="text-sm text-danger">
-                {t.datesFailed}
-              </p>
-              <button type="button" className="min-h-11 px-2 text-sm text-accent underline" onClick={requery}>
-                {t.retry}
-              </button>
+                  >
+                    {fill(t.switchDate, { day: safeDayLabel(dateError.suggestion) })}
+                  </button>
+                ) : null}
+              </FieldError>
+            ) : null}
+          </Block>
+
+          {/* 2. Pickup or delivery */}
+          <Block n={2} title={t.fulfillmentTitle}>
+            <div
+              role="radiogroup"
+              className="relative grid h-[58px] grid-cols-2 rounded-[18px] bg-c-wash p-1"
+            >
+              <i
+                aria-hidden="true"
+                className="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-[14px] bg-c-paper shadow-[0_2px_10px_rgba(0,0,0,0.08)] transition-transform duration-[450ms] ease-[var(--ease)] motion-reduce:transition-none"
+                style={{ transform: delivery ? "translateX(100%)" : "none" }}
+              />
+              {(["PICKUP", "DELIVERY"] as const).map((f) => {
+                const checked = fulfillment === f;
+                return (
+                  <label
+                    key={f}
+                    className={`relative flex cursor-pointer items-center justify-center rounded-[14px] text-base font-bold transition-colors duration-300 has-[:focus-visible]:outline-[2.5px] has-[:focus-visible]:outline-offset-[3px] has-[:focus-visible]:outline-c-red ${checked ? "text-c-ink" : "text-c-grey"}`}
+                  >
+                    <input
+                      type="radio"
+                      name="fulfillment"
+                      value={f}
+                      checked={checked}
+                      onChange={() => setFulfillment(f)}
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    />
+                    {f === "PICKUP" ? t.pickup : t.delivery}
+                  </label>
+                );
+              })}
             </div>
-          ) : null}
-        </section>
-
-        {/* 3. Pickup or delivery */}
-        <section className={sectionClass}>
-          <h2 className={sectionTitle}>{t.fulfillmentTitle}</h2>
-          <div className="flex flex-col gap-2" role="radiogroup">
-            {(["PICKUP", "DELIVERY"] as const).map((f) => {
-              const checked = fulfillment === f;
-              return (
-                <label
-                  key={f}
-                  className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${checked ? "border-accent bg-soft" : "border-line"}`}
-                >
-                  <input
-                    type="radio"
-                    name="fulfillment"
-                    value={f}
-                    checked={checked}
-                    onChange={() => setFulfillment(f)}
-                    className="mt-1 h-5 w-5 shrink-0 accent-[var(--accent)]"
-                  />
-                  <span className="flex min-w-0 flex-col gap-1">
-                    <span className="font-medium">{f === "PICKUP" ? t.pickup : t.delivery}</span>
-                    {f === "PICKUP" ? (
-                      <span className="text-sm break-words text-muted" data-testid="pickup-note">
-                        {menu.pickupNote}
-                      </span>
-                    ) : (
+            <div className="mt-2.5 text-[13px] leading-[1.55] text-c-grey">
+              {delivery ? (
+                <>
+                  <p>
+                    <span data-testid="delivery-fee">
+                      {fill(t.deliveryFee, {
+                        fee: formatDollars(menu.deliveryFeeCents),
+                        min: formatDollars(menu.freeDeliveryMinCents),
+                      })}
+                    </span>
+                    {gap > 0 ? (
                       <>
-                        <span className="text-sm text-muted" data-testid="delivery-fee">
-                          {fill(t.deliveryFee, {
-                            fee: formatDollars(menu.deliveryFeeCents),
-                            min: formatDollars(menu.freeDeliveryMinCents),
-                          })}
-                        </span>
-                        {gap > 0 ? (
-                          <span className="text-sm text-accent-strong" data-testid="delivery-gap">
-                            {fill(t.freeDeliveryGap, { gap: formatCents(gap) })}
-                          </span>
-                        ) : null}
-                        <span className="text-sm text-muted">{t.deliveryArrange}</span>
+                        {t.deliveryGapJoin}
+                        <b className="font-bold text-c-red" data-testid="delivery-gap">
+                          {fill(t.freeDeliveryGap, { gap: formatCents(gap) })}
+                        </b>
                       </>
-                    )}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-        </section>
+                    ) : null}
+                  </p>
+                  <p>{t.deliveryArrange}</p>
+                </>
+              ) : (
+                <p className="break-words" data-testid="pickup-note">
+                  {menu.pickupNote}
+                </p>
+              )}
+            </div>
+          </Block>
 
-        {/* 4. WeChat ID */}
-        <section className={sectionClass}>
-          <label className="flex flex-col gap-1">
-            <span className="text-base font-semibold">{t.wechatLabel}</span>
-            <span className="text-sm text-muted">{t.wechatHint}</span>
+          {/* 3. WeChat ID */}
+          <Block n={3} title={t.wechatLabel}>
             <input
               name="wechatId"
-              className="mt-1 min-h-12 w-full rounded-lg border border-line bg-background px-3 text-base focus:border-accent focus:outline-none"
+              aria-label={t.wechatLabel}
+              placeholder={t.wechatHint}
+              className="w-full rounded-none border-0 border-b-2 border-c-ink bg-transparent pt-2 pb-2.5 text-[21px] leading-[1.3] font-semibold text-c-ink outline-none transition-colors placeholder:font-medium placeholder:text-c-grey/50 focus:border-c-red"
               value={wechatId}
               maxLength={WECHAT_MAX}
               required
               autoComplete="off"
               autoCapitalize="none"
               autoCorrect="off"
+              spellCheck={false}
               aria-invalid={wechatError ? true : undefined}
               aria-describedby={wechatError ? "wechat-error" : undefined}
               onChange={(e) => {
@@ -460,99 +706,81 @@ export function CheckoutPage() {
                 setWechatError(null);
               }}
             />
-          </label>
-          {wechatError ? (
-            <p id="wechat-error" role="alert" className="mt-1 text-sm text-danger" data-testid="wechat-error">
-              {wechatError}
-            </p>
-          ) : null}
-        </section>
+            {wechatError ? (
+              <FieldError
+                id="wechat-error"
+                message={wechatError}
+                seq={errorSeq}
+                scroll={!dateError}
+                testId="wechat-error"
+              />
+            ) : null}
+          </Block>
 
-        {/* 5. Note */}
-        <section className={sectionClass}>
-          <label className="flex flex-col gap-1">
-            <span className="text-base font-semibold">{t.noteLabel}</span>
+          {/* 4. Note */}
+          <Block n={4} title={t.noteLabel} note={t.noteOptional}>
             <textarea
               name="note"
+              aria-label={t.noteLabel}
               rows={3}
-              className="mt-1 w-full rounded-lg border border-line bg-background px-3 py-2 text-base focus:border-accent focus:outline-none"
+              className="min-h-[92px] w-full resize-none rounded-2xl border-[1.5px] border-c-line px-3.5 py-3 text-base leading-normal text-c-ink outline-none transition-colors focus:border-c-ink"
               value={note}
               maxLength={NOTE_MAX}
               onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
             />
-          </label>
-          <p className="mt-1 text-right text-xs text-muted tabular-nums" data-testid="note-counter">
-            {fill(t.noteCounter, { count: note.length, max: NOTE_MAX })}
-          </p>
-        </section>
+            <p className="mt-1.5 text-right text-xs text-c-grey tabular-nums" data-testid="note-counter">
+              {fill(t.noteCounter, { count: note.length, max: NOTE_MAX })}
+            </p>
+          </Block>
 
-        {/* Honeypot for bots: hidden from people and assistive tech. */}
-        <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", width: 1, height: 1, overflow: "hidden" }}>
-          <input
-            type="text"
-            name="website"
-            tabIndex={-1}
-            autoComplete="off"
-            aria-hidden="true"
-            value={website}
-            onChange={(e) => setWebsite(e.target.value)}
-          />
-        </div>
-
-        {/* 6. Totals (server-computed, display only) */}
-        <section className={sectionClass} data-testid="totals">
-          <h2 className={sectionTitle}>{t.totalsTitle}</h2>
-          {data ? (
-            <dl className="flex flex-col gap-1 text-sm tabular-nums">
-              <div className="flex justify-between">
-                <dt>{t.subtotal}</dt>
-                <dd data-testid="total-subtotal">{formatCents(data.pricing.subtotalCents)}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt>{t.deliveryFeeLabel}</dt>
-                <dd data-testid="total-fee">{formatCents(data.pricing.deliveryFeeCents)}</dd>
-              </div>
-              <div className="flex justify-between text-base font-semibold">
-                <dt>{t.total}</dt>
-                <dd data-testid="total-total">{formatCents(data.pricing.totalCents)}</dd>
-              </div>
-            </dl>
-          ) : (
-            <p className="text-sm text-muted">{t.datesLoading}</p>
-          )}
-        </section>
-
-        <p className="text-center text-sm">{t.payLater}</p>
-
-        {submitError ? (
-          <div role="alert" className="rounded-xl bg-soft p-3 text-sm text-danger" data-testid="submit-error">
-            <p>{submitError.message}</p>
-            {submitError.suggestion ? (
-              <button
-                type="button"
-                className="mt-2 min-h-11 rounded-full border border-accent px-4 font-medium text-accent"
-                data-testid="suggestion"
-                onClick={() => {
-                  setSelectedDate(submitError.suggestion!);
-                  setSubmitError(null);
-                }}
-              >
-                {fill(t.switchDate, { day: safeDayLabel(submitError.suggestion) })}
-              </button>
-            ) : null}
+          {/* Honeypot for bots: hidden from people and assistive tech. */}
+          <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", width: 1, height: 1, overflow: "hidden" }}>
+            <input
+              type="text"
+              name="website"
+              tabIndex={-1}
+              autoComplete="off"
+              aria-hidden="true"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+            />
           </div>
-        ) : null}
 
-        <button
-          type="submit"
-          className="min-h-12 w-full rounded-full bg-accent text-base font-semibold text-accent-ink active:bg-accent-strong disabled:bg-disabled disabled:text-disabled-ink"
-          disabled={submitting || !orderingEnabled || hasCartProblem}
-          data-testid="submit"
-        >
-          {submitting ? t.submitting : t.submit}
-        </button>
-      </form>
-      <SiteFooter ownerWechatId={menu.ownerWechatId} />
-    </div>
+          {/* Totals (server-computed, display only) */}
+          <section className="mt-[34px] border-t-[1.5px] border-c-ink pt-[18px]" data-rise="" data-testid="totals">
+            {data ? (
+              <>
+                {delivery ? (
+                  <div className="flex items-baseline justify-between text-[15px] leading-8">
+                    <span>{t.deliveryFeeLabel}</span>
+                    <RollNumber value={formatCents(data.pricing.deliveryFeeCents)} className="font-num font-semibold" testId="total-fee" />
+                  </div>
+                ) : null}
+                <div className="mt-1.5 flex items-baseline justify-between font-display text-lg leading-none">
+                  <span>{t.total}</span>
+                  <RollNumber value={formatCents(data.pricing.totalCents)} className="font-num text-[40px] leading-[1.15] font-bold" testId="total-total" />
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-c-grey">{t.datesLoading}</p>
+            )}
+          </section>
+
+          <p className="mt-3.5 mb-[18px] text-[13px] leading-normal text-c-grey">{t.payLater}</p>
+
+          {bottomError ? <FieldError message={bottomError.message} seq={errorSeq} testId="submit-error" /> : null}
+
+          <button
+            type="submit"
+            className={`mt-3 flex h-[58px] w-full items-center justify-center rounded-[29px] bg-c-ink text-base leading-none font-bold text-c-paper transition-transform duration-[180ms] active:scale-95 disabled:opacity-35 motion-reduce:active:scale-100 ${focusRing}`}
+            disabled={submitting || !orderingEnabled || hasCartProblem}
+            data-testid="submit"
+          >
+            {submitting ? t.submitting : t.submit}
+          </button>
+        </form>
+        <SiteFooter ownerWechatId={menu.ownerWechatId} />
+      </main>
+    </Shell>
   );
 }
