@@ -27,9 +27,11 @@ import {
   db,
   resetDb,
 } from "./helpers";
+import { testDirectDatabaseUrl } from "./testDbUrl";
 
 const ADMIN_ENV = { ADMIN_USERNAME: "owner", ADMIN_INITIAL_PASSWORD: "correct-horse-42" };
-const CHILD_ENV = { ...process.env, DATABASE_URL: TEST_DATABASE_URL, DIRECT_URL: TEST_DATABASE_URL };
+// The CLI gets the direct URL (Neon: non-pooled), as in production; locally both are the same.
+const CHILD_ENV = { ...process.env, DATABASE_URL: TEST_DATABASE_URL, DIRECT_URL: testDirectDatabaseUrl() };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 

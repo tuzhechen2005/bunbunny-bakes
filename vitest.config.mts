@@ -9,6 +9,11 @@ const alias = { "@": fileURLToPath(new URL("./src", import.meta.url)) };
 // (same default as tests/db/testDbUrl.ts).
 const testDbUrl =
   process.env.TEST_DATABASE_URL || "postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_test";
+// Optional direct (non-pooled) URL of the same database, for the Prisma CLI (Neon: DIRECT_URL).
+const testDirectUrl = process.env.TEST_DIRECT_DATABASE_URL || testDbUrl;
+// DB_TEST_TIMEOUT_SCALE (default 1) stretches db-test timeouts for a remote database;
+// per-test timeouts use dbTimeout() from tests/db/testDbUrl.ts. Validated there too.
+const timeoutScale = Number(process.env.DB_TEST_TIMEOUT_SCALE || 1);
 
 export default defineConfig({
   resolve: { alias },
@@ -35,10 +40,10 @@ export default defineConfig({
           env: {
             TEST_DATABASE_URL: testDbUrl,
             DATABASE_URL: testDbUrl,
-            DIRECT_URL: testDbUrl,
+            DIRECT_URL: testDirectUrl,
           },
-          testTimeout: 30_000,
-          hookTimeout: 60_000,
+          testTimeout: 30_000 * timeoutScale,
+          hookTimeout: 60_000 * timeoutScale,
         },
       },
     ],

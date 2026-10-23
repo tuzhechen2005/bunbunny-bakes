@@ -8,6 +8,7 @@ import type { MailTransport } from "@/server/mailer";
 import { createCustomerOrder } from "@/server/orders";
 import { sendNotification, type SendDeps } from "@/server/outboxSend";
 import { createDefaultProducts, createOpenDate, createSettings, db, resetDb, TEST_DATABASE_URL } from "./helpers";
+import { DB_TEST_REMOTE } from "./testDbUrl";
 
 const NOW = new Date("2026-10-20T17:00:00Z");
 const small = createPrismaClient(TEST_DATABASE_URL, { max: 2 });
@@ -64,7 +65,11 @@ describe("pool connection timeout", () => {
     expect(() => createPrismaClient(TEST_DATABASE_URL, { connectionTimeoutMillis: 0 })).toThrow(/connectionTimeoutMillis/);
   });
 
-  it("a query waiting for a busy pool fails after the timeout instead of waiting forever", async () => {
+  // Skipped with DB_TEST_REMOTE=1: the 300 ms connectionTimeout also bounds opening the pool's
+  // first connection, and a TLS connect to a remote server (Neon over the internet) takes
+  // longer than that, so the holder transaction itself fails. The behaviour under test (pg
+  // waits at most connectionTimeoutMillis for a busy pool) does not depend on the server.
+  it.skipIf(DB_TEST_REMOTE)("a query waiting for a busy pool fails after the timeout instead of waiting forever", async () => {
     const one = createPrismaClient(TEST_DATABASE_URL, { max: 1, connectionTimeoutMillis: 300 });
     try {
       const holder = one.$transaction(async (tx) => {

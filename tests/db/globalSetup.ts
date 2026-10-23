@@ -3,13 +3,15 @@
 
 import { execFileSync } from "node:child_process";
 import { Client } from "pg";
-import { databaseName, testDatabaseUrl } from "./testDbUrl";
+import { databaseName, testDatabaseUrl, testDirectDatabaseUrl } from "./testDbUrl";
 
 export default async function setup(): Promise<void> {
   const url = testDatabaseUrl();
+  // Migrations take a session-level advisory lock: they need a direct (non-pooled) connection.
+  const directUrl = testDirectDatabaseUrl();
   const dbName = databaseName(url); // restricted to [A-Za-z0-9_]+_test by testDatabaseUrl()
 
-  const maintenance = new URL(url);
+  const maintenance = new URL(directUrl);
   maintenance.pathname = "/postgres";
   const client = new Client({ connectionString: maintenance.toString() });
   await client.connect();
@@ -33,6 +35,6 @@ export default async function setup(): Promise<void> {
   // process.loadEnvFile() there does not override variables that are already set.
   execFileSync("npx", ["prisma", "migrate", "deploy"], {
     stdio: "pipe",
-    env: { ...process.env, DATABASE_URL: url, DIRECT_URL: url },
+    env: { ...process.env, DATABASE_URL: url, DIRECT_URL: directUrl },
   });
 }
