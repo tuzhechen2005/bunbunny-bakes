@@ -4,7 +4,7 @@ export type StatusKind = "PENDING" | "CONFIRMED" | "BAKING" | "READY" | "COMPLET
 
 export type OrderViewData = {
   orderNo: string;
-  items: { name: string; qty: number; lineTotalCents: number }[];
+  items: { name: string; qty: number; lineTotalCents: number; imageUrl: string | null }[];
   subtotalCents: number;
   deliveryFeeCents: number;
   totalCents: number;

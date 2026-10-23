@@ -67,7 +67,7 @@ test("1. customer happy path -> order page -> cancel", async ({ page }) => {
   await page.getByTestId("submit").click();
 
   await page.waitForURL(/\/o\/[^/?]+\?new=1$/);
-  await expect(page.getByTestId("new-banner")).toContainText(ordPage.newTitle);
+  await expect(page.getByTestId("new-title")).toContainText(ordPage.newTitle);
   await expect(page.getByTestId("status-text")).toHaveText(
     copy.customerStatus.pending.replace("{ownerWechatId}", "bunbunny_bakes"),
   );
