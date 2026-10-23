@@ -37,15 +37,16 @@ prisma/          schema、迁移、种子
 tests/           unit/、db/（需要 Postgres）、e2e/（Playwright）
 ```
 
-## 前端约定（改版，见 `docs/FRONTEND.md`）
+## 前端约定（改版 v2，见 `docs/FRONTEND.md`）
 
-- 物理和手势在 `src/lib/motion/`（纯 TS + 单元测试，用法见该目录 README）；React Bits 只用 BlurText / CountUp / ShinyText，放 `src/components/reactbits/`（保留署名和许可证）；品牌组件（BunnyMark）放 `src/components/brand/`；飞进纸袋的接口在 `src/lib/flyToBag.ts`。
-- 颜色只用 `globals.css` 里的 token（`bg-background`、`text-accent`、`border-line` 等），组件里不写十六进制颜色。顾客端固定浅色；后台在根节点加 `theme-admin` 才有深色。
-- 标题字体用 `font-serif`（子集化的思源宋体 600，`npm run fonts` 重新生成；新增文案后要重跑）。
-- 所有可见文字只写在 `src/copy.ts`（品牌文案在 `copy.customer.brand`）。
-- 动效必须尊重 `prefers-reduced-motion`（用 `useMotionPrefs().reduced`，只淡入淡出、不晃不飞不旋转）和自动降级（`degraded`：关闭钟摆和侧转）。动效永远不能挡住或延迟下单；全部静止后停止 rAF。
-- 性能预算（D73）：首页首屏改版新增的 JS + CSS 压缩后 ≤ 60 KB（对比 main，框架本身约 203 KB 不计），标题字体子集 ≤ 125 KB；`motion` 只用 `m.*`，外面包 `MotionProvider`（LazyMotion，特性按需加载，不放在根 layout）。
-- 不用 GSAP、WebGL、持续运行的 Canvas；纸张颗粒是静态 SVG 背景。
+- 视觉以原型 v2 为准；文字越少越好（D75），所有可见文字只写在 `src/copy.ts`（品牌文案在 `copy.customer.brand`）。
+- 颜色只用 `globals.css` 里的 token：顾客端 `c-ink / c-grey / c-line / c-paper / c-wash / c-red`，首页随面包变化的 `field / fink`（`src/lib/field.ts`）；组件里不写十六进制颜色。后台继续用旧的语义 token（`bg-background`、`text-accent` 等）。顾客端固定浅色。
+- 字体：`font-display`（思源黑体 900 子集）、`font-num`（Fraunces 数字），新增文案后跑 `npm run fonts`（源字体会下载到被忽略的 `assets-src/fonts/.cache`）。
+- 品牌素材在 `public/brand/`（logo、纸袋、印章、纸纹）。
+- 物理和手势在 `src/lib/motion/`（纯 TS + 单元测试，用法见该目录 README）；飞进纸袋的接口在 `src/lib/flyToBag.ts`。触摸拖动用 touch 事件、第一下移动就判断方向，横向时 `preventDefault`。
+- 动效必须尊重 `prefers-reduced-motion`（`useMotionPrefs().reduced`：只淡入淡出、不晃不飞不转不震屏）和自动降级（`degraded`）。动效永远不能挡住或延迟下单；全部静止后停止 rAF。
+- 性能预算（D73）：首页首屏改版新增的 JS + CSS 压缩后 ≤ 60 KB（对比 main），字体子集合计 ≤ 125 KB；`motion` 库只用 `m.*`，外面包 `MotionProvider`。
+- 不用 GSAP、WebGL、持续运行的 Canvas。
 
 ## 工作方式
 

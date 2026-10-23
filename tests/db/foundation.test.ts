@@ -127,7 +127,7 @@ describe("migration + seed", () => {
       { name: "奶酥红豆包", unit: 249, bundle: 899, size: 4, mode: "DOUGH_PER_UNIT", doughG: 70, roundG: null, pieces: null, dailyLimit: null, batchYield: null, leadDays: 1, status: "ACTIVE", description: "简介待补充" },
       { name: "岩烧乳酪包", unit: 249, bundle: 899, size: 4, mode: "DOUGH_PER_UNIT", doughG: 70, roundG: null, pieces: null, dailyLimit: null, batchYield: null, leadDays: 1, status: "ACTIVE", description: "简介待补充" },
       { name: "奶酪角", unit: 299, bundle: 1099, size: 4, mode: "DOUGH_PER_ROUND", doughG: null, roundG: 340, pieces: 4, dailyLimit: null, batchYield: null, leadDays: 1, status: "ACTIVE", description: "简介待补充" },
-      { name: "焦糖布蕾", unit: 229, bundle: 899, size: 4, mode: "INDEPENDENT", doughG: null, roundG: null, pieces: null, dailyLimit: 24, batchYield: 3, leadDays: 2, status: "ACTIVE", description: "简介待补充" },
+      { name: "焦糖布蕾", unit: 249, bundle: 899, size: 4, mode: "INDEPENDENT", doughG: null, roundG: null, pieces: null, dailyLimit: 24, batchYield: 3, leadDays: 2, status: "ACTIVE", description: "简介待补充" },
     ]);
 
     const admins = await db.adminUser.findMany();

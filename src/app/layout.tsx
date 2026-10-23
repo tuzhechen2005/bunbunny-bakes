@@ -2,27 +2,36 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
-// Subsetted Noto Serif SC SemiBold (regenerate with `npm run fonts`). Self-hosted, no Google fonts.
-// Tailwind's `font-serif` maps to this via --font-serif-face (globals.css), Songti SC as fallback.
-const serif = localFont({
-  src: "../../public/fonts/noto-serif-sc-600.subset.woff2",
-  weight: "600",
+// Self-hosted subsets (regenerate with `npm run fonts`), no Google fonts at runtime.
+// Display: Noto Sans SC pinned to 900 (`font-display`). Numerals: Fraunces, soft and bold (`font-num`).
+const display = localFont({
+  src: "../../public/fonts/noto-sans-sc-900.subset.woff2",
+  weight: "900",
   style: "normal",
   display: "swap",
-  variable: "--font-serif-face",
-  fallback: ["Songti SC", "STSong", "serif"],
+  variable: "--font-display-face",
+  fallback: ["PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "sans-serif"],
+});
+const num = localFont({
+  src: "../../public/fonts/fraunces-num.subset.woff2",
+  weight: "700",
+  style: "normal",
+  display: "swap",
+  variable: "--font-num-face",
+  fallback: ["Georgia", "serif"],
 });
 
 export const metadata: Metadata = {
   title: "🐰的大面包",
+  icons: { icon: "/brand/logo.webp" },
 };
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-CN" className={`h-full antialiased ${serif.variable}`}>
-      <body className="paper-grain min-h-full flex flex-col">{children}</body>
+    <html lang="zh-CN" className={`h-full antialiased ${display.variable} ${num.variable}`}>
+      <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
 }

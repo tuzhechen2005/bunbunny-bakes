@@ -2,7 +2,7 @@
 
 /**
  * Fly-to-bag contract (FRONTEND.md 4.3). Producers (detail page, list rows) call `flyToBag`;
- * the bag (BagBar) registers itself as the landing target with `useBagTarget`; <FlyLayer/>
+ * the bag (BagBar / the paper bag) registers itself as the landing target with `useBagTarget`; <FlyLayer/>
  * (src/components/customer/bag/FlyLayer.tsx) renders the flight in between.
  *
  * Timing contract: the flight takes about 0.6 s along an arc. It lives in a fixed,

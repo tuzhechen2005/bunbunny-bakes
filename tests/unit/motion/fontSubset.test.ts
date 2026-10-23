@@ -39,16 +39,24 @@ function cmapCodePoints(sfnt: Buffer): Set<number> {
   return out;
 }
 
-describe("serif font subset", () => {
-  it("contains every character used in customer copy and seeded product names (run `npm run fonts` if this fails)", async () => {
+async function missingFrom(file: string, required: Iterable<string>): Promise<string> {
+  const woff2 = readFileSync(resolve(root, file));
+  // Re-subsetting to the required text keeps only glyphs the font really has, so what comes
+  // back in the cmap is exactly required ∩ present.
+  const text = [...required].join("");
+  const sfnt = await subsetFont(woff2, text, { targetFormat: "sfnt" });
+  const present = cmapCodePoints(Buffer.from(sfnt));
+  return [...required].filter((ch) => !present.has(ch.codePointAt(0)!)).join("");
+}
+
+describe("font subsets (run `npm run fonts` if these fail)", () => {
+  it("display face contains every character of customer copy and seeded product names", async () => {
     const required = collectFontChars(root);
-    const woff2 = readFileSync(resolve(root, "public/fonts/noto-serif-sc-600.subset.woff2"));
-    // Re-subsetting to the required text keeps only glyphs the font really has, so what comes
-    // back in the cmap is exactly required ∩ present.
-    const sfnt = await subsetFont(woff2, [...required].join(""), { targetFormat: "sfnt" });
-    const present = cmapCodePoints(Buffer.from(sfnt));
-    const missing = [...required].filter((ch) => !present.has(ch.codePointAt(0)!));
-    expect(missing.join("")).toBe("");
+    expect(await missingFrom("public/fonts/noto-sans-sc-900.subset.woff2", required)).toBe("");
     expect(required.has("放")).toBe(true); // sanity: the collector sees the brand copy
+  });
+
+  it("numeral face contains digits, $ and the separators used in prices, dates and order numbers", async () => {
+    expect(await missingFrom("public/fonts/fraunces-num.subset.woff2", "0123456789$.,/-:×+ ")).toBe("");
   });
 });
