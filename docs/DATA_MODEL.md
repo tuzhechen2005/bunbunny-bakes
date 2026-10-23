@@ -127,6 +127,29 @@
 - **AdminSession**：`tokenHash`（cookie 里存原始随机值，表里只存 sha256）、`userId`、`expiresAt`（30 天）、`lastSeenAt`。
 - **PasswordReset**：`tokenHash`、`expiresAt`（15 分钟）、`usedAt`。
 
+### ManualIncome（手动记账，D87）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | uuid | |
+| date | date | 记在哪一天（和订单的取货日同一口径） |
+| amountCents | int | > 0，美分 |
+| note | text | 1–100 字 |
+| paidMethod | PaidMethod | 微信 / Zelle / Venmo / 现金 / 其他 |
+| createdAt / updatedAt | timestamptz | |
+
+### ManualIncomeItem（手动记账里选填的商品）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | uuid | |
+| incomeId | uuid → ManualIncome | 删除记录时一起删 |
+| productId | uuid → Product，可空 | 商品被删时置空 |
+| nameSnapshot | text | 记录时的商品名 |
+| qty | int | 1–999 |
+
+增删改都写 AuditLog（entity `manual_income`）。
+
 ### RateLimitHit
 
 `key`（例如 `order_ip:<ipHash>`）、`at`。查询最近一小时的条数；超过 24 小时的记录在每 5 分钟的定时任务里清理。
