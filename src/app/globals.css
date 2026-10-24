@@ -16,19 +16,52 @@
   inherits: true;
   initial-value: #4a2723;
 }
+@property --fink2 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #674741;
+}
 :root {
   --field: #dcc5bb;
   --fink: #4a2723;
+  /* Secondary text on the field: >= 4.5:1 on its own field (src/lib/field.ts, D88). */
+  --fink2: #674741;
   --c-ink: #161412;
+  /* Icons, decoration and lines only (3.6:1 on white). Text uses --c-grey-text (D88). */
   --c-grey: #8c867e;
+  --c-grey-text: #736d66;
   --c-line: #ece8e2;
   --c-paper: #ffffff;
   --c-wash: #f5f3ef;
-  --c-red: #e0344b;
+  --c-red: #d42a41;
+  /* Photo placeholder while a product photo loads (D91). */
+  --linen: #e8dcce;
+
+  /* Motion (one family, src/lib/motion/ease.ts mirrors it): enter/move, exit, symmetric moves. */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-1: 160ms; /* taps, fades of small things */
+  --dur-2: 280ms; /* default move / reveal */
+  --dur-3: 420ms; /* large surfaces, sheets */
+  --dur-4: 640ms; /* signature moments (spin, flight) */
+}
+
+/*
+ * The bread colour fades only where it is used: the home page element animates --field/--fink/--fink2
+ * (not :root, which made every drag frame restyle the whole document). applyField() still writes
+ * the values on <html>; the page inherits them and transitions its own computed value. <html> gets
+ * the same fade on its background while the home page is mounted (overscroll area, see HomePage).
+ */
+.hm-page {
   transition:
     --field 0.8s var(--ease),
-    --fink 0.8s var(--ease);
+    --fink 0.8s var(--ease),
+    --fink2 0.8s var(--ease);
+}
+html.field-bg {
+  background-color: var(--field);
+  transition: background-color 0.8s var(--ease);
 }
 
 /*
@@ -100,7 +133,13 @@
   --color-field: var(--field);
   --color-fink: var(--fink);
   --color-c-ink: var(--c-ink);
-  --color-c-grey: var(--c-grey);
+  /* `text-c-grey` is the readable secondary text colour (D88); `c-grey-soft` is the old, lighter
+     grey for icons, borders and decoration only. */
+  --color-c-grey: var(--c-grey-text);
+  --color-c-grey-text: var(--c-grey-text);
+  --color-c-grey-soft: var(--c-grey);
+  --color-linen: var(--linen);
+  --color-fink2: var(--fink2);
   --color-c-line: var(--c-line);
   --color-c-paper: var(--c-paper);
   --color-c-wash: var(--c-wash);
@@ -124,15 +163,53 @@
   --color-disabled-ink: var(--disabled-ink);
 }
 
+/* Customer pages sit on white paper (also the overscroll area and the browser chrome, D88 chrome fix).
+   The admin keeps its own cream background. */
+html,
 body {
+  background-color: var(--c-paper);
+}
+html:has(.theme-admin),
+body:has(.theme-admin) {
   background-color: var(--background);
+}
+body {
   color: var(--foreground);
   font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Landscape phones with a notch: the centred 430 px column stays clear of the cut-outs (no effect when
+   the column does not reach the insets). `--safe-min` is the column's own padding. */
+.hm-app,
+.safe-x {
+  --safe-min: 0px;
+  padding-left: max(var(--safe-min), calc(env(safe-area-inset-left) - max(0px, (100vw - 430px) / 2)));
+  padding-right: max(var(--safe-min), calc(env(safe-area-inset-right) - max(0px, (100vw - 430px) / 2)));
+}
+.safe-x {
+  --safe-min: 16px;
+}
+
+/* Product photo fade-in (ProductPhoto): hidden until the file has loaded, then 350 ms to full. */
+img[data-ph="wait"] {
+  opacity: 0;
+}
+img[data-ph="done"] {
+  transition: opacity 350ms var(--ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  img[data-ph="done"] {
+    transition-duration: 1ms;
+  }
 }
 
 /* Display face (Noto Sans SC 900 subset) and numerals (Fraunces), see layout.tsx. `font-serif` is
    kept as an alias of the display face for pages that have not been restyled yet. */
 @theme {
+  /* Tailwind's transition utilities use the same easing and duration as the motion tokens above. */
+  --default-transition-duration: 280ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
   --font-display: var(--font-display-face), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-num: var(--font-num-face), Georgia, serif;
   --font-serif: var(--font-display-face), "PingFang SC", sans-serif;

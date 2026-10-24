@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { getBagTargetRect, notifyArrive, subscribeFly, type FlyRequest } from "@/lib/flyToBag";
 import { haptic, useMotionPrefs } from "@/lib/motion/react";
+import { photoCssUrl, THUMB_WIDTH } from "@/lib/photo";
 import { flightBegin, flightLand, type BagTarget } from "./bagFlights";
 import "./bag.css";
 
@@ -104,7 +105,7 @@ export function FlyLayer() {
             outer.className = "bag-fly";
             outer.style.transform = `translate(${sx}px,${sy}px)`;
             const disc = document.createElement("i");
-            if (req.imageUrl) disc.style.backgroundImage = `url("${req.imageUrl.replace(/"/g, "%22")}")`;
+            if (req.imageUrl) disc.style.backgroundImage = photoCssUrl(req.imageUrl, THUMB_WIDTH);
             else disc.className = "pb-ph";
             outer.appendChild(disc);
             root.appendChild(outer);

@@ -18,12 +18,23 @@ import {
   ropeStrands,
   type RackMetrics,
 } from "./geometry";
+import { focusQuietly } from "./focus";
 import { Peg } from "./Peg";
 
 const t = copy.customer.brand;
 
 const SWAY_SPRING = { frequencyHz: 1.3, dampingRatio: 0.3 };
-const DROP_SPRING = { frequencyHz: 1.25, dampingRatio: 0.55 };
+/** Nearly critically damped: a card settles on the rope (at most a few px of overshoot) instead of bouncing through it. */
+const DROP_SPRING = { frequencyHz: 1.6, dampingRatio: 0.82 };
+/** What a landing card hands to the rope (sway velocity, px/s) and to its own peg (rad/s, sign alternates). */
+const LAND_SWAY_V = 22;
+const LAND_PEG_KICK = 0.9;
+/** The entrance waits for the first photo to decode, but never longer than this. */
+const DECODE_WAIT_MS = 900;
+/** After a swipe that started on the hero "+", the click that follows is swallowed for this long. */
+const CLICK_GUARD_MS = 120;
+/** The first this many cards are what the entrance (and the hint after it) waits for. */
+const ENTRANCE_CARDS = 4;
 const SPIN_MS = 640;
 /** A touch that travels less than this and is shorter than TAP_MS is a tap, whatever axis it briefly locked to. */
 const TAP_PX = 8;
@@ -47,8 +58,12 @@ export interface RackHandle {
   kick(i: number, omega: number): void;
   /** The photo of card `i` came back: swing it and its neighbours, make the rope sway. */
   landed(i: number): void;
-  focus(): void;
+  /** Focus the rope; `visible: false` keeps the focus ring off (after a touch). */
+  focus(visible?: boolean): void;
 }
+
+/** How a card was opened: the ring of the detail's first focus depends on it. */
+export type OpenVia = "key" | "pointer";
 
 export interface RackProps {
   products: readonly MenuProduct[];
@@ -57,13 +72,17 @@ export interface RackProps {
   /** The rope settled nearer to another slot (called while dragging and flinging). */
   onIndexChange: (i: number) => void;
   /** Tap on the centred card, or Enter. */
-  onOpen: (i: number) => void;
+  onOpen: (i: number, via: OpenVia) => void;
   /** The element that receives the gestures: the whole coloured hero (D77). */
   hostRef: RefObject<HTMLElement | null>;
   /** False while a card is being taken down or the detail is open: the rack ignores input. */
   active: boolean;
   /** Hide the "try me" hint (after the first detail view). */
   hintOff: boolean;
+  /** Where the rope rests when the rack is built (read once; the rack is rebuilt by `key`). */
+  startIndex?: number;
+  /** Place the cards on the rope at once, without the entrance drop (a rebuilt rack, not the first one). */
+  skipEntrance?: boolean;
   ref?: Ref<RackHandle>;
 }
 
@@ -76,6 +95,8 @@ interface CardSim {
   px: number | null;
   v: number;
   a: number;
+  /** The card has reached the rope for the first time (it gave the rope and its peg a push). */
+  landed: boolean;
 }
 
 interface Sim {
@@ -88,40 +109,67 @@ interface Sim {
   g0: number;
   moving: boolean;
   tap: number | null;
+  /** The gesture began on the hero "+" (a drag from there still moves the rope, a tap still adds). */
+  onAdd: HTMLElement | null;
+  /** The entrance clock starts here, once the first photo is ready. */
   t0: number;
+  started: boolean;
+  /** Every card is on the rope: the "try me" hint may appear. */
+  entered: boolean;
   dPath: string;
 }
 
-function createSim(n: number, reduced: boolean): Sim {
+function createSim(n: number, reduced: boolean, start = 0): Sim {
   const cards: CardSim[] = [];
   for (let i = 0; i < n; i++) {
     const drop = new Spring(reduced ? 0 : dropStartPx(i), DROP_SPRING);
     drop.target = 0;
-    cards.push({ pend: new Pendulum(), drop, delay: reduced ? 0 : dropDelayMs(i), rest: restAngle(i), px: null, v: 0, a: 0 });
+    cards.push({ pend: new Pendulum(), drop, delay: reduced ? 0 : dropDelayMs(i), rest: restAngle(i), px: null, v: 0, a: 0, landed: reduced });
   }
   return {
-    rope: new Spring(0),
+    rope: new Spring(start),
     sway: new Spring(0, SWAY_SPRING),
     cards,
     m: rackMetrics(375),
-    idx: 0,
+    idx: start,
     drag: false,
-    g0: 0,
+    g0: start,
     moving: false,
     tap: null,
+    onAdd: null,
     t0: typeof performance === "undefined" ? 0 : performance.now(),
+    started: reduced,
+    entered: false,
     dPath: "",
   };
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+/** The hero's round "+" (a swipe may start on it). */
+const ADD_SELECTOR = ".hm-addp";
+
+/** Swallow the click that follows the gesture that just ended (capture phase on `host`, removes itself). */
+function swallowNextClick(host: HTMLElement) {
+  const stop = (e: Event) => {
+    e.stopPropagation();
+    e.preventDefault();
+    off();
+  };
+  const timer = setTimeout(() => off(), CLICK_GUARD_MS);
+  function off() {
+    clearTimeout(timer);
+    host.removeEventListener("click", stop, true);
+  }
+  host.addEventListener("click", stop, true);
+}
+
 /**
  * The rope with its clothes-pegged photos (FRONTEND.md 4.1 item 3, D77).
  * All motion is driven by one rAF loop that writes `style.transform` directly and stops when
  * everything rests; React only re-renders on index changes.
  */
-export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, hintOff, ref }: RackProps) {
+export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, hintOff, startIndex = 0, skipEntrance = false, ref }: RackProps) {
   const { reduced, degraded } = useMotionPrefs();
   const n = products.length;
   const uid = useId().replace(/:/g, "");
@@ -137,6 +185,8 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
     latest.current = { onIndexChange, onOpen, active, reduced, degraded };
   });
 
+  const initial = useRef({ start: startIndex, skip: skipEntrance });
+
   // ---- simulation + loop ----
   useLayoutEffect(() => {
     const rackEl = root.current;
@@ -150,11 +200,12 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
     const twist = pathsOf("rt");
     const twist2 = pathsOf("rt2");
 
-    const s = createSim(n, latest.current.reduced);
+    // No entrance (reduced motion, or a rebuilt rack): cards sit on the rope from the first frame.
+    const s = createSim(n, latest.current.reduced || initial.current.skip, clamp(initial.current.start, 0, n - 1));
     sim.current = s;
 
     const measure = () => {
-      const m = rackMetrics(rackEl.clientWidth);
+      const m = rackMetrics(rackEl.clientWidth, window.innerHeight);
       s.m = m;
       rackEl.style.setProperty("--cw", `${m.cardW}px`);
       rackEl.style.setProperty("--rh", `${m.height}px`);
@@ -203,15 +254,31 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
         twist2.setAttribute("d", st.light);
       }
       // cards
-      const elapsed = now - s.t0;
+      // Before the first photo is ready nothing falls yet (elapsed < 0 holds every card up).
+      const elapsed = s.started ? now - s.t0 : -1;
+      let dropping = false;
       for (let i = 0; i < n; i++) {
         const c = s.cards[i];
         const pose = cardPose(i, pos, m, sag);
         if (elapsed > c.delay) {
           c.drop.step(dt);
           if (c.drop.isAtRest(0.3, 2)) c.drop.settle();
-          else act = true;
-        } else act = true;
+          else {
+            act = true;
+            if (i < ENTRANCE_CARDS) dropping = true;
+          }
+          if (!c.landed && c.drop.x >= -0.5) {
+            // First contact with the rope: the card hands its energy to the rope and to its own peg.
+            c.landed = true;
+            if (!rm) {
+              s.sway.v += LAND_SWAY_V;
+              c.pend.omega += (i % 2 ? -1 : 1) * LAND_PEG_KICK;
+            }
+          }
+        } else {
+          act = true;
+          if (i < ENTRANCE_CARDS) dropping = true;
+        }
         const dy = c.drop.x;
         const px = pose.cx;
         if (c.px === null) {
@@ -241,6 +308,10 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
         el.style.opacity = String(pose.opacity);
         el.style.zIndex = String(pose.zIndex);
       }
+      if (!s.entered && s.started && !dropping) {
+        s.entered = true;
+        hint.current?.setAttribute("data-entered", "");
+      }
       return act;
     };
     stepFn.current = frame;
@@ -248,12 +319,37 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
     loop.current = lp;
     lp.start();
 
+    // The entrance starts when the first photo is decoded (it would pop in on the way down otherwise),
+    // after at most DECODE_WAIT_MS.
+    if (!s.started) {
+      const go = () => {
+        if (sim.current !== s || s.started) return;
+        s.started = true;
+        s.t0 = performance.now();
+        lp.start();
+      };
+      const img = cards[0]?.querySelector("img");
+      if (!img || typeof img.decode !== "function") go();
+      else {
+        const wait = new Promise<void>((r) => setTimeout(r, DECODE_WAIT_MS));
+        void Promise.race([img.decode().catch(() => {}), wait]).then(go);
+      }
+    }
+
     const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => {
       measure();
       lp.start();
     });
     ro?.observe(rackEl);
+    // The photo is capped by the viewport height on short (landscape) screens: a turn that keeps the
+    // rack's width must still re-measure.
+    const onResize = () => {
+      measure();
+      lp.start();
+    };
+    window.addEventListener("resize", onResize);
     return () => {
+      window.removeEventListener("resize", onResize);
       lp.stop();
       ro?.disconnect();
       loop.current = null;
@@ -272,7 +368,9 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
       lockPx: 4,
       canStart: (target) => {
         if (!sim.current || !latest.current.active) return false;
-        return !target?.closest("button, a, [data-no-drag]");
+        // The round "+" under the name may start a swipe too (a tap on it still adds).
+        const blocker = target?.closest("button, a, [data-no-drag]");
+        return !blocker || blocker.matches(ADD_SELECTOR);
       },
       onStart: (_x, _y, target) => {
         const s = sim.current;
@@ -280,6 +378,7 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
         s.g0 = s.rope.x;
         const card = target?.closest<HTMLElement>("[data-card]");
         s.tap = card ? Number(card.dataset.card) : null;
+        s.onAdd = target?.closest<HTMLElement>(ADD_SELECTOR) ?? null;
         s.moving = Math.abs(s.rope.v) > 1.2;
       },
       onDrag: (dx) => {
@@ -294,6 +393,15 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
         if (!s) return;
         // A finger rolling a few px is still a tap (browsers allow about 10 px).
         const isTap = !end.cancelled && end.travel < TAP_PX && end.duration < TAP_MS;
+        const addBtn = s.onAdd;
+        s.onAdd = null;
+        if (addBtn && end.dragged) {
+          // A drag that began on the "+" must not add. A finger that only rolled a little is still
+          // a tap: the browser may or may not send the click after a claimed touch, so add here
+          // and swallow whatever click follows.
+          if (!end.cancelled && end.travel < TAP_PX) addBtn.click();
+          swallowNextClick(host);
+        }
         if (s.drag && isTap) {
           s.drag = false;
           s.rope.set(s.g0, 0);
@@ -308,7 +416,7 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
           loop.current?.start();
         } else if (isTap && s.tap !== null && !s.moving) {
           const i = s.tap;
-          if (i === nearestIndex(s.rope.x, n) && s.rope.isAtRest(0.06, 0.6)) latest.current.onOpen(i);
+          if (i === nearestIndex(s.rope.x, n) && s.rope.isAtRest(0.06, 0.6)) latest.current.onOpen(i, "pointer");
           else {
             s.rope.target = i;
             loop.current?.start();
@@ -373,7 +481,7 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
         s.sway.v += 36;
         loop.current?.start();
       },
-      focus: () => root.current?.focus({ preventScroll: true }),
+      focus: (visible = true) => void focusQuietly(root.current, visible),
     }),
     [n],
   );
@@ -387,7 +495,7 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
       loop.current?.start();
       e.preventDefault();
     } else if (e.key === "Enter" || e.key === " ") {
-      latest.current.onOpen(clamp(cur, 0, n - 1));
+      latest.current.onOpen(clamp(cur, 0, n - 1), "key");
       e.preventDefault();
     }
   };
@@ -432,10 +540,10 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
             <Peg />
             <div className="hm-flip">
               <div className="hm-face">
-                <ProductPhoto product={p} className="h-full w-full" eager={i === 0} decorative />
+                <ProductPhoto product={p} className="h-full w-full" variant="rope" priority={i === 0} eager={i === 1} decorative />
               </div>
               <div className="hm-face hm-back">
-                <ProductPhoto product={p} className="h-full w-full" eager={i === 0} decorative />
+                <ProductPhoto product={p} className="h-full w-full" variant="rope" decorative />
               </div>
             </div>
           </div>

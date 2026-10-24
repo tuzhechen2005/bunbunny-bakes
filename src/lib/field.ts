@@ -1,18 +1,21 @@
 /**
  * The home hero takes the colour of the bread on the rope (D76). Colours cycle by menu position,
  * so the four current products keep these and a new product simply takes the next one.
- * `field` is the background, `ink` the text and buttons on it.
+ * `field` is the background, `ink` the text and buttons on it, `ink2` the secondary text (a softer
+ * ink that still has >= 4.5:1 on its own field, D88; it replaces opacity on the ink).
+ * Contrast ink / ink2 on field: 7.94 / 4.99, 8.51 / 5.05, 10.19 / 5.09, 4.90 / 4.62.
  */
 export interface Field {
   field: string;
   ink: string;
+  ink2: string;
 }
 
 export const FIELDS: readonly Field[] = [
-  { field: "#DCC5BB", ink: "#4A2723" }, // red bean: pale adzuki
-  { field: "#F0BF45", ink: "#36260A" }, // rock cheese: cheese yellow
-  { field: "#CFDDEA", ink: "#1B2C44" }, // cheese horn: milk blue
-  { field: "#C6601C", ink: "#FFF0DF" }, // brulee: caramel
+  { field: "#DCC5BB", ink: "#4A2723", ink2: "#674741" }, // red bean: pale adzuki
+  { field: "#F0BF45", ink: "#36260A", ink2: "#5F4817" }, // rock cheese: cheese yellow
+  { field: "#CFDDEA", ink: "#1B2C44", ink2: "#4A5A6F" }, // cheese horn: milk blue
+  { field: "#B05219", ink: "#FFF8EE", ink2: "#FFF0DF" }, // brulee: caramel (D88: darker than D76's #C6601C)
 ];
 
 export function fieldFor(index: number): Field {
@@ -20,10 +23,11 @@ export function fieldFor(index: number): Field {
   return FIELDS[((Math.trunc(index) % n) + n) % n];
 }
 
-/** Apply a field to the document (the registered --field/--fink properties animate the change). */
+/** Apply a field to the document; the home page element animates the change (see globals.css `.hm-page`). */
 export function applyField(f: Field): void {
   if (typeof document === "undefined") return;
   const s = document.documentElement.style;
   s.setProperty("--field", f.field);
   s.setProperty("--fink", f.ink);
+  s.setProperty("--fink2", f.ink2);
 }

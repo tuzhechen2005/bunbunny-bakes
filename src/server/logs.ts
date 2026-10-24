@@ -8,6 +8,7 @@ import type { LocalDate } from "@/domain/types";
 import type { Prisma } from "@/generated/prisma/client";
 import type { DbClient } from "./db";
 import { AppError } from "./errors";
+import { escapeLike } from "./orderQueries";
 
 export const LOGS_PAGE_SIZE = 50;
 /** Orders a single search term may expand to (one customer, or one number across years). */
@@ -51,6 +52,29 @@ export interface LogRow {
 export interface LogsPage {
   items: LogRow[];
   nextCursor: string | null;
+  /** Names of the products the rows mention (ids in limits, violations, reorders, or as the entity). */
+  productNames: Record<string, string>;
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** Product ids mentioned by one snapshot (before or after) of an audit row. */
+function productIdsIn(snapshot: unknown, into: Set<string>): void {
+  if (Array.isArray(snapshot)) {
+    for (const x of snapshot) {
+      if (isRecord(x) && typeof x.id === "string" && typeof x.sortOrder === "number") into.add(x.id);
+    }
+    return;
+  }
+  if (!isRecord(snapshot)) return;
+  if (isRecord(snapshot.productLimits)) for (const id of Object.keys(snapshot.productLimits)) into.add(id);
+  if (Array.isArray(snapshot.violations)) {
+    for (const v of snapshot.violations) {
+      if (isRecord(v) && typeof v.productId === "string") into.add(v.productId);
+    }
+  }
 }
 
 /** "10/29 20:05" in Chicago time. */
@@ -92,7 +116,8 @@ export function decodeCursor(cursor: string): { at: Date; id: string } {
 async function orderIdsForSearch(db: DbClient, q: string): Promise<string[]> {
   const where: Prisma.OrderWhereInput = ORDER_NO_RE.test(q)
     ? { orderNo: q }
-    : { wechatId: { equals: q, mode: "insensitive" } };
+    // Insensitive equality is an ILIKE: escape % and _ so they match themselves only.
+    : { wechatId: { equals: escapeLike(q), mode: "insensitive" } };
   const orders = await db.order.findMany({
     where,
     select: { id: true },
@@ -107,7 +132,7 @@ export async function listLogs(db: DbClient, query: LogsQuery): Promise<LogsPage
 
   if (query.q) {
     const ids = await orderIdsForSearch(db, query.q);
-    if (ids.length === 0) return { items: [], nextCursor: null };
+    if (ids.length === 0) return { items: [], nextCursor: null, productNames: {} };
     and.push({ entityType: "Order", entityId: { in: ids } });
   }
   if (query.entityId) and.push({ entityId: query.entityId });
@@ -135,6 +160,18 @@ export async function listLogs(db: DbClient, query: LogsQuery): Promise<LogsPage
     : [];
   const orderNoById = new Map(orders.map((o) => [o.id, o.orderNo]));
 
+  const productIds = new Set<string>();
+  for (const r of page) {
+    if (r.entityType === "Product") productIds.add(r.entityId);
+    productIdsIn(r.before, productIds);
+    productIdsIn(r.after, productIds);
+  }
+  const products = [...productIds].filter((id) => z.uuid().safeParse(id).success);
+  const productRows = products.length
+    ? await db.product.findMany({ where: { id: { in: products } }, select: { id: true, name: true } })
+    : [];
+  const productNames = Object.fromEntries(productRows.map((p) => [p.id, p.name]));
+
   const items: LogRow[] = page.map((r) => ({
     id: r.id,
     at: r.at.toISOString(),
@@ -149,5 +186,5 @@ export async function listLogs(db: DbClient, query: LogsQuery): Promise<LogsPage
     reason: r.reason,
   }));
   const last = page[page.length - 1];
-  return { items, nextCursor: hasMore && last ? encodeCursor(last.at, last.id) : null };
+  return { items, nextCursor: hasMore && last ? encodeCursor(last.at, last.id) : null, productNames };
 }

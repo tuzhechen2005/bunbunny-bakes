@@ -105,6 +105,46 @@ describe("cart store", () => {
     expect(JSON.parse(storage.data[CART_STORAGE_KEY])).toEqual([{ productId: "a", qty: 1 }]);
   });
 
+  it("remembers that lines were dropped, once (the bag sheet shows a notice)", () => {
+    const store = createCartStore(() =>
+      memoryStorage({ [CART_STORAGE_KEY]: JSON.stringify([{ productId: "a", qty: 1 }, { productId: "gone", qty: 2 }]) }),
+    );
+    expect(store.consumeRemovedNotice()).toBe(false);
+    expect(store.retainProducts(["a"])).toBe(1);
+    expect(store.retainProducts(["a"])).toBe(0); // nothing more to drop
+    expect(store.consumeRemovedNotice()).toBe(true);
+    expect(store.consumeRemovedNotice()).toBe(false); // one-time
+  });
+
+  it("refresh() picks up another tab's change and notifies only when something changed", () => {
+    const storage = memoryStorage();
+    const store = createCartStore(() => storage);
+    store.increment("a", 8);
+    const listener = vi.fn();
+    store.subscribe(listener);
+    const before = store.getItems();
+    store.refresh();
+    expect(listener).not.toHaveBeenCalled();
+    expect(store.getItems()).toBe(before); // same snapshot reference
+
+    storage.data[CART_STORAGE_KEY] = JSON.stringify([{ productId: "b", qty: 3 }]);
+    store.refresh();
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(store.getItems()).toEqual([{ productId: "b", qty: 3 }]);
+
+    delete storage.data[CART_STORAGE_KEY]; // the other tab cleared the cart
+    store.refresh();
+    expect(store.getItems()).toEqual([]);
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it("refresh() keeps the in-memory cart when storage is unreadable", () => {
+    const store = createCartStore(() => throwingStorage);
+    store.increment("a", 8);
+    store.refresh();
+    expect(store.getItems()).toEqual([{ productId: "a", qty: 1 }]);
+  });
+
   it("notifies subscribers and keeps a stable snapshot between changes", () => {
     const store = createCartStore(() => memoryStorage());
     const listener = vi.fn();

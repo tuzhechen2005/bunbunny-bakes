@@ -6,7 +6,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { copy } from "@/copy";
 import { dayLabel } from "@/domain/dates";
 import { formatCents } from "@/domain/pricing";
@@ -170,6 +170,20 @@ export function OrderForm({ data, order }: OrderFormProps) {
     setReason("");
     setReasonError(null);
   }
+
+  // Esc dismisses the over-limit confirmation panel (not while saving).
+  const overOpen = pending !== null;
+  useEffect(() => {
+    if (!overOpen || submitting) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setPending(null);
+      setReason("");
+      setReasonError(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [overOpen, submitting]);
 
   function setLineQty(productId: string, next: number) {
     closeOverride();

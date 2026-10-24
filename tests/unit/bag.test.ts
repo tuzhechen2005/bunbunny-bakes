@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { arrowZoom } from "@/components/customer/bag/anim";
 import {
   flightBegin,
@@ -16,6 +16,9 @@ import { PaperBag } from "@/components/customer/bag/PaperBag";
 import { RollText } from "@/components/customer/bag/RollText";
 import { copy } from "@/copy";
 import type { MenuProduct } from "@/lib/api";
+
+// BagSheet prefetches /checkout through the app router, which does not exist in a static render.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ prefetch: () => undefined, push: () => undefined }) }));
 
 const product = (over: Partial<MenuProduct> = {}): MenuProduct => ({
   id: "p1",
@@ -106,8 +109,10 @@ describe("BagSheet", () => {
   it("controls are real buttons with labels (44 px class) and the close button is labelled", () => {
     const html = sheet();
     expect(html).toContain(`aria-label="${copy.customer.brand.closeBag}"`);
-    expect(html).toContain(`aria-label="${copy.customer.home.decrease}"`);
-    expect(html).toContain(`aria-label="${copy.customer.home.increase}"`);
+    // The steppers name the bread they change.
+    expect(html).toContain('aria-label="减少一个 奶酥红豆包"');
+    expect(html).toContain('aria-label="增加一个 焦糖布蕾"');
+    expect(html).toContain('aria-label="奶酥红豆包 已选 4 个"');
     expect(html).toContain("size-11");
   });
 });

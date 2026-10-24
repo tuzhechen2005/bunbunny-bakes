@@ -136,7 +136,7 @@
 | DELETE | `/api/admin/products/{id}/image` | 删除照片：`imageUrl` 变回 null（显示兔子占位图），删除文件并写日志 |
 | GET/PUT | `/api/admin/settings` | |
 | GET | `/api/admin/logs?entityId=&from=&to=` | |
-| GET | `/api/admin/ledger?month=YYYY-MM` | 记账月汇总（D87）：`{ month, revenueCents, qty, deliveryFeeCents, receivableCents, byMethod: {WECHAT,ZELLE,VENMO,CASH,OTHER}, days: [{ date, revenueCents, qty, receivableCents }] }`。口径：按取货日；不含已取消/已拒绝；已付款订单（含运费）和手动记录计入营业额，未付款计入待收；件数只算已付款订单和手动记录里填的商品；`paidMethod` 为空算「其他」；月份格式错误 `VALIDATION` |
+| GET | `/api/admin/ledger?month=YYYY-MM` | 记账月汇总（D87）：`{ month, revenueCents, qty, deliveryFeeCents, receivableCents, byMethod: {WECHAT,ZELLE,VENMO,CASH,OTHER,UNSPECIFIED}, days: [{ date, revenueCents, qty, receivableCents }] }`。口径：按取货日；不含已取消/已拒绝；已付款订单（含运费）和手动记录计入营业额，未付款计入待收；件数只算已付款订单和手动记录里填的商品；已付款但 `paidMethod` 为空的订单算 `UNSPECIFIED`「未注明」（D94），与明确选的「其他」分开；月份格式错误 `VALIDATION` |
 | GET | `/api/admin/ledger/day?date=YYYY-MM-DD` | 日明细：同样的汇总字段加 `orders`（每单：订单号、微信号、商品、金额、运费、是否已付款、付款方式）、`manual`（手动记录）、`products`（每款件数和金额，金额是各单实际行金额相加，不重新套用套餐价；手动记录里的商品只加件数） |
 | POST | `/api/admin/ledger/manual` | 记一笔。`{ date, amountCents（整数 > 0）, note（1–100 字）, paidMethod（WECHAT/ZELLE/VENMO/CASH/OTHER）, items?: [{ productId 或 name（自由填写，≤ 60 字）, qty 1–999 }]（最多 30 行） }`；返回 201 `{ entry }`；写 `manual_income.create` 日志（entity `manual_income`） |
 | PATCH | `/api/admin/ledger/manual/{id}` | 修改（字段同上，整条替换，商品行整体替换）；返回 `{ entry }`；日志 `manual_income.update`，记录修改前后的值；找不到 `NOT_FOUND` |

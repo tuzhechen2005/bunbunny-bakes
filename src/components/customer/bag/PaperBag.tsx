@@ -14,6 +14,7 @@ import { Logo } from "@/components/brand/Logo";
 import { copy } from "@/copy";
 import { createLoop, rubberBand, PILE_WIDTH, PileWorld, radiusFor, Spring, type Loop, type PileBody } from "@/lib/motion";
 import { useMotionPrefs } from "@/lib/motion/react";
+import { photoCssUrl, THUMB_WIDTH } from "@/lib/photo";
 import { EASE, done, play } from "./anim";
 import "./bag.css";
 
@@ -72,7 +73,7 @@ function setImage(el: HTMLElement, url: string | null | undefined) {
   if (el.dataset.img === next) return;
   el.dataset.img = next;
   if (url) {
-    el.style.backgroundImage = `url("${url.replace(/"/g, "%22")}")`;
+    el.style.backgroundImage = photoCssUrl(url, THUMB_WIDTH);
     el.classList.remove("pb-ph");
   } else {
     el.style.backgroundImage = "";

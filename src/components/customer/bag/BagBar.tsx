@@ -1,7 +1,8 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { focusRing } from "@/components/ui/focus";
 import { copy } from "@/copy";
 import { formatCents } from "@/domain/pricing";
 import type { MenuProduct } from "@/lib/api";
@@ -9,7 +10,7 @@ import type { CartItem } from "@/lib/cart";
 import { useBagTarget } from "@/lib/flyToBag";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { fill } from "../format";
-import { arrowZoom } from "./anim";
+import { EASE, arrowZoom } from "./anim";
 import { subscribeBegin, subscribeLand, usePendingFlights } from "./bagFlights";
 import { BagSheet, type BagSheetHandle } from "./BagSheet";
 import { ArrowIcon } from "./icons";
@@ -20,6 +21,9 @@ import "./bag.css";
 
 const t = copy.customer.home;
 const b = copy.customer.brand;
+
+/** The pill opens the sheet this long after the tap; the arrow zoom plays meanwhile and is never awaited. */
+const PILL_OPEN_DELAY_MS = 120;
 
 export interface BagBarProps {
   /** Menu products (for the bag sheet lines and the pile thumbnails). */
@@ -58,16 +62,25 @@ export function BagBar({
   onCheckout,
   compact,
 }: BagBarProps) {
+  const pathname = usePathname();
   const { ref: targetRef } = useBagTarget();
   const { reduced } = useMotionPrefs();
   const pending = usePendingFlights();
   const [open, setOpen] = useState(false);
+  // The page can stay mounted (hidden) behind /checkout: a sheet left open must not wait there and
+  // open again, pushing its history entry, when the customer comes back.
+  const [openPath, setOpenPath] = useState(pathname);
+  if (openPath !== pathname) {
+    setOpenPath(pathname);
+    if (open) setOpen(false);
+  }
   const [live, setLive] = useState("");
   const miniRef = useRef<PaperBagHandle>(null);
   const sheetRef = useRef<BagSheetHandle>(null);
   const pillRef = useRef<HTMLButtonElement>(null);
+  const badgeRef = useRef<HTMLSpanElement>(null);
   const opener = useRef<HTMLElement | null>(null);
-  const opening = useRef(false);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const { ref: swingRef, kick } = useSwing();
 
   const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -89,6 +102,21 @@ export function BagBar({
         })),
     [cart, byId, pending],
   );
+
+  // The red badge counts what has landed in the bag: the bread still in the air is not in yet.
+  const landed = useMemo(() => items.reduce((sum, i) => sum + i.qty, 0), [items]);
+  const shown = Math.min(count, landed);
+  const prevShown = useRef(shown);
+  useEffect(() => {
+    // Pops when more bread lands (or is added in the sheet) while the badge is already showing.
+    const was = prevShown.current;
+    prevShown.current = shown;
+    if (reduced || was <= 0 || shown <= was) return;
+    badgeRef.current?.animate?.(
+      [{ transform: "scale(1)" }, { transform: "scale(1.22)", offset: 0.4 }, { transform: "scale(1)" }],
+      { duration: 280, easing: EASE },
+    );
+  }, [shown, reduced]);
 
   useEffect(
     () =>
@@ -132,13 +160,20 @@ export function BagBar({
     [open],
   );
 
-  const onPill = async () => {
-    if (open || opening.current) return;
-    opening.current = true;
-    await arrowZoom(pillRef.current, reduced);
-    opening.current = false;
-    openSheet(pillRef.current);
+  // The arrow zooms while the sheet is already on its way: opening never waits for it.
+  const onPill = () => {
+    if (open || openTimer.current !== undefined) return;
+    void arrowZoom(pillRef.current, reduced);
+    if (reduced) {
+      openSheet(pillRef.current);
+      return;
+    }
+    openTimer.current = setTimeout(() => {
+      openTimer.current = undefined;
+      openSheet(pillRef.current);
+    }, PILL_OPEN_DELAY_MS);
   };
+  useEffect(() => () => clearTimeout(openTimer.current), []);
 
   const closeSheet = useCallback(() => setOpen(false), []);
 
@@ -153,7 +188,7 @@ export function BagBar({
   return (
     <>
       <div
-        className={`pointer-events-none fixed inset-x-0 bottom-0 z-[48] mx-auto flex max-w-[430px] items-end gap-3 px-4 pb-[calc(14px+env(safe-area-inset-bottom))] transition-[opacity,transform] duration-300 ${
+        className={`pointer-events-none fixed inset-x-0 bottom-0 z-[48] mx-auto flex max-w-[430px] items-end gap-3 px-4 safe-x pb-[calc(14px+env(safe-area-inset-bottom))] transition-[opacity,transform] duration-300 ${
           open ? "translate-y-[30px] opacity-0" : ""
         }`}
         inert={open}
@@ -164,7 +199,7 @@ export function BagBar({
           type="button"
           onClick={(e) => openSheet(e.currentTarget)}
           data-bag-target="bar"
-          className="pointer-events-auto relative mb-0.5 shrink-0 [filter:drop-shadow(0_10px_14px_rgba(0,0,0,0.25))]"
+          className={`pointer-events-auto relative mb-0.5 shrink-0 [filter:drop-shadow(0_10px_14px_rgba(0,0,0,0.25))] ${focusRing}`}
         >
           <span className="sr-only">{b.openBag}</span>
           <span className="sr-only" data-testid="bag-count">
@@ -174,13 +209,14 @@ export function BagBar({
             <PaperBag ref={miniRef} width={52} items={items} />
           </div>
           <span
+            ref={badgeRef}
             aria-hidden="true"
             className={`font-num absolute top-1.5 -right-1.5 h-[22px] min-w-[22px] rounded-full bg-c-red px-1.5 text-center text-[13px] leading-[22px] font-bold text-c-paper transition-transform duration-[350ms] ease-[var(--ease)] ${
-              count > 0 ? "scale-100" : "scale-0"
+              shown > 0 ? "scale-100" : "scale-0"
             }`}
             data-testid="bag-badge"
           >
-            {count}
+            {shown}
           </span>
         </button>
         <button
@@ -188,7 +224,7 @@ export function BagBar({
           type="button"
           onClick={onPill}
           inert={compact}
-          className={`pointer-events-auto flex h-[60px] flex-1 items-center justify-between rounded-full bg-c-ink pr-2 pl-[22px] text-c-paper shadow-[0_14px_30px_-12px_rgba(0,0,0,0.55)] transition-[transform,opacity] duration-[350ms] ease-[var(--ease)] active:scale-95 ${
+          className={`pointer-events-auto flex h-[60px] flex-1 items-center justify-between rounded-full bg-c-ink pr-2 pl-[22px] text-c-paper shadow-[0_14px_30px_-12px_rgba(0,0,0,0.55)] transition-[transform,opacity] duration-[350ms] ease-[var(--ease)] active:scale-95 ${focusRing} ${
             compact ? "pointer-events-none translate-x-10 opacity-0" : ""
           }`}
           data-testid="bag-pill"
@@ -209,25 +245,22 @@ export function BagBar({
       <div className="sr-only" aria-live="polite" data-testid="bag-live">
         {live}
       </div>
-      {open
-        ? createPortal(
-            <BagSheet
-              ref={sheetRef}
-              products={products}
-              maxQty={maxQty}
-              cart={cart}
-              items={items}
-              count={count}
-              subtotalCents={subtotalCents}
-              orderingEnabled={orderingEnabled}
-              onIncrease={onIncrease}
-              onDecrease={onDecrease}
-              onCheckout={onCheckout}
-              onClose={closeSheet}
-            />,
-            document.body,
-          )
-        : null}
+      {open ? (
+        <BagSheet
+          ref={sheetRef}
+          products={products}
+          maxQty={maxQty}
+          cart={cart}
+          items={items}
+          count={count}
+          subtotalCents={subtotalCents}
+          orderingEnabled={orderingEnabled}
+          onIncrease={onIncrease}
+          onDecrease={onDecrease}
+          onCheckout={onCheckout}
+          onClose={closeSheet}
+        />
+      ) : null}
     </>
   );
 }

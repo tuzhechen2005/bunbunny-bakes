@@ -47,6 +47,8 @@ export const copy = {
       /** Tiny handwritten hint above the rope (D77). */
       tryMe: "点击试试！",
       hangBack: "挂回去",
+      /** Chevron of the sub-page top bars (checkout says 返回菜单). */
+      back: "返回",
       prevProduct: "上一款",
       nextProduct: "下一款",
       rackLabel: "今日出炉的面包，左右滑动或用方向键，回车查看",
@@ -80,6 +82,13 @@ export const copy = {
       increase: "增加一个",
       /** Screen-reader label for the qty, e.g. "已选 3 个" */
       qtyLabel: "已选 {qty} 个",
+      /** Screen-reader names that carry the product, e.g. "增加一个 奶酪角" */
+      increaseNamed: "增加一个 {name}",
+      decreaseNamed: "减少一个 {name}",
+      addNamed: "放进纸袋 {name}",
+      qtyLabelNamed: "{name} 已选 {qty} 个",
+      /** Name of a grid photo (opens the detail), e.g. "查看 奶酪角" */
+      viewDetail: "查看 {name}",
       barCount: "已选 {count} 件",
       barSubtotal: "小计 {amount}",
       /** Label alone, for bars that render the amount as a separate (animated) element. */
@@ -87,6 +96,14 @@ export const copy = {
       goCheckout: "去结算",
       checkoutClosed: "暂未开放预订",
       footerContact: "微信 {id}",
+    },
+    /** The bag sheet (names are spoken with the action so a screen reader hears what changes). */
+    bag: {
+      decreaseNamed: "减少一个 {name}",
+      increaseNamed: "增加一个 {name}",
+      qtyNamed: "{name} 已选 {qty} 个",
+      /** One-time notice when a product left the menu and was taken out of the bag. */
+      removedNotice: "有商品已下架，已从纸袋移除",
     },
     checkout: {
       pageTitle: "确认预订",
@@ -134,11 +151,13 @@ export const copy = {
       pickDate: "请先选择取货日期",
       /** FULL suggestion button, e.g. "改成 10/31 周六" */
       switchDate: "改成 {day}",
+      /** Why 确认提交预订 is disabled while a product is paused or unavailable. */
+      blockedUnavailable: "有商品暂停供应，请先移除",
     },
     /** Order page /o/{token} (PAGES.md), also the "order submitted" page. */
     order: {
+      pageTitle: "订单",
       newTitle: "预订成功",
-      newHint: "用这个链接随时查看订单",
       copyLink: "复制订单链接",
       loading: "加载中…",
       loadFailed: "加载失败，请稍后刷新",
@@ -187,6 +206,16 @@ export const copy = {
       empty: "还没有订单",
       /** A row whose request failed. */
       rowFailed: "没加载出来",
+      /** Short status of a row (the order page has the full sentence). */
+      status: {
+        PENDING: "等待确认",
+        CONFIRMED: "已确认",
+        BAKING: "烤制中",
+        READY: "可以取货",
+        READY_DELIVERY: "配送中",
+        COMPLETED: "已完成",
+        CANCELLED: "已取消",
+      },
       retry: "重新加载",
       /** Shown below the list; the WeChat id follows when the menu returns it. */
       footerHint: "找不到订单？加店主微信要链接",
@@ -338,6 +367,8 @@ export const copy = {
         VENMO: "Venmo",
         CASH: "现金",
         OTHER: "其他",
+        /** Paid order with no method recorded (D94). */
+        UNSPECIFIED: "未注明",
       },
     },
     /** /admin/settings (PAGES.md). Each section has its own save button. */
@@ -488,7 +519,34 @@ export const copy = {
         sortOrder: "排序",
         date: "日期",
         amountCents: "金额",
+        subtotalCents: "小计",
+        totalCents: "总额",
+        cutoffAt: "截止时间",
+        capacityMode: "名额方式",
+        doughG: "每个面团克数（g）",
+        roundG: "每个大圆包克数（g）",
+        piecesPerRound: "一个大圆包切几个",
+        batchYield: "一批做几个",
+        leadDays: "提前几天预订",
+        imageUrl: "照片",
+        order: "商品顺序",
       },
+      /** One product in a list, e.g. 「奶酪角 ×3」. */
+      itemChip: "{name} ×{qty}",
+      /** One per-day limit, e.g. 「奶酪角 5」. */
+      limitChip: "{name} {limit}",
+      listSeparator: "、",
+      unknownProduct: "已下架商品",
+      hasPhoto: "已设置",
+      sources: { WEB: "顾客下单", ADMIN: "代客下单" },
+      capacityModes: {
+        DOUGH_PER_UNIT: "按个算面团",
+        DOUGH_PER_ROUND: "按大圆包算面团",
+        INDEPENDENT: "独立限额",
+      },
+      productStatuses: { ACTIVE: "在售", PAUSED: "暂停", ARCHIVED: "下架" },
+      fulfillments: { PICKUP: "自提", DELIVERY: "配送" },
+      productEntity: "商品 {name}",
     },
     /** Dashboard `/admin` (PAGES.md 首页). */
     dashboard: {
@@ -552,6 +610,8 @@ export const copy = {
       usageProduct: "{name} {used} / {limit}",
       usageDelivery: "配送 {used} / {limit}",
       deliveryOff: "不配送",
+      /** Phone calendar cell: order count under the dough bar. */
+      compactOrders: "{n} 单",
       dayCellLabel: "{md}，{status}",
       statusOpen: "开放",
       statusOver: "开放，已超限",
@@ -684,6 +744,14 @@ export const copy = {
         CANCELLED: "已取消",
         REJECTED: "已拒绝",
       },
+      /** READY on a delivery order, matching what the customer sees (正在配送). */
+      readyDelivery: "配送中",
+      moveToReadyDelivery: "标为配送中",
+      /** Jumping over steps asks first. */
+      jumpTo: "直接{label}",
+      jumpTitle: "跳过中间步骤？",
+      jumpBody: "要把订单从「{from}」直接改成「{to}」，会跳过：{skipped}。",
+      jumpConfirm: "确认跳过",
       /** One-tap next-status button labels. */
       moveTo: {
         NEW: "标为新订单",
@@ -759,24 +827,6 @@ export const copy = {
       logActorAdmin: "店主",
       logActorCustomer: "顾客",
       logActorSystem: "系统",
-      logFields: {
-        status: "状态",
-        paid: "付款",
-        paidMethod: "付款方式",
-        orderNo: "订单号",
-        pickupDate: "取货日期",
-        fulfillment: "取货方式",
-        wechatId: "微信号",
-        note: "备注",
-        items: "商品",
-        subtotalCents: "小计",
-        deliveryFeeCents: "运费",
-        totalCents: "总额",
-        violations: "超限项",
-      },
-      yes: "是",
-      no: "否",
-      emptyValue: "无",
       logReason: "原因：{reason}",
       logEmpty: "还没有操作记录",
       arrow: " → ",

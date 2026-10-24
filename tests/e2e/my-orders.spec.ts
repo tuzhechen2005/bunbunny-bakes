@@ -94,7 +94,7 @@ const noHorizontalScroll = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
 test.describe("save-link modal (D83)", () => {
-  test("opens ~0.8 s after the stamp on ?new=1, traps focus, only 我已保存 closes it, copy works", async ({ page }) => {
+  test("opens ~1.3 s after the stamp on ?new=1, traps focus, only 我已保存 closes it, copy works", async ({ page }) => {
     await stubClipboard(page, "ok");
     await mockOrders(page, { [TOKEN]: () => makeOrder() });
     await page.goto(`/o/${TOKEN}?new=1`);
@@ -107,7 +107,7 @@ test.describe("save-link modal (D83)", () => {
     const stampedAt = Date.now();
     const modal = page.getByTestId("save-modal");
     await expect(modal).toBeVisible({ timeout: 3000 });
-    expect(Date.now() - stampedAt).toBeGreaterThan(300);
+    expect(Date.now() - stampedAt).toBeGreaterThan(900);
 
     await expect(modal).toHaveAttribute("role", "dialog");
     await expect(modal).toHaveAttribute("aria-modal", "true");
@@ -143,7 +143,7 @@ test.describe("save-link modal (D83)", () => {
     await page.getByTestId("save-done").click();
     await expect(modal).toHaveCount(0);
     // The save-link card stays on the page.
-    await expect(page.getByTestId("order-link")).toBeVisible();
+    await expect(page.getByTestId("copy-link-secondary")).toBeVisible();
 
     // Not again on reload.
     await page.reload();
@@ -247,7 +247,7 @@ test.describe("/orders (D84)", () => {
     await expect(rows.nth(0).getByTestId("row-order-no")).toHaveText("B-1001");
     await expect(rows.nth(0).getByTestId("row-total")).toHaveText("$20.99");
     await expect(rows.nth(0).getByTestId("row-date")).toHaveText("10/30 周五");
-    await expect(rows.nth(0).getByTestId("row-status")).toHaveText(copy.customerStatus.readyPickup);
+    await expect(rows.nth(0).getByTestId("row-status")).toHaveText(m.status.READY); // a short status, not the sentence
     await expect(rows.nth(0)).toHaveAttribute("data-state", "ready");
     await expect(rows.nth(0).locator("a")).toHaveAttribute("href", "/o/tokA");
 
@@ -255,7 +255,7 @@ test.describe("/orders (D84)", () => {
     await expect(rows.nth(1)).toHaveAttribute("data-state", "failed");
     await expect(rows.nth(1)).toContainText("B-1003");
     await expect(rows.nth(1)).toContainText(m.rowFailed);
-    await expect(rows.nth(2).getByTestId("row-status")).toHaveText(copy.customerStatus.completed);
+    await expect(rows.nth(2).getByTestId("row-status")).toHaveText(m.status.COMPLETED);
 
     // 404 is removed from storage too.
     const stored = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? "[]"), KEY);
@@ -267,6 +267,7 @@ test.describe("/orders (D84)", () => {
     await retry.click();
     await expect(rows.nth(1)).toHaveAttribute("data-state", "ready");
     await expect(rows.nth(1).getByTestId("row-total")).toHaveText("$15.00");
+    await expect(rows.nth(1).getByTestId("row-status")).toHaveText(m.status.CONFIRMED);
     await expect(page.getByTestId("order-row-retry")).toHaveCount(0);
 
     await expect(page.getByTestId("orders-hint")).toHaveText(m.footerHint);
@@ -289,6 +290,9 @@ test.describe("/orders (D84)", () => {
     await mockMenu(page);
     await page.goto("/orders");
     await expect(page.getByTestId("orders-empty")).toHaveText(m.empty);
+    // The logo at 40% sits above the line.
+    expect(await page.getByTestId("orders-empty").locator("img").evaluate((el) => getComputedStyle(el).opacity)).toBe("0.4");
+    await expect(page.getByTestId("top-bar")).toBeVisible();
     await expect(page.getByTestId("orders-hint")).toHaveText(m.footerHint);
     await page.screenshot({ path: "test-results/h1-orders-empty.png", fullPage: true });
   });

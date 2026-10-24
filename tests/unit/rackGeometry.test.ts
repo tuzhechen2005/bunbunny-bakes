@@ -29,6 +29,14 @@ describe("rack metrics (prototype layout)", () => {
     expect(rackMetrics(375).height).toBe(20 + 12 + 203 + 38);
   });
 
+  it("a short (landscape) viewport caps the photo by its height", () => {
+    expect(rackMetrics(430, 342).cardW).toBe(157);
+    expect(rackMetrics(430, 499).cardW).toBe(230);
+    expect(rackMetrics(430, 500).cardW).toBe(CARD_MAX_PX);
+    expect(rackMetrics(430, 844).cardW).toBe(CARD_MAX_PX);
+    expect(rackMetrics(430).cardW).toBe(CARD_MAX_PX);
+  });
+
   it("falls back to 375 px when the rack has no width yet", () => {
     expect(rackMetrics(0).width).toBe(375);
   });
@@ -91,6 +99,8 @@ describe("card poses", () => {
     expect(dropDelayMs(3)).toBe(450);
     expect(dropStartPx(0)).toBe(-420);
     expect(dropStartPx(2)).toBe(-500);
+    // a long menu never starts higher than the third card (the first overshoot stays small)
+    expect(dropStartPx(9)).toBe(-500);
     expect(restAngle(0)).toBeCloseTo((0.7 * Math.PI) / 180, 9);
     expect(restAngle(4)).toBe(restAngle(0));
   });
