@@ -982,4 +982,20 @@ test.describe("home polish (J1)", () => {
     await expect.poll(() => selectedIndex(page)).toBe(1);
     await expect(page.getByTestId("bag-count")).toContainText("0");
   });
+  test("Back still closes the detail after a reload (the history state outlives the page)", async ({ page }) => {
+    await mockHome(page);
+    await page.goto("/");
+    await settled(page);
+    await page.getByTestId("rack").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("detail")).toBeVisible({ timeout: 2000 });
+    await page.reload();
+    await settled(page);
+    await page.getByTestId("rack").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("detail")).toBeVisible({ timeout: 2000 });
+    await page.goBack();
+    await expect(page.getByTestId("detail")).toHaveCount(0, { timeout: 3000 });
+    expect(new URL(page.url()).pathname).toBe("/");
+  });
 });

@@ -262,10 +262,16 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
           return;
         }
         // Start from wherever the pull left the photo, end on the rope card's photo.
-        const cur = el.style.transform;
+        let cur = el.style.transform;
+        // Back right after opening: the photo may still be flying in. Take where it is on screen now,
+        // cancel those animations, and fly from there (not from where the layout says it is).
+        const running = el.getAnimations?.() ?? [];
+        const seen = running.length > 0 ? el.getBoundingClientRect() : null;
+        running.forEach((a) => a.cancel());
         el.style.transform = "";
         el.style.transformOrigin = "0 0";
         const f = el.getBoundingClientRect();
+        if (seen) cur = `translate(${seen.left - f.left}px,${seen.top - f.top}px) scale(${seen.width / f.width})`;
         const sx = to.width / f.width;
         const fly = el.animate(
           [
