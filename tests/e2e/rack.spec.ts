@@ -8,6 +8,8 @@ import { expect, test, type CDPSession, type Page } from "@playwright/test";
 test.use({ browserName: "chromium" });
 
 const PHOTO = readFileSync("tests/fixtures/bun.jpg");
+/** The photo files themselves and the /_next/image URLs that resize them (D91): both answer with the fixture. */
+const MOCK_PHOTO = /\/api\/images\/mock\/|%2Fapi%2Fimages%2Fmock%2F/;
 
 const PRODUCTS = [
   { id: "p-redbean", name: "奶酥红豆包", description: "红豆馅", unitPriceCents: 249, bundleSize: 4, bundlePriceCents: 899, status: "ACTIVE", leadDays: 1 },
@@ -22,7 +24,7 @@ async function mockHome(page: Page, products = PRODUCTS) {
       json: { orderingEnabled: true, products, pickupNote: "", deliveryFeeCents: 500, freeDeliveryMinCents: 2500, maxQtyPerItem: 8 },
     }),
   );
-  await page.route("**/api/images/mock/*", (route) => route.fulfill({ body: PHOTO, contentType: "image/jpeg" }));
+  await page.route(MOCK_PHOTO, (route) => route.fulfill({ body: PHOTO, contentType: "image/jpeg" }));
 }
 
 /**
@@ -696,7 +698,7 @@ test.describe("states", () => {
       if (mode === "error") return route.fulfill({ status: 500, json: { error: "x" } });
       return route.fulfill({ json: mode === "empty" ? menu([], true) : menu(PRODUCTS, false) });
     });
-    await page.route("**/api/images/mock/*", (route) => route.fulfill({ body: PHOTO, contentType: "image/jpeg" }));
+    await page.route(MOCK_PHOTO, (route) => route.fulfill({ body: PHOTO, contentType: "image/jpeg" }));
     await page.goto("/");
     await expect(page.getByText("菜单加载失败，请稍后再试")).toBeVisible();
     mode = "empty";

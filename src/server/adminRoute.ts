@@ -5,6 +5,7 @@
 import { ZodError, type z } from "zod";
 import type { AdminSessionInfo } from "./auth";
 import { AppError } from "./errors";
+import { revalidateMenu } from "./menuCache";
 import { issuesToFields } from "./orderSchemas";
 import { checkOrigin } from "./origin";
 import { errorResponse, requireAdmin } from "./session";
@@ -42,7 +43,11 @@ export function adminHandler<P extends Params = Record<string, string>>(
       }
       const { session, now } = await requireAdmin();
       const params = (context?.params ? await context.params : {}) as P;
-      return await fn({ request, params, admin: session, now });
+      const response = await fn({ request, params, admin: session, now });
+      // Any successful admin write may change the menu (product, photo, price, ordering switch):
+      // the home page's cached copy (src/server/menuCache.ts) must not outlive it.
+      if (method !== "GET" && method !== "HEAD" && response.ok) revalidateMenu();
+      return response;
     } catch (e) {
       if (e instanceof ZodError) {
         return errorResponse(new AppError("VALIDATION", { extra: { fields: issuesToFields(e) } }));

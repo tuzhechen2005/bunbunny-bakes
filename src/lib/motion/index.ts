@@ -4,3 +4,4 @@ export * from "./gesture";
 export * from "./loop";
 export * from "./fps";
 export * from "./pile";
+export * from "./ease";

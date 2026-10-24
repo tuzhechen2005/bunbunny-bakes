@@ -153,7 +153,7 @@ export function BagBar({
   return (
     <>
       <div
-        className={`pointer-events-none fixed inset-x-0 bottom-0 z-[48] mx-auto flex max-w-[430px] items-end gap-3 px-4 pb-[calc(14px+env(safe-area-inset-bottom))] transition-[opacity,transform] duration-300 ${
+        className={`pointer-events-none fixed inset-x-0 bottom-0 z-[48] mx-auto flex max-w-[430px] items-end gap-3 px-4 safe-x pb-[calc(14px+env(safe-area-inset-bottom))] transition-[opacity,transform] duration-300 ${
           open ? "translate-y-[30px] opacity-0" : ""
         }`}
         inert={open}

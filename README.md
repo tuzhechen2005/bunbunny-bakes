@@ -67,6 +67,24 @@ DB_TEST_REMOTE=1 DB_TEST_TIMEOUT_SCALE=4 npm run test:db
 `DB_TEST_TIMEOUT_SCALE` multiplies the db tests' timeouts (every query is an internet round trip);
 `DB_TEST_REMOTE=1` skips the one test whose premise needs a local server (a 300 ms pool connect timeout).
 
+## Product photos (D91)
+
+Photos are uploaded once at full size and stored as blobs (`/api/images/<product>/<hash>.jpg`, immutable). The customer
+pages never load that file directly: `ProductPhoto` uses `next/image`, so the browser asks `/_next/image?url=...&w=...&q=75`
+for a width that fits the place it is shown (rope, grid, detail: `sizes` in `src/lib/photo.ts`) and gets avif or webp by its
+`Accept` header. `photoUrl(url, width)` builds the same URL for CSS backgrounds (paper-bag discs, the fly layer, bag rows: 128 px).
+`next.config.ts` only lets the optimizer touch `/api/images/**` and only the widths in `PHOTO_WIDTHS`.
+
+- Local / `next start`: the built-in optimizer (sharp) resizes and caches under `.next/cache/images`. With `IMAGE_STORE=memory`
+  this works the same as in production.
+- Netlify: the Next runtime maps `/_next/image` to the Netlify Image CDN (no extra config; the `images` block in
+  `next.config.ts` is read by the runtime). Resized files are cached at the edge and keyed by URL, which contains the
+  immutable photo key, so a replaced photo is a new URL.
+- The home page (`src/app/page.tsx`) reads the menu on the server with the same function as `/api/menu`
+  (`src/server/menuCache.ts`, `use cache`, about 60 s; every successful admin write calls `revalidateMenu()`), and the page
+  still refetches `/api/menu` on mount, so the client answer wins. `HOME_INITIAL_MENU=off` disables the server copy (Playwright
+  sets it because the e2e tests mock `/api/menu`); `MENU_CACHE_SECONDS` changes the 60 s.
+
 ## Docs
 
 | File | What it covers |

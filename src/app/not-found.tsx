@@ -6,7 +6,7 @@ import { copy } from "@/copy";
 export default function NotFound() {
   return (
     <main className="flex min-h-svh w-full flex-1 flex-col items-center justify-center gap-5 bg-c-paper px-5 text-center text-c-ink">
-      <Logo label={copy.customer.brand.brandName} className="h-20 w-auto" />
+      <Logo label={copy.customer.brand.brandName} className="h-20 w-auto" lazy />
       <p className="max-w-xs text-base leading-relaxed text-c-ink">{copy.errors.NOT_FOUND}</p>
       <Link
         href="/"

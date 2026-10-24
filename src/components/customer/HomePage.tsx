@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { copy } from "@/copy";
 import { formatCents } from "@/domain/pricing";
-import type { MenuProduct } from "@/lib/api";
+import type { Menu, MenuProduct } from "@/lib/api";
 import { cart, useCart } from "@/lib/cart";
 import { applyField, fieldFor } from "@/lib/field";
 import { flyToBag } from "@/lib/flyToBag";
@@ -30,8 +30,13 @@ const b = copy.customer.brand;
 /** Spin takes 0.64 s; the detail opens at about 0.54 s (FRONTEND.md 4.1). */
 const SPIN_OPEN_MS = 540;
 const HINT_KEY = "bb_tryme_done";
+/** The page colour (layout.tsx `viewport.themeColor`): the browser chrome outside the home page. */
+const THEME_COLOR = "#ffffff";
 
 type Phase = "home" | "spin" | "detail" | "closing";
+
+const noopSubscribe = () => () => {};
+const readHintServer = () => false;
 
 function readHintDone(): boolean {
   try {
@@ -41,9 +46,10 @@ function readHintDone(): boolean {
   }
 }
 
-export function HomePage() {
+/** `initialMenu`: what the server rendered the page with (src/app/page.tsx); null while it is not known. */
+export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) {
   const router = useRouter();
-  const { status, menu, reload } = useMenu();
+  const { status, menu, reload } = useMenu(initialMenu);
   const items = useCart();
   const { reduced } = useMotionPrefs();
 
@@ -76,6 +82,17 @@ export function HomePage() {
     }
     meta.content = f;
   }, [idx]);
+  useEffect(() => {
+    // The overscroll area behind the page follows the bread too (globals.css `html.field-bg`), and
+    // both it and the browser chrome go back to the page colours when the home page unmounts.
+    const root = document.documentElement;
+    root.classList.add("field-bg");
+    return () => {
+      root.classList.remove("field-bg");
+      const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+      if (meta) meta.content = THEME_COLOR;
+    };
+  }, []);
 
   // ---- take down / hang back ----
   const heroRef = useRef<HTMLElement>(null);
@@ -98,7 +115,10 @@ export function HomePage() {
     }
   }, [phase]);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const [hintOff, setHintOff] = useState(readHintDone);
+  // The server render and hydration see "not done yet"; the stored flag applies right after.
+  const hintStored = useSyncExternalStore(noopSubscribe, readHintDone, readHintServer);
+  const [hintShown, setHintOff] = useState(false);
+  const hintOff = hintStored || hintShown;
   useEffect(() => {
     const pending = timers.current;
     return () => pending.forEach(clearTimeout);

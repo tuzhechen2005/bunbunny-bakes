@@ -113,7 +113,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  opacity: 0.85;
+  color: var(--fink2);
 }
 .hm-open i {
   width: 7px;
@@ -130,7 +130,7 @@
 .hm-sub {
   margin: 6px 0 0;
   font: 500 15px/1.5 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  opacity: 0.8;
+  color: var(--fink2);
 }
 .hm-closed {
   margin: 10px 0 0;
@@ -140,7 +140,7 @@
   margin: 0;
 }
 .hm-closed p + p {
-  opacity: 0.75;
+  color: var(--fink2);
 }
 .hm-state {
   min-height: 280px;
@@ -165,7 +165,9 @@
 .hm-rack {
   position: relative;
   margin: 10px -20px 0;
-  height: var(--rh, 330px);
+  /* Before the rack measures itself (server render): the same height rackMetrics() gives, so nothing
+     below it moves at hydration: 70 px + the photo width (54% of the column, at most 232 px). */
+  height: var(--rh, calc(70px + min(min(100vw, 430px) * 0.54, 232px)));
   touch-action: pan-y pinch-zoom;
   user-select: none;
   -webkit-user-select: none;
@@ -223,6 +225,9 @@
   transform-origin: 50% 0;
   will-change: transform;
   perspective: 900px;
+  /* The server renders the cards unplaced; the rack's first frame sets the inline opacity (and the
+     transform) that lays them out, so they stay invisible until then. */
+  opacity: 0;
 }
 .hm-hang {
   position: relative;
@@ -254,7 +259,7 @@
   border-radius: 3px;
   overflow: hidden;
   aspect-ratio: 1;
-  background: var(--c-wash);
+  background: var(--linen);
   box-shadow:
     0 26px 34px -20px rgba(0, 0, 0, 0.55),
     0 6px 12px -6px rgba(0, 0, 0, 0.3);
@@ -295,15 +300,18 @@
   position: absolute;
   z-index: 20;
   pointer-events: none;
-  color: var(--fink);
+  color: var(--fink2);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  opacity: 0.85;
   transition: opacity 0.4s;
 }
 .hm-try.is-off {
   opacity: 0;
+}
+/* Not placed yet (the rack sets left/top inline when it measures). */
+.hm-try:not([style]) {
+  visibility: hidden;
 }
 .hm-try span {
   font: 400 14px/1 "Hand Hint", system-ui, sans-serif;
@@ -363,10 +371,10 @@
   display: block;
   margin-top: 6px;
   font: 500 13px/1.3 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  opacity: 0.75;
+  color: var(--fink2);
 }
 .hm-price > .hm-warn {
-  opacity: 1;
+  color: var(--fink);
   font-weight: 700;
 }
 .hm-addp {
@@ -442,7 +450,7 @@
   border-radius: 4px;
   overflow: hidden;
   aspect-ratio: 1;
-  background: var(--c-wash);
+  background: var(--linen);
   box-shadow: 0 18px 26px -18px rgba(0, 0, 0, 0.45);
 }
 .hm-ph-img img {
@@ -481,12 +489,12 @@
 }
 .hm-t-p small {
   font: 500 11.5px/1.2 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  color: var(--c-grey);
+  color: var(--c-grey-text);
 }
 .hm-t-note {
   margin: 4px 0 0;
   font: 500 12px/1.4 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  color: var(--c-grey);
+  color: var(--c-grey-text);
 }
 .hm-t-note.is-warn {
   color: var(--c-red);
@@ -556,7 +564,7 @@
   background: var(--tint);
   border-top: 1px solid color-mix(in srgb, var(--field) 12%, var(--c-paper));
   padding: 40px 20px 150px;
-  color: var(--c-grey);
+  color: var(--c-grey-text);
   font: 400 13px/1.8 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 .hm-foot .big {
@@ -688,7 +696,7 @@
 .hm-dt-desc {
   margin: 12px 0 0;
   font: 400 16px/1.7 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  opacity: 0.86;
+  color: var(--fink2);
   white-space: pre-line;
 }
 .hm-dt-prices {
@@ -706,7 +714,7 @@
 .hm-dt-prices small {
   display: block;
   font: 500 12.5px/1 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-  opacity: 0.72;
+  color: var(--fink2);
   margin-top: 7px;
 }
 .hm-dt-lead {

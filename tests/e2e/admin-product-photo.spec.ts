@@ -51,7 +51,8 @@ test("upload a (large) photo, see it on the home card, then delete it back to th
   await page.goto("/");
   await expect(home).toBeVisible();
   const img = home.locator("img");
-  await expect(img).toHaveAttribute("src", /^\/api\/images\//);
+  // Served resized by the image optimizer (D91).
+  await expect(img).toHaveAttribute("src", /\/_next\/image\?url=%2Fapi%2Fimages%2F/);
   await expect(img).toHaveAttribute("loading", "lazy");
   await expect(home.getByTestId("bunny-placeholder")).toHaveCount(0);
   await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth)).toBeGreaterThan(0);

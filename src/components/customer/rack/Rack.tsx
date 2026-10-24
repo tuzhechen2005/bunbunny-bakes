@@ -432,10 +432,10 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
             <Peg />
             <div className="hm-flip">
               <div className="hm-face">
-                <ProductPhoto product={p} className="h-full w-full" eager={i === 0} decorative />
+                <ProductPhoto product={p} className="h-full w-full" variant="rope" priority={i === 0} eager={i === 1} decorative />
               </div>
               <div className="hm-face hm-back">
-                <ProductPhoto product={p} className="h-full w-full" eager={i === 0} decorative />
+                <ProductPhoto product={p} className="h-full w-full" variant="rope" decorative />
               </div>
             </div>
           </div>

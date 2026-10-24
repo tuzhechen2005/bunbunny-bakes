@@ -691,7 +691,7 @@ export function CheckoutPage() {
               name="wechatId"
               aria-label={t.wechatLabel}
               placeholder={t.wechatHint}
-              className="w-full rounded-none border-0 border-b-2 border-c-ink bg-transparent pt-2 pb-2.5 text-[21px] leading-[1.3] font-semibold text-c-ink outline-none transition-colors placeholder:font-medium placeholder:text-c-grey/50 focus:border-c-red"
+              className="w-full rounded-none border-0 border-b-2 border-c-ink bg-transparent pt-2 pb-2.5 text-[21px] leading-[1.3] font-semibold text-c-ink outline-none transition-colors placeholder:font-medium placeholder:text-c-grey focus:border-c-red"
               value={wechatId}
               maxLength={WECHAT_MAX}
               required

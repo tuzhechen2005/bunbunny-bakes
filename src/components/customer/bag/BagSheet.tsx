@@ -7,6 +7,7 @@ import { formatCents } from "@/domain/pricing";
 import type { MenuProduct } from "@/lib/api";
 import type { CartItem } from "@/lib/cart";
 import { Spring } from "@/lib/motion";
+import { photoUrl, THUMB_WIDTH } from "@/lib/photo";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { fill, safeLineTotal } from "../format";
 import { arrowZoom, done, play } from "./anim";
@@ -225,7 +226,7 @@ export const BagSheet = forwardRef<BagSheetHandle, BagSheetProps>(function BagSh
                   <div className="size-[62px] overflow-hidden rounded-xl bg-c-wash">
                     {product.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={product.imageUrl} alt="" loading="lazy" className="size-full object-cover" />
+                      <img src={photoUrl(product.imageUrl, THUMB_WIDTH)} alt="" loading="lazy" className="size-full object-cover" />
                     ) : (
                       <Logo className="size-full object-contain p-3 opacity-40" />
                     )}

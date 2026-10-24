@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -20,6 +20,13 @@ const num = localFont({
   variable: "--font-num-face",
   fallback: ["Georgia", "serif"],
 });
+
+// `cover` lets the page use the whole screen on notched phones (safe-area insets are handled in the
+// CSS); the browser chrome is white, and the home page tints it with the bread colour while mounted.
+export const viewport: Viewport = {
+  viewportFit: "cover",
+  themeColor: "#ffffff",
+};
 
 export const metadata: Metadata = {
   title: "🐰的大面包",
