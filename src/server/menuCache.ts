@@ -1,6 +1,7 @@
 // The menu the home page is rendered with on the server (D91). Same data as GET /api/menu (getMenu),
-// kept for about a minute per server instance with `use cache`; admin writes drop it at once
-// (revalidateMenu, called by adminHandler). The page refetches /api/menu on mount, so what the
+// cached with `use cache` (MENU_CACHE_SECONDS, default 60: after that the next request refreshes it
+// and may still get the old copy while it does, for up to a minute more); admin writes drop it at
+// once (revalidateMenu, called by adminHandler). The page refetches /api/menu on mount, so what the
 // visitor sees is corrected within a moment anyway (ordering closed, a paused product).
 
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
@@ -9,7 +10,7 @@ import { getMenu, type Menu } from "./menu";
 
 export const MENU_TAG = "menu";
 
-/** Seconds the cached menu is served before it is refreshed. 0 turns the cache off (tests). */
+/** Seconds before the cached menu is refreshed (0: refreshed on every request, still never older than the last admin write). */
 function cacheSeconds(): number {
   const n = Number(process.env.MENU_CACHE_SECONDS ?? 60);
   return Number.isFinite(n) && n >= 0 ? n : 60;

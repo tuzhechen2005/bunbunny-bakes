@@ -530,6 +530,7 @@ export function CheckoutPage() {
                 <li key={productId} className="flex items-center gap-3 py-3" data-testid="cart-line" data-product-id={productId}>
                   <ProductPhoto
                     product={product}
+                    variant="thumb"
                     className={`h-14 w-14 shrink-0 overflow-hidden rounded-[14px] ${unavailable ? "opacity-50 grayscale" : ""}`}
                   />
                   <div className="min-w-0 flex-1">

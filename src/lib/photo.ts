@@ -17,12 +17,15 @@ export const PHOTO_SIZES = {
   grid: "(max-width: 430px) 46vw, 188px",
   /** Taken-down detail photo. */
   detail: "(max-width: 430px) 76vw, 334px",
-  /** Bag rows, checkout lines, flying and stacked discs: small, never above 64 CSS px. */
+  /** Checkout lines and other small photos, never above 64 CSS px. */
   thumb: "64px",
 } as const;
 export type PhotoVariant = keyof typeof PHOTO_SIZES;
 
 const OURS = "/api/images/";
+
+/** False when the site was built with PHOTO_OPTIMIZE=off (next.config.ts): photos are then served as stored. */
+export const PHOTO_OPTIMIZE = process.env.NEXT_PUBLIC_PHOTO_OPTIMIZE !== "off";
 
 /** True for the photos we serve ourselves (the only ones the optimizer is allowed to fetch). */
 export function isOwnPhoto(url: string | null | undefined): url is string {
@@ -35,7 +38,7 @@ export function isOwnPhoto(url: string | null | undefined): url is string {
  * our photos is returned unchanged. `width` snaps up to the nearest allowed width.
  */
 export function photoUrl(url: string, width: number): string {
-  if (!isOwnPhoto(url)) return url;
+  if (!isOwnPhoto(url) || !PHOTO_OPTIMIZE) return url;
   const w = PHOTO_WIDTHS.find((x) => x >= width) ?? PHOTO_WIDTHS[PHOTO_WIDTHS.length - 1];
   return `/_next/image?url=${encodeURIComponent(url)}&w=${w}&q=${PHOTO_QUALITY}`;
 }
@@ -45,5 +48,7 @@ export function photoCssUrl(url: string, width: number): string {
   return `url("${photoUrl(url, width).replace(/"/g, "%22")}")`;
 }
 
-/** Thumbnails for CSS backgrounds and small rows (bag rows, discs): 128 px. */
+/** Flying and stacked discs (CSS backgrounds, shown at most about 40 px): 128 px. */
 export const THUMB_WIDTH = 128;
+/** Bag rows (62 CSS px, up to 3x): 192 px. */
+export const BAG_ROW_WIDTH = 192;

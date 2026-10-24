@@ -36,14 +36,14 @@ function photoLoaded(el: HTMLImageElement) {
 export function ProductPhoto({
   product,
   className,
-  variant = "thumb",
+  variant,
   priority = false,
   eager = false,
   decorative = false,
 }: {
   product: MenuProduct;
   className: string;
-  variant?: PhotoVariant;
+  variant: PhotoVariant;
   priority?: boolean;
   eager?: boolean;
   /** The surrounding element already carries the product name (alt="" then). */

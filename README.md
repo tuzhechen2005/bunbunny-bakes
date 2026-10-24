@@ -72,7 +72,7 @@ DB_TEST_REMOTE=1 DB_TEST_TIMEOUT_SCALE=4 npm run test:db
 Photos are uploaded once at full size and stored as blobs (`/api/images/<product>/<hash>.jpg`, immutable). The customer
 pages never load that file directly: `ProductPhoto` uses `next/image`, so the browser asks `/_next/image?url=...&w=...&q=75`
 for a width that fits the place it is shown (rope, grid, detail: `sizes` in `src/lib/photo.ts`) and gets avif or webp by its
-`Accept` header. `photoUrl(url, width)` builds the same URL for CSS backgrounds (paper-bag discs, the fly layer, bag rows: 128 px).
+`Accept` header. `photoUrl(url, width)` builds the same URL for CSS backgrounds (paper-bag discs and the fly layer: 128 px, bag rows: 192 px).
 `next.config.ts` only lets the optimizer touch `/api/images/**` and only the widths in `PHOTO_WIDTHS`.
 
 - Local / `next start`: the built-in optimizer (sharp) resizes and caches under `.next/cache/images`. With `IMAGE_STORE=memory`
@@ -80,10 +80,17 @@ for a width that fits the place it is shown (rope, grid, detail: `sizes` in `src
 - Netlify: the Next runtime maps `/_next/image` to the Netlify Image CDN (no extra config; the `images` block in
   `next.config.ts` is read by the runtime). Resized files are cached at the edge and keyed by URL, which contains the
   immutable photo key, so a replaced photo is a new URL.
+- **Rollback:** if the image CDN misbehaves on Netlify, set `PHOTO_OPTIMIZE=off` in the site's build environment and redeploy.
+  `next.config.ts` then sets `images.unoptimized` and `photoUrl()` returns the stored file, so every photo (`<img>` and CSS
+  backgrounds) is served as uploaded, exactly as before D91. Remove the variable to turn optimization back on.
 - The home page (`src/app/page.tsx`) reads the menu on the server with the same function as `/api/menu`
-  (`src/server/menuCache.ts`, `use cache`, about 60 s; every successful admin write calls `revalidateMenu()`), and the page
-  still refetches `/api/menu` on mount, so the client answer wins. `HOME_INITIAL_MENU=off` disables the server copy (Playwright
-  sets it because the e2e tests mock `/api/menu`); `MENU_CACHE_SECONDS` changes the 60 s.
+  (`src/server/menuCache.ts`, `use cache`). The copy is refreshed on the first request after `MENU_CACHE_SECONDS` (default 60);
+  while it refreshes, that request may still get the old copy, for up to a minute more. Every successful admin write calls
+  `revalidateMenu()`, which drops it at once. The page still refetches `/api/menu` on mount, so the client answer wins.
+- `HOME_INITIAL_MENU=off` disables the server copy. Playwright sets it for the normal suite (those specs mock `/api/menu`).
+  To test the production path run `tests/e2e/server-menu.spec.ts` alone with `E2E_SERVER_MENU=1` (the config then leaves the flag
+  unset), e.g. `E2E_SERVER_MENU=1 TEST_DATABASE_URL=<a *_test db> npx playwright test -c playwright.local.config.ts tests/e2e/server-menu.spec.ts`
+  against a production build.
 
 ## Docs
 

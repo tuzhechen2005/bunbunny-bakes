@@ -272,6 +272,9 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
             {showHero && current ? (
               <>
                 <Rack
+                  // The rack measures and places its cards once per product count; a refetch with the
+                  // same count but other products or order must start it again.
+                  key={products.map((p) => p.id).join(",")}
                   ref={rackRef}
                   products={products}
                   index={idx}

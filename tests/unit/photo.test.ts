@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import nextConfig from "../../next.config";
 import { isOwnPhoto, PHOTO_QUALITY, PHOTO_SIZES, PHOTO_WIDTHS, photoCssUrl, photoUrl, THUMB_WIDTH } from "@/lib/photo";
 
@@ -41,5 +41,33 @@ describe("next.config images", () => {
 
   it("has a sizes string for every place a photo is shown", () => {
     expect(Object.keys(PHOTO_SIZES).sort()).toEqual(["detail", "grid", "rope", "thumb"]);
+  });
+});
+
+describe("PHOTO_OPTIMIZE=off (rollback switch)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("photoUrl hands the original through", async () => {
+    vi.stubEnv("NEXT_PUBLIC_PHOTO_OPTIMIZE", "off");
+    vi.resetModules();
+    const off = await import("@/lib/photo");
+    expect(off.PHOTO_OPTIMIZE).toBe(false);
+    expect(off.photoUrl(OURS, 128)).toBe(OURS);
+    expect(off.photoCssUrl(OURS, 128)).toBe(`url("${OURS}")`);
+  });
+
+  it("next.config turns the optimizer off at build time", async () => {
+    vi.stubEnv("PHOTO_OPTIMIZE", "off");
+    vi.resetModules();
+    const cfg = (await import("../../next.config")).default;
+    expect(cfg.images?.unoptimized).toBe(true);
+    expect(cfg.env?.NEXT_PUBLIC_PHOTO_OPTIMIZE).toBe("off");
+  });
+
+  it("is on by default", () => {
+    expect(nextConfig.images?.unoptimized).toBe(false);
   });
 });
