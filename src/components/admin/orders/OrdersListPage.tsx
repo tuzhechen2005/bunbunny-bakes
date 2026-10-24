@@ -18,6 +18,7 @@ import {
   STATUS_ORDER,
   StatusChip,
 } from "./shared";
+import { moveToLabel } from "./statusUi";
 
 const t = copy.admin.orders;
 
@@ -309,7 +310,7 @@ export function OrdersListPage() {
                   <span className="text-sm text-muted">{o.pickupDateLabel}</span>
                 </Link>
                 <div className="flex flex-col items-end gap-1">
-                  <StatusChip status={o.status} />
+                  <StatusChip status={o.status} fulfillment={o.fulfillment} />
                   <span className={`text-sm ${o.paid ? "text-foreground" : "text-muted"}`}>
                     {o.paid ? t.paidMark : t.unpaidMark}
                   </span>
@@ -330,7 +331,7 @@ export function OrdersListPage() {
                   className={`${primaryBtn} mt-2 w-full`}
                   onClick={() => void advance(o, next.to)}
                 >
-                  {busyRow === o.id ? t.working : t.moveTo[next.to as keyof typeof t.moveTo]}
+                  {busyRow === o.id ? t.working : moveToLabel(next.to as OrderStatus, o.fulfillment)}
                 </button>
               )}
               {rowError[o.id] && (

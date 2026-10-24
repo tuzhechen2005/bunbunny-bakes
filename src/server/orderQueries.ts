@@ -102,6 +102,14 @@ const itemOrder: Prisma.OrderItemOrderByWithRelationInput[] = [
   { nameSnapshot: "asc" },
 ];
 
+/**
+ * Prisma's `contains` builds a LIKE pattern without escaping the value, so a search for
+ * "%" or "_" would match every order. Postgres' default LIKE escape is the backslash.
+ */
+export function escapeLike(q: string): string {
+  return q.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 export async function listOrders(db: DbClient, query: ListOrdersQuery, now: Date): Promise<OrderList> {
   const today = localDateOf(now);
   const and: Prisma.OrderWhereInput[] = [];
@@ -123,10 +131,11 @@ export async function listOrders(db: DbClient, query: ListOrdersQuery, now: Date
   if (query.paid !== undefined) and.push({ paid: query.paid });
   if (query.productId) and.push({ items: { some: { productId: query.productId } } });
   if (query.q) {
+    const q = escapeLike(query.q);
     and.push({
       OR: [
-        { orderNo: { contains: query.q, mode: "insensitive" } },
-        { wechatId: { contains: query.q, mode: "insensitive" } },
+        { orderNo: { contains: q, mode: "insensitive" } },
+        { wechatId: { contains: q, mode: "insensitive" } },
       ],
     });
   }

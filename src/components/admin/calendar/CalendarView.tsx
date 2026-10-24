@@ -5,8 +5,9 @@ import { copy } from "@/copy";
 import { addDays, localDateOf, parseLocalDate, weekdayOf } from "@/domain/dates";
 import type { LocalDate } from "@/domain/types";
 import { adminApi } from "@/lib/adminApi";
-import type { CalendarDay, CalendarResponse } from "@/server/calendar";
+import type { CalendarResponse } from "@/server/calendar";
 import { DaySheet } from "./DaySheet";
+import { usageLines } from "./usage";
 
 const t = copy.admin.calendar;
 
@@ -32,20 +33,6 @@ function shiftMonth(first: LocalDate, delta: number): LocalDate {
 function daysInMonth(first: LocalDate): number {
   const { year, month } = parseLocalDate(first);
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
-}
-
-/** Compact usage lines of an open day (PAGES example: 1460 / 1600 g · 布蕾 12 / 24 · 配送 5 / 8). */
-function usageLines(day: CalendarDay, names: Record<string, string>): string[] {
-  const lines = [fill(t.usageDough, { used: day.usage.doughG, limit: day.limits.doughLimitG })];
-  for (const [id, limit] of Object.entries(day.limits.productLimits)) {
-    lines.push(fill(t.usageProduct, { name: names[id] ?? "", used: day.usage.products[id] ?? 0, limit }));
-  }
-  lines.push(
-    day.limits.deliveryEnabled
-      ? fill(t.usageDelivery, { used: day.usage.deliveries, limit: day.limits.deliveryLimit })
-      : t.deliveryOff,
-  );
-  return lines;
 }
 
 /** Month grid, Sunday-first. */
@@ -146,11 +133,13 @@ export function CalendarView() {
           const open = !!day?.isOpen;
           const { day: dayNum, month: m } = parseLocalDate(date);
           const status = !day ? t.loading : open ? (over ? t.statusOver : t.statusOpen) : t.closed;
+          // Fixed cell height: every row of the month is the same height, whatever the text.
           const cls = [
-            "flex min-h-[4.5rem] min-w-0 flex-col items-stretch overflow-hidden rounded-lg border p-1 text-left text-[10px] leading-tight",
+            "flex h-16 min-w-0 flex-col items-stretch overflow-hidden rounded-lg border p-1 text-left text-[10px] leading-tight sm:h-28",
             over ? "border-danger bg-danger/10 text-danger" : open ? "border-line bg-card" : "border-line bg-soft/50 text-muted",
             date === today ? "ring-2 ring-accent" : "",
           ].join(" ");
+          const fillPct = day && open ? Math.min(100, Math.round((day.usage.doughG / Math.max(1, day.limits.doughLimitG)) * 100)) : 0;
           return (
             <button
               key={date}
@@ -164,14 +153,29 @@ export function CalendarView() {
             >
               <span className="text-sm font-semibold">
                 {dayNum}
-                {date === today && <span className="ml-0.5 text-[10px] font-normal">{t.today}</span>}
+                {date === today && <span className="ml-0.5 hidden text-[10px] font-normal sm:inline">{t.today}</span>}
               </span>
               {day && open && (
-                <span className="mt-0.5 flex flex-col break-words">
-                  {usageLines(day, names).map((l) => (
-                    <span key={l}>{l}</span>
-                  ))}
-                </span>
+                <>
+                  {/* Phone: a dough bar and the order count; the numbers are in the day sheet. */}
+                  <span className="mt-auto flex flex-col gap-0.5 sm:hidden">
+                    <span className="block h-1.5 overflow-hidden rounded-full bg-line" aria-hidden="true">
+                      <span
+                        className={`block h-full rounded-full ${over ? "bg-danger" : "bg-accent"}`}
+                        style={{ width: `${fillPct}%` }}
+                      />
+                    </span>
+                    <span className="truncate">{day.orderCount > 0 ? fill(t.compactOrders, { n: day.orderCount }) : "\u00a0"}</span>
+                  </span>
+                  {/* Wider screens: the full usage, one line each. */}
+                  <span className="mt-0.5 hidden flex-col sm:flex">
+                    {usageLines(day, names).map((l) => (
+                      <span key={l} className="truncate">
+                        {l}
+                      </span>
+                    ))}
+                  </span>
+                </>
               )}
             </button>
           );

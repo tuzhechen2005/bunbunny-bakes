@@ -144,7 +144,9 @@ export async function loadDashboard(client: DbClient, now: Date): Promise<Dashbo
     const row = openByDate.get(date);
     const productLimits: Record<string, number> = {};
     for (const p of productRows) {
-      if (p.capacityMode !== "INDEPENDENT") continue;
+      // An archived product can no longer be ordered: its limit is not shown;
+      // orders already placed stay in the order list and the baking lines.
+      if (p.capacityMode !== "INDEPENDENT" || p.status === "ARCHIVED") continue;
       const limit = overrideByKey.get(`${date}|${p.id}`) ?? p.dailyLimit;
       if (limit === null || limit === undefined) {
         throw new Error(`INDEPENDENT product "${p.id}" has no daily limit`);
@@ -185,7 +187,7 @@ export async function loadDashboard(client: DbClient, now: Date): Promise<Dashbo
     for (const o of day.orders) byStatus[o.status] += 1;
     const hasOrders = day.orders.length > 0;
     const independent = productRows
-      .filter((p) => p.capacityMode === "INDEPENDENT")
+      .filter((p) => p.capacityMode === "INDEPENDENT" && p.status !== "ARCHIVED")
       .map((p) => ({
         productId: p.id,
         name: p.name,

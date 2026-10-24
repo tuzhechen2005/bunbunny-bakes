@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { copy } from "@/copy";
 import { fill } from "@/components/customer/format";
 import { formatCents } from "@/domain/pricing";
-import type { OrderStatus, Violation } from "@/domain/types";
+import type { Fulfillment, OrderStatus, Violation } from "@/domain/types";
+import { statusLabel } from "./statusUi";
 
 const t = copy.admin.orders;
 
@@ -30,10 +31,10 @@ const chipTone: Record<OrderStatus, string> = {
   REJECTED: "bg-disabled text-disabled-ink",
 };
 
-export function StatusChip({ status }: Readonly<{ status: OrderStatus }>) {
+export function StatusChip({ status, fulfillment }: Readonly<{ status: OrderStatus; fulfillment?: Fulfillment }>) {
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${chipTone[status]}`}>
-      {t.statusLabels[status]}
+      {statusLabel(status, fulfillment)}
     </span>
   );
 }

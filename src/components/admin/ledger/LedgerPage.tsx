@@ -9,7 +9,7 @@ import { fill } from "@/components/customer/format";
 import { copy } from "@/copy";
 import { dayLabel, localDateOf } from "@/domain/dates";
 import {
-  LEDGER_METHODS,
+  LEDGER_BUCKETS,
   shiftMonth,
   type DayDetail,
   type LedgerManualEntry,
@@ -64,8 +64,8 @@ function Totals({
         <Stat label={t.receivable} value={formatCents(receivableCents)} testId={`${prefix}-receivable`} />
       </div>
       <h3 className="mt-3 mb-1 text-sm font-medium text-muted">{t.byMethod}</h3>
-      <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-5">
-        {LEDGER_METHODS.map((m) => (
+      <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-6">
+        {LEDGER_BUCKETS.map((m) => (
           <li key={m} className="flex justify-between gap-2">
             <span>{t.methods[m]}</span>
             <span data-testid={`${prefix}-method-${m}`}>{formatCents(byMethod[m])}</span>

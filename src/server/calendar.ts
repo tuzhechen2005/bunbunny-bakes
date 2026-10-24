@@ -167,10 +167,10 @@ export async function loadCalendar(
       if (p.capacityMode !== "INDEPENDENT") continue;
       const override = overrideMap.get(p.id) ?? null;
       const limit = override ?? p.dailyLimit ?? 0;
-      if (p.status !== "ARCHIVED") {
-        limits.productLimits[p.id] = limit;
-        overrides.productLimits[p.id] = override;
-      }
+      // Archived products cannot be ordered any more: no limit row, and no red day for them.
+      if (p.status === "ARCHIVED") continue;
+      limits.productLimits[p.id] = limit;
+      overrides.productLimits[p.id] = override;
       if ((u.products[p.id] ?? 0) > limit) overProducts.push(p.id);
     }
 

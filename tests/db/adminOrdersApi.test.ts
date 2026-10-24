@@ -137,6 +137,22 @@ describe("GET /api/admin/orders", () => {
     expect((await list("?q=zzz")).orders).toEqual([]);
   });
 
+  it("treats % and _ in the search as plain characters, not LIKE wildcards", async () => {
+    const plain = await createOrder({ date: D1, items: [{ productId: P.redBean, qty: 1 }], wechatId: "alice" });
+    const under = await createOrder({ date: D1, items: [{ productId: P.redBean, qty: 1 }], wechatId: "a_ice" });
+    const pct = await createOrder({ date: D1, items: [{ productId: P.redBean, qty: 1 }], wechatId: "100%wx" });
+    const ids = async (q: string) => (await list(`?q=${encodeURIComponent(q)}`)).orders.map((o) => o.id);
+    // A bare wildcard matches only the rows that really contain it.
+    expect(await ids("%")).toEqual([pct.id]);
+    expect(await ids("_")).toEqual([under.id]);
+    expect(await ids("a_ice")).toEqual([under.id]);
+    expect(await ids("a%e")).toEqual([]);
+    expect(await ids("100%")).toEqual([pct.id]);
+    // The backslash escape character itself is literal too.
+    expect(await ids("\\")).toEqual([]);
+    expect(await ids("alice")).toEqual([plain.id]);
+  });
+
   it("pages 50 at a time with a cursor", async () => {
     for (let i = 0; i < 52; i++) {
       await createOrder({ date: D1, items: [{ productId: P.redBean, qty: 1 }] });

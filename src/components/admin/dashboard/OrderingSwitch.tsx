@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { copy } from "@/copy";
 import { adminApi } from "@/lib/adminApi";
 import { AdminCard } from "../AdminCard";
@@ -30,6 +30,16 @@ export function OrderingSwitch({
       setError(result.message);
     }
   }
+
+  // Esc dismisses the pause confirmation (not while the request is in flight).
+  useEffect(() => {
+    if (!confirming || pending) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConfirming(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [confirming, pending]);
 
   const label = enabled ? (pending ? t.turningOff : t.turnOff) : pending ? t.turningOn : t.turnOn;
 
