@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
+import { Logo } from "@/components/brand/Logo";
 import { copy } from "@/copy";
 import { adminApi, ADMIN_LOGIN_PATH } from "@/lib/adminApi";
 import { ADMIN_NAV, isActiveNav } from "./nav";
@@ -46,8 +47,13 @@ export function AdminShell({ children }: Readonly<{ children: ReactNode }>) {
     <div className="flex min-h-full flex-1 flex-col bg-background text-foreground">
       <header className="sticky top-0 z-30 border-b border-line bg-card">
         <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between px-4">
-          <Link href="/admin" className="text-lg font-semibold">
-            {copy.shopName}
+          <Link
+            href="/admin"
+            aria-label={copy.customer.brand.brandName}
+            className="flex min-h-12 items-center gap-1.5 text-lg font-semibold"
+          >
+            <Logo className="h-9 w-auto" />
+            <span aria-hidden="true">{copy.customer.brand.wordmark}</span>
           </Link>
           <button
             type="button"

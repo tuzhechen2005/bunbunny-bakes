@@ -125,6 +125,21 @@ describe("GET calendar", () => {
     await createOrder({ date: D1, items: [{ productId: P.brulee, qty: 5 }] });
     expect((await get(D1, D1)).days[0].over.products).toEqual([P.brulee]);
   });
+
+  it("an archived INDEPENDENT product has no day limit row and no red day, orders stay intact", async () => {
+    await createOpenDate(D1);
+    await db.openDateProductLimit.create({ data: { date: toDbDate(D1), productId: P.brulee, limit: 4 } });
+    await createOrder({ date: D1, items: [{ productId: P.brulee, qty: 5 }] });
+    await db.product.update({ where: { id: P.brulee }, data: { status: "ARCHIVED" } });
+    const res = await get(D1, D1);
+    const day = res.days[0];
+    expect(res.independentProducts.map((p) => p.id)).not.toContain(P.brulee);
+    expect(Object.keys(day.limits.productLimits)).not.toContain(P.brulee);
+    expect(Object.keys(day.overrides.productLimits)).not.toContain(P.brulee);
+    expect(day.over.products).toEqual([]);
+    expect(day.orderCount).toBe(1);
+    expect(await db.orderItem.count({ where: { productId: P.brulee } })).toBe(1);
+  });
 });
 
 describe("PUT dates/{date}", () => {

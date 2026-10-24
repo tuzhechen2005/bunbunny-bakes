@@ -64,7 +64,7 @@ describe("dayDetail", () => {
       deliveryFeeCents: 500,
       items: [cheese(2, 1200), bean(1, 500)],
     }),
-    // Cara: 3 beans = 1500, paid, method never recorded -> OTHER
+    // Cara: 3 beans = 1500, paid, method never recorded -> UNSPECIFIED (未注明)
     order({ orderNo: "1107-003", wechatId: "cara", paidMethod: null, totalCents: 1500, items: [bean(3, 1500)] }),
     // Dan: 4 cheese = 2000, not paid yet -> receivable only
     order({
@@ -107,8 +107,8 @@ describe("dayDetail", () => {
     expect(d.qty).toBe(10);
   });
 
-  it("splits by method, null method -> OTHER, manual included, sums to revenue", () => {
-    expect(d.byMethod).toEqual({ WECHAT: 1200, ZELLE: 2200, VENMO: 700, CASH: 1500, OTHER: 1500 });
+  it("splits by method, null method -> UNSPECIFIED, manual included, sums to revenue", () => {
+    expect(d.byMethod).toEqual({ WECHAT: 1200, ZELLE: 2200, VENMO: 700, CASH: 1500, OTHER: 0, UNSPECIFIED: 1500 });
     expect(Object.values(d.byMethod).reduce((a, b) => a + b, 0)).toBe(d.revenueCents);
   });
 
@@ -132,28 +132,47 @@ describe("dayDetail", () => {
     expect(d.orders.map((o) => [o.orderNo, o.paid, o.method])).toEqual([
       ["1107-001", true, "WECHAT"],
       ["1107-002", true, "ZELLE"],
-      ["1107-003", true, "OTHER"],
+      ["1107-003", true, "UNSPECIFIED"],
       ["1107-004", false, null],
     ]);
     expect(d.manual.map((m) => m.id)).toEqual(["m1", "m2"]);
   });
 
-  it("a paid order with a delivery fee and no method: fee counted, method OTHER", () => {
+  it("a deliberate 其他 and a missing method are separate buckets (D94)", () => {
+    const e = dayDetail(
+      "2026-11-07",
+      [
+        order({ orderNo: "o", paidMethod: "OTHER", totalCents: 400, items: [bean(1, 400)] }),
+        order({ orderNo: "u", paidMethod: null, totalCents: 700, items: [bean(1, 700)] }),
+      ],
+      [manual({ id: "mo", amountCents: 300, paidMethod: "OTHER" })],
+    );
+    expect(e.byMethod.OTHER).toBe(700); // order 400 + manual 300
+    expect(e.byMethod.UNSPECIFIED).toBe(700);
+    expect(e.orders.map((r) => [r.orderNo, r.method])).toEqual([
+      ["o", "OTHER"],
+      ["u", "UNSPECIFIED"],
+    ]);
+    expect(Object.values(e.byMethod).reduce((a, b) => a + b, 0)).toBe(e.revenueCents);
+  });
+
+  it("a paid order with a delivery fee and no method: fee counted, method UNSPECIFIED", () => {
     // 2 x 500 = 1000 + 500 fee = 1500
     const e = dayDetail("2026-11-07", [
       order({ orderNo: "x", paidMethod: null, totalCents: 1500, deliveryFeeCents: 500, items: [bean(2, 1000)] }),
     ], []);
     expect(e.revenueCents).toBe(1500);
     expect(e.deliveryFeeCents).toBe(500);
-    expect(e.byMethod.OTHER).toBe(1500);
-    expect(e.orders[0].method).toBe("OTHER");
+    expect(e.byMethod.UNSPECIFIED).toBe(1500);
+    expect(e.byMethod.OTHER).toBe(0);
+    expect(e.orders[0].method).toBe("UNSPECIFIED");
     expect(e.products[0].amountCents).toBe(1000);
   });
 
   it("an empty day is all zeros", () => {
     const e = dayDetail("2026-11-20", orders, entries);
     expect(e).toMatchObject({ revenueCents: 0, qty: 0, deliveryFeeCents: 0, receivableCents: 0, orders: [], manual: [], products: [] });
-    expect(Object.values(e.byMethod)).toEqual([0, 0, 0, 0, 0]);
+    expect(Object.values(e.byMethod)).toEqual([0, 0, 0, 0, 0, 0]);
   });
 
   it("manual items without a product link group by name", () => {
@@ -188,7 +207,7 @@ describe("monthSummary", () => {
     expect(m.receivableCents).toBe(700); // 300 + 400
     expect(m.deliveryFeeCents).toBe(500);
     expect(m.qty).toBe(2 + 1 + 5);
-    expect(m.byMethod).toEqual({ WECHAT: 1000, ZELLE: 250, VENMO: 600, CASH: 0, OTHER: 0 });
+    expect(m.byMethod).toEqual({ WECHAT: 1000, ZELLE: 250, VENMO: 600, CASH: 0, OTHER: 0, UNSPECIFIED: 0 });
   });
 
   it("lists only days with data, ascending; cancelled-only days are omitted", () => {

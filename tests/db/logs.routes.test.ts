@@ -143,6 +143,18 @@ describe("search", () => {
     expect(json.items.map((i) => i.orderNo)).toEqual(["1025-001", "1024-001"]);
   });
 
+  it("q = WeChat ID treats % and _ literally (no LIKE wildcards)", async () => {
+    const p = await createDefaultProducts();
+    await createOpenDate("2026-10-24");
+    const a = await createOrder({ date: "2026-10-24", wechatId: "aliceXwx", items: [{ productId: p.redBean, qty: 1 }] });
+    const b = await createOrder({ date: "2026-10-24", wechatId: "alice_wx", items: [{ productId: p.redBean, qty: 1 }] });
+    await log({ at: "2026-10-20T15:00:00Z", entityType: "Order", entityId: a.id, action: "order.create" });
+    await log({ at: "2026-10-21T15:00:00Z", entityType: "Order", entityId: b.id, action: "order.create" });
+
+    expect((await get("?q=alice_wx")).json.items.map((i) => i.entityId)).toEqual([b.id]);
+    expect((await get("?q=%25")).json.items).toEqual([]);
+  });
+
   it("entityId filters one entity, and an empty query string means no filter", async () => {
     await log({ at: "2026-10-20T15:00:00Z", entityId: "abc" });
     await log({ at: "2026-10-21T15:00:00Z", entityId: "1" });
@@ -154,6 +166,58 @@ describe("search", () => {
     expect((await get("?from=2026-13-01")).status).toBe(422);
     expect((await get("?to=tomorrow")).status).toBe(422);
     expect((await get("?cursor=garbage")).status).toBe(422);
+  });
+});
+
+describe("product names for readable rows", () => {
+  it("returns names of products named by id in limits, violations, reorders and as the entity", async () => {
+    const p = await createDefaultProducts();
+    await db.auditLog.create({
+      data: {
+        at: new Date("2026-10-20T15:00:00Z"),
+        actor: "ADMIN",
+        action: "date.update",
+        entityType: "OpenDate",
+        entityId: "2026-10-30",
+        before: { productLimits: {} },
+        after: { productLimits: { [p.brulee]: 12 } },
+      },
+    });
+    await db.auditLog.create({
+      data: {
+        at: new Date("2026-10-21T15:00:00Z"),
+        actor: "ADMIN",
+        action: "product.update",
+        entityType: "Product",
+        entityId: p.cheeseHorn,
+      },
+    });
+    await db.auditLog.create({
+      data: {
+        at: new Date("2026-10-22T15:00:00Z"),
+        actor: "ADMIN",
+        action: "order.override",
+        entityType: "Order",
+        entityId: "not-a-uuid",
+        after: { violations: [{ kind: "PRODUCT", date: "2026-10-30", productId: p.redBean, after: 9, limit: 8, over: 1 }] },
+      },
+    });
+    await db.auditLog.create({
+      data: {
+        at: new Date("2026-10-23T15:00:00Z"),
+        actor: "ADMIN",
+        action: "product.reorder",
+        entityType: "Product",
+        entityId: "all",
+        before: [{ id: p.rockCheese, sortOrder: 1 }],
+        after: [{ id: p.rockCheese, sortOrder: 1 }],
+      },
+    });
+    const { json } = await get();
+    const names = (json as unknown as { productNames: Record<string, string> }).productNames;
+    expect(Object.keys(names).sort()).toEqual([p.brulee, p.cheeseHorn, p.redBean, p.rockCheese].sort());
+    expect(names[p.brulee]).toBe("焦糖布蕾");
+    expect(names[p.cheeseHorn]).toBe("奶酪角");
   });
 });
 
