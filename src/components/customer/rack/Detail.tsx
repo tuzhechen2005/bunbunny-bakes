@@ -8,6 +8,7 @@ import { useMotionPrefs } from "@/lib/motion/react";
 import { fill, safeLineTotal } from "../format";
 import { ProductPhoto } from "../ProductCard";
 import { bindDrag } from "./drag";
+import { focusQuietly } from "./focus";
 import { DownIcon, LeftIcon, MinusIcon, PlusIcon, RightIcon } from "./icons";
 import { Peg } from "./Peg";
 import { RollingText } from "./RollingText";
@@ -15,6 +16,7 @@ import { RollingText } from "./RollingText";
 const b = copy.customer.brand;
 const t = copy.customer.home;
 const EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
+const EASE_IN = "cubic-bezier(0.5, 0, 0.75, 0)";
 
 /** Pull this far (px) and the photo flies back to the rope. */
 export const PULL_CLOSE_PX = 90;
@@ -42,13 +44,15 @@ export interface DetailProps {
   onClose: () => void;
   /** Add `qty` of `product` to the bag; `from` is the photo's rect. */
   onAdd: (product: MenuProduct, qty: number, from: DOMRect) => void;
+  /** Opened by key (the close button gets a focus ring) or by touch / mouse (no ring anywhere). */
+  via: "key" | "pointer";
   ref?: Ref<DetailHandle>;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /** The taken-down bread (FRONTEND.md 4.2): colour field, photo with peg, details, sticky add button. */
-export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChange, onClose, onAdd, ref }: DetailProps) {
+export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChange, onClose, onAdd, via, ref }: DetailProps) {
   const { reduced } = useMotionPrefs();
   const n = products.length;
   const [i, setI] = useState(startIndex);
@@ -83,7 +87,7 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
       x?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: ms, delay, fill: "backwards" });
     if (reduced) {
       fade(bg.current, 200);
-      fade(r.querySelector(".hm-dt-content"), 200);
+      fade(r.querySelector(".hm-dt-content"), 200, 200);
       return;
     }
     const to = el.getBoundingClientRect();
@@ -105,15 +109,28 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
         { opacity: 0, transform: "translateY(46px)" },
         { opacity: 1, transform: "none" },
       ],
-      { duration: 620, delay: 120, easing: EASE, fill: "backwards" },
+      { duration: 620, delay: 200, easing: EASE, fill: "backwards" },
     );
     fade(top.current, 300, 200);
+    // The dock rises in after the photo has landed.
+    dock.current?.animate?.(
+      [
+        { opacity: 0, transform: "translateY(12px)" },
+        { opacity: 1, transform: "none" },
+      ],
+      { duration: 320, delay: 260, easing: EASE, fill: "backwards" },
+    );
     // Runs once on mount: `from` is the rope card's position at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    hang.current?.focus({ preventScroll: true });
+    // After a touch nothing may show a ring: focus the dialog itself (it has no outline). By key the
+    // close button is focused and rings as usual.
+    if (via === "key") focusQuietly(hang.current, true);
+    else root.current?.focus({ preventScroll: true });
+    // Runs once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const goRef = useRef(go);
@@ -131,6 +148,8 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
     const bd = body.current;
     el?.getAnimations?.().forEach((a) => a.cancel());
     bd?.getAnimations?.().forEach((a) => a.cancel());
+    // A new bread starts at the top (the pull-down to close only works from there).
+    if (root.current) root.current.scrollTop = 0;
     const d = dir.current;
     if (!latest.current.reduced) {
       el?.animate?.(
@@ -236,17 +255,23 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
         if (!r || !el) return;
         closing.current = true;
         r.style.pointerEvents = "none";
-        dock.current?.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 150, fill: "forwards" });
+        dock.current?.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 150, easing: EASE_IN, fill: "forwards" });
         if (latest.current.reduced || !to || typeof el.animate !== "function") {
           const a = r.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 200, fill: "forwards" });
           await a?.finished.catch(() => {});
           return;
         }
         // Start from wherever the pull left the photo, end on the rope card's photo.
-        const cur = el.style.transform;
+        let cur = el.style.transform;
+        // Back right after opening: the photo may still be flying in. Take where it is on screen now,
+        // cancel those animations, and fly from there (not from where the layout says it is).
+        const running = el.getAnimations?.() ?? [];
+        const seen = running.length > 0 ? el.getBoundingClientRect() : null;
+        running.forEach((a) => a.cancel());
         el.style.transform = "";
         el.style.transformOrigin = "0 0";
         const f = el.getBoundingClientRect();
+        if (seen) cur = `translate(${seen.left - f.left}px,${seen.top - f.top}px) scale(${seen.width / f.width})`;
         const sx = to.width / f.width;
         const fly = el.animate(
           [
@@ -260,11 +285,12 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
             { opacity: 1, transform: body.current.style.transform || "none" },
             { opacity: 0, transform: "translateY(30px)" },
           ],
-          { duration: 260, easing: EASE, fill: "forwards" },
+          { duration: 260, easing: EASE_IN, fill: "forwards" },
         );
-        top.current?.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 180, fill: "forwards" });
-        if (bg.current) bg.current.style.opacity = "0";
-        await fly.finished.catch(() => {});
+        top.current?.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: EASE_IN, fill: "forwards" });
+        // The colour field lets go after the photo is under way (the page's own colour is behind it).
+        const fadeBg = bg.current?.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 300, delay: 140, easing: EASE, fill: "forwards" });
+        await Promise.all([fly.finished.catch(() => {}), fadeBg?.finished.catch(() => {})]);
       },
     }),
     [],
@@ -286,7 +312,7 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
   };
 
   return (
-    <div ref={root} className="hm-detail" role="dialog" aria-modal="true" aria-label={product.name} data-testid="detail">
+    <div ref={root} className="hm-detail" role="dialog" aria-modal="true" aria-label={product.name} tabIndex={-1} data-testid="detail">
       <div ref={bg} className="hm-detail-bg" aria-hidden="true" />
       <div className="hm-dt-content">
         <div ref={top} className="hm-dt-top">
@@ -330,26 +356,35 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
                 <small>{fill(t.bundleSize, { size: product.bundleSize })}</small>
               </div>
             ) : null}
+            <span className="hm-stp">
+              <button
+                type="button"
+                aria-label={fill(t.decreaseNamed, { name: product.name })}
+                disabled={q <= 1}
+                onClick={() => setQty(q - 1)}
+                data-testid="detail-dec"
+              >
+                <MinusIcon />
+              </button>
+              <b className="hm-n" aria-label={fill(t.qtyLabelNamed, { name: product.name, qty: q })} data-testid="detail-qty">
+                <RollingText value={String(q)} />
+              </b>
+              <button
+                type="button"
+                aria-label={fill(t.increaseNamed, { name: product.name })}
+                disabled={q >= room}
+                onClick={() => setQty(q + 1)}
+                data-testid="detail-inc"
+              >
+                <PlusIcon />
+              </button>
+            </span>
           </div>
           {product.leadDays > 1 ? (
             <p className="hm-dt-lead" data-testid="detail-lead">
               {copy.customer.checkout.leadDaysHint}
             </p>
           ) : null}
-          <div className="hm-dt-act">
-            <span />
-            <span className="hm-stp">
-              <button type="button" aria-label={t.decrease} disabled={q <= 1} onClick={() => setQty(q - 1)} data-testid="detail-dec">
-                <MinusIcon />
-              </button>
-              <b className="hm-n" aria-label={fill(t.qtyLabel, { qty: q })} data-testid="detail-qty">
-                <RollingText value={String(q)} />
-              </b>
-              <button type="button" aria-label={t.increase} disabled={q >= room} onClick={() => setQty(q + 1)} data-testid="detail-inc">
-                <PlusIcon />
-              </button>
-            </span>
-          </div>
           {paused ? <p className="hm-dt-note">{t.paused}</p> : room <= 0 ? <p className="hm-dt-note">{t.maxReached}</p> : null}
         </div>
         <div ref={dock} className="hm-dt-dock">

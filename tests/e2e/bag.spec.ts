@@ -104,7 +104,7 @@ test("an add flies: the cart and amount update at once, the bread drops in on la
   // In one synchronous step: click, then read the page. The bread must be in the air, not yet in
   // the bag, while badge and amount are already right.
   const atClick = await page.evaluate(async () => {
-    const click = document.querySelector<HTMLElement>('[data-testid="product-card"][data-product-id="rs"] button[aria-label="增加一个"]')!;
+    const click = document.querySelector<HTMLElement>('[data-testid="product-card"][data-product-id="rs"] button[aria-label^="增加一个"]')!;
     click.click();
     await new Promise((r) => setTimeout(r, 120)); // staggered start of the first disc
     return {

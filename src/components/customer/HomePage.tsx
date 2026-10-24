@@ -10,6 +10,7 @@ import type { MenuProduct } from "@/lib/api";
 import { cart, useCart } from "@/lib/cart";
 import { applyField, fieldFor } from "@/lib/field";
 import { flyToBag } from "@/lib/flyToBag";
+import { pushOverlay } from "@/lib/overlayHistory";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { BagBar } from "./bag/BagBar";
 import { FlyLayer } from "./bag/FlyLayer";
@@ -17,7 +18,8 @@ import { fill, safeLineTotal } from "./format";
 import { ProductCard } from "./ProductCard";
 import { Detail, type DetailHandle } from "./rack/Detail";
 import { NameSwap } from "./rack/NameSwap";
-import { Rack, type RackHandle } from "./rack/Rack";
+import { focusQuietly } from "./rack/focus";
+import { Rack, type OpenVia, type RackHandle } from "./rack/Rack";
 import { RollingText } from "./rack/RollingText";
 import { OrdersIcon, PlusIcon } from "./rack/icons";
 import { SiteFooter } from "./SiteFooter";
@@ -87,14 +89,31 @@ export function HomePage() {
     phaseRef.current = p;
     setPhaseState(p);
   }, []);
-  const [detail, setDetail] = useState<{ index: number; from: { left: number; top: number; width: number } } | null>(null);
+  const [detail, setDetail] = useState<{
+    index: number;
+    from: { left: number; top: number; width: number };
+    via: OpenVia;
+  } | null>(null);
   const curRef = useRef(0);
-  /** After hanging back, focus returns to the rope once the page is no longer inert. */
+  /** Where the detail came from: a rope card, or a grid tile (the photo flies back to it). */
+  const origin = useRef<{ tile: HTMLElement | null; via: OpenVia }>({ tile: null, via: "pointer" });
+  /** Steps the history entry of the open detail back (Back closes the detail first, D90). */
+  const leaveHistory = useRef<(() => void) | null>(null);
+  const hangBackRef = useRef<() => void>(() => {});
+  const productsRef = useRef<readonly MenuProduct[]>(products);
+  useEffect(() => {
+    productsRef.current = products;
+  });
+  /** After hanging back, focus returns to where it came from once the page is no longer inert. */
   const refocus = useRef(false);
   useEffect(() => {
     if (phase === "home" && refocus.current) {
       refocus.current = false;
-      rackRef.current?.focus();
+      const { tile, via } = origin.current;
+      // After a touch nothing is focused (no ring); by key the opener gets its focus back.
+      if (tile?.isConnected) focusQuietly(tile, via === "key");
+      else if (via === "key") rackRef.current?.focus(true);
+      else rackRef.current?.focus(false);
     }
   }, [phase]);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -104,52 +123,85 @@ export function HomePage() {
     return () => pending.forEach(clearTimeout);
   }, []);
 
+  const markHintDone = useCallback(() => {
+    setHintOff(true);
+    try {
+      window.sessionStorage.setItem(HINT_KEY, "1");
+    } catch {
+      /* the hint just shows again next visit */
+    }
+  }, []);
+
   const openDetail = useCallback(
-    (i: number) => {
+    (i: number, via: OpenVia, tile: { rect: DOMRect; el: HTMLElement } | null = null) => {
       const rack = rackRef.current;
-      const hr = rack?.hangRect(i);
+      if (tile) rack?.jumpTo(i);
+      const hr = tile ? tile.rect : rack?.hangRect(i);
       if (!rack || !hr) {
         setPhase("home");
         return;
       }
       rack.setTaken(i, true);
       curRef.current = i;
-      setDetail({ index: i, from: { left: hr.left, top: hr.top, width: hr.width } });
+      origin.current = { tile: tile?.el ?? null, via };
+      setDetail({ index: i, from: { left: hr.left, top: hr.top, width: hr.width }, via });
+      leaveHistory.current = pushOverlay(() => hangBackRef.current());
       setPhase("detail");
     },
     [setPhase],
   );
 
-  const takeDown = useCallback(
-    (i: number) => {
+  /** A tap on a grid photo: the detail grows out of the tile, no spin (FRONTEND.md 4.1 item 5). */
+  const openFromTile = useCallback(
+    (i: number, rect: DOMRect, el: HTMLElement, via: OpenVia) => {
       if (phaseRef.current !== "home") return;
-      setHintOff(true);
-      try {
-        window.sessionStorage.setItem(HINT_KEY, "1");
-      } catch {
-        /* the hint just shows again next visit */
-      }
+      markHintDone();
+      openDetail(i, via, { rect, el });
+    },
+    [markHintDone, openDetail],
+  );
+
+  const takeDown = useCallback(
+    (i: number, via: OpenVia) => {
+      if (phaseRef.current !== "home") return;
+      markHintDone();
       setPhase("spin");
       rackRef.current?.spin(i);
-      if (reduced) openDetail(i);
-      else timers.current.push(setTimeout(() => openDetail(i), SPIN_OPEN_MS));
+      if (reduced) openDetail(i, via);
+      else timers.current.push(setTimeout(() => openDetail(i, via), SPIN_OPEN_MS));
     },
-    [openDetail, reduced, setPhase],
+    [markHintDone, openDetail, reduced, setPhase],
   );
 
   const hangBack = useCallback(async () => {
     if (phaseRef.current !== "detail") return;
     setPhase("closing");
+    // Closing by button / pull / Esc steps the history entry back; by Back it is gone already.
+    leaveHistory.current?.();
+    leaveHistory.current = null;
     const cur = curRef.current;
     const rack = rackRef.current;
     rack?.jumpTo(cur);
-    await detailRef.current?.close(rack?.faceRect(cur) ?? null);
+    let to: DOMRect | null = rack?.faceRect(cur) ?? null;
+    const fromTile = origin.current.tile !== null;
+    if (fromTile) {
+      // Back to the grid photo if it is on screen, otherwise the photo just fades away with the page.
+      const id = productsRef.current[cur]?.id;
+      const tile = [...document.querySelectorAll<HTMLElement>("[data-testid=product-card]")].find((e) => e.dataset.productId === id);
+      const r = tile?.querySelector(".hm-ph-img")?.getBoundingClientRect();
+      origin.current.tile = tile?.querySelector<HTMLElement>(".hm-ph-img") ?? null;
+      to = r && r.bottom > 0 && r.top < window.innerHeight ? r : null;
+    }
+    await detailRef.current?.close(to);
     setDetail(null);
     rack?.setTaken(cur, false);
     refocus.current = true;
     setPhase("home");
-    rack?.landed(cur);
+    if (!fromTile) rack?.landed(cur);
   }, [setPhase]);
+  useEffect(() => {
+    hangBackRef.current = () => void hangBack();
+  }, [hangBack]);
 
   useEffect(() => {
     if (phase !== "detail") return;
@@ -196,10 +248,10 @@ export function HomePage() {
   const showHero = menu !== null && products.length > 0;
 
   return (
-    <div className="hm-page">
+    <div className="hm-page" data-compact={phase === "detail" ? "" : undefined}>
       <div className="hm-app">
         <div inert={phase !== "home"}>
-          <section ref={heroRef} className="hm-hero" data-testid="hero">
+          <section ref={heroRef} className="hm-hero" data-testid="hero" data-phase={phase}>
             <header className="hm-hdr">
               <div className="hm-wm" role="img" aria-label={b.brandName}>
                 <Logo />
@@ -282,7 +334,7 @@ export function HomePage() {
                   <button
                     type="button"
                     className="hm-addp"
-                    aria-label={b.addToBag}
+                    aria-label={fill(t.addNamed, { name: current.name })}
                     disabled={paused || atMax}
                     onClick={addFromRope}
                     data-testid="hero-add"
@@ -313,6 +365,7 @@ export function HomePage() {
                     max={maxQty}
                     onDecrease={() => cart.decrement(p.id)}
                     onIncrease={(from) => addOne(p, from)}
+                    onOpen={(rect, el, via) => openFromTile(products.indexOf(p), rect, el, via)}
                   />
                 ))}
               </ul>
@@ -333,6 +386,7 @@ export function HomePage() {
           onIndexChange={onDetailIndex}
           onClose={() => void hangBack()}
           onAdd={addFromDetail}
+          via={detail.via}
         />
       ) : null}
 

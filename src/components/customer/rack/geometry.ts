@@ -35,9 +35,16 @@ export interface RackMetrics {
   height: number;
 }
 
-export function rackMetrics(width: number): RackMetrics {
+/** A landscape phone (viewport shorter than this) caps the photo by the viewport height. */
+export const SHORT_VIEWPORT_PX = 500;
+/** Share of the viewport height a photo may take on a short (landscape) viewport. */
+export const SHORT_CARD_SHARE = 0.46;
+
+/** Photo width for a rack `width` px wide; `viewportH` (optional) caps it on short landscape viewports. */
+export function rackMetrics(width: number, viewportH = 0): RackMetrics {
   const w = width > 0 ? width : 375;
-  const cardW = Math.round(Math.min(w * 0.54, CARD_MAX_PX));
+  const cap = viewportH > 0 && viewportH < SHORT_VIEWPORT_PX ? viewportH * SHORT_CARD_SHARE : Infinity;
+  const cardW = Math.round(Math.min(w * 0.54, CARD_MAX_PX, cap));
   return {
     width: w,
     cardW,
@@ -139,7 +146,10 @@ export function dropDelayMs(i: number): number {
   return 120 + i * 110;
 }
 
+/** Cards after this one start no higher (a long menu must not make the overshoot bigger). */
+const DROP_STAGGER_CAP = 2;
+
 /** Start offset (px above the rope) of card `i`'s entrance drop. */
 export function dropStartPx(i: number): number {
-  return -420 - i * 40;
+  return -420 - Math.min(i, DROP_STAGGER_CAP) * 40;
 }
