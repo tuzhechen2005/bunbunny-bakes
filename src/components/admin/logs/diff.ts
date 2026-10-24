@@ -122,7 +122,14 @@ export function formatValue(key: string, value: unknown, ctx: FormatContext = {}
         return t.hasPhoto;
     }
     if (ISO_INSTANT.test(value)) return chicagoTime(value);
-    if (PLAIN_DATE.test(value)) return dayLabel(value as LocalDate);
+    if (PLAIN_DATE.test(value)) {
+      // Free text or legacy values can look like a date without being one (2026-02-30).
+      try {
+        return dayLabel(value as LocalDate);
+      } catch {
+        return clip(value);
+      }
+    }
     return clip(value);
   }
   if (Array.isArray(value)) {

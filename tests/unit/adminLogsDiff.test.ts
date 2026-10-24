@@ -152,4 +152,12 @@ describe("diffLines", () => {
   it("does not treat prototype keys as known labels", () => {
     expect(diffLines({}, { constructor: 1 })[0].label).toBe("constructor");
   });
+
+  it("never throws on date-shaped strings that are not real dates", () => {
+    for (const v of ["2026-02-30", "2026-13-45", "0000-00-00"]) {
+      expect(() => formatValue("note", v)).not.toThrow();
+      expect(formatValue("note", v)).toBe(v);
+      expect(() => diffLines(null, { note: v })).not.toThrow();
+    }
+  });
 });
