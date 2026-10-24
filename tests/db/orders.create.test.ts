@@ -411,6 +411,16 @@ describe("createCustomerOrder: rate limits (D38, D86)", () => {
     expect(await codeOf(create({ wechatId: " wx_same " }))).toBe("RATE_LIMITED");
   });
 
+  it("the per-wechat unconfirmed limit ignores letter case (D92)", async () => {
+    await createOpenDate(DATE);
+    await create({ wechatId: "Wx_Case" });
+    await create({ wechatId: "wx_case" });
+    expect(await codeOf(create({ wechatId: "WX_CASE" }))).toBe("RATE_LIMITED");
+    expect(await codeOf(create({ wechatId: "wx_case" }))).toBe("RATE_LIMITED");
+    // A different id is still fine.
+    await expect(create({ wechatId: "wx_case2" })).resolves.toBeTruthy();
+  });
+
   it("CONTACTED counts; confirmed and cancelled orders don't", async () => {
     await createOpenDate(DATE);
     await createOrder({ date: DATE, items: [{ productId: P.redBean, qty: 1 }], wechatId: "wx_c", status: "CONFIRMED" });

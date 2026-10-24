@@ -56,6 +56,12 @@ export function pushOverlay(onPop: () => void): () => void {
     if (at === -1) return; // the browser already popped it
     stack.splice(at, 1);
     // Only step back when our entry is still the page the user is on.
-    if (currentId() === entry.id) window.history.back();
+    if (currentId() === entry.id) {
+      try {
+        window.history.back();
+      } catch {
+        /* nothing to undo */
+      }
+    }
   };
 }

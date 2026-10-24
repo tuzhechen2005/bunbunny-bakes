@@ -17,27 +17,53 @@ const STAMPER_ASPECT = 382 / 300;
 const IMPACT_AT = 1250;
 const LAST_BAG_KEY = "bunbunny:lastBag";
 
-/** Bag contents: the order's product photos, else the bread saved at checkout, else plain discs. */
-function bagItems(order: Pick<OrderViewData, "orderNo" | "items">): PaperBagItem[] {
-  const items: PaperBagItem[] = order.items.map((it, i) => ({
-    productId: `i${i}`,
+interface SavedBag {
+  orderNo?: unknown;
+  token?: unknown;
+  items?: { name?: unknown; imageUrl?: unknown; qty?: unknown }[];
+}
+
+function readSavedBag(): SavedBag | null {
+  try {
+    return JSON.parse(sessionStorage.getItem(LAST_BAG_KEY) ?? "null") as SavedBag | null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The bread checkout saved in sessionStorage, as bag contents: the order page draws the bag with
+ * it at once, while the order itself is still loading. Null when there is none.
+ */
+export function savedBagItems(token: string): PaperBagItem[] | null {
+  const saved = readSavedBag();
+  // An entry that belongs to another order (or carries no token) is not this order's bread.
+  if (!saved || saved.token !== token || !Array.isArray(saved.items)) return null;
+  const items: PaperBagItem[] = [];
+  for (const it of saved.items) {
+    if (typeof it?.name !== "string" || typeof it.qty !== "number" || it.qty < 1) continue;
+    items.push({ productId: it.name, imageUrl: typeof it.imageUrl === "string" ? it.imageUrl : null, qty: it.qty });
+  }
+  return items.length ? items : null;
+}
+
+/**
+ * Bag contents: the order's product photos, else the bread saved at checkout, else plain discs.
+ * Tagged by product name, so the bag drawn before the order loaded keeps its bread when the order arrives.
+ */
+function bagItems(order: Pick<OrderViewData, "orderNo" | "items">, token: string): PaperBagItem[] {
+  const items: PaperBagItem[] = order.items.map((it) => ({
+    productId: it.name,
     imageUrl: it.imageUrl ?? null,
     qty: it.qty,
   }));
   if (items.some((it) => it.imageUrl)) return items;
-  try {
-    const saved = JSON.parse(sessionStorage.getItem(LAST_BAG_KEY) ?? "null") as {
-      orderNo?: unknown;
-      items?: { name?: unknown; imageUrl?: unknown }[];
-    } | null;
-    if (saved?.orderNo !== order.orderNo || !Array.isArray(saved.items)) return items;
-    return items.map((it, i) => {
-      const match = saved.items!.find((s) => s.name === order.items[i].name);
-      return typeof match?.imageUrl === "string" ? { ...it, imageUrl: match.imageUrl } : it;
-    });
-  } catch {
-    return items;
-  }
+  const saved = readSavedBag();
+  if (saved?.orderNo !== order.orderNo || saved.token !== token || !Array.isArray(saved.items)) return items;
+  return items.map((it) => {
+    const match = saved.items!.find((s) => s.name === it.productId);
+    return typeof match?.imageUrl === "string" ? { ...it, imageUrl: match.imageUrl } : it;
+  });
 }
 
 function vibrate(pattern: number[]) {
@@ -49,8 +75,13 @@ function vibrate(pattern: number[]) {
 }
 
 interface Props {
-  order: Pick<OrderViewData, "orderNo" | "items" | "statusKind">;
-  /** Just ordered (?new=1): play the fold + stamp sequence once. */
+  /** Null while the order is loading: the bag is drawn from `preBag` and the sequence waits. */
+  order: Pick<OrderViewData, "orderNo" | "items" | "statusKind"> | null;
+  /** The order's view token: the bread saved at checkout only counts when it is this order's. */
+  token: string;
+  /** Bag contents to show before the order has loaded (the bread saved at checkout). */
+  preBag?: readonly PaperBagItem[] | null;
+  /** Just ordered (?new=1): play the fold + stamp sequence once, as soon as the order is there. */
   fresh: boolean;
   /** The page column that shakes on impact. */
   shakeRef: RefObject<HTMLElement | null>;
@@ -67,15 +98,20 @@ interface Props {
  * shockwave, ink splatter, jolt, haptic), lifts away and leaves the seal. Reduced motion
  * shows the end state at once.
  */
-export function OrderStage({ order, fresh, shakeRef, onImpact }: Props) {
+export function OrderStage({ order, token, preBag = null, fresh, shakeRef, onImpact }: Props) {
   const { reduced, degraded } = useMotionPrefs();
   const [playing] = useState(() => fresh && !reduced);
   const [folded, setFolded] = useState(!playing);
   const [stamperGone, setStamperGone] = useState(false);
-  const stamped = order.statusKind !== "CANCELLED";
+  const stamped = !!order && order.statusKind !== "CANCELLED";
+  const ready = !!order;
 
-  const { orderNo, items: orderItems } = order;
-  const items = useMemo(() => bagItems({ orderNo, items: orderItems }), [orderNo, orderItems]);
+  const orderNo = order?.orderNo;
+  const orderItems = order?.items;
+  const items = useMemo(
+    () => (orderNo !== undefined && orderItems ? bagItems({ orderNo, items: orderItems }, token) : (preBag ?? [])),
+    [orderNo, orderItems, preBag, token],
+  );
 
   const stageRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -106,7 +142,8 @@ export function OrderStage({ order, fresh, shakeRef, onImpact }: Props) {
   }, [playing]);
 
   useEffect(() => {
-    if (!playing) return;
+    // The sequence starts when the order is there (the bag has been waiting, already full).
+    if (!playing || !ready) return;
     const stage = stageRef.current;
     const wrap = wrapRef.current;
     const stamper = stamperRef.current;
@@ -174,12 +211,12 @@ export function OrderStage({ order, fresh, shakeRef, onImpact }: Props) {
           [
             { opacity: 0, filter: "blur(3px)", transform: "rotate(-12deg) scale(1.12)" },
             { opacity: 1, filter: "blur(0)", transform: "rotate(-12deg) scale(.99)", offset: 0.25 },
-            { opacity: 0.95, filter: "blur(0)", transform: "rotate(-12deg) scale(1)" },
+            { opacity: 1, filter: "blur(0)", transform: "rotate(-12deg) scale(1)" },
           ],
           { duration: 700, easing: "ease-out", fill: "forwards" },
         );
         // No Web Animations: show the seal at once.
-        if (!a) imp.style.opacity = "0.95";
+        if (!a) imp.style.opacity = "1";
       });
       run(
         wave,
@@ -236,23 +273,27 @@ export function OrderStage({ order, fresh, shakeRef, onImpact }: Props) {
       anims.forEach((a) => a?.cancel());
       extras.forEach((e) => e.remove());
     };
-  }, [playing, shakeRef]);
+  }, [playing, ready, shakeRef]);
 
   return (
-    <div ref={stageRef} data-testid="order-stage" className="relative grid h-[390px] place-items-center overflow-visible">
-      <div ref={wrapRef} className="mt-10">
+    <div
+      ref={stageRef}
+      data-testid="order-stage"
+      className={`relative grid place-items-center overflow-visible ${playing ? "h-[390px]" : "h-[320px]"}`}
+    >
+      <div ref={wrapRef} className={playing ? "mt-10" : "mt-8"}>
         <PaperBag
           ref={bagRef}
           width={BAG_WIDTH}
           items={items}
           folded={folded}
           imprint={
-            stamped ? (
+            stamped && order ? (
               <div
                 ref={impRef}
                 data-testid="order-stamp"
                 className="ord-imprint"
-                style={{ opacity: playing ? 0 : 0.92 }}
+                style={{ opacity: playing ? 0 : 1 }}
               >
                 <StampSvg orderNo={order.orderNo} />
               </div>

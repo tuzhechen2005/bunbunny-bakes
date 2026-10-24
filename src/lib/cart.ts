@@ -29,8 +29,12 @@ export interface CartStore {
   decrement(productId: string): void;
   remove(productId: string): void;
   clear(): void;
-  /** Drops lines whose product is not in `productIds` (vanished from the menu). */
-  retainProducts(productIds: Iterable<string>): void;
+  /** Drops lines whose product is not in `productIds` (vanished from the menu). Returns how many lines went. */
+  retainProducts(productIds: Iterable<string>): number;
+  /** True once after `retainProducts` dropped lines: the bag sheet tells the customer, one time. */
+  consumeRemovedNotice(): boolean;
+  /** Re-reads the storage (another tab changed the cart) and notifies when the cart differs. */
+  refresh(): void;
   /** Total number of pieces. */
   count(): number;
 }
@@ -57,6 +61,7 @@ function sanitize(raw: unknown): CartItem[] {
 export function createCartStore(getStorage: () => StorageLike | null | undefined): CartStore {
   let items: readonly CartItem[] | null = null;
   const listeners = new Set<() => void>();
+  let removedNotice = false;
 
   function load(): readonly CartItem[] {
     if (items) return items;
@@ -78,6 +83,25 @@ export function createCartStore(getStorage: () => StorageLike | null | undefined
     } catch {
       // Storage full / blocked: keep the in-memory copy only.
     }
+    for (const listener of [...listeners]) listener();
+  }
+
+  /** Another tab wrote the cart: adopt it. Unreadable storage keeps the in-memory copy. */
+  function refresh(): void {
+    let next: CartItem[];
+    try {
+      const storage = getStorage();
+      if (!storage) return;
+      const raw = storage.getItem(CART_STORAGE_KEY);
+      next = raw ? sanitize(JSON.parse(raw)) : [];
+    } catch {
+      return;
+    }
+    const current = load();
+    if (current.length === next.length && current.every((c, i) => c.productId === next[i].productId && c.qty === next[i].qty)) {
+      return;
+    }
+    items = next.length ? next : EMPTY;
     for (const listener of [...listeners]) listener();
   }
 
@@ -136,8 +160,19 @@ export function createCartStore(getStorage: () => StorageLike | null | undefined
       const keep = new Set(productIds);
       const current = load();
       const next = current.filter((i) => keep.has(i.productId));
-      if (next.length !== current.length) commit(next);
+      const dropped = current.length - next.length;
+      if (dropped > 0) {
+        removedNotice = true;
+        commit(next);
+      }
+      return dropped;
     },
+    consumeRemovedNotice() {
+      const had = removedNotice;
+      removedNotice = false;
+      return had;
+    },
+    refresh,
     count() {
       return load().reduce((sum, i) => sum + i.qty, 0);
     },
@@ -148,6 +183,13 @@ export function createCartStore(getStorage: () => StorageLike | null | undefined
 export const cart: CartStore = createCartStore(() =>
   typeof window === "undefined" ? null : window.localStorage,
 );
+
+// Another tab (or window) changed the cart: follow it. `key === null` is localStorage.clear().
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === null || e.key === CART_STORAGE_KEY) cart.refresh();
+  });
+}
 
 function getServerSnapshot(): readonly CartItem[] {
   return EMPTY;

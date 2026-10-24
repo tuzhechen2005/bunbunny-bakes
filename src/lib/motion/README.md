@@ -81,7 +81,7 @@ radius. `radiusFor(n)` exposes the rule. The view (`PaperBag`) maps world units 
 const close = pushOverlay(() => hangBack()); // adds a history entry; Back calls the callback (play the closing animation)
 close();                                      // any other way of closing: steps the entry back, never leaves the page
 ```
-The product detail uses it; the bag sheet will too. Entries are numbered in `history.state` (the router's own state is
+The product detail and the bag sheet (`Sheet` with `history`) use it. Entries are numbered in `history.state` (the router's own state is
 kept), so a stale `close()` after a Back is a no-op.
 
 ## Home polish notes (J1)
@@ -90,3 +90,9 @@ kept), so a stale `close()` after a Back is a no-op.
 - The entrance starts when slot 0's photo is decoded (or after 900 ms); a landing card hands energy to the rope and its peg; the hint
   (`data-entered` on `.hm-try`) fades in after the last card landed and nudges three times.
 - A swipe may start on the hero "+" (`.hm-addp`); a drag from there never adds, a tap still does.
+
+## Control kit (`src/components/ui/`) and overlay history
+
+- `Stepper` `{ qty, size: sm 42 | md 44 | lg 58, tone: wash | paper | fink, decreaseLabel, increaseLabel, qtyLabel, ... }`: the - n + pill (bag sheet, checkout lines; the home page can switch to it).
+- `Sheet` (ref `{ close(), releaseHistory(), panel, backdrop }`): the one bottom sheet. Backdrop ink 40%, spring in (1.8 Hz / 0.7), 300 ms ease-in out, scroll lock, focus trap, Esc, pull down (more than 110 px or faster than 0.5 px/ms) via `bindDrag`, optional `history` (Back closes it first) and `dismissible={false}` for the save-link dialog. Mark scrolling lists `data-sheet-scroll` and things that must not pull the sheet `data-no-sheet-drag`.
+- `TopBar` (56 px, 44 px chevron link, title), `focusRing` (2 px `currentColor`, offset 3 px; red only for errors), `ui.css` (`.ui-skel` loading placeholder).

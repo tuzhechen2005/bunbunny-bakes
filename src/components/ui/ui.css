@@ -1,0 +1,24 @@
+/*
+ * Shared bits of the customer control kit (src/components/ui). Colours come from the global tokens.
+ */
+
+/* Loading placeholder: a wash block whose opacity breathes between .55 and 1 every 1.2 s. */
+@keyframes ui-skel {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.ui-skel {
+  background: var(--c-wash);
+  animation: ui-skel 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-skel {
+    animation: none;
+    opacity: 0.75;
+  }
+}
