@@ -6,9 +6,9 @@ import { AdminCard } from "@/components/admin/AdminCard";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { fill } from "@/components/customer/format";
 import { copy } from "@/copy";
-import { dayLabel } from "@/domain/dates";
-import type { OrderStatus, Violation } from "@/domain/types";
+import type { Fulfillment, OrderStatus, Violation } from "@/domain/types";
 import { adminApi } from "@/lib/adminApi";
+import { diffLines } from "@/components/admin/logs/diff";
 import type { OrderDetail, OrderLogEntry } from "@/server/orderQueries";
 import {
   CopyButton,
@@ -22,12 +22,14 @@ import {
   STATUS_ORDER,
   StatusChip,
 } from "./shared";
+import { forwardChoices, moveToLabel, skippedSteps, statusLabel } from "./statusUi";
 
 const t = copy.admin.orders;
 const METHODS = ["WECHAT", "ZELLE", "VENMO", "CASH", "OTHER"] as const;
 
 type SheetState =
   | { kind: "reason"; to: "REJECTED" | "CANCELLED" }
+  | { kind: "jump"; to: OrderStatus }
   | { kind: "correct" }
   | null;
 
@@ -45,44 +47,12 @@ function fmtTime(iso: string): string {
   return parts;
 }
 
-function fmtValue(key: string, v: unknown, productName: (id: string) => string): string {
-  if (v === null || v === undefined || v === "") return t.emptyValue;
-  switch (key) {
-    case "status":
-      return t.statusLabels[v as OrderStatus] ?? String(v);
-    case "paid":
-      return v ? t.yes : t.no;
-    case "paidMethod":
-      return t.paymentMethods[v as keyof typeof t.paymentMethods] ?? String(v);
-    case "fulfillment":
-      return v === "DELIVERY" ? t.delivery : t.pickup;
-    case "pickupDate":
-      try {
-        return dayLabel(String(v));
-      } catch {
-        return String(v);
-      }
-    case "subtotalCents":
-    case "deliveryFeeCents":
-    case "totalCents":
-      return typeof v === "number" ? money(v) : String(v);
-    case "items":
-      return Array.isArray(v)
-        ? v.map((i: { name?: string; qty?: number }) => `${i.name ?? ""}×${i.qty ?? ""}`).join("、")
-        : String(v);
-    case "violations":
-      return Array.isArray(v) ? (v as Violation[]).map((x) => describeViolation(x, productName)).join("；") : String(v);
-    default:
-      return typeof v === "object" ? JSON.stringify(v) : String(v);
-  }
-}
-
-const HIDDEN_KEYS = new Set(["paidAt", "cutoffAt"]);
-
-function LogItem({ log, productName }: Readonly<{ log: OrderLogEntry; productName: (id: string) => string }>) {
-  const before = (log.before ?? {}) as Record<string, unknown>;
-  const after = (log.after ?? {}) as Record<string, unknown>;
-  const keys = Object.keys(after).filter((k) => !HIDDEN_KEYS.has(k));
+function LogItem({
+  log,
+  productNames,
+  fulfillment,
+}: Readonly<{ log: OrderLogEntry; productNames: Record<string, string>; fulfillment: Fulfillment }>) {
+  const lines = diffLines(log.before, log.after, { productNames, fulfillment });
   const actor = log.actor === "ADMIN" ? t.logActorAdmin : log.actor === "CUSTOMER" ? t.logActorCustomer : t.logActorSystem;
   const label = (t.logActions as Record<string, string>)[log.action] ?? log.action;
   return (
@@ -93,21 +63,12 @@ function LogItem({ log, productName }: Readonly<{ log: OrderLogEntry; productNam
         </span>
         <span className="shrink-0 text-sm text-muted">{fmtTime(log.at)}</span>
       </div>
-      {keys.map((k) => {
-        const name = (t.logFields as Record<string, string>)[k] ?? k;
-        const changed = k in before;
-        const text = changed
-          ? `${fmtValue(k, before[k], productName)}${t.arrow}${fmtValue(k, after[k], productName)}`
-          : fmtValue(k, after[k], productName);
-        // Unchanged values are not worth a line.
-        if (changed && JSON.stringify(before[k]) === JSON.stringify(after[k])) return null;
-        return (
-          <div key={k} className="mt-1 break-words text-sm">
-            <span className="text-muted">{name}：</span>
-            {text}
-          </div>
-        );
-      })}
+      {lines.map((l) => (
+        <div key={l.key} className="mt-1 break-words text-sm">
+          <span className="text-muted">{l.label}：</span>
+          {l.from !== null ? `${l.from}${t.arrow}${l.to}` : l.to}
+        </div>
+      ))}
       {log.reason && <div className="mt-1 text-sm">{fill(t.logReason, { reason: log.reason })}</div>}
     </li>
   );
@@ -160,6 +121,7 @@ export function OrderDetailPage({ id }: Readonly<{ id: string }>) {
 
   const names = new Map(order.items.map((i) => [i.productId, i.name]));
   const productName = (pid: string) => names.get(pid) ?? pid;
+  const productNames = Object.fromEntries(names);
 
   /** Runs a write; STALE reloads. Returns the failed result, or null on success. */
   async function act(path: string, body: Record<string, unknown>) {
@@ -185,12 +147,15 @@ export function OrderDetailPage({ id }: Readonly<{ id: string }>) {
     return null;
   }
 
-  const forward = order.nextStatuses.filter((n) => !n.reasonRequired);
+  const { next, jumps } = forwardChoices(
+    order.status,
+    order.nextStatuses.filter((n) => !n.reasonRequired).map((n) => n.to as OrderStatus),
+  );
   const reasonOnes = order.nextStatuses.filter((n) => n.reasonRequired);
 
   return (
     <>
-      <PageHeader title={order.orderNo} backHref="/admin/orders" actions={<StatusChip status={order.status} />} />
+      <PageHeader title={order.orderNo} backHref="/admin/orders" actions={<StatusChip status={order.status} fulfillment={order.fulfillment} />} />
 
       {actionError && (
         <div role="alert" className="mb-3 rounded-lg border border-danger p-3 text-danger">
@@ -201,15 +166,25 @@ export function OrderDetailPage({ id }: Readonly<{ id: string }>) {
       <div className="space-y-4">
         <AdminCard title={t.sectionStatus}>
           <div className="flex flex-col gap-2">
-            {forward.map((n) => (
+            {next && (
               <button
-                key={n.to}
                 type="button"
                 disabled={busy}
                 className={primaryBtn}
-                onClick={() => void act("status", { to: n.to })}
+                onClick={() => void act("status", { to: next })}
               >
-                {t.moveTo[n.to as keyof typeof t.moveTo]}
+                {moveToLabel(next, order.fulfillment)}
+              </button>
+            )}
+            {jumps.map((to) => (
+              <button
+                key={to}
+                type="button"
+                disabled={busy}
+                className={secondaryBtn}
+                onClick={() => setSheet({ kind: "jump", to })}
+              >
+                {fill(t.jumpTo, { label: moveToLabel(to, order.fulfillment) })}
               </button>
             ))}
             {reasonOnes.map((n) => (
@@ -334,7 +309,7 @@ export function OrderDetailPage({ id }: Readonly<{ id: string }>) {
           ) : (
             <ul>
               {order.logs.map((l) => (
-                <LogItem key={l.id} log={l} productName={productName} />
+                <LogItem key={l.id} log={l} productNames={productNames} fulfillment={order.fulfillment} />
               ))}
             </ul>
           )}
@@ -354,9 +329,21 @@ export function OrderDetailPage({ id }: Readonly<{ id: string }>) {
           }}
         />
       )}
+      {sheet?.kind === "jump" && (
+        <JumpSheet
+          key={sheet.to}
+          from={order.status}
+          to={sheet.to}
+          fulfillment={order.fulfillment}
+          busy={busy}
+          onClose={() => setSheet(null)}
+          onConfirm={() => void act("status", { to: sheet.to })}
+        />
+      )}
       {sheet?.kind === "correct" && (
         <CorrectSheet
           current={order.status}
+          fulfillment={order.fulfillment}
           busy={busy}
           productName={productName}
           onClose={() => setSheet(null)}
@@ -420,14 +407,55 @@ function ReasonSheet({
   );
 }
 
+function JumpSheet({
+  from,
+  to,
+  fulfillment,
+  busy,
+  onClose,
+  onConfirm,
+}: Readonly<{
+  from: OrderStatus;
+  to: OrderStatus;
+  fulfillment: Fulfillment;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}>) {
+  const skipped = skippedSteps(from, to)
+    .map((s) => statusLabel(s, fulfillment))
+    .join(copy.admin.logs.listSeparator);
+  return (
+    <Sheet title={t.jumpTitle} onClose={onClose} busy={busy}>
+      <p className="text-base">
+        {fill(t.jumpBody, {
+          from: statusLabel(from, fulfillment),
+          to: statusLabel(to, fulfillment),
+          skipped,
+        })}
+      </p>
+      <div className="mt-4 flex gap-2">
+        <button type="button" className={`${secondaryBtn} flex-1`} disabled={busy} onClick={onClose}>
+          {t.sheetBack}
+        </button>
+        <button type="button" className={`${primaryBtn} flex-1`} disabled={busy} onClick={onConfirm}>
+          {busy ? t.working : t.jumpConfirm}
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
 function CorrectSheet({
   current,
+  fulfillment,
   busy,
   productName,
   onClose,
   onSubmit,
 }: Readonly<{
   current: OrderStatus;
+  fulfillment: Fulfillment;
   busy: boolean;
   productName: (id: string) => string;
   onClose: () => void;
@@ -472,7 +500,7 @@ function CorrectSheet({
         >
           {options.map((s) => (
             <option key={s} value={s}>
-              {t.statusLabels[s]}
+              {statusLabel(s, fulfillment)}
             </option>
           ))}
         </select>

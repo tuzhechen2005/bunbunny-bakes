@@ -338,6 +338,8 @@ export const copy = {
         VENMO: "Venmo",
         CASH: "现金",
         OTHER: "其他",
+        /** Paid order with no method recorded (D94). */
+        UNSPECIFIED: "未注明",
       },
     },
     /** /admin/settings (PAGES.md). Each section has its own save button. */
@@ -488,7 +490,34 @@ export const copy = {
         sortOrder: "排序",
         date: "日期",
         amountCents: "金额",
+        subtotalCents: "小计",
+        totalCents: "总额",
+        cutoffAt: "截止时间",
+        capacityMode: "名额方式",
+        doughG: "每个面团克数（g）",
+        roundG: "每个大圆包克数（g）",
+        piecesPerRound: "一个大圆包切几个",
+        batchYield: "一批做几个",
+        leadDays: "提前几天预订",
+        imageUrl: "照片",
+        order: "商品顺序",
       },
+      /** One product in a list, e.g. 「奶酪角 ×3」. */
+      itemChip: "{name} ×{qty}",
+      /** One per-day limit, e.g. 「奶酪角 5」. */
+      limitChip: "{name} {limit}",
+      listSeparator: "、",
+      unknownProduct: "已下架商品",
+      hasPhoto: "已设置",
+      sources: { WEB: "顾客下单", ADMIN: "代客下单" },
+      capacityModes: {
+        DOUGH_PER_UNIT: "按个算面团",
+        DOUGH_PER_ROUND: "按大圆包算面团",
+        INDEPENDENT: "独立限额",
+      },
+      productStatuses: { ACTIVE: "在售", PAUSED: "暂停", ARCHIVED: "下架" },
+      fulfillments: { PICKUP: "自提", DELIVERY: "配送" },
+      productEntity: "商品 {name}",
     },
     /** Dashboard `/admin` (PAGES.md 首页). */
     dashboard: {
@@ -552,6 +581,8 @@ export const copy = {
       usageProduct: "{name} {used} / {limit}",
       usageDelivery: "配送 {used} / {limit}",
       deliveryOff: "不配送",
+      /** Phone calendar cell: order count under the dough bar. */
+      compactOrders: "{n} 单",
       dayCellLabel: "{md}，{status}",
       statusOpen: "开放",
       statusOver: "开放，已超限",
@@ -684,6 +715,14 @@ export const copy = {
         CANCELLED: "已取消",
         REJECTED: "已拒绝",
       },
+      /** READY on a delivery order, matching what the customer sees (正在配送). */
+      readyDelivery: "配送中",
+      moveToReadyDelivery: "标为配送中",
+      /** Jumping over steps asks first. */
+      jumpTo: "直接{label}",
+      jumpTitle: "跳过中间步骤？",
+      jumpBody: "要把订单从「{from}」直接改成「{to}」，会跳过：{skipped}。",
+      jumpConfirm: "确认跳过",
       /** One-tap next-status button labels. */
       moveTo: {
         NEW: "标为新订单",
@@ -759,24 +798,6 @@ export const copy = {
       logActorAdmin: "店主",
       logActorCustomer: "顾客",
       logActorSystem: "系统",
-      logFields: {
-        status: "状态",
-        paid: "付款",
-        paidMethod: "付款方式",
-        orderNo: "订单号",
-        pickupDate: "取货日期",
-        fulfillment: "取货方式",
-        wechatId: "微信号",
-        note: "备注",
-        items: "商品",
-        subtotalCents: "小计",
-        deliveryFeeCents: "运费",
-        totalCents: "总额",
-        violations: "超限项",
-      },
-      yes: "是",
-      no: "否",
-      emptyValue: "无",
       logReason: "原因：{reason}",
       logEmpty: "还没有操作记录",
       arrow: " → ",

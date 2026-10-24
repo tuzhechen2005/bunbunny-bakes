@@ -26,6 +26,7 @@ interface LogItem {
 interface LogsResponse {
   items: LogItem[];
   nextCursor: string | null;
+  productNames: Record<string, string>;
 }
 
 function actionLabel(action: string): string {
@@ -38,13 +39,17 @@ function actorLabel(actor: string): string {
   return Object.prototype.hasOwnProperty.call(map, actor) ? map[actor] : actor;
 }
 
-function LogEntry({ item }: Readonly<{ item: LogItem }>) {
-  const lines = diffLines(item.before, item.after);
+function LogEntry({ item, productNames }: Readonly<{ item: LogItem; productNames: Record<string, string> }>) {
+  const lines = diffLines(item.before, item.after, { productNames });
+  const productName = item.entityType === "Product" ? productNames[item.entityId] : undefined;
   const isOrder = item.entityType === "Order";
   return (
     <li className="rounded-xl border border-line bg-card p-3" data-testid="log-entry">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="font-semibold">{actionLabel(item.action)}</span>
+        {productName && (
+          <span className="text-sm text-muted">{t.productEntity.replace("{name}", productName)}</span>
+        )}
         {item.orderNo && (
           <span className="text-sm text-muted">{t.orderPrefix.replace("{orderNo}", item.orderNo)}</span>
         )}
@@ -90,6 +95,7 @@ export function LogsPage() {
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<LogItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [productNames, setProductNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +113,7 @@ export function LogsPage() {
     setLoading(false);
     if (result.ok) {
       setItems(result.data.items);
+      setProductNames(result.data.productNames ?? {});
       setNextCursor(result.data.nextCursor);
     } else if (result.error !== "UNAUTHORIZED") {
       setItems([]);
@@ -132,6 +139,7 @@ export function LogsPage() {
     if (mine !== generation.current) return;
     if (result.ok) {
       setItems((prev) => [...prev, ...result.data.items]);
+      setProductNames((prev) => ({ ...prev, ...result.data.productNames }));
       setNextCursor(result.data.nextCursor);
     } else if (result.error !== "UNAUTHORIZED") {
       setError(result.message || t.loadFailed);
@@ -195,7 +203,7 @@ export function LogsPage() {
       ) : (
         <ul className="flex flex-col gap-3">
           {items.map((item) => (
-            <LogEntry key={item.id} item={item} />
+            <LogEntry key={item.id} item={item} productNames={productNames} />
           ))}
         </ul>
       )}
