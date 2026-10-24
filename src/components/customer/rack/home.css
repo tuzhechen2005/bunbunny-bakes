@@ -41,10 +41,33 @@
 .hm-detail button {
   cursor: pointer;
 }
-.hm-app :is(button, [tabindex]):focus-visible,
-.hm-detail :is(button, [tabindex]):focus-visible {
-  outline: 2.5px solid var(--c-red);
+/* One ring for the whole customer side: the text colour of the surface, 2 px, 3 px off, rounded. */
+.hm-page :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid currentColor;
   outline-offset: 3px;
+  border-radius: 12px;
+}
+.hm-page :is(.hm-addp, .hm-plus, .hm-cta, .hm-stp, [data-testid="bag-pill"]):focus-visible {
+  border-radius: 999px;
+}
+.hm-page :is(.hm-ph-img):focus-visible {
+  border-radius: 6px;
+}
+/* Buttons with inverted text (field on fink, paper on ink): the ring uses the surface's own text colour instead. */
+.hm-page :is(.hm-addp, .hm-state button, .hm-dt-dock .hm-cta):focus-visible {
+  outline-color: var(--fink);
+}
+.hm-page .hm-plus:focus-visible,
+.hm-page .hm-ctl button:focus-visible {
+  outline-color: var(--c-ink);
+}
+/* The pill is white-on-black: its ring has to read on the page colour around it. */
+.hm-page [data-testid="bag-pill"]:focus-visible,
+.hm-page [data-bag-target="bar"]:focus-visible {
+  outline-color: var(--c-ink);
+}
+.hm-detail[tabindex]:focus {
+  outline: none;
 }
 .hm-n {
   font-family: var(--font-num);
@@ -61,6 +84,13 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+}
+/* The entrance drops photos from above the screen: header and slogan stay in front of them. */
+.hm-hdr,
+.hm-slogan,
+.hm-sub {
+  position: relative;
+  z-index: 30;
 }
 .hm-hdr {
   height: 56px;
@@ -88,11 +118,6 @@
 .hm-orders svg {
   width: 20px;
   height: 20px;
-}
-.hm-orders:focus-visible {
-  outline: 2.5px solid var(--c-red);
-  outline-offset: 2px;
-  border-radius: 12px;
 }
 .hm-wm {
   display: flex;
@@ -299,11 +324,12 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  opacity: 0.85;
-  transition: opacity 0.4s;
-}
-.hm-try.is-off {
   opacity: 0;
+  transition: opacity 600ms var(--ease);
+}
+/* Appears once the entrance is over (set by the rack), then nudges three times and stops. */
+.hm-try[data-entered]:not(.is-off) {
+  opacity: 0.85;
 }
 .hm-try span {
   font: 400 14px/1 "Hand Hint", system-ui, sans-serif;
@@ -314,7 +340,9 @@
   width: 26px;
   height: 22px;
   margin: 1px 10px 0 0;
-  animation: hm-nudge 1.8s var(--ease) infinite;
+}
+.hm-try[data-entered]:not(.is-off) svg {
+  animation: hm-nudge 1.8s var(--ease) 600ms 3;
 }
 @keyframes hm-nudge {
   0%,
@@ -393,6 +421,18 @@
 .hm-cta:active:not(:disabled) {
   transform: scale(0.95);
 }
+/* Double exposure: the page's own name and dots leave before the detail's name arrives, and return after it left. */
+.hm-hero[data-phase="spin"] :is(.hm-info, .hm-dots) {
+  opacity: 0;
+  transition: opacity 200ms cubic-bezier(0.5, 0, 0.75, 0) 300ms;
+}
+.hm-hero[data-phase="detail"] :is(.hm-info, .hm-dots) {
+  opacity: 0;
+  transition: opacity 200ms cubic-bezier(0.5, 0, 0.75, 0);
+}
+.hm-hero[data-phase="closing"] :is(.hm-info, .hm-dots) {
+  transition: opacity 260ms var(--ease) 260ms;
+}
 .hm-dots {
   display: flex;
   gap: 6px;
@@ -439,6 +479,10 @@
   position: relative;
 }
 .hm-ph-img {
+  display: block;
+  width: 100%;
+  padding: 0;
+  cursor: pointer;
   border-radius: 4px;
   overflow: hidden;
   aspect-ratio: 1;
@@ -480,7 +524,7 @@
   font-weight: 700;
 }
 .hm-t-p small {
-  font: 500 11.5px/1.2 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font: 500 12.5px/1.2 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
   color: var(--c-grey);
 }
 .hm-t-note {
@@ -605,6 +649,10 @@
   margin-top: auto;
 }
 .hm-dt-top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--field);
   height: 62px;
   display: flex;
   align-items: center;
@@ -649,7 +697,9 @@
   height: 20px;
 }
 .hm-dt-ph {
-  margin: 12px 48px 0;
+  /* Fits above the add button on short phones: the photo is capped by the viewport height too. */
+  width: min(calc(100% - 96px), 42svh);
+  margin: 8px auto 0;
   position: relative;
   touch-action: pan-x;
 }
@@ -666,12 +716,12 @@
   opacity: 0.6;
 }
 .hm-dt-body {
-  padding: 26px 24px 8px;
+  padding: 20px 24px 8px;
 }
 .hm-dt-dock {
   position: sticky;
   bottom: 0;
-  padding: 22px 16px calc(14px + env(safe-area-inset-bottom)) 92px;
+  padding: 16px 16px calc(12px + env(safe-area-inset-bottom)) 92px;
   background: linear-gradient(to bottom, transparent, var(--field) 40%);
 }
 .hm-dt-dock .hm-cta {
@@ -686,16 +736,17 @@
   letter-spacing: -0.045em;
 }
 .hm-dt-desc {
-  margin: 12px 0 0;
+  margin: 10px 0 0;
   font: 400 16px/1.7 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
   opacity: 0.86;
   white-space: pre-line;
 }
 .hm-dt-prices {
   display: flex;
-  gap: 28px;
-  margin-top: 22px;
-  padding-top: 18px;
+  align-items: center;
+  gap: 24px;
+  margin-top: 16px;
+  padding-top: 14px;
   border-top: 1px solid color-mix(in srgb, var(--fink) 22%, transparent);
 }
 .hm-dt-prices b {
@@ -716,20 +767,20 @@
   background: color-mix(in srgb, var(--fink) 14%, transparent);
   font: 500 14px/1.5 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
-.hm-dt-act {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 24px;
-}
-.hm-dt-act .hm-stp {
+/* The quantity sits on the right of the prices row (no row of its own). */
+.hm-dt-prices .hm-stp {
+  margin-left: auto;
+  flex: none;
   background: color-mix(in srgb, var(--fink) 14%, transparent);
-  height: 58px;
-  border-radius: 29px;
+  height: 52px;
+  border-radius: 26px;
 }
-.hm-dt-act .hm-stp button {
-  width: 50px;
-  height: 58px;
+.hm-dt-prices .hm-stp button {
+  width: 46px;
+  height: 52px;
+}
+.hm-dt-prices .hm-stp button::after {
+  inset: -3px 0;
 }
 .hm-dt-note {
   margin: 10px 0 0;
@@ -774,4 +825,96 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+/* ---------- small and short screens ---------- */
+@media (max-width: 360px) {
+  .hm-dt-prices {
+    gap: 14px;
+  }
+  .hm-dt-prices b {
+    font-size: 26px;
+  }
+  .hm-dt-prices .hm-stp button {
+    width: 40px;
+  }
+}
+/* SE-sized first paint: the bundle line and the dots must stay above the bag bar. */
+@media (max-height: 600px) {
+  .hm-hdr {
+    height: 48px;
+  }
+  .hm-slogan {
+    margin-top: 6px;
+  }
+  .hm-sub {
+    margin-top: 2px;
+  }
+  .hm-hero {
+    padding-bottom: 16px;
+  }
+  .hm-rack {
+    margin-top: 2px;
+  }
+  .hm-name {
+    margin-bottom: 6px;
+  }
+  .hm-dots {
+    margin-top: 12px;
+  }
+  .hm-addp {
+    width: 52px;
+    height: 52px;
+  }
+  .hm-dt-top {
+    height: 54px;
+  }
+  .hm-dt-body {
+    padding-top: 14px;
+  }
+  .hm-dt-name {
+    font-size: clamp(26px, 8.4vw, 32px);
+  }
+  .hm-dt-desc {
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .hm-dt-prices {
+    margin-top: 12px;
+    padding-top: 10px;
+  }
+  .hm-dt-dock .hm-cta {
+    height: 54px;
+  }
+}
+/* Landscape phone: photos are capped by the viewport height (in Rack), the bag bar is slimmer. */
+@media (max-height: 500px) {
+  .hm-page [data-testid="bag-pill"] {
+    height: 52px;
+  }
+  .hm-dt-dock .hm-cta {
+    height: 52px;
+  }
+}
+/* A wider screen clips the rope at the column edge: let it fade out instead of ending like a wall. */
+@media (min-width: 431px) {
+  .hm-rack {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 28px, black calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, transparent, black 28px, black calc(100% - 28px), transparent);
+    /* Tall mask so shadows below the photos and pegs above the rope are not cut. */
+    -webkit-mask-size: 100% 400%;
+    mask-size: 100% 400%;
+    -webkit-mask-position: 0 50%;
+    mask-position: 0 50%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+  }
+}
+/* While the detail is open the pill steps aside quickly (the bag bar itself belongs to the bag). */
+.hm-page[data-compact] [data-testid="bag-pill"] {
+  translate: 24px 0;
+  transition:
+    translate 160ms cubic-bezier(0.5, 0, 0.75, 0),
+    transform 160ms cubic-bezier(0.5, 0, 0.75, 0),
+    opacity 160ms cubic-bezier(0.5, 0, 0.75, 0);
 }

@@ -80,6 +80,13 @@ export const copy = {
       increase: "增加一个",
       /** Screen-reader label for the qty, e.g. "已选 3 个" */
       qtyLabel: "已选 {qty} 个",
+      /** Screen-reader names that carry the product, e.g. "增加一个 奶酪角" */
+      increaseNamed: "增加一个 {name}",
+      decreaseNamed: "减少一个 {name}",
+      addNamed: "放进纸袋 {name}",
+      qtyLabelNamed: "{name} 已选 {qty} 个",
+      /** Name of a grid photo (opens the detail), e.g. "查看 奶酪角" */
+      viewDetail: "查看 {name}",
       barCount: "已选 {count} 件",
       barSubtotal: "小计 {amount}",
       /** Label alone, for bars that render the amount as a separate (animated) element. */
