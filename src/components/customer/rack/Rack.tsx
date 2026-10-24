@@ -399,7 +399,7 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
           // A drag that began on the "+" must not add. A finger that only rolled a little is still
           // a tap: the browser may or may not send the click after a claimed touch, so add here
           // and swallow whatever click follows.
-          if (isTap) addBtn.click();
+          if (!end.cancelled && end.travel < TAP_PX) addBtn.click();
           swallowNextClick(host);
         }
         if (s.drag && isTap) {

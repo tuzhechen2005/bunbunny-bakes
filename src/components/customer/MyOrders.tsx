@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Logo } from "@/components/brand/Logo";
+import { TopBar } from "@/components/ui/TopBar";
+import { focusRing } from "@/components/ui/focus";
 import { copy } from "@/copy";
 import { formatCents } from "@/domain/pricing";
 import { fetchMenu } from "@/lib/api";
@@ -10,7 +13,12 @@ import type { OrderViewData } from "@/components/order/types";
 import { fill } from "./format";
 
 const t = copy.customer.myOrders;
-const focusRing = "focus-visible:outline-[2.5px] focus-visible:outline-offset-[3px] focus-visible:outline-c-red";
+
+/** The short status of a row (the order page has the full sentence). */
+function shortStatus(order: Pick<OrderViewData, "statusKind" | "fulfillment">): string {
+  if (order.statusKind === "READY" && order.fulfillment === "DELIVERY") return t.status.READY_DELIVERY;
+  return t.status[order.statusKind];
+}
 
 type RowState =
   | { kind: "loading" }
@@ -63,38 +71,31 @@ export function MyOrders() {
     <div className="flex flex-1 flex-col bg-c-wash text-c-ink">
       <main
         data-testid="my-orders"
-        className="mx-auto flex w-full max-w-[430px] flex-1 flex-col overflow-x-clip bg-c-paper px-5 pb-[calc(30px+env(safe-area-inset-bottom))]"
+        className="mx-auto flex w-full max-w-[430px] flex-1 flex-col overflow-x-clip bg-c-paper pb-[calc(30px+env(safe-area-inset-bottom))]"
       >
-        <header className="flex min-h-14 items-center justify-between pt-3">
-          <h1 className="m-0 font-display text-[32px] leading-[1.15] tracking-[-0.045em]">{t.pageTitle}</h1>
-          <Link
-            href="/"
-            data-testid="orders-home"
-            className={`-mr-3 flex min-h-11 items-center px-3 text-sm font-bold text-c-grey ${focusRing}`}
-          >
-            {t.backHome}
-          </Link>
-        </header>
+        <TopBar backHref="/" backLabel={copy.customer.brand.back} title={t.pageTitle} titleAs="h1" />
+        <div className="flex flex-1 flex-col px-5">
+          {entries === null ? (
+            <p role="status" className="mt-10 text-center text-[15px] text-c-grey">
+              {t.loading}
+            </p>
+          ) : entries.length === 0 ? (
+            <div data-testid="orders-empty" className="mt-16 mb-10 flex flex-col items-center gap-4 text-center">
+              <Logo className="h-20 w-auto opacity-40" />
+              <p className="m-0 font-display text-xl text-c-grey">{t.empty}</p>
+            </div>
+          ) : (
+            <ul className="m-0 mt-4 flex list-none flex-col gap-3 p-0">
+              {entries.map((entry) => (
+                <OrderRow key={entry.token} entry={entry} state={rows[entry.token] ?? { kind: "loading" }} onRetry={load} />
+              ))}
+            </ul>
+          )}
 
-        {entries === null ? (
-          <p role="status" className="mt-10 text-center text-[15px] text-c-grey">
-            {t.loading}
+          <p data-testid="orders-hint" className="mt-8 text-center text-[13px] leading-normal text-c-grey">
+            {ownerWechatId ? fill(t.footerHintWithId, { id: ownerWechatId }) : t.footerHint}
           </p>
-        ) : entries.length === 0 ? (
-          <p data-testid="orders-empty" className="mt-16 mb-10 text-center font-display text-xl text-c-grey">
-            {t.empty}
-          </p>
-        ) : (
-          <ul className="m-0 mt-4 flex list-none flex-col gap-3 p-0">
-            {entries.map((entry) => (
-              <OrderRow key={entry.token} entry={entry} state={rows[entry.token] ?? { kind: "loading" }} onRetry={load} />
-            ))}
-          </ul>
-        )}
-
-        <p data-testid="orders-hint" className="mt-8 text-center text-[13px] leading-normal text-c-grey">
-          {ownerWechatId ? fill(t.footerHintWithId, { id: ownerWechatId }) : t.footerHint}
-        </p>
+        </div>
       </main>
     </div>
   );
@@ -158,12 +159,17 @@ function OrderRow({
             {formatCents(order.totalCents)}
           </span>
         </div>
-        <p data-testid="row-date" className="mt-2 text-[14px] leading-snug font-bold">
-          {order.pickupDateLabel}
-        </p>
-        <p data-testid="row-status" className="mt-1 break-words text-[13.5px] leading-snug text-c-grey">
-          {order.statusText}
-        </p>
+        <div className="mt-2.5 flex items-center justify-between gap-3">
+          <p data-testid="row-date" className="m-0 min-w-0 text-[14px] leading-snug font-bold">
+            {order.pickupDateLabel}
+          </p>
+          <span
+            data-testid="row-status"
+            className="shrink-0 rounded-full bg-c-paper px-3 py-1 text-[13px] leading-snug font-bold text-c-ink"
+          >
+            {shortStatus(order)}
+          </span>
+        </div>
       </Link>
     </li>
   );

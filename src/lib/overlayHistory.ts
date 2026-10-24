@@ -39,15 +39,29 @@ export function pushOverlay(onPop: () => void): () => void {
     window.addEventListener("popstate", onPopState);
     listening = true;
   }
+  // The id lives in history.state, which survives a reload or a restored tab while `seq` restarts:
+  // never reuse a number that an older entry of this session already carries.
+  seq = Math.max(seq, currentId());
   const entry: Entry = { id: ++seq, onPop };
-  stack.push(entry);
   const prev = (window.history.state ?? {}) as Record<string, unknown>;
-  window.history.pushState({ ...prev, bbOverlay: entry.id }, "");
+  try {
+    window.history.pushState({ ...prev, bbOverlay: entry.id }, "");
+  } catch {
+    // Safari throws a SecurityError when pushState is called too often: no entry, Back just leaves the page.
+    return () => {};
+  }
+  stack.push(entry);
   return function close() {
     const at = stack.indexOf(entry);
     if (at === -1) return; // the browser already popped it
     stack.splice(at, 1);
     // Only step back when our entry is still the page the user is on.
-    if (currentId() === entry.id) window.history.back();
+    if (currentId() === entry.id) {
+      try {
+        window.history.back();
+      } catch {
+        /* nothing to undo */
+      }
+    }
   };
 }

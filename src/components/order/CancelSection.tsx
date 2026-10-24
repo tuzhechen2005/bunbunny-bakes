@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Sheet, type SheetHandle } from "@/components/ui/Sheet";
+import { focusRing } from "@/components/ui/focus";
 import { copy } from "@/copy";
 
 const t = copy.customer.order;
-const focusRing = "focus-visible:outline-[2.5px] focus-visible:outline-offset-[3px] focus-visible:outline-c-red";
 
 type Props = {
   token: string;
@@ -35,23 +36,14 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
   const [error, setError] = useState<string | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<SheetHandle>(null);
   const wasOpen = useRef(false);
 
-  // Move focus into the sheet when it opens, and back to the trigger when it closes.
+  // Focus goes back to the trigger when the sheet is gone (the sheet moves it inside when it opens).
   useEffect(() => {
-    if (sheetOpen) backRef.current?.focus();
-    else if (wasOpen.current) triggerRef.current?.focus();
+    if (!sheetOpen && wasOpen.current) triggerRef.current?.focus();
     wasOpen.current = sheetOpen;
   }, [sheetOpen]);
-
-  useEffect(() => {
-    if (!sheetOpen || busy) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setSheetOpen(false);
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [sheetOpen, busy]);
 
   async function onConfirm() {
     if (busy) return;
@@ -103,44 +95,38 @@ export function CancelSection({ token, canCancel, cancelDeadlineLabel, onCancell
       </button>
 
       {sheetOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-c-ink/40">
-          <button
-            type="button"
-            aria-hidden="true"
-            tabIndex={-1}
-            className="absolute inset-0 cursor-default"
-            onClick={() => !busy && setSheetOpen(false)}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="cancel-sheet-title"
-            className="relative w-full max-w-[430px] rounded-t-[24px] bg-c-paper p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-c-ink"
-          >
-            <p id="cancel-sheet-title" className="mb-5 text-center font-display text-lg">
-              {t.cancelConfirmTitle}
-            </p>
-            <div className="flex flex-col gap-3">
-              <button
-                type="button"
-                onClick={onConfirm}
-                disabled={busy}
-                className={`min-h-[52px] w-full rounded-full bg-c-red text-base font-bold text-c-paper disabled:opacity-50 ${focusRing}`}
-              >
-                {busy ? t.cancelling : t.cancelConfirm}
-              </button>
-              <button
-                ref={backRef}
-                type="button"
-                onClick={() => setSheetOpen(false)}
-                disabled={busy}
-                className={`min-h-[52px] w-full rounded-full border-[1.5px] border-c-ink text-base font-bold text-c-ink disabled:opacity-50 ${focusRing}`}
-              >
-                {t.cancelBack}
-              </button>
-            </div>
+        <Sheet
+          ref={sheetRef}
+          labelledBy="cancel-sheet-title"
+          dismissible={!busy}
+          initialFocus={backRef}
+          onClosed={() => setSheetOpen(false)}
+          className="p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+          panelTestId="cancel-sheet"
+        >
+          <p id="cancel-sheet-title" className="mb-5 text-center font-display text-lg">
+            {t.cancelConfirmTitle}
+          </p>
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={busy}
+              className={`min-h-[52px] w-full rounded-full bg-c-red text-base font-bold text-c-paper disabled:opacity-50 ${focusRing}`}
+            >
+              {busy ? t.cancelling : t.cancelConfirm}
+            </button>
+            <button
+              ref={backRef}
+              type="button"
+              onClick={() => sheetRef.current?.close()}
+              disabled={busy}
+              className={`min-h-[52px] w-full rounded-full border-[1.5px] border-c-ink text-base font-bold text-c-ink disabled:opacity-50 ${focusRing}`}
+            >
+              {t.cancelBack}
+            </button>
           </div>
-        </div>
+        </Sheet>
       )}
     </div>
   );

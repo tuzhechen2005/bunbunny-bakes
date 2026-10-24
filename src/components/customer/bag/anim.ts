@@ -1,6 +1,8 @@
 /** Small Web Animations helpers shared by the bag components. Never throw, never block. */
 
 export const EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
+/** Exit curve: things leave slowly at first, then fast. */
+export const EASE_IN = "cubic-bezier(0.5, 0, 0.75, 0)";
 
 /**
  * element.animate with the reduced-motion rule built in: when `reduced`, only the opacity part of

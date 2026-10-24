@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /** A minimal browser history: pushState / back / popstate, enough for the overlay helper. */
-function installFakeWindow() {
-  const entries: unknown[] = [{ __NA: true }];
+function installFakeWindow(initial: unknown = { __NA: true }, pushThrows = false) {
+  const entries: unknown[] = [initial];
   let at = 0;
   const listeners: (() => void)[] = [];
   const history = {
@@ -10,6 +10,7 @@ function installFakeWindow() {
       return entries[at];
     },
     pushState(state: unknown) {
+      if (pushThrows) throw new DOMException("too often", "SecurityError");
       entries.splice(at + 1);
       entries.push(state);
       at++;
@@ -92,5 +93,42 @@ describe("pushOverlay (Back closes the overlay first, D90)", () => {
     await flush();
     expect(a).toHaveBeenCalledTimes(1);
     expect(h.at()).toBe(0);
+  });
+
+  it("after a reload the page restarts its counter but the restored state still carries an old id", async () => {
+    // history.state of the restored entry is {bbOverlay: 1} while a fresh page starts counting at 0.
+    const h = installFakeWindow({ __NA: true, bbOverlay: 1 });
+    const { pushOverlay } = await import("@/lib/overlayHistory");
+    const onPop = vi.fn();
+    const close = pushOverlay(onPop);
+    expect(h.entries[1]).toMatchObject({ bbOverlay: 2 });
+    h.w.history.back();
+    await flush();
+    expect(onPop).toHaveBeenCalledTimes(1);
+    expect(h.at()).toBe(0);
+    close(); // the entry is gone already: no second back
+    await flush();
+    expect(h.at()).toBe(0);
+  });
+
+  it("closing by button after a reload goes back exactly one entry", async () => {
+    const h = installFakeWindow({ __NA: true, bbOverlay: 1 });
+    const { pushOverlay } = await import("@/lib/overlayHistory");
+    const close = pushOverlay(() => {});
+    expect(h.at()).toBe(1);
+    close();
+    await flush();
+    expect(h.at()).toBe(0);
+  });
+
+  it("a pushState that throws (Safari) leaves no stack entry and a no-op close", async () => {
+    const h = installFakeWindow({ __NA: true }, true);
+    const { pushOverlay } = await import("@/lib/overlayHistory");
+    const onPop = vi.fn();
+    const close = pushOverlay(onPop);
+    close();
+    await flush();
+    expect(h.at()).toBe(0);
+    expect(onPop).not.toHaveBeenCalled();
   });
 });

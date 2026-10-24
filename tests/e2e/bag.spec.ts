@@ -97,12 +97,12 @@ test("empty bag: no badge, $0.00, the bag opens and says it is empty", async ({ 
   await expect(page.getByTestId("bag-checkout")).toBeDisabled();
 });
 
-test("an add flies: the cart and amount update at once, the bread drops in on landing, never twice", async ({
+test("an add flies: the amount updates at once, the badge counts the bread on landing, never twice", async ({
   page,
 }) => {
   await openHome(page);
   // In one synchronous step: click, then read the page. The bread must be in the air, not yet in
-  // the bag, while badge and amount are already right.
+  // the bag: the amount is already right, the badge counts only what has landed.
   const atClick = await page.evaluate(async () => {
     const click = document.querySelector<HTMLElement>('[data-testid="product-card"][data-product-id="rs"] button[aria-label^="增加一个"]')!;
     click.click();
@@ -114,9 +114,11 @@ test("an add flies: the cart and amount update at once, the bread drops in on la
       subtotal: document.querySelector('[data-testid="bag-subtotal"]')!.textContent,
     };
   });
-  expect(atClick).toEqual({ discs: 1, pile: 0, count: "1", subtotal: "$2.49" });
-  // It lands inside the window about 0.62 s after take-off.
+  expect(atClick).toEqual({ discs: 1, pile: 0, count: "0", subtotal: "$2.49" });
+  await expect(page.getByTestId("bag-count")).toHaveText("已选 1 件"); // the spoken count is not delayed
+  // It lands inside the window about 0.62 s after take-off, and the badge follows.
   await expect.poll(() => pileCount(page), { timeout: 3000 }).toBe(1);
+  await expect(page.getByTestId("bag-badge")).toHaveText("1");
   await expect(page.locator(".bag-fly")).toHaveCount(0);
   await page.waitForTimeout(1200);
   expect(await pileCount(page)).toBe(1); // not counted twice
@@ -295,6 +297,10 @@ test("去结算 zooms the arrow and calls onCheckout; it is disabled when orderi
   await add(page, "hd");
   await page.getByTestId("bag-pill").click(); // the bag still opens
   await expect(page.getByTestId("bag-checkout")).toBeDisabled();
+  await page.evaluate(async () => {
+    const panel = document.querySelector('[data-testid="bag-sheet"]')!;
+    await Promise.all(panel.getAnimations().map((a) => a.finished.catch(() => undefined)));
+  });
   await expect(page.getByTestId("bag-checkout")).toContainText("暂未开放预订");
   await page.getByTestId("bag-checkout").click({ force: true });
   await expect(page).toHaveURL(/\/$/);
@@ -338,26 +344,45 @@ test("reduced motion: no flight, the bread is in the bag at once, the sheet fade
 test("shaking the big bag with the mouse moves the bag and rolls the bread", async ({ page }) => {
   await openHome(page);
   await add(page, "hd", 3);
-  await expect.poll(() => pileCount(page), { timeout: 4000 }).toBe(3);
+  await expect.poll(() => pileCount(page), { timeout: 8000 }).toBe(3);
   await page.getByTestId("bag-pill").click();
   await expect.poll(() => pileCount(page, "sheet")).toBe(3);
-  await page.waitForTimeout(1200); // let the opening hop settle
-  const bag = page.locator('[data-bag-target="sheet"] .pb');
-  const box = (await bag.boundingBox())!;
+  // Deterministic start: the sheet's opening animations are over and the pile has come to rest
+  // (two identical snapshots 300 ms apart), however slow the machine is.
+  await page.evaluate(async () => {
+    const panel = document.querySelector('[data-testid="bag-sheet"]')!;
+    await Promise.all(panel.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined)));
+  });
   const snap = () => sheetPile(page).evaluateAll((els) => els.map((e) => (e as HTMLElement).style.transform).join("|"));
+  let last = "";
+  await expect
+    .poll(
+      async () => {
+        const now = await snap();
+        const same = now === last;
+        last = now;
+        await page.waitForTimeout(300);
+        return same;
+      },
+      { timeout: 15000 },
+    )
+    .toBe(true);
+  const bag = page.locator('[data-bag-target="sheet"] .pb');
+  const sw = bag.locator(".pb-sw");
+  await expect.poll(() => sw.evaluate((e) => (e as HTMLElement).style.transform), { timeout: 10000 }).toBe("");
+  const box = (await bag.boundingBox())!;
   const before = await snap();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  for (let i = 0; i < 12; i++) {
-    await page.mouse.move(box.x + box.width / 2 + (i % 2 ? -50 : 50), box.y + box.height / 2, { steps: 2 });
+  for (let i = 0; i < 16; i++) {
+    await page.mouse.move(box.x + box.width / 2 + (i % 2 ? -50 : 50), box.y + box.height / 2, { steps: 6 });
   }
-  const sw = bag.locator(".pb-sw");
   expect(await sw.evaluate((e) => (e as HTMLElement).style.transform)).toContain("translate(");
   // The bread rolls around while (or shortly after) the bag is shaken.
-  await expect.poll(snap, { timeout: 3000 }).not.toBe(before);
+  await expect.poll(snap, { timeout: 8000 }).not.toBe(before);
   await page.mouse.up();
   // It springs back and everything rests again.
-  await expect.poll(() => sw.evaluate((e) => (e as HTMLElement).style.transform), { timeout: 6000 }).toBe("");
+  await expect.poll(() => sw.evaluate((e) => (e as HTMLElement).style.transform), { timeout: 10000 }).toBe("");
 });
 
 // Real touch events through the Chrome DevTools protocol (WebKit has no equivalent): a finger on

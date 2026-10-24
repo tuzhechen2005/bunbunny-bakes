@@ -176,7 +176,11 @@ test("checkout: lines, date states, brûlée hint, delivery gap", async ({ page 
   await mockApis(page);
   await seedCart(page, [{ productId: "p-cheese", qty: 5 }, { productId: "p-brulee", qty: 1 }]);
   const cheese = page.locator('[data-testid="cart-line"][data-product-id="p-cheese"]');
-  await expect(cheese).toContainText("奶酪角 ×5");
+  // The line says the name only: the quantity lives in the stepper, never repeated as 「×5」.
+  await expect(cheese).toContainText("奶酪角");
+  await expect(cheese).not.toContainText("×");
+  await expect(cheese.getByTestId("qty")).toHaveText("5");
+  await expect(cheese.getByRole("button", { name: "增加一个 奶酪角" })).toBeVisible();
   await expect(cheese.getByTestId("line-breakdown")).toHaveText("$10.99 + $2.99 = $13.98");
   await expect(page.getByTestId("lead-hint")).toHaveText("布蕾需提前两天");
 
@@ -231,15 +235,26 @@ test("checkout: happy path submits once, navigates and clears the cart", async (
   await seedCart(page, [{ productId: "p-redbean", qty: 4 }]);
   await fillAndPickDate(page);
   await page.getByLabel("备注").fill("谢谢");
-  await expect(page.getByTestId("note-counter")).toHaveText("2/300");
+  await expect(page.getByTestId("note-counter")).toHaveCount(0); // only shown from 240 characters
+  // The form stays on screen until the page changes: no full-screen "submitted" state, no empty-cart flash.
+  await page.evaluate(() => {
+    const w = window as unknown as { __flash: boolean };
+    w.__flash = false;
+    new MutationObserver(() => {
+      if (document.querySelector('[data-testid="empty-cart"]')) w.__flash = true;
+    }).observe(document.body, { childList: true, subtree: true });
+  });
 
   // double tap: two clicks in the same task, before React re-renders
   await page.getByTestId("submit").evaluate((el: HTMLButtonElement) => {
     el.click();
     el.click();
   });
-  await expect(page.getByText("提交中…")).toBeVisible();
+  await expect(page.getByTestId("submit")).toHaveText("提交中…");
+  await expect(page.getByTestId("submit")).toBeDisabled();
+  await expect(page.getByTestId("cart-line")).toHaveCount(1);
   await page.waitForURL(/\/o\/tok123\?new=1$/);
+  expect(await page.evaluate(() => (window as unknown as { __flash: boolean }).__flash)).toBe(false);
   expect(bodies).toHaveLength(1);
   const body = bodies[0];
   expect(body).toMatchObject({
@@ -257,6 +272,7 @@ test("checkout: happy path submits once, navigates and clears the cart", async (
   const lastBag = await page.evaluate(() => sessionStorage.getItem("bunbunny:lastBag"));
   expect(JSON.parse(lastBag ?? "null")).toEqual({
     orderNo: "1030-001",
+    token: "tok123",
     items: [{ name: "奶酥红豆包", imageUrl: null, qty: 4 }],
   });
 });

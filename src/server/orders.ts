@@ -286,7 +286,8 @@ export async function createCustomerOrder(
       }
       const unconfirmed = await tx.order.count({
         where: {
-          wechatId: data.wechatId,
+          // D92: WeChat ids are compared without regard to letter case.
+          wechatId: { equals: data.wechatId, mode: "insensitive" },
           pickupDate: toDbDate(date),
           status: { in: ["NEW", "CONTACTED"] },
         },
