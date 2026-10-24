@@ -80,6 +80,7 @@ export function ProductCard({
   max,
   onDecrease,
   onIncrease,
+  onOpen,
 }: {
   product: MenuProduct;
   qty: number;
@@ -87,6 +88,8 @@ export function ProductCard({
   onDecrease: () => void;
   /** `from` is the photo's rect, where the little flight to the bag starts. */
   onIncrease: (from: DOMRect | null) => void;
+  /** Tap on the photo: open this bread's detail; `from` is the photo's rect (the detail grows out of it). */
+  onOpen?: (from: DOMRect, opener: HTMLElement, via: "key" | "pointer") => void;
 }) {
   const photo = useRef<HTMLDivElement>(null);
   const paused = product.status === "PAUSED";
@@ -100,14 +103,33 @@ export function ProductCard({
       data-paused={paused ? "true" : undefined}
     >
       <div className="hm-ph" ref={photo}>
-        <div className="hm-ph-img">
-          <ProductPhoto product={product} className="h-full w-full" variant="grid" />
-        </div>
+        <button
+          type="button"
+          className="hm-ph-img"
+          aria-label={fill(t.viewDetail, { name: product.name })}
+          onClick={(e) => onOpen?.(e.currentTarget.getBoundingClientRect(), e.currentTarget, e.detail === 0 ? "key" : "pointer")}
+          data-testid="tile-photo"
+        >
+          <ProductPhoto product={product} className="h-full w-full" variant="grid" decorative />
+        </button>
         <span className="hm-ctl">
           {qty > 0 ? (
-            <QtyStepper qty={qty} canIncrease={!paused && !atMax} onDecrease={onDecrease} onIncrease={add} onPhoto />
+            <QtyStepper
+              qty={qty}
+              canIncrease={!paused && !atMax}
+              onDecrease={onDecrease}
+              onIncrease={add}
+              onPhoto
+              name={product.name}
+            />
           ) : (
-            <button type="button" className="hm-plus" aria-label={t.increase} disabled={paused || atMax} onClick={add}>
+            <button
+              type="button"
+              className="hm-plus"
+              aria-label={fill(t.increaseNamed, { name: product.name })}
+              disabled={paused || atMax}
+              onClick={add}
+            >
               <PlusIcon />
             </button>
           )}

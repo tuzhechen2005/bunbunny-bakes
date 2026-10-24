@@ -737,3 +737,251 @@ test.describe("states", () => {
     expect(box!.x).toBe(425);
   });
 });
+
+// ---- J1 polish: detail fit, Back, grid photo, names, hint, swipe from + ----
+test.describe("home polish (J1)", () => {
+  const LONG = "长长的简介。".repeat(40);
+
+  test("the detail fits without scrolling on short phones, quantity right of the prices", async ({ page }) => {
+    for (const [w, h] of [
+      [390, 664],
+      [320, 568],
+      [360, 740],
+    ] as const) {
+      await page.setViewportSize({ width: w, height: h });
+      await mockHome(page);
+      await page.goto("/");
+      await settled(page);
+      await page.getByTestId("rack").focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByTestId("detail")).toBeVisible({ timeout: 2000 });
+      await page.waitForTimeout(900);
+      const r = await page.evaluate(() => {
+        const d = document.querySelector(".hm-detail")!;
+        const stp = document.querySelector(".hm-detail .hm-stp")!.getBoundingClientRect();
+        const dock = document.querySelector(".hm-dt-dock")!.getBoundingClientRect();
+        const unit = document.querySelector('[data-testid="detail-unit"]')!.getBoundingClientRect();
+        return {
+          overflow: d.scrollHeight - d.clientHeight,
+          stpBottom: stp.bottom,
+          dockTop: dock.top,
+          stpLeft: stp.left,
+          unitLeft: unit.left,
+          stpTop: stp.top,
+          unitBottom: unit.bottom,
+          act: !!document.querySelector(".hm-dt-act"),
+        };
+      });
+      expect(r.act).toBe(false);
+      expect(r.overflow, `${w}x${h}`).toBeLessThanOrEqual(1);
+      expect(r.stpBottom, `${w}x${h}`).toBeLessThanOrEqual(r.dockTop + 1);
+      expect(r.stpLeft).toBeGreaterThan(r.unitLeft);
+      expect(r.stpTop).toBeLessThan(r.unitBottom + 30); // same row
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("detail")).toHaveCount(0, { timeout: 3000 });
+    }
+  });
+
+  test("a long description scrolls above the dock, and a new bread starts at the top", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 664 });
+    await mockHome(
+      page,
+      PRODUCTS.map((p, i) => (i === 1 ? { ...p, description: LONG } : p)),
+    );
+    await page.goto("/");
+    await settled(page);
+    await page.getByTestId("rack").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("detail")).toBeVisible({ timeout: 2000 });
+    await page.getByTestId("detail-next").click();
+    await expect(page.getByTestId("detail-name")).toHaveText("岩烧乳酪包");
+    await page.waitForTimeout(700);
+    const r = await page.evaluate(() => {
+      const d = document.querySelector(".hm-detail")!;
+      d.scrollTop = d.scrollHeight;
+      const stp = document.querySelector(".hm-detail .hm-stp")!.getBoundingClientRect();
+      const dock = document.querySelector(".hm-dt-dock")!.getBoundingClientRect();
+      const top = document.querySelector(".hm-dt-top")!.getBoundingClientRect();
+      return { scrolled: d.scrollTop, stpBottom: stp.bottom, dockTop: dock.top, topBarTop: top.top };
+    });
+    expect(r.scrolled).toBeGreaterThan(50);
+    expect(r.stpBottom).toBeLessThanOrEqual(r.dockTop + 1);
+    expect(r.topBarTop).toBe(0); // the bar sticks
+    await page.getByTestId("detail-next").click();
+    await expect(page.getByTestId("detail-name")).toHaveText("焦糖布蕾");
+    expect(await page.evaluate(() => document.querySelector(".hm-detail")!.scrollTop)).toBe(0);
+  });
+
+  test("a touch-opened detail shows no focus ring; keyboard-opened focuses the close button", async ({ page }) => {
+    await mockHome(page);
+    await page.goto("/");
+    await settled(page);
+    const [cx, cy] = await centreOf(page, '.hm-card[data-card="0"] .hm-face:not(.hm-back)');
+    await page.touchscreen.tap(cx, cy);
+    await expect(page.getByTestId("detail")).toBeVisible({ timeout: 2000 });
+    const touch = await page.evaluate(() => {
+      const a = document.activeElement as HTMLElement;
+      return { testid: a.getAttribute("data-testid"), outline: getComputedStyle(a).outlineStyle };
+    });
+    expect(touch).toEqual({ testid: "detail", outline: "none" });
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("detail")).toHaveCount(0, { timeout: 3000 });
+    await page.getByTestId("rack").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("detail")).toBeVisible({ timeout: 2000 });
+    await expect(page.getByTestId("detail-close")).toBeFocused();
+    const ring = await page.getByTestId("detail-close").evaluate((e) => getComputedStyle(e).outlineWidth);
+    expect(ring).toBe("2px");
+  });
+
+  test("names carry the product: hero +, grid +/- and quantity, detail stepper", async ({ page }) => {
+    await mockHome(page);
+    await page.goto("/");
+    await settled(page);
+    await expect(page.getByTestId("hero-add")).toHaveAttribute("aria-label", "放进纸袋 奶酥红豆包");
+    const tile = page.locator('[data-testid="product-card"][data-product-id="p-rock"]');
+    await tile.getByRole("button", { name: "增加一个 岩烧乳酪包" }).click();
+    await expect(tile.getByRole("button", { name: "减少一个 岩烧乳酪包" })).toBeVisible();
+    await expect(tile.getByTestId("qty")).toHaveAttribute("aria-label", "岩烧乳酪包 已选 1 个");
+    await page.getByTestId("rack").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("detail")).toBeVisible({ timeout: 2000 });
+    await expect(page.getByTestId("detail-inc")).toHaveAttribute("aria-label", "增加一个 奶酥红豆包");
+    await expect(page.getByTestId("detail-dec")).toHaveAttribute("aria-label", "减少一个 奶酥红豆包");
+    await expect(page.getByTestId("detail-qty")).toHaveAttribute("aria-label", "奶酥红豆包 已选 1 个");
+  });
+
+  test("browser Back closes the detail first and stays on the page (D90)", async ({ page }) => {
+    await mockHome(page);
+    await page.goto("/");
+    await settled(page);
+    const len0 = await page.evaluate(() => history.length);
+    await page.getByTestId("rack").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("detail")).toBeVisible({ timeout: 2000 });
+    expect(await page.evaluate(() => history.length)).toBe(len0 + 1);
+    await page.goBack();
+    await expect(page.getByTestId("detail")).toHaveCount(0, { timeout: 3000 });
+    expect(new URL(page.url()).pathname).toBe("/");
+    // closing by the button steps the entry back: no pile-up
+    for (let k = 0; k < 2; k++) {
+      await page.getByTestId("rack").focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByTestId("detail")).toBeVisible({ timeout: 2000 });
+      await page.getByTestId("detail-close").click();
+      await expect(page.getByTestId("detail")).toHaveCount(0, { timeout: 3000 });
+    }
+    await page.waitForTimeout(300);
+    expect(new URL(page.url()).pathname).toBe("/");
+    // the entry after the last close is the one the Back above left behind (forward entries are overwritten)
+    expect(await page.evaluate(() => history.length)).toBeLessThanOrEqual(len0 + 1);
+  });
+
+  test("tapping a grid photo opens that bread's detail, no spin; hanging back returns to the tile", async ({ page }) => {
+    await mockHome(page);
+    await page.goto("/");
+    await settled(page);
+    const tile = page.locator('[data-testid="product-card"][data-product-id="p-brulee"]');
+    await tile.scrollIntoViewIfNeeded();
+    await tile.getByTestId("tile-photo").tap();
+    await expect(page.getByTestId("detail")).toBeVisible({ timeout: 2000 });
+    await expect(page.getByTestId("detail-name")).toHaveText("焦糖布蕾");
+    await expect(page.getByTestId("detail-pos")).toHaveText("3 / 4");
+    expect(
+      await page.evaluate(
+        () => [...document.querySelectorAll(".hm-flip")].flatMap((e) => e.getAnimations()).filter((a) => !(a instanceof CSSTransition)).length,
+      ),
+    ).toBe(0);
+    await page.getByTestId("detail-close").click();
+    await expect(page.getByTestId("detail")).toHaveCount(0, { timeout: 3000 });
+    await expect(page.locator(".hm-card.is-taken")).toHaveCount(0);
+  });
+
+  test("the hint waits for the entrance, then nudges three times and stops", async ({ page }) => {
+    await mockHome(page);
+    await page.goto("/");
+    await expect(page.getByTestId("rack")).toBeVisible();
+    const hint = page.getByTestId("try-me");
+    await expect(hint).toHaveAttribute("data-entered", "", { timeout: 4000 });
+    await expect.poll(() => hint.evaluate((e) => getComputedStyle(e).opacity), { timeout: 3000 }).toBe("0.85");
+    const anim = await hint.locator("svg").evaluate((e) => {
+      const cs = getComputedStyle(e);
+      return { count: cs.animationIterationCount, name: cs.animationName };
+    });
+    expect(anim).toEqual({ count: "3", name: "hm-nudge" });
+  });
+
+  test("the bundle price line is 12.5 px", async ({ page }) => {
+    await mockHome(page);
+    await page.goto("/");
+    await settled(page);
+    expect(await page.locator('[data-testid="bundle-price"]').first().evaluate((e) => getComputedStyle(e).fontSize)).toBe("12.5px");
+  });
+
+  test("320x568: bundle line and dots stay above the bag bar", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await mockHome(page);
+    await page.goto("/");
+    await settled(page);
+    const r = await page.evaluate(() => ({
+      bar: document.querySelector('[data-testid="bag-pill"]')!.getBoundingClientRect().top,
+      dots: document.querySelector(".hm-dots")!.getBoundingClientRect().bottom,
+      bundle: document.querySelector(".hm-price > span")!.getBoundingClientRect().bottom,
+    }));
+    expect(r.dots).toBeLessThan(r.bar);
+    expect(r.bundle).toBeLessThan(r.bar);
+  });
+
+  test("landscape: the photo is capped by the viewport height, the bag bar is 52 px", async ({ page }) => {
+    await page.setViewportSize({ width: 750, height: 342 });
+    await mockHome(page);
+    await page.goto("/");
+    await settled(page);
+    const r = await page.evaluate(() => ({
+      card: document.querySelector('.hm-card[data-card="0"] .hm-face')!.getBoundingClientRect().width,
+      pill: document.querySelector('[data-testid="bag-pill"]')!.getBoundingClientRect().height,
+    }));
+    expect(r.card).toBeLessThanOrEqual(342 * 0.46 + 2);
+    expect(r.pill).toBe(52);
+  });
+
+  test("desktop: the rope fades out at the column edges", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await mockHome(page);
+    await page.goto("/");
+    await settled(page);
+    expect(await page.locator(".hm-rack").evaluate((e) => getComputedStyle(e).maskImage)).toContain("linear-gradient");
+  });
+
+  test("a swipe that starts on the hero + drags the rope and does not add; a tap still adds", async ({ page, context }) => {
+    await mockHome(page);
+    await page.goto("/");
+    await settled(page);
+    const cdp = await context.newCDPSession(page);
+    const f = finger(cdp);
+    const [bx, by] = await centreOf(page, '[data-testid="hero-add"]');
+    await drag(f, [bx, by], [bx - 150, by], { steps: 8, ms: 160 });
+    await expect.poll(() => selectedIndex(page)).toBe(1);
+    await expect(page.getByTestId("bag-count")).toContainText("0");
+    await expect(page.getByTestId("hero-add")).toBeEnabled();
+    await settled(page);
+    const [tx, ty] = await centreOf(page, '[data-testid="hero-add"]');
+    await page.touchscreen.tap(tx, ty);
+    await expect(page.getByTestId("bag-count")).toContainText("1");
+  });
+  test("a mouse drag that starts on the hero + moves the rope and does not add", async ({ page }) => {
+    await mockHome(page);
+    await page.goto("/");
+    await settled(page);
+    const [bx, by] = await centreOf(page, '[data-testid="hero-add"]');
+    await page.mouse.move(bx, by);
+    await page.mouse.down();
+    for (let i = 1; i <= 8; i++) {
+      await page.mouse.move(bx - i * 20, by);
+      await page.waitForTimeout(16);
+    }
+    await page.mouse.up();
+    await expect.poll(() => selectedIndex(page)).toBe(1);
+    await expect(page.getByTestId("bag-count")).toContainText("0");
+  });
+});

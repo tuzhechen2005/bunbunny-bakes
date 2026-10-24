@@ -74,3 +74,19 @@ radius. `radiusFor(n)` exposes the rule. The view (`PaperBag`) maps world units 
 - `BagBar` (props unchanged) renders the mini bag + pill and, in a portal while open, `BagSheet`.
 - `FlyLayer` draws the flights; `bagFlights.ts` keeps the breads in the air (`pending`) so the bags show the cart minus the flying bread and a landing drops them in exactly once.
 - A bag window is found by `[data-bag-target="sheet" | "bar"] [data-pb-window]` (sheet first), so flights land in whichever bag is visible.
+
+## Browser Back closes overlays first (`src/lib/overlayHistory.ts`, D90)
+
+```ts
+const close = pushOverlay(() => hangBack()); // adds a history entry; Back calls the callback (play the closing animation)
+close();                                      // any other way of closing: steps the entry back, never leaves the page
+```
+The product detail uses it; the bag sheet will too. Entries are numbered in `history.state` (the router's own state is
+kept), so a stale `close()` after a Back is a no-op.
+
+## Home polish notes (J1)
+
+- `.hm-hero[data-phase]` (`home | spin | detail | closing`) drives the name/dots fades (no double exposure with the detail's name).
+- The entrance starts when slot 0's photo is decoded (or after 900 ms); a landing card hands energy to the rope and its peg; the hint
+  (`data-entered` on `.hm-try`) fades in after the last card landed and nudges three times.
+- A swipe may start on the hero "+" (`.hm-addp`); a drag from there never adds, a tap still does.
