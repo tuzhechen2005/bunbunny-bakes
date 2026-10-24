@@ -235,6 +235,71 @@ test.describe("checkout", () => {
     await expect(line.getByRole("button", { name: /增加一个/ })).toBeEnabled();
   });
 
+  /** Back to the bag and 去结算 again, with the same bread (the checkout page is kept hidden meanwhile). */
+  async function leaveAndReturn(page: Page) {
+    await page.getByRole("link", { name: "返回菜单" }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await page.getByTestId("bag-pill").click();
+    await page.getByTestId("bag-checkout").click();
+    await expect(page).toHaveURL(/\/checkout$/);
+  }
+
+  test("a retry after a network error, even after leaving and coming back, keeps the idempotency key", async ({ page }) => {
+    const keys: string[] = [];
+    await mockApis(page, {
+      orders: async (route) => {
+        keys.push((route.request().postDataJSON() as { idempotencyKey: string }).idempotencyKey);
+        if (keys.length < 3) return route.abort("failed");
+        return route.fulfill({ status: 201, json: { orderNo: "1030-009", viewToken: "tok999", url: "/o/tok999" } });
+      },
+    });
+    await seedCart(page, [{ productId: "p-redbean", qty: 2 }]);
+    await page.locator('[data-testid="date-card"][data-date="2026-10-30"]').click();
+    await page.getByLabel("微信号").fill("bunny_fan_01");
+    await page.getByTestId("submit").click();
+    await expect(page.getByTestId("submit-error")).toBeVisible();
+
+    await leaveAndReturn(page);
+    await expect(page.locator('[data-testid="date-card"][aria-pressed="true"]')).toHaveCount(1); // still chosen
+    await page.getByTestId("submit").click();
+    await expect(page.getByTestId("submit-error")).toBeVisible();
+    await page.getByTestId("submit").click();
+    await expect.poll(() => keys.length).toBe(3);
+    expect(new Set(keys).size).toBe(1);
+  });
+
+  test("leaving mid-POST, coming back after the failure: the retry has the same key", async ({ page }) => {
+    const keys: string[] = [];
+    let release!: () => void;
+    const hold = new Promise<void>((r) => (release = r));
+    await mockApis(page, {
+      orders: async (route) => {
+        keys.push((route.request().postDataJSON() as { idempotencyKey: string }).idempotencyKey);
+        if (keys.length === 1) {
+          await hold;
+          return route.abort("failed");
+        }
+        return route.fulfill({ status: 201, json: { orderNo: "1030-010", viewToken: "tok1010", url: "/o/tok1010" } });
+      },
+    });
+    await seedCart(page, [{ productId: "p-redbean", qty: 2 }]);
+    await page.locator('[data-testid="date-card"][data-date="2026-10-30"]').click();
+    await page.getByLabel("微信号").fill("bunny_fan_01");
+    await page.getByTestId("submit").click();
+    await expect(page.getByTestId("submit")).toHaveText("提交中…");
+    await page.getByRole("link", { name: "返回菜单" }).click();
+    await expect(page).toHaveURL(/\/$/);
+    release(); // the POST fails while the checkout page is hidden
+    await page.waitForTimeout(400);
+    await page.getByTestId("bag-pill").click();
+    await page.getByTestId("bag-checkout").click();
+    await expect(page).toHaveURL(/\/checkout$/);
+    await expect(page.getByTestId("submit")).toBeEnabled();
+    await page.getByTestId("submit").click();
+    await expect.poll(() => keys.length).toBe(2);
+    expect(keys[1]).toBe(keys[0]);
+  });
+
   test("leaving mid-submit: the response is still handled, nothing hijacks the page", async ({ page }) => {
     let release!: () => void;
     const hold = new Promise<void>((r) => (release = r));

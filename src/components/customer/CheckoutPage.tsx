@@ -259,8 +259,14 @@ export function CheckoutPage() {
     setErrorSeq((n) => n + 1);
   };
 
-  // One idempotency key per submission: new on mount and whenever cart, date or fulfillment change.
+  // One idempotency key per submission: new on mount and whenever cart, date or fulfillment really
+  // change. The effect also re-runs when this preserved page is shown again; then the signature is
+  // the same and the key stays, so a retry after a NETWORK error is still the same order.
+  const keyFor = useRef("");
   useEffect(() => {
+    const sig = `${cartKey}|${selectedDate}|${fulfillment}`;
+    if (keyFor.current === sig) return;
+    keyFor.current = sig;
     keyRef.current = uuidV4();
   }, [cartKey, selectedDate, fulfillment]);
 
