@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Stepper } from "@/components/ui/Stepper";
+import { TopBar } from "@/components/ui/TopBar";
+import { focusRing } from "@/components/ui/focus";
+import "@/components/ui/ui.css";
 import { copy } from "@/copy";
 import { dayLabel } from "@/domain/dates";
 import { formatCents } from "@/domain/pricing";
@@ -15,8 +19,10 @@ import {
   type Fulfillment,
   type MenuProduct,
 } from "@/lib/api";
-import { cart, useCart, useHydrated } from "@/lib/cart";
+import { cart, useCart, useHydrated, type CartItem } from "@/lib/cart";
 import { useMotionPrefs } from "@/lib/motion/react";
+import { myOrders } from "@/lib/myOrders";
+import { pendingSave } from "@/lib/pendingSave";
 import { FieldError } from "./checkout/FieldError";
 import { RollNumber } from "./checkout/RollNumber";
 import { breakdownText, fill, formatDollars } from "./format";
@@ -26,8 +32,11 @@ import { useMenu } from "./useMenu";
 
 const t = copy.customer.checkout;
 const home = copy.customer.home;
+const bagCopy = copy.customer.bag;
 const WECHAT_MAX = 40;
 const NOTE_MAX = 300;
+/** The character counter of the note only shows when the limit is getting close. */
+const NOTE_COUNTER_FROM = 240;
 const EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 /** sessionStorage key the order page reads to draw the bag (G4). */
 const LAST_BAG_KEY = "bunbunny:lastBag";
@@ -44,7 +53,11 @@ interface SubmitError {
   where: "date" | "submit";
 }
 
-const focusRing = "focus-visible:outline-[2.5px] focus-visible:outline-offset-[3px] focus-visible:outline-c-red";
+/** The new order goes into 我的订单 and its save-link dialog becomes due (D84, D89). */
+function rememberOrder(token: string, orderNo: string): void {
+  myOrders.record(token, orderNo, Date.now());
+  pendingSave.add(token);
+}
 
 function safeDayLabel(date: string): string {
   try {
@@ -59,24 +72,6 @@ function splitDayLabel(date: string): [string, string] {
   const label = safeDayLabel(date);
   const i = label.indexOf(" ");
   return i < 0 ? [label, ""] : [label.slice(0, i), label.slice(i + 1)];
-}
-
-function Icon({ children }: { children: ReactNode }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-[18px] w-[18px]"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      {children}
-    </svg>
-  );
 }
 
 /** Numbered block (prototype `.blk`): number, title, optional note on the right. */
@@ -144,7 +139,7 @@ function DateCard({
   return (
     <button
       type="button"
-      className={`flex min-h-[112px] w-[100px] flex-none flex-col items-start justify-between rounded-[20px] border-[1.5px] px-3.5 pt-3.5 pb-[13px] text-left transition-[background-color,border-color,color,transform] duration-[250ms] ${tone} ${available ? "active:scale-[0.96] motion-reduce:active:scale-100" : ""} ${focusRing}`}
+      className={`flex min-h-[112px] w-[100px] flex-none snap-start flex-col items-start justify-between rounded-[20px] border-[1.5px] px-3.5 pt-3.5 pb-[13px] text-left transition-[background-color,border-color,color,transform] duration-[250ms] ${tone} ${available ? "active:scale-[0.96] motion-reduce:active:scale-100" : ""} ${focusRing}`}
       disabled={!available}
       aria-pressed={selected}
       onClick={(e) => {
@@ -171,57 +166,19 @@ function DateCard({
   );
 }
 
-function RoundButton({
-  label,
-  disabled,
-  onClick,
-  children,
-}: {
-  label: string;
-  disabled?: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
+/** Four date cards while the dates load (same size as the real ones, so nothing jumps). */
+function DatesSkeleton({ heading = false }: { heading?: boolean }) {
   return (
-    <button
-      type="button"
-      className={`grid h-11 w-11 place-items-center rounded-full text-c-ink transition-transform duration-[180ms] active:scale-95 disabled:opacity-35 motion-reduce:active:scale-100 ${focusRing}`}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      <span className="grid h-8 w-8 place-items-center rounded-full border-[1.5px] border-c-line">{children}</span>
-    </button>
-  );
-}
-
-/** − qty + for a cart line, 44px touch targets. */
-function LineStepper({
-  qty,
-  canIncrease,
-  onDecrease,
-  onIncrease,
-}: {
-  qty: number;
-  canIncrease: boolean;
-  onDecrease: () => void;
-  onIncrease: () => void;
-}) {
-  return (
-    <div className="flex shrink-0 items-center">
-      <RoundButton label={home.decrease} disabled={qty <= 0} onClick={onDecrease}>
-        <Icon>
-          <path d="M5 12h14" />
-        </Icon>
-      </RoundButton>
-      <span className="min-w-5 text-center font-num text-base font-bold" aria-label={fill(home.qtyLabel, { qty })} data-testid="qty">
-        {qty}
-      </span>
-      <RoundButton label={home.increase} disabled={!canIncrease} onClick={onIncrease}>
-        <Icon>
-          <path d="M12 5v14M5 12h14" />
-        </Icon>
-      </RoundButton>
+    <div className={heading ? "mt-[34px]" : undefined} aria-busy="true" data-testid="dates-skeleton">
+      {heading ? <div className="ui-skel mb-3.5 h-6 w-28 rounded-full" aria-hidden="true" /> : null}
+      <div className="-mx-5 flex gap-2.5 overflow-hidden px-5 pt-1 pb-2" aria-hidden="true">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="ui-skel h-[112px] w-[100px] flex-none rounded-[20px]" />
+        ))}
+      </div>
+      <p role="status" className="sr-only">
+        {t.datesLoading}
+      </p>
     </div>
   );
 }
@@ -238,7 +195,10 @@ function Shell({ children }: { children: ReactNode }) {
 export function CheckoutPage() {
   const router = useRouter();
   const { status: menuStatus, menu, reload: reloadMenu } = useMenu();
-  const items = useCart();
+  const liveItems = useCart();
+  // Set when the order is created: the form stays on screen (button 提交中…) while the page navigates.
+  const [frozen, setFrozen] = useState<readonly CartItem[] | null>(null);
+  const items = frozen ?? liveItems;
   const hydrated = useHydrated();
   const { reduced } = useMotionPrefs();
 
@@ -254,16 +214,22 @@ export function CheckoutPage() {
   // Bumped whenever an error is raised, so the error line shakes again even with the same text.
   const [errorSeq, setErrorSeq] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
 
   const submittingRef = useRef(false);
   const keyRef = useRef<string>("");
   const availSeq = useRef(0);
-  const pageRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLElement>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const cartKey = JSON.stringify(items);
   const menuReady = menuStatus === "ready";
-  const showForm = hydrated && menuReady && !!menu && items.length > 0 && !submitted;
+  const showForm = hydrated && menuReady && !!menu && items.length > 0;
 
   const raiseSubmitError = (error: SubmitError) => {
     setSubmitError(error);
@@ -333,21 +299,25 @@ export function CheckoutPage() {
 
   const requery = () => setAvailTick((n) => n + 1);
 
-  if (submitted) {
-    return (
-      <Shell>
-        <main className="flex flex-1 items-center justify-center p-8 text-c-grey">
-          <p role="status">{t.submitting}</p>
-        </main>
-      </Shell>
-    );
-  }
+  const top = <TopBar backHref="/" backLabel={t.backToMenu} title={t.pageTitle} titleAs="h1" />;
 
   if (!hydrated || menuStatus === "loading") {
     return (
       <Shell>
-        <main className="flex flex-1 items-center justify-center p-8 text-c-grey">
-          <p>{copy.customer.home.loading}</p>
+        {top}
+        <main className="flex flex-1 flex-col px-5 pb-[calc(30px+env(safe-area-inset-bottom))]" aria-busy="true">
+          <p role="status" className="sr-only">
+            {home.loading}
+          </p>
+          <ul className="mt-4 flex list-none flex-col divide-y divide-c-line p-0" aria-hidden="true" data-testid="lines-skeleton">
+            {Array.from({ length: Math.min(Math.max(items.length, 1), 3) }, (_, i) => (
+              <li key={i} className="flex items-center gap-3 py-3">
+                <div className="ui-skel h-14 w-14 shrink-0 rounded-[14px]" />
+                <div className="ui-skel h-5 w-32 rounded-full" />
+              </li>
+            ))}
+          </ul>
+          <DatesSkeleton heading />
         </main>
       </Shell>
     );
@@ -356,6 +326,7 @@ export function CheckoutPage() {
   if (menuStatus === "error" || !menu) {
     return (
       <Shell>
+        {top}
         <main className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
           <p role="alert" className="font-semibold text-c-red">
             {copy.customer.home.loadFailed}
@@ -375,6 +346,7 @@ export function CheckoutPage() {
   if (items.length === 0) {
     return (
       <Shell>
+        {top}
         <main className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center" data-testid="empty-cart">
           <p className="font-display text-xl">{t.emptyCart}</p>
           <Link
@@ -401,9 +373,11 @@ export function CheckoutPage() {
   const gap = data?.pricing.freeDeliveryGapCents ?? 0;
   // CAPACITY_RULES §7 rules 3–4: a cart with a paused/unavailable product or a qty over the
   // per-item max cannot check out. The offending lines explain why.
-  const hasCartProblem = lines.some(
-    (l) => l.product.status === "PAUSED" || problems.has(l.productId) || l.qty > menu.maxQtyPerItem,
-  );
+  const hasUnavailable = lines.some((l) => l.product.status === "PAUSED" || problems.get(l.productId) === "PRODUCT_UNAVAILABLE");
+  const hasCartProblem =
+    hasUnavailable || lines.some((l) => problems.has(l.productId) || l.qty > menu.maxQtyPerItem);
+  // Say why 确认提交预订 is disabled (the totals themselves always come from the server).
+  const blockedReason = hasUnavailable ? t.blockedUnavailable : hasCartProblem ? copy.errors.QTY_LIMIT : null;
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -435,22 +409,31 @@ export function CheckoutPage() {
     });
 
     if (result.ok) {
+      // Everything below also runs when the customer has already left this page: the response is
+      // still handled, so the order is in 我的订单 and its save-link modal is still due.
+      const { orderNo, viewToken } = result.data;
       // Best effort: the order page draws the ordered bread in the bag (G4). Never blocks the redirect.
       try {
         sessionStorage.setItem(
           LAST_BAG_KEY,
           JSON.stringify({
-            orderNo: result.data.orderNo,
+            orderNo,
             items: lines.map((l) => ({ name: l.product.name, imageUrl: l.product.imageUrl, qty: l.qty })),
           }),
         );
       } catch {
         /* storage unavailable (private mode, quota): the order page falls back */
       }
-      setSubmitted(true);
+      rememberOrder(viewToken, orderNo);
       keyRef.current = uuidV4();
-      cart.clear();
-      router.replace(`/o/${encodeURIComponent(result.data.viewToken)}?new=1`);
+      if (mounted.current) {
+        setFrozen(items);
+        cart.clear();
+        router.replace(`/o/${encodeURIComponent(viewToken)}?new=1`);
+      } else if (JSON.stringify(cart.getItems()) === cartKey) {
+        // Gone already: do not pull them to the order page; only empty the bag if it is still this order.
+        cart.clear();
+      }
       return; // stay locked while navigating
     }
 
@@ -499,28 +482,17 @@ export function CheckoutPage() {
 
   return (
     <Shell>
+      {top}
       <main ref={pageRef} className="flex flex-1 flex-col px-5 pb-[calc(30px+env(safe-area-inset-bottom))]">
-        <div className="-mx-2.5 flex h-[62px] items-center">
-          <Link
-            href="/"
-            className={`grid h-11 w-11 place-items-center rounded-full text-c-ink ${focusRing}`}
-            aria-label={t.backToMenu}
-          >
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-              <path d="M15 6l-6 6 6 6" />
-            </svg>
-          </Link>
-        </div>
-        <h1 className="mt-1.5 font-display text-[38px] leading-[1.1] tracking-[-0.05em]">{t.pageTitle}</h1>
         {!orderingEnabled ? (
-          <p className="mt-2.5 text-sm font-semibold text-c-red" data-testid="ordering-closed">
+          <p className="mt-1 text-sm font-semibold text-c-red" data-testid="ordering-closed">
             {copy.home.orderingClosed}
           </p>
         ) : null}
 
         <form onSubmit={onSubmit} className="flex flex-col" noValidate>
           {/* Cart lines */}
-          <ul className="mt-6 flex flex-col divide-y divide-c-line" aria-label={t.cartTitle} data-rise="">
+          <ul className="mt-3 flex flex-col divide-y divide-c-line" aria-label={t.cartTitle} data-rise="">
             {lines.map(({ productId, qty, product }) => {
               const problem = problems.get(productId);
               const unavailable = product.status === "PAUSED" || problem === "PRODUCT_UNAVAILABLE";
@@ -533,7 +505,7 @@ export function CheckoutPage() {
                     className={`h-14 w-14 shrink-0 overflow-hidden rounded-[14px] ${unavailable ? "opacity-50 grayscale" : ""}`}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[15px] leading-snug font-bold break-words">{fill(t.lineName, { name: product.name, qty })}</p>
+                    <p className="text-[15px] leading-snug font-bold break-words">{product.name}</p>
                     <p className="font-num text-[13px] leading-snug font-semibold text-c-grey" data-testid="line-breakdown">
                       {breakdownText(qty, product)}
                     </p>
@@ -552,9 +524,16 @@ export function CheckoutPage() {
                       {t.remove}
                     </button>
                   ) : (
-                    <LineStepper
+                    <Stepper
+                      size="md"
+                      tone="wash"
                       qty={qty}
                       canIncrease={!atMax}
+                      canDecrease={qty > 0}
+                      decreaseLabel={fill(bagCopy.decreaseNamed, { name: product.name })}
+                      increaseLabel={fill(bagCopy.increaseNamed, { name: product.name })}
+                      qtyLabel={fill(bagCopy.qtyNamed, { name: product.name, qty })}
+                      qtyTestId="qty"
                       onDecrease={() => cart.decrement(productId)}
                       onIncrease={() => cart.increment(productId, menu.maxQtyPerItem)}
                     />
@@ -578,7 +557,7 @@ export function CheckoutPage() {
                   {t.noDates}
                 </p>
               ) : (
-                <div className="-mx-5 flex gap-2.5 overflow-x-auto px-5 pt-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="-mx-5 flex snap-x snap-mandatory scroll-px-5 gap-2.5 overflow-x-auto px-5 pt-1 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {data.dates.map((d) => (
                     <DateCard
                       key={d.date}
@@ -594,7 +573,7 @@ export function CheckoutPage() {
                 </div>
               )
             ) : avail.status === "error" ? null : (
-              <p className="text-sm text-c-grey">{t.datesLoading}</p>
+              <DatesSkeleton />
             )}
             {avail.status === "error" ? (
               <div className="mt-2 flex items-center gap-3">
@@ -641,7 +620,7 @@ export function CheckoutPage() {
                 return (
                   <label
                     key={f}
-                    className={`relative flex cursor-pointer items-center justify-center rounded-[14px] text-base font-bold transition-colors duration-300 has-[:focus-visible]:outline-[2.5px] has-[:focus-visible]:outline-offset-[3px] has-[:focus-visible]:outline-c-red ${checked ? "text-c-ink" : "text-c-grey"}`}
+                    className={`relative flex cursor-pointer items-center justify-center rounded-[14px] text-base font-bold transition-colors duration-300 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-[3px] has-[:focus-visible]:outline-current ${checked ? "text-c-ink" : "text-c-grey"}`}
                   >
                     <input
                       type="radio"
@@ -691,7 +670,7 @@ export function CheckoutPage() {
               name="wechatId"
               aria-label={t.wechatLabel}
               placeholder={t.wechatHint}
-              className="w-full rounded-none border-0 border-b-2 border-c-ink bg-transparent pt-2 pb-2.5 text-[21px] leading-[1.3] font-semibold text-c-ink outline-none transition-colors placeholder:font-medium placeholder:text-c-grey/50 focus:border-c-red"
+              className="w-full rounded-none border-0 border-b-2 border-c-line bg-transparent pt-2 pb-2.5 text-[21px] leading-[1.3] font-semibold text-c-ink outline-none transition-[border-color,box-shadow] duration-200 placeholder:font-medium placeholder:text-c-grey/50 focus:border-c-ink focus:shadow-[0_1px_0_0_var(--c-ink)] aria-[invalid=true]:border-c-red aria-[invalid=true]:shadow-[0_1px_0_0_var(--c-red)]"
               value={wechatId}
               maxLength={WECHAT_MAX}
               required
@@ -728,9 +707,11 @@ export function CheckoutPage() {
               maxLength={NOTE_MAX}
               onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
             />
-            <p className="mt-1.5 text-right text-xs text-c-grey tabular-nums" data-testid="note-counter">
-              {fill(t.noteCounter, { count: note.length, max: NOTE_MAX })}
-            </p>
+            {note.length >= NOTE_COUNTER_FROM ? (
+              <p className="mt-1.5 text-right text-xs text-c-grey tabular-nums" data-testid="note-counter">
+                {fill(t.noteCounter, { count: note.length, max: NOTE_MAX })}
+              </p>
+            ) : null}
           </Block>
 
           {/* Honeypot for bots: hidden from people and assistive tech. */}
@@ -762,13 +743,18 @@ export function CheckoutPage() {
                 </div>
               </>
             ) : (
-              <p className="text-sm text-c-grey">{t.datesLoading}</p>
+              <div className="ui-skel h-12 rounded-2xl" aria-hidden="true" />
             )}
           </section>
 
           <p className="mt-3.5 mb-[18px] text-[13px] leading-normal text-c-grey">{t.payLater}</p>
 
           {bottomError ? <FieldError message={bottomError.message} seq={errorSeq} testId="submit-error" /> : null}
+          {blockedReason ? (
+            <p className="mt-3 text-[13.5px] leading-snug font-semibold text-c-red" data-testid="submit-blocked">
+              {blockedReason}
+            </p>
+          ) : null}
 
           <button
             type="submit"
@@ -779,8 +765,8 @@ export function CheckoutPage() {
             {submitting ? t.submitting : t.submit}
           </button>
         </form>
-        <SiteFooter ownerWechatId={menu.ownerWechatId} />
       </main>
+      <SiteFooter ownerWechatId={menu.ownerWechatId} />
     </Shell>
   );
 }

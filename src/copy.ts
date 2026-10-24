@@ -47,6 +47,8 @@ export const copy = {
       /** Tiny handwritten hint above the rope (D77). */
       tryMe: "点击试试！",
       hangBack: "挂回去",
+      /** Chevron of the sub-page top bars (checkout says 返回菜单). */
+      back: "返回",
       prevProduct: "上一款",
       nextProduct: "下一款",
       rackLabel: "今日出炉的面包，左右滑动或用方向键，回车查看",
@@ -87,6 +89,14 @@ export const copy = {
       goCheckout: "去结算",
       checkoutClosed: "暂未开放预订",
       footerContact: "微信 {id}",
+    },
+    /** The bag sheet (names are spoken with the action so a screen reader hears what changes). */
+    bag: {
+      decreaseNamed: "减少一个 {name}",
+      increaseNamed: "增加一个 {name}",
+      qtyNamed: "{name} 已选 {qty} 个",
+      /** One-time notice when a product left the menu and was taken out of the bag. */
+      removedNotice: "有商品已下架，已从纸袋移除",
     },
     checkout: {
       pageTitle: "确认预订",
@@ -134,11 +144,13 @@ export const copy = {
       pickDate: "请先选择取货日期",
       /** FULL suggestion button, e.g. "改成 10/31 周六" */
       switchDate: "改成 {day}",
+      /** Why 确认提交预订 is disabled while a product is paused or unavailable. */
+      blockedUnavailable: "有商品暂停供应，请先移除",
     },
     /** Order page /o/{token} (PAGES.md), also the "order submitted" page. */
     order: {
+      pageTitle: "订单",
       newTitle: "预订成功",
-      newHint: "用这个链接随时查看订单",
       copyLink: "复制订单链接",
       loading: "加载中…",
       loadFailed: "加载失败，请稍后刷新",
@@ -187,6 +199,16 @@ export const copy = {
       empty: "还没有订单",
       /** A row whose request failed. */
       rowFailed: "没加载出来",
+      /** Short status of a row (the order page has the full sentence). */
+      status: {
+        PENDING: "等待确认",
+        CONFIRMED: "已确认",
+        BAKING: "烤制中",
+        READY: "可以取货",
+        READY_DELIVERY: "配送中",
+        COMPLETED: "已完成",
+        CANCELLED: "已取消",
+      },
       retry: "重新加载",
       /** Shown below the list; the WeChat id follows when the menu returns it. */
       footerHint: "找不到订单？加店主微信要链接",

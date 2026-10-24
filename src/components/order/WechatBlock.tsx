@@ -1,12 +1,12 @@
 "use client";
 
+import { focusRing } from "@/components/ui/focus";
 import { copy } from "@/copy";
 import { copyText } from "./copyText";
 import { fill } from "./types";
 import { useCopied } from "./useCopied";
 
 const t = copy.customer.order;
-const focusRing = "focus-visible:outline-[2.5px] focus-visible:outline-offset-[3px] focus-visible:outline-c-red";
 
 export function WechatBlock({ ownerWechatId, prominent }: { ownerWechatId: string; prominent: boolean }) {
   const [copied, setCopied] = useCopied();

@@ -74,3 +74,10 @@ radius. `radiusFor(n)` exposes the rule. The view (`PaperBag`) maps world units 
 - `BagBar` (props unchanged) renders the mini bag + pill and, in a portal while open, `BagSheet`.
 - `FlyLayer` draws the flights; `bagFlights.ts` keeps the breads in the air (`pending`) so the bags show the cart minus the flying bread and a landing drops them in exactly once.
 - A bag window is found by `[data-bag-target="sheet" | "bar"] [data-pb-window]` (sheet first), so flights land in whichever bag is visible.
+
+## Control kit (`src/components/ui/`) and overlay history
+
+- `Stepper` `{ qty, size: sm 42 | md 44 | lg 58, tone: wash | paper | fink, decreaseLabel, increaseLabel, qtyLabel, ... }`: the - n + pill (bag sheet, checkout lines; the home page can switch to it).
+- `Sheet` (ref `{ close(), releaseHistory(), panel, backdrop }`): the one bottom sheet. Backdrop ink 40%, spring in (1.8 Hz / 0.7), 300 ms ease-in out, scroll lock, focus trap, Esc, pull down (more than 110 px or faster than 0.5 px/ms) via `bindDrag`, optional `history` (Back closes it first) and `dismissible={false}` for the save-link dialog. Mark scrolling lists `data-sheet-scroll` and things that must not pull the sheet `data-no-sheet-drag`.
+- `TopBar` (56 px, 44 px chevron link, title), `focusRing` (2 px `currentColor`, offset 3 px; red only for errors), `ui.css` (`.ui-skel` loading placeholder).
+- `src/lib/overlayHistory.ts`: `pushOverlay(onPop) -> close()`. Back pops the overlay (`onPop` plays the closing animation); closing any other way calls `close()`, which removes the history entry again.

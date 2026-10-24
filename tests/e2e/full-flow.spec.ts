@@ -75,11 +75,15 @@ test("1. customer happy path -> order page -> cancel", async ({ page }) => {
   await expect(page.getByTestId("status-text")).toContainText("已收到，等待确认");
   await expect(page.getByTestId("total")).toHaveText("$19.98");
 
-  // Reload: the success banner is gone, the order is still there.
+  // Reload: the success title is gone, the order is still there, and the save-link dialog is still
+  // due (D89) until 我已保存.
   await page.reload();
   await expect(page.getByTestId("status-text")).toBeVisible();
-  await expect(page.getByTestId("new-banner")).toHaveCount(0);
+  await expect(page.getByTestId("new-title")).toHaveCount(0);
   await expect(page.getByTestId("total")).toHaveText("$19.98");
+  await expect(page.getByTestId("save-modal")).toBeVisible({ timeout: 5000 });
+  await page.getByTestId("save-done").click();
+  await expect(page.getByTestId("save-modal")).toHaveCount(0);
 
   await page.getByRole("button", { name: ordPage.cancelOrder }).click();
   await page.getByRole("dialog").getByRole("button", { name: ordPage.cancelConfirm }).click();

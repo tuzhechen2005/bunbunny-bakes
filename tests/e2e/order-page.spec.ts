@@ -74,22 +74,21 @@ function expectOnlyOwnRequests(urls: string[], baseURL: string) {
 }
 
 test.describe("order page /o/{token}", () => {
-  test("?new=1 shows the success banner, drops the query, and is gone after refresh", async ({ page }) => {
+  test("?new=1 shows the success title, drops the query, and is gone after refresh", async ({ page }) => {
     await mockOrder(page, () => makeOrder());
     await page.goto(`${ORDER_PATH}?new=1`);
-    const banner = page.getByTestId("new-banner");
     await expect(page.getByTestId("new-title")).toHaveText(t.newTitle);
-    await expect(banner).toContainText(t.newHint);
-    // The banner shows the plain order link (no ?new=1).
-    await expect(banner.getByRole("textbox")).toHaveValue(new URL(ORDER_PATH, page.url()).href);
     await expect(page).toHaveURL((url) => url.pathname === ORDER_PATH && url.search === "");
     // Still shown after the query is dropped (no remount / flash).
-    await expect(banner).toBeVisible();
+    await expect(page.getByTestId("new-title")).toBeVisible();
     await expect(page.getByTestId("status-text")).toBeVisible();
+    // The link is copied with a button only: never a raw URL field (the save dialog has the big button).
+    await expect(page.getByTestId("copy-link-secondary")).toBeVisible();
+    await expect(page.getByRole("textbox")).toHaveCount(0);
 
     await page.reload();
     await expect(page.getByTestId("status-text")).toBeVisible();
-    await expect(page.getByTestId("new-banner")).toHaveCount(0);
+    await expect(page.getByTestId("new-title")).toHaveCount(0);
   });
 
   test("?new=1 folds the bag and stamps it, once; a plain visit shows it already stamped", async ({ page }) => {
@@ -104,7 +103,7 @@ test.describe("order page /o/{token}", () => {
     await expect(page.getByText(copy.customer.brand.receiptLast)).toBeVisible();
     await expect(page.getByTestId("order-stamp")).toContainText(t.stamp);
     await expect(page.getByTestId("order-stamp")).toContainText("B-1042");
-    await expect(page.getByTestId("order-stamp")).toHaveCSS("opacity", "0.95", { timeout: 3000 });
+    await expect(page.getByTestId("order-stamp")).toHaveCSS("opacity", "1", { timeout: 3000 });
     await expect(page.locator(".ord-stamper")).toHaveCount(0, { timeout: 3000 });
     await expect(page.getByTestId("total")).toHaveCSS("opacity", "1", { timeout: 3000 });
 
@@ -113,7 +112,7 @@ test.describe("order page /o/{token}", () => {
     await expect(page.locator("[data-seq]")).toHaveCount(0);
     await expect(page.locator(".ord-stamper")).toHaveCount(0);
     await expect(page.getByTestId("new-title")).toHaveCount(0);
-    await expect(page.getByTestId("order-stamp")).toHaveCSS("opacity", "0.92");
+    await expect(page.getByTestId("order-stamp")).toHaveCSS("opacity", "1");
     await expect(page.getByTestId("total")).toHaveText("$20.99");
   });
 
@@ -124,7 +123,7 @@ test.describe("order page /o/{token}", () => {
     await expect(page.getByTestId("new-title")).toBeVisible();
     await expect(page.locator("[data-seq]")).toHaveCount(0);
     await expect(page.locator(".ord-stamper")).toHaveCount(0);
-    await expect(page.getByTestId("order-stamp")).toHaveCSS("opacity", "0.92");
+    await expect(page.getByTestId("order-stamp")).toHaveCSS("opacity", "1");
     await expect(page.getByTestId("new-title")).toHaveCSS("opacity", "1");
     await expect(page.getByText(copy.customer.brand.receiptLast)).toBeVisible();
   });
@@ -239,27 +238,7 @@ test.describe("order page /o/{token}", () => {
     ]);
   });
 
-  test("banner copy-link button (async clipboard) copies the link without ?new=1 and shows 已复制", async ({ page }) => {
-    await page.addInitScript(() => {
-      const w = window as unknown as { __copied: string[] };
-      w.__copied = [];
-      Object.defineProperty(navigator, "clipboard", {
-        configurable: true,
-        value: { writeText: async (text: string) => void w.__copied.push(text) },
-      });
-    });
-    await mockOrder(page, () => makeOrder());
-    await page.goto(`${ORDER_PATH}?new=1`);
-    const banner = page.getByTestId("new-banner");
-    await expect(banner.getByRole("textbox")).toHaveAttribute("readonly", "");
-    await banner.getByRole("button", { name: t.copyLink }).click();
-    await expect(banner.getByRole("button", { name: t.copied })).toBeVisible();
-    const link = new URL(ORDER_PATH, page.url()).href;
-    expect(await page.evaluate(() => (window as unknown as { __copied: string[] }).__copied)).toEqual([link]);
-    expect(link).not.toContain("new=1");
-  });
-
-  test("banner copy-link button falls back to execCommand without navigator.clipboard", async ({ page }) => {
+  test("copy-link button falls back to execCommand without navigator.clipboard", async ({ page }) => {
     await page.addInitScript(() => {
       const w = window as unknown as { __selected: string[] };
       w.__selected = [];
@@ -271,16 +250,16 @@ test.describe("order page /o/{token}", () => {
       };
     });
     await mockOrder(page, () => makeOrder());
-    await page.goto(`${ORDER_PATH}?new=1`);
-    const banner = page.getByTestId("new-banner");
-    await banner.getByRole("button", { name: t.copyLink }).click();
-    await expect(banner.getByRole("button", { name: t.copied })).toBeVisible();
+    await page.goto(ORDER_PATH);
+    const button = page.getByTestId("copy-link-secondary");
+    await button.click();
+    await expect(button).toHaveText(t.copied);
     expect(await page.evaluate(() => (window as unknown as { __selected: string[] }).__selected)).toEqual([
       new URL(ORDER_PATH, page.url()).href,
     ]);
   });
 
-  test("without ?new=1 there is no banner but a secondary copy-link button", async ({ page }) => {
+  test("a plain visit has the secondary copy-link button, no success title", async ({ page }) => {
     await page.addInitScript(() => {
       const w = window as unknown as { __copied: string[] };
       w.__copied = [];
@@ -292,7 +271,7 @@ test.describe("order page /o/{token}", () => {
     await mockOrder(page, () => makeOrder());
     await page.goto(ORDER_PATH);
     await expect(page.getByTestId("status-text")).toBeVisible();
-    await expect(page.getByTestId("new-banner")).toHaveCount(0);
+    await expect(page.getByTestId("new-title")).toHaveCount(0);
     const button = page.getByTestId("copy-link-secondary");
     await expect(button).toHaveText(t.copyLink);
     await button.click();
@@ -556,7 +535,7 @@ test.describe("order page /o/{token}", () => {
     let order = makeOrder();
     await mockOrder(page, () => order);
     await page.goto(`${ORDER_PATH}?new=1`);
-    await expect(page.getByTestId("new-banner")).toBeVisible();
+    await expect(page.getByTestId("new-title")).toBeVisible();
     await page.screenshot({ path: `${dir}/m3c-order-pending-new.png`, fullPage: true });
 
     order = makeOrder(CONFIRMED);
