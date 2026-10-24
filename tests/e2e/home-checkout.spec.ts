@@ -272,6 +272,7 @@ test("checkout: happy path submits once, navigates and clears the cart", async (
   const lastBag = await page.evaluate(() => sessionStorage.getItem("bunbunny:lastBag"));
   expect(JSON.parse(lastBag ?? "null")).toEqual({
     orderNo: "1030-001",
+    token: "tok123",
     items: [{ name: "奶酥红豆包", imageUrl: null, qty: 4 }],
   });
 });

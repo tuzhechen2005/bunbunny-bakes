@@ -58,14 +58,16 @@ export function OrderPage() {
   }, [hasNewParam, pathname, router]);
 
   // Straight after ordering the bag is drawn from the bread checkout saved while the order loads.
-  const [preBag] = useState(() => (isNew ? savedBagItems() : null));
+  const [preBag] = useState(() => (isNew ? savedBagItems(token) : null));
 
   // The save-link dialog: due right after ordering, and again on every later visit until 我已保存
   // (D89). Checkout adds the token when the order is created; this covers a fresh view on its own.
-  const [saveDue] = useState(() => isNew || pendingSave.has(token));
-  useEffect(() => {
+  // The token is added once, when this page instance is created (an initializer, not an effect: a
+  // preserved page that is shown again must not add it back after 我已保存).
+  const [saveDue] = useState(() => {
     if (isNew) pendingSave.add(token);
-  }, [isNew, token]);
+    return isNew || pendingSave.has(token);
+  });
 
   // The sequence (?new=1, full motion): the title and cards wait for the stamp impact.
   const { reduced } = useMotionPrefs();
@@ -191,7 +193,7 @@ export function OrderPage() {
           </p>
         )}
 
-        <OrderStage order={order} preBag={preBag} fresh={isNew} shakeRef={columnRef} onImpact={onImpact} />
+        <OrderStage order={order} token={token} preBag={preBag} fresh={isNew} shakeRef={columnRef} onImpact={onImpact} />
 
         {order && (
           <>

@@ -158,6 +158,7 @@ test.describe("order page /o/{token}", () => {
         "bunbunny:lastBag",
         JSON.stringify({
           orderNo: "B-1042",
+          token: "tok_abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG",
           items: [
             { name: "奶酥红豆包", imageUrl: "/brand/logo.webp", qty: 4 },
             { name: "奶酪角", imageUrl: "/brand/logo.webp", qty: 2 },

@@ -5,6 +5,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 const CART_KEY = "bb_cart_v1";
 
 const PRODUCTS = [
+  { id: "p-cheese", name: "奶酪角", description: "", imageUrl: null, unitPriceCents: 299, bundleSize: 4, bundlePriceCents: 1099, status: "ACTIVE", leadDays: 1 },
   { id: "p-redbean", name: "奶酥红豆包", description: "", imageUrl: null, unitPriceCents: 249, bundleSize: 4, bundlePriceCents: 899, status: "ACTIVE", leadDays: 1 },
   { id: "p-paused", name: "菠萝包", description: "", imageUrl: null, unitPriceCents: 300, bundleSize: 1, bundlePriceCents: null, status: "PAUSED", leadDays: 1 },
 ];
@@ -173,6 +174,65 @@ test.describe("checkout", () => {
     const main = (await page.getByRole("main").boundingBox())!;
     expect(Math.round(f.x)).toBe(Math.round(main.x)); // the footer spans the column
     expect(Math.round(l.x - f.x)).toBe(20); // its own 20 px, not 40
+  });
+
+  test("a second order in the same tab starts from a fresh checkout", async ({ page }) => {
+    await mockApis(page);
+    await page.route("**/api/o/tok123", (route) =>
+      route.fulfill({
+        json: {
+          orderNo: "1030-001", items: [{ name: "奶酥红豆包", qty: 2, lineTotalCents: 498, imageUrl: null }], subtotalCents: 498,
+          deliveryFeeCents: 0, totalCents: 498, pickupDate: "2026-10-30", pickupDateLabel: "10/30 周五", fulfillment: "PICKUP",
+          statusText: "已确认", statusKind: "CONFIRMED", ownerWechatId: "", pickupNote: null, canCancel: false,
+          cancelDeadlineLabel: null, note: null,
+        },
+      }),
+    );
+    await seedCart(page, [{ productId: "p-redbean", qty: 2 }]);
+    await page.locator('[data-testid="date-card"][data-date="2026-10-30"]').click();
+    await page.getByLabel("微信号").fill("bunny_fan_01");
+    await page.getByTestId("submit").click();
+    await page.waitForURL(/\/o\/tok123/);
+    await expect(page.getByTestId("status-text")).toBeVisible();
+
+    // Client navigation home, a different bread, the bag, 去结算 again.
+    await page.getByTestId("top-bar-back").click();
+    await expect(page).toHaveURL(/\/$/);
+    await page.locator('[data-testid="product-card"][data-product-id="p-cheese"]').getByRole("button", { name: "增加一个" }).click();
+    await expect(page.getByTestId("bag-badge")).toHaveText("1", { timeout: 6000 });
+    await page.getByTestId("bag-pill").click();
+    await page.getByTestId("bag-checkout").click();
+    await expect(page).toHaveURL(/\/checkout$/);
+    const lines = page.getByTestId("cart-line");
+    await expect(lines).toHaveCount(1);
+    await expect(lines.first()).toHaveAttribute("data-product-id", "p-cheese");
+    await expect(page.getByTestId("submit")).toBeEnabled();
+    await expect(page.getByTestId("submit")).toHaveText("确认提交预订");
+    await expect(page.getByTestId("date-card").first()).toBeVisible();
+    // The date has to be chosen again.
+    await expect(page.locator('[data-testid="date-card"][aria-pressed="true"]')).toHaveCount(0);
+  });
+
+  test("the line controls are locked while the order is being sent", async ({ page }) => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => (release = r));
+    await mockApis(page, {
+      orders: async (route) => {
+        await hold;
+        await route.fulfill({ status: 500, json: { error: "BOOM", message: "x" } });
+      },
+    });
+    await seedCart(page, [{ productId: "p-redbean", qty: 2 }]);
+    await page.locator('[data-testid="date-card"][data-date="2026-10-30"]').click();
+    await page.getByLabel("微信号").fill("bunny_fan_01");
+    await page.getByTestId("submit").click();
+    await expect(page.getByTestId("submit")).toHaveText("提交中…");
+    const line = page.getByTestId("cart-line").first();
+    await expect(line.getByRole("button", { name: /增加一个/ })).toBeDisabled();
+    await expect(line.getByRole("button", { name: /减少一个/ })).toBeDisabled();
+    release();
+    await expect(page.getByTestId("submit")).toBeEnabled();
+    await expect(line.getByRole("button", { name: /增加一个/ })).toBeEnabled();
   });
 
   test("leaving mid-submit: the response is still handled, nothing hijacks the page", async ({ page }) => {

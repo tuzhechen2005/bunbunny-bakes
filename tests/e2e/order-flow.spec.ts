@@ -45,6 +45,7 @@ async function mockOrder(page: Page, current: () => Order | null) {
 
 const SAVED_BAG = {
   orderNo: "B-1042",
+  token: TOKEN,
   items: [
     { name: "奶酥红豆包", imageUrl: "/brand/logo.webp", qty: 2 },
     { name: "奶酪角", imageUrl: "/brand/logo.webp", qty: 1 },
@@ -74,6 +75,17 @@ test.describe("?new=1 while the order loads", () => {
     await expect(page.getByTestId("order-stamp")).toContainText("B-1042");
     await expect(page.locator(".pb-pi")).toHaveCount(3);
     await expect(page.locator('.pb-pi[data-same="1"]')).toHaveCount(1); // the same bread, not rebuilt
+  });
+
+  test("bread saved for another order is ignored", async ({ page }) => {
+    await page.addInitScript(
+      (bag) => sessionStorage.setItem("bunbunny:lastBag", JSON.stringify(bag)),
+      { ...SAVED_BAG, token: "tok_some_other_order" },
+    );
+    await page.route(`**${API_PATH}`, () => undefined); // never answers
+    await page.goto(`${ORDER_PATH}?new=1`);
+    await expect(page.getByText(t.loading)).toBeVisible();
+    await expect(page.getByTestId("order-stage")).toHaveCount(0);
   });
 
   test("without saved bread the neutral loading text shows instead", async ({ page }) => {
@@ -114,6 +126,35 @@ test.describe("save-link reminder (D89)", () => {
     await page.getByTestId("save-done").click();
     await expect(page.getByTestId("save-modal")).toHaveCount(0);
     expect(await page.evaluate((k) => localStorage.getItem(k) ?? "[]", PENDING_KEY)).not.toContain(TOKEN);
+    await page.reload();
+    await expect(page.getByTestId("status-text")).toBeVisible();
+    await page.waitForTimeout(1200);
+    await expect(page.getByTestId("save-modal")).toHaveCount(0);
+  });
+
+  test("我已保存 ends it for good, also after leaving and coming back in the same tab", async ({ page }) => {
+    await page.route("**/api/menu", (route) =>
+      route.fulfill({
+        json: { orderingEnabled: true, products: [], pickupNote: "", deliveryFeeCents: 500, freeDeliveryMinCents: 2500, maxQtyPerItem: 8 },
+      }),
+    );
+    await mockOrder(page, () => makeOrder());
+    await page.goto(`${ORDER_PATH}?new=1`);
+    await expect(page.getByTestId("save-modal")).toBeVisible({ timeout: 5000 });
+    await page.getByTestId("save-done").click();
+    await expect(page.getByTestId("save-modal")).toHaveCount(0);
+
+    // Client navigation away (home -> 我的订单 -> the same order): the preserved page is shown again.
+    await page.getByTestId("top-bar-back").click();
+    await expect(page).toHaveURL(/\/$/);
+    await page.getByTestId("my-orders-link").click();
+    await expect(page).toHaveURL(/\/orders$/);
+    await page.getByTestId("order-row").locator("a").click();
+    await expect(page.getByTestId("status-text")).toBeVisible();
+    await page.waitForTimeout(1200);
+    await expect(page.getByTestId("save-modal")).toHaveCount(0);
+    expect(await page.evaluate((k) => localStorage.getItem(k) ?? "[]", PENDING_KEY)).not.toContain(TOKEN);
+
     await page.reload();
     await expect(page.getByTestId("status-text")).toBeVisible();
     await page.waitForTimeout(1200);

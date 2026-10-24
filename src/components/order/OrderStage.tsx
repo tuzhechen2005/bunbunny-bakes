@@ -19,6 +19,7 @@ const LAST_BAG_KEY = "bunbunny:lastBag";
 
 interface SavedBag {
   orderNo?: unknown;
+  token?: unknown;
   items?: { name?: unknown; imageUrl?: unknown; qty?: unknown }[];
 }
 
@@ -34,9 +35,10 @@ function readSavedBag(): SavedBag | null {
  * The bread checkout saved in sessionStorage, as bag contents: the order page draws the bag with
  * it at once, while the order itself is still loading. Null when there is none.
  */
-export function savedBagItems(): PaperBagItem[] | null {
+export function savedBagItems(token: string): PaperBagItem[] | null {
   const saved = readSavedBag();
-  if (!saved || !Array.isArray(saved.items)) return null;
+  // An entry that belongs to another order (or carries no token) is not this order's bread.
+  if (!saved || saved.token !== token || !Array.isArray(saved.items)) return null;
   const items: PaperBagItem[] = [];
   for (const it of saved.items) {
     if (typeof it?.name !== "string" || typeof it.qty !== "number" || it.qty < 1) continue;
@@ -49,7 +51,7 @@ export function savedBagItems(): PaperBagItem[] | null {
  * Bag contents: the order's product photos, else the bread saved at checkout, else plain discs.
  * Tagged by product name, so the bag drawn before the order loaded keeps its bread when the order arrives.
  */
-function bagItems(order: Pick<OrderViewData, "orderNo" | "items">): PaperBagItem[] {
+function bagItems(order: Pick<OrderViewData, "orderNo" | "items">, token: string): PaperBagItem[] {
   const items: PaperBagItem[] = order.items.map((it) => ({
     productId: it.name,
     imageUrl: it.imageUrl ?? null,
@@ -57,7 +59,7 @@ function bagItems(order: Pick<OrderViewData, "orderNo" | "items">): PaperBagItem
   }));
   if (items.some((it) => it.imageUrl)) return items;
   const saved = readSavedBag();
-  if (saved?.orderNo !== order.orderNo || !Array.isArray(saved.items)) return items;
+  if (saved?.orderNo !== order.orderNo || saved.token !== token || !Array.isArray(saved.items)) return items;
   return items.map((it) => {
     const match = saved.items!.find((s) => s.name === it.productId);
     return typeof match?.imageUrl === "string" ? { ...it, imageUrl: match.imageUrl } : it;
@@ -75,6 +77,8 @@ function vibrate(pattern: number[]) {
 interface Props {
   /** Null while the order is loading: the bag is drawn from `preBag` and the sequence waits. */
   order: Pick<OrderViewData, "orderNo" | "items" | "statusKind"> | null;
+  /** The order's view token: the bread saved at checkout only counts when it is this order's. */
+  token: string;
   /** Bag contents to show before the order has loaded (the bread saved at checkout). */
   preBag?: readonly PaperBagItem[] | null;
   /** Just ordered (?new=1): play the fold + stamp sequence once, as soon as the order is there. */
@@ -94,7 +98,7 @@ interface Props {
  * shockwave, ink splatter, jolt, haptic), lifts away and leaves the seal. Reduced motion
  * shows the end state at once.
  */
-export function OrderStage({ order, preBag = null, fresh, shakeRef, onImpact }: Props) {
+export function OrderStage({ order, token, preBag = null, fresh, shakeRef, onImpact }: Props) {
   const { reduced, degraded } = useMotionPrefs();
   const [playing] = useState(() => fresh && !reduced);
   const [folded, setFolded] = useState(!playing);
@@ -105,8 +109,8 @@ export function OrderStage({ order, preBag = null, fresh, shakeRef, onImpact }: 
   const orderNo = order?.orderNo;
   const orderItems = order?.items;
   const items = useMemo(
-    () => (orderNo !== undefined && orderItems ? bagItems({ orderNo, items: orderItems }) : (preBag ?? [])),
-    [orderNo, orderItems, preBag],
+    () => (orderNo !== undefined && orderItems ? bagItems({ orderNo, items: orderItems }, token) : (preBag ?? [])),
+    [orderNo, orderItems, preBag, token],
   );
 
   const stageRef = useRef<HTMLDivElement>(null);

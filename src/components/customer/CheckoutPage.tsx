@@ -220,8 +220,24 @@ export function CheckoutPage() {
   const availSeq = useRef(0);
   const pageRef = useRef<HTMLElement>(null);
   const mounted = useRef(true);
+  // True once an order was created (here or after the customer had left) and nothing is in flight.
+  const finished = useRef(false);
+  // With cacheComponents this page stays mounted, hidden, after it navigates away, and the same
+  // instance is shown again by the next visit. The effect re-runs on every show: after a finished
+  // order the page starts over (new cart lines, enabled button, new key); a POST still in flight
+  // keeps the lock.
   useEffect(() => {
     mounted.current = true;
+    if (finished.current && !submittingRef.current) {
+      finished.current = false;
+      setFrozen(null);
+      setSubmitting(false);
+      setSubmitError(null);
+      setWechatError(null);
+      setSelectedDate(null);
+      setAvailTick((n) => n + 1);
+      keyRef.current = uuidV4();
+    }
     return () => {
       mounted.current = false;
     };
@@ -418,6 +434,7 @@ export function CheckoutPage() {
           LAST_BAG_KEY,
           JSON.stringify({
             orderNo,
+            token: viewToken,
             items: lines.map((l) => ({ name: l.product.name, imageUrl: l.product.imageUrl, qty: l.qty })),
           }),
         );
@@ -426,15 +443,19 @@ export function CheckoutPage() {
       }
       rememberOrder(viewToken, orderNo);
       keyRef.current = uuidV4();
+      finished.current = true;
       if (mounted.current) {
         setFrozen(items);
         cart.clear();
         router.replace(`/o/${encodeURIComponent(viewToken)}?new=1`);
-      } else if (JSON.stringify(cart.getItems()) === cartKey) {
-        // Gone already: do not pull them to the order page; only empty the bag if it is still this order.
-        cart.clear();
+        return; // stay locked while navigating; the next show of this page starts over
       }
-      return; // stay locked while navigating
+      // Gone already: do not pull them to the order page; only empty the bag if it is still this
+      // order, and unlock so a later visit to this (preserved) page is not stuck on 提交中…
+      if (JSON.stringify(cart.getItems()) === cartKey) cart.clear();
+      submittingRef.current = false;
+      setSubmitting(false);
+      return;
     }
 
     submittingRef.current = false;
@@ -519,6 +540,7 @@ export function CheckoutPage() {
                     <button
                       type="button"
                       className={`min-h-11 shrink-0 px-2 text-sm font-bold underline ${focusRing}`}
+                      disabled={submitting}
                       onClick={() => cart.remove(productId)}
                     >
                       {t.remove}
@@ -528,8 +550,8 @@ export function CheckoutPage() {
                       size="md"
                       tone="wash"
                       qty={qty}
-                      canIncrease={!atMax}
-                      canDecrease={qty > 0}
+                      canIncrease={!atMax && !submitting}
+                      canDecrease={qty > 0 && !submitting}
                       decreaseLabel={fill(bagCopy.decreaseNamed, { name: product.name })}
                       increaseLabel={fill(bagCopy.increaseNamed, { name: product.name })}
                       qtyLabel={fill(bagCopy.qtyNamed, { name: product.name, qty })}

@@ -116,16 +116,24 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
     const release = releaseRef.current;
     releaseRef.current = null;
     if (!release) return Promise.resolve();
-    const before = window.history.state;
+    // close() steps the history back only while the sheet's own entry is the current one (it
+    // carries the overlay marker). Then wait for that traversal; otherwise there is nothing to wait for.
+    const state = window.history.state as Record<string, unknown> | null;
+    const willStepBack = !!state && typeof state === "object" && "bbOverlay" in state;
+    if (!willStepBack) {
+      release();
+      return Promise.resolve();
+    }
     return new Promise<void>((resolve) => {
       const finish = () => {
         window.removeEventListener("popstate", finish);
+        clearTimeout(safety);
         resolve();
       };
+      // Safety net only: a popstate that never comes must not keep the page from navigating.
+      const safety = setTimeout(finish, 1000);
       window.addEventListener("popstate", finish);
       release();
-      // No step back was needed (the entry was not the current one): nothing to wait for.
-      if (window.history.state === before) setTimeout(finish, 400);
     });
   }, []);
 
