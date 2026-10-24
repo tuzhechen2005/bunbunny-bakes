@@ -534,6 +534,7 @@ export function CheckoutPage() {
                 <li key={productId} className="flex items-center gap-3 py-3" data-testid="cart-line" data-product-id={productId}>
                   <ProductPhoto
                     product={product}
+                    variant="thumb"
                     className={`h-14 w-14 shrink-0 overflow-hidden rounded-[14px] ${unavailable ? "opacity-50 grayscale" : ""}`}
                   />
                   <div className="min-w-0 flex-1">
@@ -703,7 +704,7 @@ export function CheckoutPage() {
               name="wechatId"
               aria-label={t.wechatLabel}
               placeholder={t.wechatHint}
-              className="w-full rounded-none border-0 border-b-2 border-c-line bg-transparent pt-2 pb-2.5 text-[21px] leading-[1.3] font-semibold text-c-ink outline-none transition-[border-color,box-shadow] duration-200 placeholder:font-medium placeholder:text-c-grey/50 focus:border-c-ink focus:shadow-[0_1px_0_0_var(--c-ink)] aria-[invalid=true]:border-c-red aria-[invalid=true]:shadow-[0_1px_0_0_var(--c-red)]"
+              className="w-full rounded-none border-0 border-b-2 border-c-line bg-transparent pt-2 pb-2.5 text-[21px] leading-[1.3] font-semibold text-c-ink outline-none transition-[border-color,box-shadow] duration-200 placeholder:font-medium placeholder:text-c-grey focus:border-c-ink focus:shadow-[0_1px_0_0_var(--c-ink)] aria-[invalid=true]:border-c-red aria-[invalid=true]:shadow-[0_1px_0_0_var(--c-red)]"
               value={wechatId}
               maxLength={WECHAT_MAX}
               required

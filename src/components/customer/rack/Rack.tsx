@@ -79,6 +79,10 @@ export interface RackProps {
   active: boolean;
   /** Hide the "try me" hint (after the first detail view). */
   hintOff: boolean;
+  /** Where the rope rests when the rack is built (read once; the rack is rebuilt by `key`). */
+  startIndex?: number;
+  /** Place the cards on the rope at once, without the entrance drop (a rebuilt rack, not the first one). */
+  skipEntrance?: boolean;
   ref?: Ref<RackHandle>;
 }
 
@@ -115,7 +119,7 @@ interface Sim {
   dPath: string;
 }
 
-function createSim(n: number, reduced: boolean): Sim {
+function createSim(n: number, reduced: boolean, start = 0): Sim {
   const cards: CardSim[] = [];
   for (let i = 0; i < n; i++) {
     const drop = new Spring(reduced ? 0 : dropStartPx(i), DROP_SPRING);
@@ -123,13 +127,13 @@ function createSim(n: number, reduced: boolean): Sim {
     cards.push({ pend: new Pendulum(), drop, delay: reduced ? 0 : dropDelayMs(i), rest: restAngle(i), px: null, v: 0, a: 0, landed: reduced });
   }
   return {
-    rope: new Spring(0),
+    rope: new Spring(start),
     sway: new Spring(0, SWAY_SPRING),
     cards,
     m: rackMetrics(375),
-    idx: 0,
+    idx: start,
     drag: false,
-    g0: 0,
+    g0: start,
     moving: false,
     tap: null,
     onAdd: null,
@@ -165,7 +169,7 @@ function swallowNextClick(host: HTMLElement) {
  * All motion is driven by one rAF loop that writes `style.transform` directly and stops when
  * everything rests; React only re-renders on index changes.
  */
-export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, hintOff, ref }: RackProps) {
+export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, hintOff, startIndex = 0, skipEntrance = false, ref }: RackProps) {
   const { reduced, degraded } = useMotionPrefs();
   const n = products.length;
   const uid = useId().replace(/:/g, "");
@@ -181,6 +185,8 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
     latest.current = { onIndexChange, onOpen, active, reduced, degraded };
   });
 
+  const initial = useRef({ start: startIndex, skip: skipEntrance });
+
   // ---- simulation + loop ----
   useLayoutEffect(() => {
     const rackEl = root.current;
@@ -194,7 +200,8 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
     const twist = pathsOf("rt");
     const twist2 = pathsOf("rt2");
 
-    const s = createSim(n, latest.current.reduced);
+    // No entrance (reduced motion, or a rebuilt rack): cards sit on the rope from the first frame.
+    const s = createSim(n, latest.current.reduced || initial.current.skip, clamp(initial.current.start, 0, n - 1));
     sim.current = s;
 
     const measure = () => {
@@ -533,10 +540,10 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
             <Peg />
             <div className="hm-flip">
               <div className="hm-face">
-                <ProductPhoto product={p} className="h-full w-full" eager={i === 0} decorative />
+                <ProductPhoto product={p} className="h-full w-full" variant="rope" priority={i === 0} eager={i === 1} decorative />
               </div>
               <div className="hm-face hm-back">
-                <ProductPhoto product={p} className="h-full w-full" eager={i === 0} decorative />
+                <ProductPhoto product={p} className="h-full w-full" variant="rope" decorative />
               </div>
             </div>
           </div>

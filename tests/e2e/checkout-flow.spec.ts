@@ -124,7 +124,7 @@ test.describe("checkout", () => {
         return { color: cs.borderBottomColor, width: cs.borderBottomWidth, shadow: cs.boxShadow };
       });
     const ink = "rgb(22, 20, 18)";
-    const red = "rgb(224, 52, 75)";
+    const red = "rgb(212, 42, 65)";
     const rest = await look();
     expect(rest.color).not.toBe(ink);
     expect(rest.color).not.toBe(red);

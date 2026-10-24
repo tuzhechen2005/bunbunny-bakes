@@ -334,7 +334,7 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
         <div ref={ph} className={`hm-dt-ph ${paused ? "is-paused" : ""}`}>
           <Peg />
           <div className="hm-face">
-            <ProductPhoto product={product} className="h-full w-full" eager decorative />
+            <ProductPhoto product={product} className="h-full w-full" variant="detail" eager decorative />
           </div>
         </div>
         <div ref={body} className="hm-dt-body">

@@ -13,7 +13,7 @@ export function NotFoundMessage() {
     <div className="mx-auto flex min-h-svh w-full max-w-[430px] flex-1 flex-col bg-c-paper text-c-ink">
       <TopBar backHref="/" backLabel={copy.customer.brand.back} />
       <div className="flex flex-1 flex-col items-center justify-center gap-5 px-5 pb-20 text-center">
-        <Logo label={copy.customer.brand.brandName} className="h-20 w-auto" />
+        <Logo label={copy.customer.brand.brandName} className="h-20 w-auto" lazy />
         <p className="max-w-xs text-base leading-relaxed text-c-ink">{copy.errors.NOT_FOUND}</p>
         <Link
           href="/"
