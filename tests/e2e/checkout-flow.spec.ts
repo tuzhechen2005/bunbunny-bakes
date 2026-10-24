@@ -196,7 +196,7 @@ test.describe("checkout", () => {
     await expect(page.getByTestId("status-text")).toBeVisible();
 
     // Client navigation home, a different bread, the bag, 去结算 again.
-    await page.getByTestId("top-bar-back").click();
+    await page.getByRole("link", { name: "返回", exact: true }).click(); // the order page's (checkout is kept hidden)
     await expect(page).toHaveURL(/\/$/);
     await page.locator('[data-testid="product-card"][data-product-id="p-cheese"]').getByRole("button", { name: "增加一个" }).click();
     await expect(page.getByTestId("bag-badge")).toHaveText("1", { timeout: 6000 });

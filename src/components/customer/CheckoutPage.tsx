@@ -222,14 +222,17 @@ export function CheckoutPage() {
   const mounted = useRef(true);
   // True once an order was created (here or after the customer had left) and nothing is in flight.
   const finished = useRef(false);
+  /** The POST is on its way (the response has not arrived yet). */
+  const inflight = useRef(false);
   // With cacheComponents this page stays mounted, hidden, after it navigates away, and the same
   // instance is shown again by the next visit. The effect re-runs on every show: after a finished
   // order the page starts over (new cart lines, enabled button, new key); a POST still in flight
   // keeps the lock.
   useEffect(() => {
     mounted.current = true;
-    if (finished.current && !submittingRef.current) {
+    if (finished.current && !inflight.current) {
       finished.current = false;
+      submittingRef.current = false;
       setFrozen(null);
       setSubmitting(false);
       setSubmitError(null);
@@ -413,6 +416,7 @@ export function CheckoutPage() {
     if (invalid || !selectedDate) return;
 
     submittingRef.current = true;
+    inflight.current = true;
     setSubmitting(true);
     const result = await submitOrder({
       items: items.map(({ productId, qty }) => ({ productId, qty })),
@@ -424,6 +428,7 @@ export function CheckoutPage() {
       website,
     });
 
+    inflight.current = false;
     if (result.ok) {
       // Everything below also runs when the customer has already left this page: the response is
       // still handled, so the order is in 我的订单 and its save-link modal is still due.
