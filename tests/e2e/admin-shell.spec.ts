@@ -50,7 +50,7 @@ test("a logged-in admin sees the shell, the menu links, and can log out", async 
   await loginAsAdmin(context, baseURL!);
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: t.dashboardTitle })).toBeVisible();
-  await expect(page.getByRole("link", { name: copy.shopName })).toBeVisible();
+  await expect(page.getByRole("link", { name: copy.customer.brand.brandName })).toBeVisible();
   for (const label of [t.orders, t.calendar, t.newOrder, t.products, t.settings]) {
     await expect(page.getByRole("main").getByRole("link", { name: label })).toBeVisible();
   }

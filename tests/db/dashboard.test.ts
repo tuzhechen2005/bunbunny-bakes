@@ -20,6 +20,7 @@ import { buildSummary } from "@/domain/summary";
 import { createSession, hashPassword } from "@/server/auth";
 import { loadDashboard, setOrderingEnabled } from "@/server/dashboard";
 import { prisma } from "@/server/db";
+import { toDbDate } from "@/server/dbDates";
 import {
   createDefaultProducts,
   createOpenDate,
@@ -218,6 +219,20 @@ describe("loadDashboard", () => {
     const d = await loadDashboard(db, NOW);
     expect(d.unconfirmedTomorrow).toBe(2);
     expect(d.days[TODAY].byStatus.NEW).toBe(1);
+  });
+
+  it("drops an archived independent product from the day cards and the over flag, keeps its orders", async () => {
+    await seedExample();
+    await db.openDateProductLimit.create({ data: { date: toDbDate(TOMORROW), productId: ids.brulee, limit: 4 } });
+    const before = await loadDashboard(db, NOW);
+    expect(before.next14.find((n) => n.date === TOMORROW)?.over).toBe(true);
+    await db.product.update({ where: { id: ids.brulee }, data: { status: "ARCHIVED" } });
+    const d = await loadDashboard(db, NOW);
+    expect(d.days[TOMORROW].independent).toEqual([]);
+    expect(d.next14.find((n) => n.date === TOMORROW)?.over).toBe(false);
+    expect(await db.orderItem.count({ where: { productId: ids.brulee } })).toBe(2);
+    // The baking lines still show the bread that was ordered.
+    expect(d.days[TOMORROW].byStatus.NEW).toBe(1);
   });
 
   it("reports a closed tomorrow with no orders as closed and empty", async () => {

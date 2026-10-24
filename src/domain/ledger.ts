@@ -3,7 +3,9 @@
 // Rules (PAGES.md /admin/ledger):
 // - Orders count on their pickup date; CANCELLED / REJECTED orders count nowhere.
 // - A paid order adds its total (delivery fee included) to revenue and to its payment
-//   method (null method -> OTHER). An unpaid valid order adds its total to "receivable".
+//   method; a paid order with no method recorded goes to its own bucket UNSPECIFIED
+//   (「未注明」, D94), separate from a deliberate OTHER. An unpaid valid order adds its
+//   total to "receivable".
 // - Quantities come only from paid orders and from the items typed into manual entries.
 // - Per-product amount = sum of the paid orders' actual line totals. Bundle prices were
 //   applied per order when it was placed; they are never re-applied to a summed quantity.
@@ -15,6 +17,9 @@ import type { LocalDate, OrderStatus } from "./types";
 
 export const LEDGER_METHODS = ["WECHAT", "ZELLE", "VENMO", "CASH", "OTHER"] as const;
 export type LedgerMethod = (typeof LEDGER_METHODS)[number];
+/** Where a paid amount is booked: a payment method, or UNSPECIFIED for a paid order with none recorded. */
+export const LEDGER_BUCKETS = [...LEDGER_METHODS, "UNSPECIFIED"] as const;
+export type LedgerBucket = (typeof LEDGER_BUCKETS)[number];
 
 export interface LedgerOrderItem {
   productId: string;
@@ -50,7 +55,7 @@ export interface LedgerManualEntry {
   items: LedgerManualItem[];
 }
 
-export type MethodTotals = Record<LedgerMethod, number>;
+export type MethodTotals = Record<LedgerBucket, number>;
 
 export interface ProductTotal {
   /** Null for manual items without a product link; those group by name. */
@@ -76,8 +81,8 @@ export interface DayOrderRow {
   totalCents: number;
   deliveryFeeCents: number;
   paid: boolean;
-  /** Null when unpaid; OTHER when paid without a recorded method. */
-  method: LedgerMethod | null;
+  /** Null when unpaid; UNSPECIFIED when paid without a recorded method. */
+  method: LedgerBucket | null;
 }
 
 export interface DayDetail extends LedgerTotals {
@@ -100,7 +105,7 @@ export interface MonthSummary extends LedgerTotals {
 }
 
 export function emptyMethodTotals(): MethodTotals {
-  return { WECHAT: 0, ZELLE: 0, VENMO: 0, CASH: 0, OTHER: 0 };
+  return { WECHAT: 0, ZELLE: 0, VENMO: 0, CASH: 0, OTHER: 0, UNSPECIFIED: 0 };
 }
 
 export function isValidOrder(o: Pick<LedgerOrder, "status">): boolean {
@@ -128,7 +133,7 @@ function totalsOf(orders: LedgerOrder[], manual: LedgerManualEntry[]): LedgerTot
       t.revenueCents += o.totalCents;
       t.deliveryFeeCents += o.deliveryFeeCents;
       t.qty += orderQty(o);
-      t.byMethod[o.paidMethod ?? "OTHER"] += o.totalCents;
+      t.byMethod[o.paidMethod ?? "UNSPECIFIED"] += o.totalCents;
     } else {
       t.receivableCents += o.totalCents;
     }
@@ -178,7 +183,7 @@ export function dayDetail(
       totalCents: o.totalCents,
       deliveryFeeCents: o.deliveryFeeCents,
       paid: o.paid,
-      method: o.paid ? (o.paidMethod ?? "OTHER") : null,
+      method: o.paid ? (o.paidMethod ?? "UNSPECIFIED") : null,
     }));
   return {
     date,

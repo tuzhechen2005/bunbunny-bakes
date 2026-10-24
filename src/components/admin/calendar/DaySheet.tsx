@@ -5,6 +5,7 @@ import { copy } from "@/copy";
 import { dayLabel } from "@/domain/dates";
 import { adminApi } from "@/lib/adminApi";
 import type { CalendarDay, DateWarning } from "@/server/calendar";
+import { usageLines } from "./usage";
 
 const t = copy.admin.calendar;
 
@@ -126,6 +127,14 @@ export function DaySheet({
             ✕
           </button>
         </div>
+
+        {day.isOpen && (
+          <ul className="space-y-0.5 text-sm text-muted" data-testid="day-usage">
+            {usageLines(day, names).map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        )}
 
         <label className={toggleRow}>
           <input type="checkbox" className="size-6" checked={isOpen} onChange={(e) => setIsOpen(e.target.checked)} />

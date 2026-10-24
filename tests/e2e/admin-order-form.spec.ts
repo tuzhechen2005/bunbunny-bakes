@@ -140,6 +140,15 @@ test("new order: OVER_LIMIT lists violations, needs a reason, then resubmits wit
   await expect(page.getByTestId("reason-error")).toBeVisible();
   expect(bodies).toHaveLength(1);
 
+  // Esc dismisses the over-limit panel (nothing is sent); submitting again brings it back.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  expect(bodies).toHaveLength(1);
+  await page.getByTestId("submit").click();
+  await expect(dialog).toBeVisible();
+  expect(bodies).toHaveLength(2);
+  bodies.pop();
+
   await page.getByTestId("reason").fill("老顾客，我能多做");
   await dialog.scrollIntoViewIfNeeded();
   await page.screenshot({ path: "/Users/tuzhechen/Documents/bunbunny-bake/.orchestrator/screens/m4d-over-limit.png" });
