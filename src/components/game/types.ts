@@ -8,6 +8,8 @@ export interface TierView {
   points: number;
   imageUrl: string | null;
   color: { bg: string; ink: string };
+  /** Display name (D107); the first character is drawn on a piece that has no picture. */
+  name?: string;
 }
 
 export interface StartedRun {
