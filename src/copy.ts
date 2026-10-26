@@ -250,6 +250,8 @@ export const copy = {
       rankPre: "本周第",
       rankPost: "名",
       again: "再来一局",
+      againDiscard: "放弃这局成绩，再来一局",
+      scoreDiffers: "以服务器记录的成绩为准",
       toBoard: "看排行榜",
       /** Leaderboard. */
       boardTitle: "本周排行榜",

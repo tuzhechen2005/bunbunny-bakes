@@ -95,7 +95,7 @@ export function Board({
         if (L.soundOn) sound.drop();
       } else if (ev.type === "merge") {
         if (L.soundOn) (ev.big ? sound.big : () => sound.merge(ev.tier))();
-        haptic(ev.big ? 40 : 12);
+        if (ev.big || !L.reduced) haptic(ev.big ? 40 : 12);
       } else if (ev.type === "over") {
         if (L.soundOn) sound.over();
       }
@@ -108,8 +108,9 @@ export function Board({
         live.current.onHud(h);
       }
     };
-    const doDrop = (x: number) => {
-      if (session.over) return;
+    /** A release inside the cool-down is kept and dropped the moment the cool-down ends (at most 30 steps). */
+    let pending: number | null = null;
+    const dropNow = (x: number) => {
       const evs = session.drop(x);
       if (evs) {
         box.dataset.drops = String(session.drops.length);
@@ -117,15 +118,26 @@ export function Board({
         hud();
       }
     };
+    const doDrop = (x: number) => {
+      if (session.over) return;
+      if (!session.canDrop()) {
+        pending = x;
+        wake();
+        return;
+      }
+      dropNow(x);
+    };
 
     const onTouchStart = (e: TouchEvent) => {
       touching = true;
+      wake();
       target = toWorld(e.touches[0].clientX);
       aimX = target;
       e.preventDefault();
     };
     const onTouchMove = (e: TouchEvent) => {
       if (!touching) return;
+      wake();
       target = toWorld(e.touches[0].clientX);
       e.preventDefault();
     };
@@ -141,11 +153,13 @@ export function Board({
     };
     const onMouseMove = (e: MouseEvent) => {
       target = toWorld(e.clientX);
+      wake();
     };
     const onClick = (e: MouseEvent) => {
       doDrop(toWorld(e.clientX));
     };
     const onKey = (e: KeyboardEvent) => {
+      wake();
       if (e.key === "ArrowLeft") target = Math.max(0, target - KEY_STEP);
       else if (e.key === "ArrowRight") target = Math.min(1, target + KEY_STEP);
       else if (e.key === " " || e.key === "Enter") doDrop(target);
@@ -164,7 +178,9 @@ export function Board({
     let raf = 0;
     let last: number | null = null;
     let acc = 0;
-    let finished = false;
+    // A session that is already over (coming back to the page) must not report game over again.
+    let finished = session.over;
+    let running = false;
     const frame = (still = false) => {
       const now = performance.now();
       const dt = last === null || still ? 0 : Math.min(0.05, (now - last) / 1000);
@@ -182,11 +198,16 @@ export function Board({
           }
           hud();
         }
+        if (pending !== null && session.canDrop()) {
+          const x = pending;
+          pending = null;
+          dropNow(x);
+        }
       }
       const over = session.over;
       r.draw(
         session.bodies,
-        { x: aimX, tier: session.current(), cooled: session.cooled, visible: !over },
+        { x: aimX, tier: session.current(), cooled: session.cooled, visible: !over, holding: touching },
         dt,
         now,
       );
@@ -195,17 +216,33 @@ export function Board({
         hud();
         live.current.onOver();
       }
-      if (over && !r.animating) return;
+      if (over && !r.animating) {
+        running = false;
+        return;
+      }
+      // D105: nothing moves and nobody is touching it: stop until the next input.
+      const asleep =
+        !over && session.asleep && session.cooled >= 1 && !touching && pending === null && !r.animating && Math.abs(target - aimX) < 0.0008;
+      if (asleep) {
+        running = false;
+        return;
+      }
       if (!still) raf = requestAnimationFrame(() => frame());
     };
     const start = () => {
       cancelAnimationFrame(raf);
       last = null;
+      running = true;
       raf = requestAnimationFrame(() => frame());
     };
+    function wake() {
+      if (!running && !document.hidden && !(session.over && finished && !r.animating)) start();
+    }
     const onVis = () => {
-      if (document.hidden) cancelAnimationFrame(raf);
-      else if (!(session.over && finished && !r.animating)) start();
+      if (document.hidden) {
+        cancelAnimationFrame(raf);
+        running = false;
+      } else if (!(session.over && finished && !r.animating)) start();
     };
     document.addEventListener("visibilitychange", onVis);
     hud();

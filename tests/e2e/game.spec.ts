@@ -37,11 +37,13 @@ interface Api {
   starts: unknown[];
   finishes: { runId: string; drops: { x: number; at: number }[] }[];
   failFinishOnce: boolean;
+  stallFinishOnce: boolean;
+  result: { score: number; best: number; rank: number | null };
   startError: { status: number; body: unknown } | null;
 }
 
 async function mockApi(page: Page, board: object | number = BOARD): Promise<Api> {
-  const api: Api = { starts: [], finishes: [], failFinishOnce: false, startError: null };
+  const api: Api = { starts: [], finishes: [], failFinishOnce: false, stallFinishOnce: false, result: { score: 123, best: 456, rank: 3 }, startError: null };
   await page.route("**/api/menu", (route) =>
     route.fulfill({
       json: { orderingEnabled: true, products: PRODUCTS, pickupNote: "", deliveryFeeCents: 500, freeDeliveryMinCents: 2500, maxQtyPerItem: 8, ownerWechatId: "bunbunny_bakes" },
@@ -57,12 +59,16 @@ async function mockApi(page: Page, board: object | number = BOARD): Promise<Api>
     return route.fulfill({ json: { runId: `run-${api.starts.length}`, seed: "seed-e2e", tiers: TIERS, expiresAt: "2099-01-01T00:00:00Z" } });
   });
   await page.route("**/api/game/finish", (route: Route) => {
+    if (api.stallFinishOnce) {
+      api.stallFinishOnce = false;
+      return; // never answered: the client's own timeout has to end the wait
+    }
     if (api.failFinishOnce) {
       api.failFinishOnce = false;
       return route.abort("failed");
     }
     api.finishes.push(route.request().postDataJSON());
-    return route.fulfill({ json: { score: 123, best: 456, rank: 3, week: "2026-10-26" } });
+    return route.fulfill({ json: { ...api.result, week: "2026-10-26" } });
   });
   return api;
 }
@@ -184,9 +190,14 @@ test("play to game over: the drop log is valid, a failed submit can be retried w
   // Nothing is claimed about the board until the server answered; the retry button shows.
   await expect(page.getByTestId("game-retry")).toBeVisible();
   await expect(page.getByTestId("game-confirmed")).toHaveCount(0);
+  // Starting over would drop the unsent score: the button says so.
+  await expect(page.getByTestId("game-again")).toHaveText(g.againDiscard);
   await page.getByTestId("game-retry").click();
-  await expect(page.getByTestId("game-confirmed")).toBeVisible();
+  // The mock's score differs from the client's: the sheet shows the SERVER score and does not claim 上榜.
   await expect(page.getByTestId("game-best")).toHaveText("456");
+  await expect(page.getByTestId("game-final-score")).toHaveText("123");
+  await expect(page.getByTestId("game-differs")).toBeVisible();
+  await expect(page.getByTestId("game-confirmed")).toHaveCount(0);
 
   expect(api.finishes).toHaveLength(1);
   const { runId, drops } = api.finishes[0];
@@ -198,8 +209,6 @@ test("play to game over: the drop log is valid, a failed submit can be retried w
     expect(Number.isInteger(drops[i].at)).toBe(true);
     if (i > 0) expect(drops[i].at - drops[i - 1].at).toBeGreaterThanOrEqual(30);
   }
-  const shown = Number(await page.getByTestId("game-final-score").innerText());
-  expect(shown).toBeGreaterThanOrEqual(0);
 
   // Another round: a new run, a fresh board.
   await page.getByTestId("game-again").click();
@@ -208,7 +217,7 @@ test("play to game over: the drop log is valid, a failed submit can be retried w
   expect(api.starts).toHaveLength(2);
 });
 
-test("touch: press, drag to aim and release drops one piece; the cool-down blocks a second one", async ({ page }) => {
+test("touch: press, drag to aim and release drops one piece; a tap in the cool-down is kept and dropped after it", async ({ page }) => {
   const api = await mockApi(page);
   await page.goto("/game");
   await startGame(page);
@@ -222,14 +231,14 @@ test("touch: press, drag to aim and release drops one piece; the cool-down block
   for (let i = 1; i <= 6; i++) await touch("touchMove", box.x + box.width * (0.3 + i * 0.05));
   await touch("touchEnd", box.x + box.width * 0.6);
   await expect(page.getByTestId("game-board")).toHaveAttribute("data-drops", "1");
-  // Immediately again: inside the cool-down, ignored.
+  // Immediately again: inside the cool-down. The tap is kept and dropped when the cool-down ends.
   await touch("touchStart", box.x + box.width * 0.5);
   await touch("touchEnd", box.x + box.width * 0.5);
-  await expect(page.getByTestId("game-board")).toHaveAttribute("data-drops", "1");
+  await expect(page.getByTestId("game-board")).toHaveAttribute("data-drops", "2", { timeout: 1500 });
   await page.waitForTimeout(400);
-  await touch("touchStart", box.x + box.width * 0.5);
-  await touch("touchEnd", box.x + box.width * 0.5);
-  await expect(page.getByTestId("game-board")).toHaveAttribute("data-drops", "2");
+  await touch("touchStart", box.x + box.width * 0.4);
+  await touch("touchEnd", box.x + box.width * 0.4);
+  await expect(page.getByTestId("game-board")).toHaveAttribute("data-drops", "3");
   expect(api.finishes).toHaveLength(0);
 });
 
@@ -255,4 +264,48 @@ test("320 px: the start screen and the board do not scroll sideways", async ({ p
   const b = (await page.getByTestId("game-board").boundingBox())!;
   expect(b.x + b.width).toBeLessThanOrEqual(320);
   expect(b.y + b.height).toBeLessThanOrEqual(640);
+});
+
+test("leaderboard and back after game over: no second finish, the sheet keeps the confirmed result", async ({ page }) => {
+  test.setTimeout(120_000);
+  const api = await mockApi(page);
+  api.result = { score: 123, best: 456, rank: null };
+  await page.goto("/game");
+  await startGame(page);
+  await playUntilOver(page);
+  await expect(page.getByTestId("game-best")).toHaveText("456");
+  // rank null: no "本周第  名" text
+  await expect(page.getByTestId("game-over-sheet")).not.toContainText(g.rankPre);
+  await page.getByTestId("game-to-board").click();
+  await expect(page.getByTestId("game-board-close")).toBeVisible();
+  await page.getByTestId("game-board-close").click();
+  await expect(page.getByTestId("game-over-sheet")).toBeVisible();
+  await expect(page.getByTestId("game-best")).toHaveText("456");
+  await page.waitForTimeout(1500);
+  expect(api.finishes).toHaveLength(1);
+
+  // A start that fails after starting over: the leaderboard's back goes to the start screen, not into the old run.
+  api.startError = { status: 500, body: { error: "INTERNAL", message: "x" } };
+  await page.getByTestId("game-again").click();
+  await expect(page.getByTestId("game-form-error")).toBeVisible();
+  await page.getByTestId("game-open-board").click();
+  await page.getByTestId("game-board-close").click();
+  await expect(page.getByTestId("game-start")).toBeVisible();
+  expect(api.finishes).toHaveLength(1);
+});
+
+test("a stalled finish ends in a retry button instead of waiting forever", async ({ page }) => {
+  test.setTimeout(120_000);
+  const api = await mockApi(page);
+  api.stallFinishOnce = true;
+  await page.goto("/game");
+  await startGame(page);
+  await playUntilOver(page);
+  await expect(page.getByText(g.submitting)).toBeVisible();
+  await expect(page.getByTestId("game-again")).toBeDisabled();
+  await expect(page.getByTestId("game-retry")).toBeVisible({ timeout: 25_000 });
+  await page.getByTestId("game-retry").click();
+  await expect(page.getByTestId("game-best")).toHaveText("456");
+  expect(api.finishes).toHaveLength(1);
+  expect(api.finishes[0].runId).toBe("run-1");
 });

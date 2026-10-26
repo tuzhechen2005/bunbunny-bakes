@@ -38,6 +38,9 @@ export class Session {
   get score() {
     return this.game.score;
   }
+  get asleep() {
+    return this.game.asleep;
+  }
   get over() {
     return this.game.over;
   }

@@ -26,7 +26,8 @@ export interface DropLog {
 export interface FinishResult {
   score: number;
   best: number;
-  rank: number;
+  /** null when the server could not rank the run. */
+  rank: number | null;
   week: { start: string; end: string } | string;
 }
 

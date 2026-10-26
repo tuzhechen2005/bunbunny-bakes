@@ -121,6 +121,8 @@ export interface Aim {
   /** 0..1 cool-down progress (the piece fades in as it fills). */
   cooled: number;
   visible: boolean;
+  /** A finger is down: the guide is drawn strong. */
+  holding?: boolean;
 }
 
 export class BoardRenderer {
@@ -215,7 +217,9 @@ export class BoardRenderer {
         this.rings.push({ x, y, from: r * 0.4, to: r * 3.2, t: -0.08, max: 0.8, color: this.theme.ink, width: 2 });
         this.shake = 1;
       }
-      this.floaters.push({ x, y: y - r, text: `+${ev.points}`, t: 0, big: ev.big });
+      // Several merges in one cascade: stack the numbers instead of printing them on top of each other.
+      const stacked = this.floaters.filter((f) => f.t < 0.45).length;
+      this.floaters.push({ x: x + (stacked === 0 ? 0 : stacked % 2 ? 14 : -14), y: y - r - stacked * 24, text: `+${ev.points}`, t: 0, big: ev.big });
     }
   }
 
@@ -284,13 +288,13 @@ export class BoardRenderer {
       ctx.lineCap = "round";
       ctx.lineWidth = 2;
       ctx.strokeStyle = theme.ink;
-      ctx.globalAlpha = 0.18 * aim.cooled;
+      ctx.globalAlpha = aim.holding ? 0.55 : 0.18 * aim.cooled;
       ctx.beginPath();
       ctx.moveTo(ax * w, (pr + 0.012 + pr) * w);
       ctx.lineTo(ax * w, land * w);
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.globalAlpha = 0.14 * aim.cooled;
+      ctx.globalAlpha = aim.holding ? 0.4 : 0.14 * aim.cooled;
       ctx.beginPath();
       ctx.arc(ax * w, land * w, pr * w, 0, Math.PI * 2);
       ctx.stroke();

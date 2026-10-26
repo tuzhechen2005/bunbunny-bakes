@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { copy } from "@/copy";
+import { focusRing } from "@/components/ui/focus";
 import { fill } from "@/components/customer/format";
 import { fetchLeaderboard } from "./gameApi";
 import type { Leaderboard } from "./types";
@@ -51,7 +52,7 @@ export function LeaderboardView({ wechatId, version = 0 }: { wechatId: string; v
             setState({ status: "loading" });
             setAttempt((n) => n + 1);
           }}
-          className="mt-3 min-h-11 rounded-full bg-c-wash px-5 text-sm font-bold text-c-ink"
+          className={`mt-3 min-h-11 rounded-full bg-c-wash px-5 text-sm font-bold text-c-ink ${focusRing}`}
         >
           {t.retry}
         </button>

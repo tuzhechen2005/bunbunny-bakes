@@ -83,6 +83,11 @@ export function GamePage() {
   const [finish, setFinish] = useState<Finish>({ state: "submitting" });
   const [sheetOpen, setSheetOpen] = useState(false);
   const [boardVersion, setBoardVersion] = useState(0);
+  /** Where 返回 on the leaderboard goes: the finished run it was opened from, or the start screen. */
+  const [boardFrom, setBoardFrom] = useState<"start" | "over">("start");
+  /** Runs whose finish was already sent (at most one automatic submit per run) and the one in flight. */
+  const submitted = useRef(new Set<string>());
+  const inflight = useRef<string | null>(null);
   const sheetRef = useRef<SheetHandle>(null);
   const afterSheet = useRef<() => void>(() => {});
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -116,9 +121,16 @@ export function GamePage() {
     }
   };
 
-  const submit = useCallback(async (s: Session, id: string) => {
+  const submit = useCallback(async (s: Session, id: string, retry = false) => {
+    if (!retry && submitted.current.has(id)) return;
+    if (inflight.current === id) return;
+    submitted.current.add(id);
+    inflight.current = id;
     setFinish({ state: "submitting" });
     const r = await finishRun(id, s.drops);
+    if (inflight.current === id) inflight.current = null;
+    // A late answer of an earlier run must not show on the current one.
+    if (runId.current !== id) return;
     if (r.ok) {
       setFinish({ state: "ok", result: r.data });
       setBoardVersion((n) => n + 1);
@@ -148,6 +160,7 @@ export function GamePage() {
     }
     writeRemembered({ wechatId: w, nickname: n });
     runId.current = r.data.runId;
+    inflight.current = null;
     setHud({ score: 0, next: 0 });
     const next = new Session(r.data.tiers, r.data.seed);
     sessionRef.current = next;
@@ -159,7 +172,7 @@ export function GamePage() {
 
   const onOver = useCallback(() => {
     setPhase("over");
-    if (sessionRef.current) void submit(sessionRef.current, runId.current);
+    if (sessionRef.current && !submitted.current.has(runId.current)) void submit(sessionRef.current, runId.current);
     timers.current.push(setTimeout(() => setSheetOpen(true), reduced ? 0 : SHEET_DELAY_MS));
   }, [reduced, submit]);
 
@@ -188,7 +201,12 @@ export function GamePage() {
             <h2 className="font-display m-0 text-[26px] leading-none tracking-[-0.03em]">{t.boardTitle}</h2>
             <button
               type="button"
-              onClick={() => setPhase(session ? "over" : "start")}
+              onClick={() => {
+                if (boardFrom === "over" && session?.over) {
+                  setPhase("over");
+                  setSheetOpen(true);
+                } else setPhase("start");
+              }}
               className={`min-h-11 rounded-full bg-c-wash px-5 text-sm font-bold ${focusRing}`}
               data-testid="game-board-close"
             >
@@ -267,7 +285,10 @@ export function GamePage() {
             </button>
             <button
               type="button"
-              onClick={() => setPhase("board")}
+              onClick={() => {
+                setBoardFrom("start");
+                setPhase("board");
+              }}
               className={`min-h-11 w-full rounded-full bg-c-wash text-[15px] font-bold ${focusRing}`}
               data-testid="game-open-board"
             >
@@ -284,15 +305,17 @@ export function GamePage() {
 
   // ---------------- playing / over ----------------
   const next = session.tiers[Math.min(hud.next, session.tiers.length - 1)];
-  const finalScore = session.score;
+  // What the server recorded is what counts; the client's own number is only shown until then.
+  const finalScore = finish.state === "ok" ? finish.result.score : session.score;
+  const sameScore = finish.state === "ok" && finish.result.score === session.score;
   return (
     <Shell>
       {top}
-      <main className="flex flex-1 flex-col items-stretch px-3 pb-[calc(12px+env(safe-area-inset-bottom))]">
+      <main className="flex flex-1 flex-col items-stretch px-2 pb-[calc(12px+env(safe-area-inset-bottom))]">
         <div className="flex h-[92px] shrink-0 items-center justify-between px-2" data-testid="game-hud">
           <div>
             <p className="m-0 text-xs font-bold text-c-grey">{t.score}</p>
-            <p className="font-num m-0 text-[40px] leading-none text-c-ink" aria-live="off">
+            <p className="font-num m-0 text-[40px] leading-[1.15] text-c-ink" aria-live="off">
               <RollNumber value={String(hud.score)} testId="game-score" />
             </p>
           </div>
@@ -301,14 +324,17 @@ export function GamePage() {
             <PieceChip tier={next} size={44} />
           </div>
         </div>
-        <Board
-          key={runKey}
-          session={session}
-          soundOn={soundOn}
-          reduced={reduced}
-          onHud={setHud}
-          onOver={onOver}
-        />
+        {/* On tall phones the board sits in the middle of the space under the HUD. */}
+        <div className="flex flex-1 items-center justify-center">
+          <Board
+            key={runKey}
+            session={session}
+            soundOn={soundOn}
+            reduced={reduced}
+            onHud={setHud}
+            onOver={onOver}
+          />
+        </div>
       </main>
 
       {phase === "over" && sheetOpen ? (
@@ -339,7 +365,7 @@ export function GamePage() {
                 {finish.retry ? (
                   <button
                     type="button"
-                    onClick={() => void submit(session, runId.current)}
+                    onClick={() => void submit(session, runId.current, true)}
                     className={`mt-2 min-h-11 rounded-full bg-c-wash px-6 text-sm font-bold ${focusRing}`}
                     data-testid="game-retry"
                   >
@@ -351,12 +377,20 @@ export function GamePage() {
               </>
             ) : (
               <div className="flex items-start justify-center gap-8">
-                <p className="m-0 text-sm font-bold" data-testid="game-confirmed">
-                  {t.confirmed}
-                  <span className="mt-0.5 block text-base">
-                    {t.rankPre} <b className="font-num text-xl font-normal">{finish.result.rank}</b> {t.rankPost}
-                  </span>
-                </p>
+                {sameScore ? (
+                  <p className="m-0 text-sm font-bold" data-testid="game-confirmed">
+                    {t.confirmed}
+                    {finish.result.rank != null ? (
+                      <span className="mt-0.5 block text-base">
+                        {t.rankPre} <b className="font-num text-xl font-normal">{finish.result.rank}</b> {t.rankPost}
+                      </span>
+                    ) : null}
+                  </p>
+                ) : (
+                  <p className="m-0 text-sm text-c-grey" data-testid="game-differs">
+                    {t.scoreDiffers}
+                  </p>
+                )}
                 <p className="m-0 text-sm font-bold">
                   {t.best}
                   <span className="font-num mt-0.5 block text-xl font-normal" data-testid="game-best">
@@ -370,14 +404,18 @@ export function GamePage() {
             <button
               type="button"
               onClick={() => closeSheetThen(() => void begin())}
-              className={`font-display h-14 w-full rounded-full bg-c-ink text-lg text-c-paper ${focusRing}`}
+              className={`font-display h-14 w-full rounded-full bg-c-ink text-lg text-c-paper disabled:opacity-50 ${focusRing}`}
+              disabled={finish.state === "submitting"}
               data-testid="game-again"
             >
-              {t.again}
+              {finish.state === "failed" ? t.againDiscard : t.again}
             </button>
             <button
               type="button"
-              onClick={() => closeSheetThen(() => setPhase("board"))}
+              onClick={() => closeSheetThen(() => {
+                  setBoardFrom("over");
+                  setPhase("board");
+                })}
               className={`min-h-11 w-full rounded-full bg-c-wash text-[15px] font-bold ${focusRing}`}
               data-testid="game-to-board"
             >

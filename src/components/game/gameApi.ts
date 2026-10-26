@@ -3,24 +3,32 @@ import { copy } from "@/copy";
 import type { ApiResult } from "@/lib/api";
 import type { DropLog, FinishResult, Leaderboard, StartedRun } from "./types";
 
+/** A stalled phone connection must end in a retry button, not in a spinner that never stops. */
+export const REQUEST_TIMEOUT_MS = 15_000;
+
 async function call<T>(path: string, body?: unknown): Promise<ApiResult<T>> {
   let response: Response;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), REQUEST_TIMEOUT_MS);
   try {
     response = await fetch(path, {
+      signal: ctl.signal,
       method: body === undefined ? "GET" : "POST",
       headers: body === undefined ? undefined : { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
     });
   } catch {
+    clearTimeout(timer);
     return { ok: false, status: 0, error: { error: "NETWORK", message: copy.errors.fallback } };
   }
   let json: unknown = null;
   try {
     json = await response.json();
   } catch {
-    /* not JSON */
+    /* not JSON (or the body stalled and was aborted) */
   }
+  clearTimeout(timer);
   if (response.ok && json !== null) return { ok: true, status: response.status, data: json as T };
   const b = (json && typeof json === "object" ? json : {}) as Record<string, unknown>;
   return {
