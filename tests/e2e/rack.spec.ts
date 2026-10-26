@@ -11,12 +11,25 @@ const PHOTO = readFileSync("tests/fixtures/bun.jpg");
 /** The photo files themselves and the /_next/image URLs that resize them (D91): both answer with the fixture. */
 const MOCK_PHOTO = /\/api\/images\/mock\/|%2Fapi%2Fimages%2Fmock%2F/;
 
+// The menu contract of the multi-photo / colour work (D95, D98): `images` (cover first, 0-6) and `field`
+// per product; `imageUrl` is always the cover. Photo counts: 2, 3, 1 and none; the third bread has its own
+// colour (not the old cycle's) and the last one a dark colour.
+const PHOTO_COUNT: Record<string, number> = { "p-redbean": 2, "p-rock": 3, "p-brulee": 1, "p-wedge": 0 };
+const FIELDS: Record<string, { bg: string; ink: string; ink2: string }> = {
+  "p-redbean": { bg: "#DCC5BB", ink: "#4A2723", ink2: "#674741" },
+  "p-rock": { bg: "#F0BF45", ink: "#36260A", ink2: "#5F4817" },
+  "p-brulee": { bg: "#B9C9A0", ink: "#1F2A12", ink2: "#44522F" },
+  "p-wedge": { bg: "#3A3633", ink: "#FFF8EE", ink2: "#E8DFD2" },
+};
 const PRODUCTS = [
   { id: "p-redbean", name: "奶酥红豆包", description: "红豆馅", unitPriceCents: 249, bundleSize: 4, bundlePriceCents: 899, status: "ACTIVE", leadDays: 1 },
   { id: "p-rock", name: "岩烧乳酪包", description: "乳酪", unitPriceCents: 249, bundleSize: 4, bundlePriceCents: 899, status: "ACTIVE", leadDays: 1 },
   { id: "p-brulee", name: "焦糖布蕾", description: "布蕾", unitPriceCents: 249, bundleSize: 4, bundlePriceCents: 899, status: "ACTIVE", leadDays: 2 },
-  { id: "p-wedge", name: "奶酪角", description: "奶酪", unitPriceCents: 299, bundleSize: 4, bundlePriceCents: 1099, status: "PAUSED", leadDays: 1 },
-].map((p) => ({ ...p, imageUrl: `/api/images/mock/${p.id}.jpg` }));
+  { id: "p-wedge", name: "奶酪角", description: "奶酪", unitPriceCents: 299, bundleSize: 4, bundlePriceCents: 1099, status: "PAUSED", leadDays: 3 },
+].map((p) => {
+  const images = Array.from({ length: PHOTO_COUNT[p.id] }, (_, k) => `/api/images/mock/${p.id}-${k + 1}.jpg`);
+  return { ...p, images, imageUrl: images[0] ?? null, field: FIELDS[p.id] };
+});
 
 async function mockHome(page: Page, products = PRODUCTS) {
   await page.route("**/api/menu", (route) =>
@@ -301,11 +314,14 @@ test.describe("rope gestures with real touch events (CDP)", () => {
   });
 
   test("buttons on the hero still work and never start a drag", async ({ page }) => {
-    const [bx, by] = await centreOf(page, '[data-testid="hero-add"]');
+    const [bx, by] = await centreOf(page, '[data-testid="hero-view"]');
     await f.down(bx, by);
     await f.wait(40);
     await f.up();
-    await expect(page.getByTestId("bag-count")).toContainText("1");
+    // a tap on the 「查看详情 →」 pill takes the bread down (spin, then the detail)
+    await expect(page.getByTestId("detail")).toBeVisible({ timeout: 3000 });
+    await expect(page.getByTestId("detail-name")).toHaveText("奶酥红豆包");
+    await expect(page.getByTestId("bag-count")).toContainText("0");
     expect(await selectedIndex(page)).toBe(0);
   });
 
@@ -542,25 +558,73 @@ test.describe("mouse and keyboard", () => {
     await expect(page.getByRole("listbox", { name: /左右滑动/ })).toBeVisible();
     await expect(page.getByRole("option")).toHaveCount(4);
     const field = () => page.evaluate(() => document.documentElement.style.getPropertyValue("--field"));
+    const ink = () => page.evaluate(() => document.documentElement.style.getPropertyValue("--fink"));
     expect(await field()).toBe("#DCC5BB");
     await page.getByTestId("rack").focus();
     await page.keyboard.press("ArrowRight");
     await expect.poll(field).toBe("#F0BF45");
     await page.keyboard.press("ArrowRight");
+    // D95: the product's own colours (here not the old cycle's third colour)
+    await expect.poll(field).toBe("#B9C9A0");
+    expect(await ink()).toBe("#1F2A12");
+    expect(await page.evaluate(() => document.documentElement.style.getPropertyValue("--fink2"))).toBe("#44522F");
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(field).toBe("#3A3633");
+    // the browser chrome follows
+    expect(await page.evaluate(() => document.querySelector('meta[name="theme-color"]')!.getAttribute("content"))).toBe("#3A3633");
+  });
+
+  test("a menu payload without `field` (an old cached copy) falls back to the old cycle", async ({ page }) => {
+    await page.unroute("**/api/menu");
+    await mockHome(
+      page,
+      PRODUCTS.map((p) => {
+        const old: Record<string, unknown> = { ...p };
+        delete old.field;
+        delete old.images;
+        return old;
+      }) as unknown as typeof PRODUCTS,
+    );
+    await page.goto("/");
+    await settled(page);
+    const field = () => page.evaluate(() => document.documentElement.style.getPropertyValue("--field"));
+    await page.getByTestId("rack").focus();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
     await expect.poll(field).toBe("#CFDDEA");
   });
 
-  test("hero + puts the current bread in the bag (and is off for paused ones)", async ({ page }) => {
-    await page.getByTestId("hero-add").click();
-    await page.getByTestId("hero-add").click();
-    await expect(page.getByTestId("bag-count")).toContainText("2");
-    await expect(page.getByTestId("bag-live")).toContainText("已放进纸袋：奶酥红豆包");
-    expect(await page.evaluate(() => localStorage.getItem("bb_cart_v1"))).toBe(JSON.stringify([{ productId: "p-redbean", qty: 2 }]));
+  test("hero pill 「查看详情 →」 opens the current bread's detail; nothing on the home page adds (D97)", async ({ page }) => {
+    const pill = page.getByTestId("hero-view");
+    await expect(pill).toHaveText("查看详情 →");
+    await expect(pill).toHaveAttribute("aria-label", "查看 奶酥红豆包 详情");
+    // same colours as the old round button: ink on the field
+    expect(await pill.evaluate((e) => [getComputedStyle(e).backgroundColor, getComputedStyle(e).color])).toEqual(["rgb(74, 39, 35)", "rgb(220, 197, 187)"]);
+    expect((await pill.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await pill.click();
+    await expect(page.getByTestId("detail")).toBeVisible({ timeout: 3000 });
+    await expect(page.getByTestId("detail-name")).toHaveText("奶酥红豆包");
+    // the spin ran first: the detail is not instant
+    await expect(page.getByTestId("bag-count")).toContainText("0");
+    expect(await page.evaluate(() => localStorage.getItem("bb_cart_v1"))).toBeNull();
+    await page.getByTestId("detail-close").click();
+    await expect(page.getByTestId("detail")).toHaveCount(0, { timeout: 3000 });
+    // a paused bread opens too, but cannot go in the bag
     await page.getByTestId("rack").focus();
     for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowRight");
     await expect.poll(() => selectedIndex(page)).toBe(3);
-    await expect(page.getByTestId("hero-add")).toBeDisabled();
+    await expect(page.getByTestId("hero-view")).toBeEnabled();
     await expect(page.getByTestId("current")).toContainText("暂停供应");
+    await page.getByTestId("hero-view").click();
+    await expect(page.getByTestId("detail-name")).toHaveText("奶酪角", { timeout: 3000 });
+    await expect(page.getByTestId("detail-add")).toBeDisabled();
+  });
+
+  test("the hero pill: Enter and Space on it open the detail by key", async ({ page }) => {
+    await page.getByTestId("hero-view").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByTestId("detail")).toBeVisible({ timeout: 3000 });
+    await expect(page.getByTestId("detail-close")).toBeFocused();
   });
 
   test("detail: prev / next, quantity, price, lead hint, add with a count, hang back", async ({ page }) => {
@@ -588,14 +652,16 @@ test.describe("mouse and keyboard", () => {
     await page.getByTestId("detail-next").click();
     await expect(page.getByTestId("detail-name")).toHaveText("焦糖布蕾");
     await expect(page.getByTestId("detail-pos")).toHaveText("3 / 4");
-    await expect(page.getByTestId("detail-lead")).toHaveText("布蕾需提前两天");
-    await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--field"))).toBe("#CFDDEA");
+    await expect(page.getByTestId("detail-lead")).toHaveText("需提前 2 天预订");
+    await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--field"))).toBe("#B9C9A0");
 
     // the paused one cannot be added
     await page.getByTestId("detail-next").click();
     await expect(page.getByTestId("detail-name")).toHaveText("奶酪角");
     await expect(page.getByTestId("detail-add")).toBeDisabled();
     await expect(page.getByTestId("detail-next")).toBeDisabled();
+    await expect(page.getByTestId("detail-lead")).toHaveText("需提前 3 天预订");
+    await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--field"))).toBe("#3A3633");
 
     // hang back on the product we ended on: the rope shows it in the middle
     await page.getByTestId("detail-close").click();
@@ -622,18 +688,25 @@ test.describe("mouse and keyboard", () => {
     await expect(page.getByTestId("detail").getByText("大量订购请加微信联系")).toBeVisible();
   });
 
-  test("list: tiles add / step, paused tile greyed and not addable", async ({ page }) => {
+  test("list: a tile is one button that opens the detail, with no add or stepper (D97)", async ({ page }) => {
     const tile = (id: string) => page.locator(`[data-testid="product-card"][data-product-id="${id}"]`);
-    await tile("p-rock").getByRole("button", { name: "增加一个" }).click();
-    await expect(tile("p-rock").getByTestId("qty")).toHaveText("1");
-    await tile("p-rock").getByRole("button", { name: "增加一个" }).click();
-    await expect(tile("p-rock").getByTestId("qty")).toHaveText("2");
-    await tile("p-rock").getByRole("button", { name: "减少一个" }).click();
-    await tile("p-rock").getByRole("button", { name: "减少一个" }).click();
-    await expect(tile("p-rock").getByTestId("qty")).toHaveCount(0);
-    await expect(tile("p-wedge").getByRole("button", { name: "增加一个" })).toBeDisabled();
+    for (const [id, name] of [
+      ["p-redbean", "奶酥红豆包"],
+      ["p-rock", "岩烧乳酪包"],
+      ["p-brulee", "焦糖布蕾"],
+      ["p-wedge", "奶酪角"],
+    ]) {
+      await expect(tile(id).getByRole("button")).toHaveCount(1);
+      await expect(tile(id).getByRole("button", { name: `查看 ${name}` })).toBeVisible();
+      await expect(tile(id).getByTestId("qty")).toHaveCount(0);
+    }
+    await expect(page.getByRole("button", { name: /^增加一个|^放进纸袋/ })).toHaveCount(0); // none on the home page itself
     await expect(tile("p-wedge").getByText("暂停供应")).toBeVisible();
     await expect(page.getByRole("heading", { name: "全部面包" })).toBeVisible();
+    // the name, the price and the photo are all part of the one button: any of them opens the detail
+    await tile("p-rock").getByText("岩烧乳酪包").click();
+    await expect(page.getByTestId("detail-name")).toHaveText("岩烧乳酪包", { timeout: 3000 });
+    await expect(page.getByTestId("bag-count")).toContainText("0");
   });
 });
 
@@ -834,15 +907,12 @@ test.describe("home polish (J1)", () => {
     expect(ring).toBe("2px");
   });
 
-  test("names carry the product: hero +, grid +/- and quantity, detail stepper", async ({ page }) => {
+  test("names carry the product: hero pill, grid tile, detail stepper", async ({ page }) => {
     await mockHome(page);
     await page.goto("/");
     await settled(page);
-    await expect(page.getByTestId("hero-add")).toHaveAttribute("aria-label", "放进纸袋 奶酥红豆包");
-    const tile = page.locator('[data-testid="product-card"][data-product-id="p-rock"]');
-    await tile.getByRole("button", { name: "增加一个 岩烧乳酪包" }).click();
-    await expect(tile.getByRole("button", { name: "减少一个 岩烧乳酪包" })).toBeVisible();
-    await expect(tile.getByTestId("qty")).toHaveAttribute("aria-label", "岩烧乳酪包 已选 1 个");
+    await expect(page.getByTestId("hero-view")).toHaveAttribute("aria-label", "查看 奶酥红豆包 详情");
+    await expect(page.locator('[data-testid="product-card"][data-product-id="p-rock"]').getByRole("button", { name: "查看 岩烧乳酪包" })).toBeVisible();
     await page.getByTestId("rack").focus();
     await page.keyboard.press("Enter");
     await expect(page.getByTestId("detail")).toBeVisible({ timeout: 2000 });
@@ -953,27 +1023,28 @@ test.describe("home polish (J1)", () => {
     expect(await page.locator(".hm-rack").evaluate((e) => getComputedStyle(e).maskImage)).toContain("linear-gradient");
   });
 
-  test("a swipe that starts on the hero + drags the rope and does not add; a tap still adds", async ({ page, context }) => {
+  test("a swipe that starts on the hero pill drags the rope and does not open the detail; a tap still does", async ({ page, context }) => {
     await mockHome(page);
     await page.goto("/");
     await settled(page);
     const cdp = await context.newCDPSession(page);
     const f = finger(cdp);
-    const [bx, by] = await centreOf(page, '[data-testid="hero-add"]');
+    const [bx, by] = await centreOf(page, '[data-testid="hero-view"]');
     await drag(f, [bx, by], [bx - 150, by], { steps: 8, ms: 160 });
     await expect.poll(() => selectedIndex(page)).toBe(1);
-    await expect(page.getByTestId("bag-count")).toContainText("0");
-    await expect(page.getByTestId("hero-add")).toBeEnabled();
+    await page.waitForTimeout(900); // a detail would have opened by now (spin 0.54 s)
+    await expect(page.getByTestId("detail")).toHaveCount(0);
+    await expect(page.getByTestId("hero-view")).toBeEnabled();
     await settled(page);
-    const [tx, ty] = await centreOf(page, '[data-testid="hero-add"]');
+    const [tx, ty] = await centreOf(page, '[data-testid="hero-view"]');
     await page.touchscreen.tap(tx, ty);
-    await expect(page.getByTestId("bag-count")).toContainText("1");
+    await expect(page.getByTestId("detail-name")).toHaveText("岩烧乳酪包", { timeout: 3000 });
   });
-  test("a mouse drag that starts on the hero + moves the rope and does not add", async ({ page }) => {
+  test("a mouse drag that starts on the hero pill moves the rope and does not open the detail", async ({ page }) => {
     await mockHome(page);
     await page.goto("/");
     await settled(page);
-    const [bx, by] = await centreOf(page, '[data-testid="hero-add"]');
+    const [bx, by] = await centreOf(page, '[data-testid="hero-view"]');
     await page.mouse.move(bx, by);
     await page.mouse.down();
     for (let i = 1; i <= 8; i++) {
@@ -982,7 +1053,8 @@ test.describe("home polish (J1)", () => {
     }
     await page.mouse.up();
     await expect.poll(() => selectedIndex(page)).toBe(1);
-    await expect(page.getByTestId("bag-count")).toContainText("0");
+    await page.waitForTimeout(900);
+    await expect(page.getByTestId("detail")).toHaveCount(0);
   });
   test("Back still closes the detail after a reload (the history state outlives the page)", async ({ page }) => {
     await mockHome(page);
