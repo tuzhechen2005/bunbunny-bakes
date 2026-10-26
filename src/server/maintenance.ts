@@ -21,6 +21,8 @@ export async function cleanup(db: DbClient, now: Date): Promise<CleanupCounts> {
   const ordersIpHashCleared = await db.$executeRaw`
     UPDATE "Order" SET "ipHash" = NULL
     WHERE "createdAt" < ${dayAgo} AND "ipHash" IS NOT NULL`;
+  // Game runs keep their IP hash for 24 hours too (not part of the reported counts).
+  await db.gameRun.updateMany({ where: { startedAt: { lt: dayAgo }, ipHash: { not: null } }, data: { ipHash: null } });
   return {
     rateLimitHits: rateLimitHits.count,
     adminSessions: adminSessions.count,

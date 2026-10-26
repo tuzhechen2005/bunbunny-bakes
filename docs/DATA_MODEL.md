@@ -154,6 +154,18 @@
 
 `key`（例如 `order_ip:<ipHash>`）、`at`。查询最近 10 分钟的条数（D86）；超过 24 小时的记录在每 5 分钟的定时任务里清理。
 
+### 消除大面包的表（D100–D105）
+
+**GameTier**：店主配置的等级。`id`、`productId`（→ Product，商品被删时置空）、`sortOrder`（从小到大）、`imageUrl`（去掉白底的图，可空，空则用商品封面）、`isBig`（大面包那一行，logo 图）、`createdAt`、`updatedAt`。没有任何配置时用在售商品作默认。
+
+**GameRun**：一局。`id`、`seed`、`wechatId`、`nickname`、`tiersSnapshot`（开始时的等级配置，JSON）、`startedAt`、`finishedAt`（可空；有值说明已验证并保存）、`score`（服务器重放得到）、`weekKey`（完成时所在周的周一，America/Chicago，`YYYY-MM-DD`）、`ipHash`（24 小时后由定时清理置空）、`hidden`（店主隐藏，默认 false）。索引：`(weekKey, score desc)`、`wechatId`、`lower(wechatId)`、`startedAt`。
+
+**GameBan**：被禁的微信号，`wechatId`、`reason`、`createdAt`。唯一性不区分大小写（数据库里 `lower("wechatId")` 的唯一索引，Prisma 里写不出来，只在迁移 SQL 里）；查询用 `mode: "insensitive"`。
+
+**GameAward**：每周一条，`weekKey`（唯一）、`runId`（→ GameRun，Restrict）、`contactedAt`、`redeemedAt`、`note`。
+
+后台对这些表的写入都写 AuditLog（后台页面任务负责）。游戏接口使用 `RateLimitHit`，key 为 `game_start_ip:<ipHash>`、`game_finish_ip:<ipHash>`，窗口 1 小时。
+
 ## 2. 订单状态机
 
 ```
