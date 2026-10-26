@@ -100,6 +100,8 @@ model Product {
   name             String
   description      String        @default("")
   imageUrl         String?
+  /// Home background colour `#RRGGBB` (D95); null = default 奶白. ink/ink2 are derived (src/lib/fieldColor.ts).
+  fieldColor       String?
   unitPriceCents   Int
   bundleSize       Int           @default(4)
   bundlePriceCents Int?
@@ -119,6 +121,20 @@ model Product {
   orderItems  OrderItem[]
   manualItems ManualIncomeItem[]
   gameTiers   GameTier[]
+  images      ProductImage[]
+}
+
+/// Product photos in display order, cover = sortOrder 0 (D98). Product.imageUrl mirrors the cover.
+model ProductImage {
+  id        String   @id @default(uuid()) @db.Uuid
+  productId String   @db.Uuid
+  url       String
+  sortOrder Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
 }
 
 model OpenDate {

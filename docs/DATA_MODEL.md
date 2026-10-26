@@ -30,7 +30,8 @@
 | id | uuid | |
 | name | text | 例如"奶酥红豆包" |
 | description | text | |
-| imageUrl | text? | 空时显示兔子占位图 |
+| imageUrl | text? | 封面照片的冗余副本（= 第一张 ProductImage，每次改照片同步）；空时显示兔子占位图 |
+| fieldColor | text? | 首页背景色 `#RRGGBB`（大写，CHECK 约束），空 = 默认奶白 `#EFE7DA`（D95）；字色由 `src/lib/fieldColor.ts` 按对比度算出 |
 | unitPriceCents | int | |
 | bundleSize | int | 默认 4 |
 | bundlePriceCents | int? | 空 = 没有套餐 |
@@ -45,6 +46,18 @@
 | sortOrder | int | |
 
 用 Zod 校验"方式 ↔ 必填字段"的对应关系，数据库层加 CHECK 约束兜底。
+
+### ProductImage（D98）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | uuid | |
+| productId | uuid → Product | 删商品时级联删除 |
+| url | text | `/api/images/<key>` |
+| sortOrder | int | 0 = 封面；每次增删/排序后重排成 0..n-1；索引 (productId, sortOrder)，不设唯一约束（交换顺序时不会冲突） |
+| createdAt | timestamptz | |
+
+每款商品最多 6 张（服务器在持有商品行锁的事务里检查）。迁移 `20261026120000_product_colour_and_photos`：已有 `imageUrl` 的商品各得一条 sortOrder 0 的 ProductImage；按名字给现有商品设 fieldColor（奶酥红豆包 #DCC5BB、岩烧乳酪包 #F0BF45、奶酪角 #CFDDEA、焦糖布蕾 #B05219、巧克力奶酥吐司 #5A3A2A，名字不存在就跳过）。
 
 ### OpenDate
 
