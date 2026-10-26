@@ -331,10 +331,15 @@ model GameTier {
   productId String?  @db.Uuid
   sortOrder Int      @default(0)
   imageUrl  String?
+  /// Game-only piece name, or an override of the product's name (1-12 chars). NULL = the product's.
+  name       String?
+  /// Tier colour `#RRGGBB` (CHECK in the DB). NULL = the product's colour, else the preset cycle.
+  fieldColor String?
   isBig     Boolean  @default(false)
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
+  /// productId NULL on a non-big row = a game-only piece (D107); deleting a product leaves one behind.
   product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([sortOrder])
