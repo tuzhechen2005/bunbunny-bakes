@@ -15,7 +15,8 @@ export function ColorField({
   value,
   name,
   onChange,
-}: Readonly<{ value: string; name: string; onChange: (hex: string) => void }>) {
+  label,
+}: Readonly<{ value: string; name: string; onChange: (hex: string) => void; label?: string }>) {
   const hex = value.toUpperCase();
   const f = fieldFor(hex);
   const isPreset = FIELD_PRESETS.some((p) => p.hex === hex);
@@ -24,7 +25,7 @@ export function ColorField({
   return (
     <div className="flex flex-col gap-2" data-testid="color-field">
       <span className="text-sm font-medium" id="color-field-label">
-        {t.fieldColor}
+        {label ?? t.fieldColor}
       </span>
       <div role="radiogroup" aria-labelledby="color-field-label" className="grid grid-cols-5 gap-2">
         {FIELD_PRESETS.map((p) => {

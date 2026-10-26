@@ -115,13 +115,21 @@
 
 引擎在 `src/lib/game/`（纯 TS，固定步长 1/120 秒，只用 + − × ÷ 和 `Math.sqrt/min/max/abs/floor`，V8 和 JavaScriptCore 结果逐位一致）。服务端实现在 `src/server/game.ts`、`gameTiers.ts`、`gameWeek.ts`。三个接口都带 `Cache-Control: no-store`；JSON 内容类型必填，请求体有大小上限（start 4 KB，finish 64 KB）。
 
-**`POST /api/game/start`** `{ wechatId, nickname }` → `201 { runId, seed, tiers: [{ id, radius, points, imageUrl, color: { bg, ink } }], expiresAt }`
+**`POST /api/game/start`** `{ wechatId, nickname }` → `201 { runId, seed, tiers: [{ id, radius, points, imageUrl, color: { bg, ink }, name }], expiresAt }`
 
 - `wechatId` 规则同下单（1–40 字符）；`nickname` 去掉首尾空格后 1–10 个字符（按 Unicode 字符数），不能含控制字符、换行、双向覆盖字符。不合格 `422 VALIDATION`（带 `fields`）。
 - 被禁的微信号（不区分大小写）：`422 VALIDATION`，`message` 为友好提示。
 - `seed` 来自 `crypto.randomBytes`；每局只能结束一次，2 小时后过期。
-- `tiers` 按从小到大排列，最后一项 `id` 恒为 `"big"`。店主配置了至少 2 个商品等级就用店主的（`GameTier`），否则用在售商品（按菜单顺序，最多 5 个）+ 大面包，图为商品封面。`radius` 以棋盘宽度为 1，约 0.071 → 0.268（商品等级 0.071 → 0.215，大面包 0.268；D106）。每次只掉最小的 3 档，商品等级 ≥ 7 时 4 档；`points` 为合成出该级得分（等级序号的三角数 × 10，大面包等级也是），`color` 来自商品首页背景色。
+- `tiers` 按从小到大排列，最后一项 `id` 恒为 `"big"`。店主配置了至少 2 个商品等级就用店主的（`GameTier`），否则用在售商品（按菜单顺序，最多 8 个）+ 大面包，图为商品封面。`radius` 以棋盘宽度为 1，约 0.071 → 0.268（商品等级 0.071 → 0.215，大面包 0.268；D106）。每次只掉最小的 3 档，商品等级 ≥ 7 时 4 档；`points` 为合成出该级得分（等级序号的三角数 × 10，大面包等级也是），`color` 来自商品首页背景色。
 - 这一份等级配置在开始时存进 `GameRun.tiersSnapshot`，之后改配置只影响新的局。
+- 每个等级带 `name`（游戏专用面包自己的名字，否则是商品名；大面包是店名；只用于显示，不进重放快照）。没有图片的等级（游戏专用面包在店主上传图片之前）画成底色圆 + 名字的第一个字。
+
+**后台等级接口**（`/api/admin/game/tiers`，需要登录 + Origin 检查，写入都记 AuditLog；商品等级 + 游戏专用面包合计最多 8 档、至少 2 档，`422 VALIDATION`）
+
+- `GET`：`{ configured, tiers: [{ id, productId, productName, isBig, gameOnly, name, fieldColor, imageUrl, productImageUrl, color }], products }`。`gameOnly` = 没有商品的非大面包等级；`fieldColor` 是这一档自己的底色（空 = 用商品的）。
+- `POST` `{}` 保存默认；`{ productId }` 加商品等级；`{ name, fieldColor }` 加游戏专用面包（`name` 去首尾空格后 1–12 个字符、无控制字符，`fieldColor` 为 `#RRGGBB`）→ `201`，审计 `game.tier.add`。
+- `PATCH /tiers/{id}`：`{ productId }` 换商品；或 `{ name?, fieldColor? }` 改名字 / 底色（任何非大面包等级；`fieldColor: null` 恢复成商品的颜色，游戏专用面包不能清空底色）→ 审计 `game.tier.update`。
+- `DELETE /tiers/{id}`、`PUT /tiers/order`、`POST|DELETE /tiers/{id}/image`：对游戏专用面包同样适用。
 - 同一 IP 每小时最多 60 次（`RATE_LIMITED`，`game_start_ip:<ipHash>`）。
 
 **`POST /api/game/finish`** `{ runId, drops: [{ x, at }] }` → `200 { score, best, rank, week: { start, end } }`
