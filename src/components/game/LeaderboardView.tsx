@@ -82,6 +82,11 @@ export function LeaderboardView({ wechatId, version = 0 }: { wechatId: string; v
                 <b className="font-display block truncate text-[15px] text-c-ink">{row.nickname}</b>
                 <span className="font-num block text-xs text-c-grey">{row.wechatMasked}</span>
               </span>
+              {row.rank === 1 ? (
+                <span role="img" aria-label={t.prizeMarkLabel} className="text-lg leading-none" data-testid="game-prize-mark">
+                  {t.prizeMark}
+                </span>
+              ) : null}
               <span className="font-num text-xl text-c-ink">{row.score}</span>
             </li>
           ))}

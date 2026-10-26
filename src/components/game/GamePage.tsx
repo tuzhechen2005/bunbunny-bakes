@@ -275,6 +275,9 @@ export function GamePage() {
                 {formError}
               </p>
             ) : null}
+            <p className="font-display m-0 mt-1 text-center text-[15px] leading-snug text-c-ink" data-testid="game-prize-line">
+              {t.prizeLine}
+            </p>
             <button
               type="submit"
               disabled={starting}

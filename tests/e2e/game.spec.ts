@@ -113,6 +113,8 @@ test("home entry card shows the week's best and breathes unless motion is reduce
   await mockApi(page);
   await page.goto("/");
   await expect(page.getByTestId("game-entry-line")).toContainText(`${g.entryBest} 1280`);
+  // D108: the prize is hinted on the card, on the start screen and on the leaderboard's first row.
+  await expect(page.getByTestId("game-entry-prize")).toHaveText(g.entryPrize);
   const anim = await page.getByTestId("game-entry").evaluate((e) => getComputedStyle(e).animationName);
   expect(anim).toBe("game-breathe");
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -308,4 +310,14 @@ test("a stalled finish ends in a retry button instead of waiting forever", async
   await expect(page.getByTestId("game-best")).toHaveText("456");
   expect(api.finishes).toHaveLength(1);
   expect(api.finishes[0].runId).toBe("run-1");
+});
+
+test("the start screen and the leaderboard's first row hint at the weekly prize (D108)", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/game");
+  await expect(page.getByTestId("game-prize-line")).toHaveText(g.prizeLine);
+  await page.getByRole("button", { name: g.viewBoard }).click();
+  const rows = page.getByTestId("game-row");
+  await expect(rows.first().getByTestId("game-prize-mark")).toBeVisible();
+  await expect(page.getByTestId("game-prize-mark")).toHaveCount(1);
 });

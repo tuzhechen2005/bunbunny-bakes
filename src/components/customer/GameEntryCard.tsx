@@ -61,7 +61,12 @@ export function GameEntryCard() {
           <Logo className="h-10 w-auto" />
         </span>
         <span className="min-w-0 flex-1">
-          <b className="font-display block text-[22px] leading-[1.15] tracking-[-0.03em]">{t.title}</b>
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <b className="font-display text-[22px] leading-[1.15] tracking-[-0.03em]">{t.title}</b>
+            <span className="rounded-full bg-c-paper px-2 py-0.5 text-xs font-bold whitespace-nowrap text-c-ink shadow-[inset_0_0_0_1px_var(--c-line)]" data-testid="game-entry-prize">
+              {t.entryPrize}
+            </span>
+          </span>
           <span className="mt-0.5 block text-sm text-c-grey" data-testid="game-entry-line">
             {best !== null ? (
               <>

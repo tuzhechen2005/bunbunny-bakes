@@ -215,7 +215,12 @@ export const copy = {
       /** Home entry card: weekly best, the label before the score (e.g. "本周最高" 1280). */
       entryBest: "本周最高",
       entryNeutral: "来玩一局，上榜看看",
-      entryLabel: "玩消除大面包",
+      entryLabel: "玩消除大面包，周冠军有礼",
+      /** D108: the prize is hinted on the card, the start screen and the leaderboard's first row. */
+      entryPrize: "🎁 周冠军有礼",
+      prizeLine: "本周第一名可获得总共价值10💲的面包 🍞！",
+      prizeMark: "🎁",
+      prizeMarkLabel: "第一名有奖励",
       /** Start screen. */
       startTitle: "合成大面包",
       startHint: "相同的面包碰在一起会变大一级，最后合成大面包！",
