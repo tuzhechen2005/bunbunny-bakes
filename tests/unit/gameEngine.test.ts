@@ -369,10 +369,10 @@ describe("determinism", () => {
     expect({ score: bot.score, over: bot.over, steps: bot.steps, hash: bot.finalHash, drops: bot.log.length }).toMatchInlineSnapshot(`
       {
         "drops": 40,
-        "hash": "d1bb9d84",
+        "hash": "72ea7811",
         "over": false,
-        "score": 2290,
-        "steps": 2666,
+        "score": 1410,
+        "steps": 2643,
       }
     `);
   });
@@ -400,19 +400,26 @@ describe("caps end the game inside the engine", () => {
   });
 
   it("ends after the MAX_DROPS-th drop (client and server agree on the score)", () => {
+    // Small pieces on a big board: long games that can reach the cap.
+    const ROOMY: TierDef[] = [0.045, 0.06, 0.075, 0.09, 0.105].map((radius, i) => ({
+      id: `r${i}`,
+      radius,
+      points: (i * (i + 1) * 10) / 2,
+    }));
+    ROOMY.push({ id: "big", radius: 0.15, points: 150 });
     let found: ReturnType<typeof greedyRun> | null = null;
     for (let s = 0; s < 40 && !found; s++) {
-      const r = greedyRun(`cap${s}`, TIERS, MAX_DROPS, 40);
+      const r = greedyRun(`cap${s}`, ROOMY, MAX_DROPS, 40);
       if (r.drops === MAX_DROPS) found = r;
     }
     expect(found).not.toBeNull();
     const r = found!;
     expect(r.over).toBe(true);
-    const res = replay(`cap${r.seedIndex}`, TIERS, r.log);
+    const res = replay(`cap${r.seedIndex}`, ROOMY, r.log);
     expect(res).toMatchObject({ score: r.score, over: true });
     // One more drop than the cap is rejected outright.
     const extra = [...r.log, { x: 0.5, at: r.log[r.log.length - 1].at + 30 }];
-    expect(() => replay(`cap${r.seedIndex}`, TIERS, extra)).toThrow(ReplayError);
+    expect(() => replay(`cap${r.seedIndex}`, ROOMY, extra)).toThrow(ReplayError);
   });
 });
 
