@@ -77,8 +77,11 @@ export const BIG_BIG_BONUS = 500;
 export const DEFAULT_HEIGHT = 1.5;
 /** Danger line, from the top of the board. */
 export const DANGER_Y = 0.26;
-/** Only the smallest tiers are ever dropped. */
+/** Only the smallest tiers are ever dropped: 3 of them, 4 once there are 7 or more product tiers (Suika drops 5 of 11). */
 export const DROP_TIERS = 3;
+export function dropTierCount(productTiers: number): number {
+  return Math.max(1, Math.min(productTiers >= 7 ? DROP_TIERS + 1 : DROP_TIERS, productTiers));
+}
 
 const DAMPING = 0.994;
 const FLOOR_FRICTION = 0.8;
@@ -96,14 +99,15 @@ export function defaultPoints(index: number): number {
 }
 
 /**
- * Radius for product tier `i` of `n` (0.076 -> 0.229), rounded so snapshots stay readable. 15% larger
- * than the first tuning (0.066 -> 0.199), which owners found too easy: a game now lasts about half as long.
+ * Radius for product tier `i` of `n` (0.082 -> 0.247), rounded so snapshots stay readable. About 24%
+ * larger than the first tuning (0.066 -> 0.199, big 0.268), which the owner found too easy (D106, D107):
+ * with 4-8 product tiers a casual game now piles up after 30-45 drops.
  */
 export function defaultRadius(i: number, n: number): number {
   const t = n <= 1 ? 0 : i / (n - 1);
-  return Math.round((0.076 + 0.153 * t) * 10000) / 10000;
+  return Math.round((0.082 + 0.165 * t) * 10000) / 10000;
 }
-export const BIG_RADIUS = 0.268;
+export const BIG_RADIUS = 0.28;
 
 /** `n` product tiers (>= 1) plus the 大面包 tier with the default radii and points. */
 export function defaultTierDefs(ids: readonly string[]): TierDef[] {
@@ -151,7 +155,7 @@ export function createGame(opts: GameOptions): Game {
   const W = 1;
   const H = opts.height;
   const bigIndex = tiers.length - 1;
-  const dropTiers = Math.max(1, Math.min(DROP_TIERS, bigIndex));
+  const dropTiers = dropTierCount(bigIndex);
   const rng: Rng = createRng(opts.seed);
 
   let bodies: Internal[] = [];
