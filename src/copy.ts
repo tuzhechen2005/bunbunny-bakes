@@ -325,6 +325,16 @@ export const copy = {
     },
   },
 
+  /** 消除大面包 API messages (src/server/game.ts); safe to show customers. */
+  gameApi: {
+    banned: "这个微信号暂时不能参加游戏，有疑问请加微信联系店主",
+    nickname: "昵称请填 1 到 10 个字",
+    wechatId: "请填写微信号（最多 40 个字符）",
+    runNotFound: "找不到这一局，请重新开始",
+    runExpired: "这一局已经过期，请重新开始",
+    badRun: "这一局的成绩没能通过验证",
+  },
+
   admin: {
     /** Admin login, password reset (PAGES.md /admin/login). */
     auth: {
