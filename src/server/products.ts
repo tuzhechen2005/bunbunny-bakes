@@ -8,7 +8,8 @@ import { copy } from "@/copy";
 import { usage } from "@/domain/capacity";
 import { localDateOf } from "@/domain/dates";
 import { OCCUPYING_STATUSES, type CapacityMode, type LocalDate } from "@/domain/types";
-import type { Product } from "@/generated/prisma/client";
+import { isHexColor } from "@/lib/fieldColor";
+import type { Prisma, Product } from "@/generated/prisma/client";
 import { writeAudit } from "./audit";
 import { loadDayContext, loadProductMap, loadSettings, type ProductInfoMap } from "./day";
 import type { DbClient, Tx } from "./db";
@@ -39,6 +40,17 @@ const description = z
 const CAPACITY_MODES = ["DOUGH_PER_UNIT", "DOUGH_PER_ROUND", "INDEPENDENT"] as const;
 const STATUSES = ["ACTIVE", "PAUSED", "ARCHIVED"] as const;
 
+const fieldColor = z
+  .string()
+  .refine(isHexColor, { message: "Use #RRGGBB" })
+  .transform((s) => s.toUpperCase());
+
+/** Photos in display order (cover first) travel with every product the admin API returns. */
+export const PRODUCT_INCLUDE = {
+  images: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+} satisfies Prisma.ProductInclude;
+export type ProductWithImages = Prisma.ProductGetPayload<{ include: typeof PRODUCT_INCLUDE }>;
+
 const shape = {
   name,
   description,
@@ -54,6 +66,8 @@ const shape = {
   leadDays: intIn(0, 7),
   status: z.enum(STATUSES),
   sortOrder: intIn(-1_000_000, 1_000_000),
+  /** Home background `#RRGGBB`; null = default 奶白 (D95). */
+  fieldColor: fieldColor.nullable(),
 };
 
 type Fields = { [K in keyof typeof shape]: z.output<(typeof shape)[K]> };
@@ -96,6 +110,7 @@ const createSchema = z
     leadDays: true,
     status: true,
     sortOrder: true,
+    fieldColor: true,
   })
   .strict();
 
@@ -130,18 +145,26 @@ function pickFields(p: Product): Fields {
     leadDays: p.leadDays,
     status: p.status,
     sortOrder: p.sortOrder,
+    fieldColor: p.fieldColor,
   };
+}
+
+/** The product row without its photos (what the audit log keeps). */
+function bare(product: ProductWithImages): Product {
+  const { images, ...rest } = product;
+  void images;
+  return rest;
 }
 
 function productNotFound(): AppError {
   return new AppError("NOT_FOUND", { message: copy.admin.products.productNotFound });
 }
 
-export async function listProducts(db: DbClient): Promise<Product[]> {
-  return db.product.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+export async function listProducts(db: DbClient): Promise<ProductWithImages[]> {
+  return db.product.findMany({ include: PRODUCT_INCLUDE, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
 }
 
-export async function createProduct(db: DbClient, input: unknown, now: Date): Promise<Product> {
+export async function createProduct(db: DbClient, input: unknown, now: Date): Promise<ProductWithImages> {
   const data = parseOrThrow(createSchema, input);
   // Validate before opening a transaction; sortOrder is filled in inside it.
   const fields = parseOrThrow(fullSchema, {
@@ -157,6 +180,7 @@ export async function createProduct(db: DbClient, input: unknown, now: Date): Pr
     leadDays: data.leadDays ?? 1,
     status: data.status ?? "ACTIVE",
     sortOrder: data.sortOrder ?? 0,
+    fieldColor: data.fieldColor ?? null,
   });
   return db.$transaction(async (tx) => {
     let sortOrder = data.sortOrder;
@@ -164,13 +188,13 @@ export async function createProduct(db: DbClient, input: unknown, now: Date): Pr
       const max = await tx.product.aggregate({ _max: { sortOrder: true } });
       sortOrder = (max._max.sortOrder ?? 0) + 1;
     }
-    const product = await tx.product.create({ data: { ...fields, sortOrder } });
+    const product = await tx.product.create({ data: { ...fields, sortOrder }, include: PRODUCT_INCLUDE });
     await writeAudit(tx, {
       actor: "ADMIN",
       action: "product.create",
       entityType: "Product",
       entityId: product.id,
-      after: product,
+      after: bare(product),
       at: now,
     });
     return product;
@@ -178,7 +202,7 @@ export async function createProduct(db: DbClient, input: unknown, now: Date): Pr
 }
 
 export interface UpdateProductResult {
-  product: Product;
+  product: ProductWithImages;
   overLimitDates: OverLimitDate[];
 }
 
@@ -194,7 +218,7 @@ export async function updateProduct(
   return db.$transaction(async (tx) => {
     // Serialise concurrent edits of the same product.
     await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${id}::uuid FOR UPDATE`;
-    const before = await tx.product.findUnique({ where: { id } });
+    const before = await tx.product.findUnique({ where: { id }, include: PRODUCT_INCLUDE });
     if (!before) throw productNotFound();
 
     // Validation applies to the merged result (a mode switch needs its new fields).
@@ -205,14 +229,14 @@ export async function updateProduct(
     const capacityChanged = CAPACITY_KEYS.some((k) => changed.includes(k));
     const oldProducts = capacityChanged ? await loadProductMap(tx) : null;
 
-    const product = await tx.product.update({ where: { id }, data: merged });
+    const product = await tx.product.update({ where: { id }, data: merged, include: PRODUCT_INCLUDE });
     await writeAudit(tx, {
       actor: "ADMIN",
       action: "product.update",
       entityType: "Product",
       entityId: id,
-      before,
-      after: product,
+      before: bare(before),
+      after: bare(product),
       at: now,
     });
 
@@ -271,7 +295,7 @@ async function newlyOverLimitDates(
 }
 
 /** Rewrites sortOrder to 1..n following `ids` (which must list every product exactly once). */
-export async function reorderProducts(db: DbClient, input: unknown, now: Date): Promise<Product[]> {
+export async function reorderProducts(db: DbClient, input: unknown, now: Date): Promise<ProductWithImages[]> {
   const { ids } = parseOrThrow(reorderSchema, input);
   if (new Set(ids).size !== ids.length) {
     throw new AppError("VALIDATION", { extra: { fields: { ids: "Duplicate ids" } } });
@@ -297,6 +321,6 @@ export async function reorderProducts(db: DbClient, input: unknown, now: Date): 
       after: afterOrder,
       at: now,
     });
-    return tx.product.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+    return tx.product.findMany({ include: PRODUCT_INCLUDE, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
   });
 }

@@ -28,9 +28,14 @@ function card(page: Page, name: string) {
   return page.getByTestId("product-card").filter({ hasText: name });
 }
 
+/** Puts `n` in the bag from the detail the tile opens (D97). */
 async function add(page: Page, name: string, n: number) {
-  const plus = card(page, name).getByRole("button", { name: copy.customer.home.increase });
-  for (let i = 0; i < n; i++) await plus.click();
+  await card(page, name).getByTestId("tile-photo").click();
+  await expect(page.getByTestId("detail")).toBeVisible();
+  for (let i = 1; i < n; i++) await page.getByTestId("detail-inc").click();
+  await page.getByTestId("detail-add").click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("detail")).toHaveCount(0);
 }
 
 /** Home: red bean x4 + cheese wedge x4 ($8.99 + $10.99 = $19.98), then to checkout. */

@@ -15,6 +15,8 @@ const product = (over: Partial<MenuProduct> = {}): MenuProduct => ({
   name: "奶酥红豆包",
   description: null,
   imageUrl: null,
+  images: [],
+  field: { bg: "#EFE7DA", ink: "#3C2D1E", ink2: "#5C4B3A" },
   unitPriceCents: 249,
   bundleSize: 4,
   bundlePriceCents: 899,

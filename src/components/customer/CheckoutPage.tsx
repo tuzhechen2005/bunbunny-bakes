@@ -393,7 +393,12 @@ export function CheckoutPage() {
   const data = avail.data;
   const problems = new Map<string, string>();
   for (const p of data?.cartProblems ?? []) if (!problems.has(p.productId)) problems.set(p.productId, p.error);
-  const needsLeadHint = lines.some((l) => l.product.leadDays >= 2);
+  // D96: the product with the longest lead time (ties: the first in the bag) names the hint.
+  const leadLine = lines.reduce<(typeof lines)[number] | null>(
+    (best, l) => (l.product.leadDays > 1 && (!best || l.product.leadDays > best.product.leadDays) ? l : best),
+    null,
+  );
+  const leadHint = leadLine ? fill(t.leadDaysHint, { name: leadLine.product.name, n: leadLine.product.leadDays }) : undefined;
   const orderingEnabled = menu.orderingEnabled && (data ? data.orderingEnabled : true);
   const gap = data?.pricing.freeDeliveryGapCents ?? 0;
   // CAPACITY_RULES §7 rules 3–4: a cart with a paused/unavailable product or a qty over the
@@ -581,7 +586,7 @@ export function CheckoutPage() {
           <Block
             n={1}
             title={t.datesTitle}
-            note={needsLeadHint ? t.leadDaysHint : undefined}
+            note={leadHint}
             noteTestId="lead-hint"
             testId="dates"
           >

@@ -5,7 +5,7 @@ import { copy } from "@/copy";
 import type { MenuProduct } from "@/lib/api";
 import { Pendulum, Spring, createLoop, rubberBand, snapTarget, type Loop } from "@/lib/motion";
 import { useMotionPrefs } from "@/lib/motion/react";
-import { ProductPhoto } from "../ProductCard";
+import { photosOf, ProductPhoto } from "../ProductCard";
 import { bindDrag } from "./drag";
 import {
   cardPose,
@@ -109,7 +109,7 @@ interface Sim {
   g0: number;
   moving: boolean;
   tap: number | null;
-  /** The gesture began on the hero "+" (a drag from there still moves the rope, a tap still adds). */
+  /** The gesture began on the hero pill (a drag from there still moves the rope, a tap still opens the detail). */
   onAdd: HTMLElement | null;
   /** The entrance clock starts here, once the first photo is ready. */
   t0: number;
@@ -146,8 +146,8 @@ function createSim(n: number, reduced: boolean, start = 0): Sim {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/** The hero's round "+" (a swipe may start on it). */
-const ADD_SELECTOR = ".hm-addp";
+/** The hero's 「查看详情 →」 pill (a swipe may start on it; a tap opens the detail). */
+const ADD_SELECTOR = ".hm-viewp";
 
 /** Swallow the click that follows the gesture that just ended (capture phase on `host`, removes itself). */
 function swallowNextClick(host: HTMLElement) {
@@ -368,7 +368,7 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
       lockPx: 4,
       canStart: (target) => {
         if (!sim.current || !latest.current.active) return false;
-        // The round "+" under the name may start a swipe too (a tap on it still adds).
+        // The 「查看详情 →」 pill under the name may start a swipe too (a tap on it still opens the detail).
         const blocker = target?.closest("button, a, [data-no-drag]");
         return !blocker || blocker.matches(ADD_SELECTOR);
       },
@@ -396,9 +396,9 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
         const addBtn = s.onAdd;
         s.onAdd = null;
         if (addBtn && end.dragged) {
-          // A drag that began on the "+" must not add. A finger that only rolled a little is still
-          // a tap: the browser may or may not send the click after a claimed touch, so add here
-          // and swallow whatever click follows.
+          // A drag that began on the pill must not open the detail. A finger that only rolled a little
+          // is still a tap: the browser may or may not send the click after a claimed touch, so click
+          // here and swallow whatever click follows.
           if (!end.cancelled && end.travel < TAP_PX) addBtn.click();
           swallowNextClick(host);
         }
@@ -542,8 +542,9 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
               <div className="hm-face">
                 <ProductPhoto product={p} className="h-full w-full" variant="rope" priority={i === 0} eager={i === 1} decorative />
               </div>
-              <div className="hm-face hm-back">
-                <ProductPhoto product={p} className="h-full w-full" variant="rope" decorative />
+              {/* The back of the spin is the second photo when there is one (D98), else the darker cover. */}
+              <div className="hm-face hm-back" data-second={photosOf(p)[1] ? "" : undefined} data-testid="rack-back">
+                <ProductPhoto product={p} src={photosOf(p)[1]} className="h-full w-full" variant="rope" decorative />
               </div>
             </div>
           </div>

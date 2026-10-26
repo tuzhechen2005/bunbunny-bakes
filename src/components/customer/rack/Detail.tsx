@@ -6,11 +6,11 @@ import { formatCents } from "@/domain/pricing";
 import type { MenuProduct } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { fill, safeLineTotal } from "../format";
-import { ProductPhoto } from "../ProductCard";
 import { bindDrag } from "./drag";
 import { focusQuietly } from "./focus";
 import { DownIcon, LeftIcon, MinusIcon, PlusIcon, RightIcon } from "./icons";
 import { Peg } from "./Peg";
+import { PHOTO_AXIS_BIAS, PhotoCarousel } from "./PhotoCarousel";
 import { RollingText } from "./RollingText";
 
 const b = copy.customer.brand;
@@ -221,6 +221,8 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
     const offs = [photo, bar].map((zone) =>
       bindDrag(zone, {
         axis: "y",
+        // The same rule as the photo carousel on this photo: vertical iff |dx| < 0.75 |dy|.
+        horizontalBias: PHOTO_AXIS_BIAS,
         lockPx: 4,
         canStart: (target) => !target?.closest("button") && scroller.scrollTop <= 2 && !busy.current,
         shouldClaim: (_dx, dy) => dy > 0,
@@ -333,9 +335,7 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
         </div>
         <div ref={ph} className={`hm-dt-ph ${paused ? "is-paused" : ""}`}>
           <Peg />
-          <div className="hm-face">
-            <ProductPhoto product={product} className="h-full w-full" variant="detail" eager decorative />
-          </div>
+          <PhotoCarousel key={product.id} product={product} reduced={reduced} />
         </div>
         <div ref={body} className="hm-dt-body">
           <h2 className="hm-dt-name" data-testid="detail-name">
@@ -382,7 +382,7 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
           </div>
           {product.leadDays > 1 ? (
             <p className="hm-dt-lead" data-testid="detail-lead">
-              {copy.customer.checkout.leadDaysHint}
+              {fill(t.leadHint, { n: product.leadDays })}
             </p>
           ) : null}
           {paused ? <p className="hm-dt-note">{t.paused}</p> : room <= 0 ? <p className="hm-dt-note">{t.maxReached}</p> : null}

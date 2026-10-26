@@ -8,7 +8,7 @@ import { copy } from "@/copy";
 import { formatCents } from "@/domain/pricing";
 import type { Menu, MenuProduct } from "@/lib/api";
 import { cart, useCart } from "@/lib/cart";
-import { applyField, fieldFor } from "@/lib/field";
+import { applyField, productField } from "@/lib/field";
 import { flyToBag } from "@/lib/flyToBag";
 import { pushOverlay } from "@/lib/overlayHistory";
 import { useMotionPrefs } from "@/lib/motion/react";
@@ -22,7 +22,7 @@ import { NameSwap } from "./rack/NameSwap";
 import { focusQuietly } from "./rack/focus";
 import { Rack, type OpenVia, type RackHandle } from "./rack/Rack";
 import { RollingText } from "./rack/RollingText";
-import { OrdersIcon, PlusIcon } from "./rack/icons";
+import { OrdersIcon } from "./rack/icons";
 import { SiteFooter } from "./SiteFooter";
 import { useMenu } from "./useMenu";
 import "./rack/home.css";
@@ -92,18 +92,25 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
   const subtotal = known.reduce((sum, i) => sum + safeLineTotal(i.qty, byId.get(i.productId)!), 0);
   const qtyOf = (id: string) => items.find((i) => i.productId === id)?.qty ?? 0;
 
+  const productsRef = useRef<readonly MenuProduct[]>(products);
+  useEffect(() => {
+    productsRef.current = products;
+  });
+
   // ---- which bread is on the rope, the colour follows ----
   const idx = Math.min(nav.i, Math.max(0, products.length - 1));
   const current: MenuProduct | undefined = products[idx];
   const onRopeIndex = useCallback((i: number) => {
     setNav((s) => (s.i === i ? s : { i, dir: i > s.i ? 1 : -1 }));
   }, []);
+  // The bread's own colours (D95); a menu payload without them falls back to the old cycle by position.
+  const fieldKey = current ? `${current.field?.bg}|${current.field?.ink}|${current.field?.ink2}` : "";
   useEffect(() => {
-    applyField(fieldFor(idx));
-  }, [idx]);
+    applyField(productField(productsRef.current[idx] ?? {}, idx));
+  }, [idx, fieldKey]);
   useEffect(() => {
     // Browser chrome (Safari / Android) takes the bread colour too.
-    const f = fieldFor(idx).field;
+    const f = productField(productsRef.current[idx] ?? {}, idx).field;
     let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     if (!meta) {
       meta = document.createElement("meta");
@@ -111,7 +118,7 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
       document.head.appendChild(meta);
     }
     meta.content = f;
-  }, [idx]);
+  }, [idx, fieldKey]);
   useEffect(() => {
     // The overscroll area behind the page follows the bread too (globals.css `html.field-bg`), and
     // both it and the browser chrome go back to the page colours when the home page unmounts.
@@ -139,10 +146,6 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
   /** Steps the history entry of the open detail back (Back closes the detail first, D90). */
   const leaveHistory = useRef<(() => void) | null>(null);
   const hangBackRef = useRef<() => void>(() => {});
-  const productsRef = useRef<readonly MenuProduct[]>(products);
-  useEffect(() => {
-    productsRef.current = products;
-  });
   /** After hanging back, focus returns to where it came from once the page is no longer inert. */
   const refocus = useRef(false);
   useEffect(() => {
@@ -231,7 +234,7 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
       const id = productsRef.current[cur]?.id;
       const tile = [...document.querySelectorAll<HTMLElement>("[data-testid=product-card]")].find((e) => e.dataset.productId === id);
       const r = tile?.querySelector(".hm-ph-img")?.getBoundingClientRect();
-      origin.current.tile = tile?.querySelector<HTMLElement>(".hm-ph-img") ?? null;
+      origin.current.tile = tile?.querySelector<HTMLElement>(".hm-tile-btn") ?? null;
       to = r && r.bottom > 0 && r.top < window.innerHeight ? r : null;
     }
     await detailRef.current?.close(to);
@@ -261,20 +264,10 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
     curRef.current = i;
     rack?.setTaken(i, true);
     rack?.goTo(i);
-    applyField(fieldFor(i));
+    applyField(productField(productsRef.current[i] ?? {}, i));
   }, []);
 
-  // ---- adding ----
-  const addOne = (p: MenuProduct, from: DOMRect | null) => {
-    if (p.status === "PAUSED" || qtyOf(p.id) >= maxQty) return;
-    cart.increment(p.id, maxQty);
-    flyToBag({ from: from ?? new DOMRect(0, 0, 0, 0), imageUrl: p.imageUrl, productId: p.id });
-  };
-  const addFromRope = () => {
-    if (!current) return;
-    addOne(current, rackRef.current?.faceRect(idx) ?? null);
-    rackRef.current?.kick(idx, 1.6);
-  };
+  // ---- adding: only from the detail (D97) ----
   const addFromDetail = (p: MenuProduct, qty: number, from: DOMRect) => {
     const have = qtyOf(p.id);
     const next = Math.min(maxQty, have + qty);
@@ -286,7 +279,6 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
 
   const orderingEnabled = menu?.orderingEnabled ?? false;
   const paused = current?.status === "PAUSED";
-  const atMax = current ? qtyOf(current.id) >= maxQty : false;
   const showHero = menu !== null && products.length > 0;
 
   return (
@@ -370,23 +362,18 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
                     </b>
                     {paused ? (
                       <span className="hm-warn">{t.paused}</span>
-                    ) : atMax ? (
-                      <span className="hm-warn" data-testid="hero-max-hint">
-                        {t.maxReached}
-                      </span>
                     ) : current.bundlePriceCents !== null ? (
                       <span>{fill(t.bundlePrice, { size: current.bundleSize, price: formatCents(current.bundlePriceCents) })}</span>
                     ) : null}
                   </div>
                   <button
                     type="button"
-                    className="hm-addp"
-                    aria-label={fill(t.addNamed, { name: current.name })}
-                    disabled={paused || atMax}
-                    onClick={addFromRope}
-                    data-testid="hero-add"
+                    className="hm-viewp"
+                    aria-label={fill(t.viewHeroNamed, { name: current.name })}
+                    onClick={(e) => takeDown(idx, e.detail === 0 ? "key" : "pointer")}
+                    data-testid="hero-view"
                   >
-                    <PlusIcon />
+                    {t.viewHero}
                   </button>
                 </div>
                 <div className="hm-dots" aria-hidden="true">
@@ -408,10 +395,6 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
                   <ProductCard
                     key={p.id}
                     product={p}
-                    qty={qtyOf(p.id)}
-                    max={maxQty}
-                    onDecrease={() => cart.decrement(p.id)}
-                    onIncrease={(from) => addOne(p, from)}
                     onOpen={(rect, el, via) => openFromTile(products.indexOf(p), rect, el, via)}
                   />
                 ))}
