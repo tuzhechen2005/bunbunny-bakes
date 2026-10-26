@@ -256,7 +256,9 @@ export async function updateTierLook(db: DbClient, id: string, input: unknown, n
     if (!row || row.isBig) throw notFound();
     const nextName = name === undefined ? row.name : name;
     const nextColor = fieldColor === undefined ? row.fieldColor : fieldColor;
-    if (!row.productId && nextColor === null) throw invalid(t.pieceColorInvalid, "fieldColor");
+    // A game-only piece has no product colour to fall back to, so it cannot be reset (a name-only edit
+    // of a piece left behind by a deleted product keeps its NULL colour and the preset cycle).
+    if (!row.productId && fieldColor === null) throw invalid(t.pieceColorInvalid, "fieldColor");
     await tx.$executeRaw`UPDATE "GameTier" SET "name" = ${nextName}, "fieldColor" = ${nextColor}, "updatedAt" = ${now.toISOString()}::timestamptz WHERE "id"::text = ${id}`;
     await writeTierAudit(tx, "game.tier.update", id, now, { name: row.name, fieldColor: row.fieldColor }, { name: nextName, fieldColor: nextColor });
   });

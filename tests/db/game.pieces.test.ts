@@ -270,7 +270,9 @@ describe("loadTierConfigs", () => {
     const cfg = await loadTierConfigs(db);
     expect(cfg[0]).toMatchObject({ id: list[0].id, name: "" });
     expect(cfg[0].color.bg).toMatch(/^#[0-9A-F]{6}$/i);
-    expect((await patch(list[0].id, { name: "救回来", fieldColor: "#F0BF45" })).status).toBe(200);
+    // A name-only edit keeps the NULL colour (the preset cycle); then a colour can be set.
+    expect((await patch(list[0].id, { name: "救回来" })).status).toBe(200);
     expect((await nonBig())[0]).toMatchObject({ name: "救回来", gameOnly: true });
+    expect((await patch(list[0].id, { fieldColor: "#F0BF45" })).status).toBe(200);
   });
 });

@@ -9,6 +9,7 @@ import { copy } from "@/copy";
 import { adminApi } from "@/lib/adminApi";
 import { TierCircle } from "./TierCircle";
 import { TierImageEditor } from "./TierImageEditor";
+import { DEFAULT_FIELD_COLOR } from "@/lib/fieldColor";
 
 const t = copy.admin.game;
 
@@ -36,7 +37,6 @@ interface View {
 }
 
 const MAX_TIERS = 8;
-const DEFAULT_PIECE_COLOR = "#EFE7DA";
 
 /** Name + colour fields shared by "add a game piece" and "edit a tier's look". */
 function LookForm({
@@ -367,7 +367,7 @@ export function TiersPanel() {
                 <LookForm
                   testId="piece-form"
                   initialName=""
-                  initialColor={DEFAULT_PIECE_COLOR}
+                  initialColor={DEFAULT_FIELD_COLOR}
                   submitLabel={t.pieceAdd}
                   busy={busy}
                   onCancel={() => setAddingPiece(false)}

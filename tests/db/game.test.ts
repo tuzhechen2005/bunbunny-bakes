@@ -555,8 +555,11 @@ describe("review fixes", () => {
     await expect(
       finishRun(db, { runId: run.runId, drops }, IP, new Date(T.getTime() + 1000)),
     ).rejects.toMatchObject({ code: "VALIDATION" });
-    // After the game would really have taken (plus the 10 s slack) it is accepted.
-    const ok = new Date(T.getTime() + (lastAt / 120) * 1000 + 3000);
+    // After the game would really have taken it is accepted. A game that ended counts until its game
+    // over (the 1.5 s over timer and the settling after the last drop), so use the replay's own steps.
+    const r = replay(run.seed, run.tiers, drops);
+    const played = r.over ? r.steps : lastAt;
+    const ok = new Date(T.getTime() + (played / 120) * 1000);
     await expect(finishRun(db, { runId: run.runId, drops }, IP, ok)).resolves.toBeDefined();
   });
 
