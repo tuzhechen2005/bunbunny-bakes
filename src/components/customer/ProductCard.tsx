@@ -8,13 +8,17 @@ import type { MenuProduct } from "@/lib/api";
 import { isOwnPhoto, PHOTO_SIZES, type PhotoVariant } from "@/lib/photo";
 import { BunnyPlaceholder } from "./BunnyPlaceholder";
 import { fill } from "./format";
-import { PlusIcon } from "./rack/icons";
-import { QtyStepper } from "./QtyStepper";
 
 const t = copy.customer.home;
 
 /** Intrinsic size given to next/image (only sets the aspect ratio; CSS sets the displayed size). */
 const PHOTO_INTRINSIC = 1200;
+
+/** The photos of a product in display order, cover first (older payloads without `images` have just the cover). */
+export function photosOf(p: Pick<MenuProduct, "imageUrl"> & { images?: readonly string[] | null }): string[] {
+  if (p.images && p.images.length > 0) return [...p.images];
+  return p.imageUrl ? [p.imageUrl] : [];
+}
 
 /** Hide a photo that is still loading (see `img[data-ph]` in globals.css), show it with a fade when it has. */
 function waitForPhoto(el: HTMLImageElement | null) {
@@ -37,6 +41,7 @@ export function ProductPhoto({
   product,
   className,
   variant,
+  src,
   priority = false,
   eager = false,
   decorative = false,
@@ -44,22 +49,25 @@ export function ProductPhoto({
   product: MenuProduct;
   className: string;
   variant: PhotoVariant;
+  /** Show this photo instead of the cover (a carousel slide, the rope's back face). */
+  src?: string | null;
   priority?: boolean;
   eager?: boolean;
   /** The surrounding element already carries the product name (alt="" then). */
   decorative?: boolean;
 }) {
-  if (!product.imageUrl) return <BunnyPlaceholder className={className} />;
+  const url = src === undefined ? product.imageUrl : src;
+  if (!url) return <BunnyPlaceholder className={className} />;
   return (
     <Image
-      src={product.imageUrl}
+      src={url}
       alt={decorative ? "" : product.name}
       // Photos are 1:1 (D72); object-cover handles any other shape.
       width={PHOTO_INTRINSIC}
       height={PHOTO_INTRINSIC}
       sizes={PHOTO_SIZES[variant]}
       // Only our own photos go through the optimizer (next.config.ts allows just /api/images/**).
-      unoptimized={!isOwnPhoto(product.imageUrl)}
+      unoptimized={!isOwnPhoto(url)}
       className={`${className} aspect-square object-cover`}
       preload={priority}
       fetchPriority={priority ? "high" : undefined}
@@ -73,28 +81,19 @@ export function ProductPhoto({
   );
 }
 
-/** Grid tile of the "all breads" list (FRONTEND.md 4.1 item 5): photo, round "+" that becomes "− n +". */
+/**
+ * Grid tile of the "all breads" list (FRONTEND.md 4.1 item 5, D97): the whole tile is one button that
+ * opens the detail (there is no add here). `from` is the photo's rect, where the detail grows out of.
+ */
 export function ProductCard({
   product,
-  qty,
-  max,
-  onDecrease,
-  onIncrease,
   onOpen,
 }: {
   product: MenuProduct;
-  qty: number;
-  max: number;
-  onDecrease: () => void;
-  /** `from` is the photo's rect, where the little flight to the bag starts. */
-  onIncrease: (from: DOMRect | null) => void;
-  /** Tap on the photo: open this bread's detail; `from` is the photo's rect (the detail grows out of it). */
   onOpen?: (from: DOMRect, opener: HTMLElement, via: "key" | "pointer") => void;
 }) {
-  const photo = useRef<HTMLDivElement>(null);
+  const photo = useRef<HTMLSpanElement>(null);
   const paused = product.status === "PAUSED";
-  const atMax = qty >= max;
-  const add = () => onIncrease(photo.current?.getBoundingClientRect() ?? null);
   return (
     <li
       className={`hm-tile ${paused ? "is-paused" : ""}`}
@@ -102,56 +101,37 @@ export function ProductCard({
       data-product-id={product.id}
       data-paused={paused ? "true" : undefined}
     >
-      <div className="hm-ph" ref={photo}>
-        <button
-          type="button"
-          className="hm-ph-img"
-          aria-label={fill(t.viewDetail, { name: product.name })}
-          onClick={(e) => onOpen?.(e.currentTarget.getBoundingClientRect(), e.currentTarget, e.detail === 0 ? "key" : "pointer")}
-          data-testid="tile-photo"
-        >
-          <ProductPhoto product={product} className="h-full w-full" variant="grid" decorative />
-        </button>
-        <span className="hm-ctl">
-          {qty > 0 ? (
-            <QtyStepper
-              qty={qty}
-              canIncrease={!paused && !atMax}
-              onDecrease={onDecrease}
-              onIncrease={add}
-              onPhoto
-              name={product.name}
-            />
-          ) : (
-            <button
-              type="button"
-              className="hm-plus"
-              aria-label={fill(t.increaseNamed, { name: product.name })}
-              disabled={paused || atMax}
-              onClick={add}
-            >
-              <PlusIcon />
-            </button>
-          )}
+      <button
+        type="button"
+        className="hm-tile-btn"
+        aria-label={fill(t.viewDetail, { name: product.name })}
+        onClick={(e) =>
+          onOpen?.(
+            photo.current?.getBoundingClientRect() ?? e.currentTarget.getBoundingClientRect(),
+            e.currentTarget,
+            e.detail === 0 ? "key" : "pointer",
+          )
+        }
+        data-testid="tile-photo"
+      >
+        <span className="hm-ph" ref={photo}>
+          <span className="hm-ph-img">
+            <ProductPhoto product={product} className="h-full w-full" variant="grid" decorative />
+          </span>
         </span>
-      </div>
-      <h3 className="hm-t-name">{product.name}</h3>
-      <p className="hm-t-p">
-        <b className="hm-n" data-testid="price">
-          {formatCents(product.unitPriceCents)}
-        </b>
-        {product.bundlePriceCents !== null ? (
-          <small data-testid="bundle-price">
-            {fill(t.bundlePrice, { size: product.bundleSize, price: formatCents(product.bundlePriceCents) })}
-          </small>
-        ) : null}
-      </p>
-      {paused ? <p className="hm-t-note">{t.paused}</p> : null}
-      {!paused && atMax ? (
-        <p className="hm-t-note is-warn" data-testid="max-hint">
-          {t.maxReached}
-        </p>
-      ) : null}
+        <span className="hm-t-name">{product.name}</span>
+        <span className="hm-t-p">
+          <b className="hm-n" data-testid="price">
+            {formatCents(product.unitPriceCents)}
+          </b>
+          {product.bundlePriceCents !== null ? (
+            <small data-testid="bundle-price">
+              {fill(t.bundlePrice, { size: product.bundleSize, price: formatCents(product.bundlePriceCents) })}
+            </small>
+          ) : null}
+        </span>
+        {paused ? <span className="hm-t-note">{t.paused}</span> : null}
+      </button>
     </li>
   );
 }

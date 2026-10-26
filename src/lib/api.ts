@@ -10,7 +10,12 @@ export interface MenuProduct {
   id: string;
   name: string;
   description: string | null;
+  /** The cover; always `images[0] ?? null`. */
   imageUrl: string | null;
+  /** Public photo URLs in display order, cover first, 0 to 6 (D98). */
+  images: string[];
+  /** The product's home colours (D95); the server always fills it in. */
+  field: { bg: string; ink: string; ink2: string };
   unitPriceCents: number;
   bundleSize: number;
   bundlePriceCents: number | null;

@@ -89,7 +89,8 @@ kept), so a stale `close()` after a Back is a no-op.
 - `.hm-hero[data-phase]` (`home | spin | detail | closing`) drives the name/dots fades (no double exposure with the detail's name).
 - The entrance starts when slot 0's photo is decoded (or after 900 ms); a landing card hands energy to the rope and its peg; the hint
   (`data-entered` on `.hm-try`) fades in after the last card landed and nudges three times.
-- A swipe may start on the hero "+" (`.hm-addp`); a drag from there never adds, a tap still does.
+- A swipe may start on the hero 「查看详情 →」 pill (`.hm-viewp`, D97); a drag from there moves the rope and never opens the detail, a tap opens it (with the spin).
+- The detail photo is a carousel (`rack/PhotoCarousel.tsx`, D98): `bindDrag` axis x with the same 0.75 bias as the pull-down on the same photo (`PHOTO_AXIS_BIAS`), so one gesture is either a carousel swipe or a pull, decided on the first move. Rope spring, `rubberBand` and `snapTarget` (one photo per fling); reduced motion switches at once.
 
 ## Control kit (`src/components/ui/`) and overlay history
 

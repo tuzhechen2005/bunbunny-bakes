@@ -1,6 +1,7 @@
 // J3: checkout behaviour of the continuous flow (skeletons, focus, snapping, blocked reasons,
 // leaving mid-submit) against mocked customer APIs.
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { addFromTile } from "./support/addFromTile";
 
 const CART_KEY = "bb_cart_v1";
 
@@ -198,7 +199,7 @@ test.describe("checkout", () => {
     // Client navigation home, a different bread, the bag, 去结算 again.
     await page.getByRole("link", { name: "返回", exact: true }).click(); // the order page's (checkout is kept hidden)
     await expect(page).toHaveURL(/\/$/);
-    await page.locator('[data-testid="product-card"][data-product-id="p-cheese"]').getByRole("button", { name: "增加一个" }).click();
+    await addFromTile(page, "p-cheese");
     await expect(page.getByTestId("bag-badge")).toHaveText("1", { timeout: 6000 });
     await page.getByTestId("bag-pill").click();
     await page.getByTestId("bag-checkout").click();

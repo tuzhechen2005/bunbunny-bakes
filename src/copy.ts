@@ -85,9 +85,16 @@ export const copy = {
       /** Screen-reader names that carry the product, e.g. "增加一个 奶酪角" */
       increaseNamed: "增加一个 {name}",
       decreaseNamed: "减少一个 {name}",
-      addNamed: "放进纸袋 {name}",
+      /** The pill under the rope: visible text and its accessible name (D97). */
+      viewHero: "查看详情 →",
+      viewHeroNamed: "查看 {name} 详情",
+      /** Detail photo carousel: the focusable photo's name and the spoken position (D98) */
+      photoLabel: "{name} 的照片，左右键切换",
+      photoPos: "第 {i} / {n} 张",
+      /** Detail page, shown when leadDays > 1 (D96), e.g. "需提前 2 天预订" */
+      leadHint: "需提前 {n} 天预订",
       qtyLabelNamed: "{name} 已选 {qty} 个",
-      /** Name of a grid photo (opens the detail), e.g. "查看 奶酪角" */
+      /** Name of a grid tile (the whole tile opens the detail), e.g. "查看 奶酪角" */
       viewDetail: "查看 {name}",
       barCount: "已选 {count} 件",
       barSubtotal: "小计 {amount}",
@@ -115,7 +122,8 @@ export const copy = {
       lineName: "{name} ×{qty}",
       remove: "移除",
       datesTitle: "取货日期",
-      leadDaysHint: "布蕾需提前两天",
+      /** The product with the longest lead time, e.g. "焦糖布蕾需提前 2 天" (D96) */
+      leadDaysHint: "{name}需提前 {n} 天",
       noDates: "暂时没有可以预订的日期，请关注群内通知～",
       datesLoading: "正在查询可以预订的日期…",
       datesFailed: "日期加载失败，请稍后再试",

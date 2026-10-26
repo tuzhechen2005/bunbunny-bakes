@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { FIELDS, fieldFor } from "@/lib/field";
+import { FIELDS, fieldFor, productField } from "@/lib/field";
+
+describe("productField (D95)", () => {
+  it("uses the colours of the product itself", () => {
+    expect(productField({ field: { bg: "#B9C9A0", ink: "#111111", ink2: "#333333" } }, 2)).toEqual({
+      field: "#B9C9A0",
+      ink: "#111111",
+      ink2: "#333333",
+    });
+  });
+  it("falls back to the old cycle when the payload has no field", () => {
+    expect(productField({}, 1)).toBe(FIELDS[1]);
+    expect(productField({ field: null }, 5)).toBe(FIELDS[1]);
+  });
+});
 
 describe("fieldFor", () => {
   it("cycles through the palette by menu position", () => {

@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { chromium, devices, expect, test, type Page } from "@playwright/test";
+import { addFromTile, openTile } from "./support/addFromTile";
 
 const CART_KEY = "bb_cart_v1";
 const PHOTO = fs.readFileSync(path.join(__dirname, "../fixtures/bun.jpg"));
@@ -60,13 +61,8 @@ async function openHome(page: Page, o: MenuOpts = {}) {
   if (!o.gate) await expect(page.getByTestId("rack")).toBeVisible();
 }
 
-const tile = (page: Page, id: string) => page.locator(`[data-testid="product-card"][data-product-id="${id}"]`);
-
-/** Puts `n` of a product in the bag with the little "+" of its list tile (one flight per tap). */
-async function add(page: Page, id: string, n = 1) {
-  const plus = tile(page, id).getByRole("button", { name: "增加一个" });
-  for (let i = 0; i < n; i++) await plus.click();
-}
+/** Puts `n` of a product in the bag from the detail of its list tile (one flight carrying `n`, D97). */
+const add = addFromTile;
 
 /** Puts `qty` of the product at rope position `index` in the bag in ONE flight, from its detail view. */
 async function addViaDetail(page: Page, index: number, qty: number) {
@@ -101,10 +97,11 @@ test("an add flies: the amount updates at once, the badge counts the bread on la
   page,
 }) => {
   await openHome(page);
+  await openTile(page, "rs");
   // In one synchronous step: click, then read the page. The bread must be in the air, not yet in
   // the bag: the amount is already right, the badge counts only what has landed.
   const atClick = await page.evaluate(async () => {
-    const click = document.querySelector<HTMLElement>('[data-testid="product-card"][data-product-id="rs"] button[aria-label^="增加一个"]')!;
+    const click = document.querySelector<HTMLElement>('[data-testid="detail-add"]')!;
     click.click();
     await new Promise((r) => setTimeout(r, 120)); // staggered start of the first disc
     return {

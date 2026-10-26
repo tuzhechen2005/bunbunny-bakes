@@ -5,6 +5,7 @@ import { Logo } from "@/components/brand/Logo";
 import { HomePage } from "@/components/customer/HomePage";
 import { OrdersIcon } from "@/components/customer/rack/icons";
 import { copy } from "@/copy";
+import type { Menu } from "@/lib/api";
 import { getInitialMenu } from "@/server/menuCache";
 import "@/components/customer/rack/home.css";
 
@@ -25,7 +26,9 @@ export default function Home() {
 
 async function HomeWithMenu() {
   await connection(); // request time only: nothing is read from the database while building
-  return <HomePage initialMenu={await getInitialMenu()} />;
+  // The server menu carries `images` and `field` (shared contract of the multi-photo / colour work); the
+  // cast only bridges the two Menu types until both sides declare the same shape.
+  return <HomePage initialMenu={(await getInitialMenu()) as Menu | null} />;
 }
 
 /**

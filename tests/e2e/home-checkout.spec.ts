@@ -1,5 +1,6 @@
 // Home + checkout against mocked customer APIs (docs/API_SPEC.md §2).
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { addFromTile, closeDetail, openTile } from "./support/addFromTile";
 
 const CART_KEY = "bb_cart_v1";
 
@@ -19,6 +20,7 @@ const PRODUCTS: Product[] = [
   { id: "p-redbean", name: "奶酥红豆包", description: "红豆馅", imageUrl: null, unitPriceCents: 249, bundleSize: 4, bundlePriceCents: 899, status: "ACTIVE", leadDays: 1 },
   { id: "p-cheese", name: "奶酪角", description: "奶酪", imageUrl: null, unitPriceCents: 299, bundleSize: 4, bundlePriceCents: 1099, status: "ACTIVE", leadDays: 1 },
   { id: "p-brulee", name: "焦糖布蕾", description: "布蕾", imageUrl: null, unitPriceCents: 450, bundleSize: 1, bundlePriceCents: null, status: "ACTIVE", leadDays: 2 },
+  { id: "p-tart", name: "法式塔", description: "塔", imageUrl: null, unitPriceCents: 500, bundleSize: 1, bundlePriceCents: null, status: "ACTIVE", leadDays: 3 },
   { id: "p-paused", name: "菠萝包", description: "暂停中", imageUrl: null, unitPriceCents: 300, bundleSize: 1, bundlePriceCents: null, status: "PAUSED", leadDays: 1 },
 ];
 
@@ -117,13 +119,16 @@ test("home: add items updates the bag bar; placeholder; open state", async ({ pa
   await expect(card(page, "p-redbean").getByTestId("bunny-placeholder")).toBeVisible();
   await expect(page.getByTestId("footer-contact")).toHaveCount(0);
 
-  const plus = card(page, "p-cheese").getByRole("button", { name: "增加一个" });
-  for (let i = 0; i < 5; i++) await plus.click();
+  // The tiles have no add or stepper (D97): the bread goes in from the detail, comes out in the bag sheet.
+  await expect(card(page, "p-cheese").getByRole("button", { name: /增加一个|放进纸袋/ })).toHaveCount(0);
+  await addFromTile(page, "p-cheese", 5);
   await expect(page.getByTestId("bag-count")).toContainText("5");
   await expect(page.getByTestId("bag-subtotal")).toContainText("13.98");
-  await card(page, "p-redbean").getByRole("button", { name: "增加一个" }).click();
+  await addFromTile(page, "p-redbean");
   await expect(page.getByTestId("bag-subtotal")).toContainText("16.47");
-  await card(page, "p-cheese").getByRole("button", { name: "减少一个" }).click();
+  await page.getByTestId("bag-pill").click();
+  await page.getByTestId("bag-line").filter({ hasText: "奶酪角" }).getByTestId("bag-line-dec").click();
+  await page.getByTestId("bag-close").click();
   await expect(page.getByTestId("bag-count")).toContainText("5");
   await expect(page.getByTestId("bag-subtotal")).toContainText("13.48");
 
@@ -143,14 +148,21 @@ test("home: paused card disabled, max reached, footer wechat, vanished items dro
   const paused = card(page, "p-paused");
   await expect(paused).toHaveAttribute("data-paused", "true");
   await expect(paused.getByText("暂停供应")).toBeVisible();
-  await expect(paused.getByRole("button", { name: "增加一个" })).toBeDisabled();
+  // A paused bread still opens its detail, but cannot go in the bag.
+  await openTile(page, "p-paused");
+  await expect(page.getByTestId("detail-add")).toBeDisabled();
+  await expect(page.getByTestId("detail")).toContainText("暂停供应");
+  await closeDetail(page);
 
-  const plus = card(page, "p-redbean").getByRole("button", { name: "增加一个" });
-  await expect(card(page, "p-redbean").getByTestId("max-hint")).toHaveCount(0);
-  for (let i = 0; i < 7; i++) await plus.click();
-  await expect(card(page, "p-redbean").getByTestId("qty")).toHaveText("8");
-  await expect(plus).toBeDisabled();
-  await expect(card(page, "p-redbean").getByTestId("max-hint")).toHaveText("大量订购请加微信联系");
+  await openTile(page, "p-redbean");
+  await expect(page.getByTestId("detail")).not.toContainText("大量订购请加微信联系");
+  for (let i = 1; i < 7; i++) await page.getByTestId("detail-inc").click();
+  await page.getByTestId("detail-add").click();
+  await expect(page.getByTestId("bag-count")).toContainText("8");
+  await expect(page.getByTestId("detail-add")).toBeDisabled();
+  await expect(page.getByTestId("detail-inc")).toBeDisabled();
+  await expect(page.getByTestId("detail")).toContainText("大量订购请加微信联系");
+  await closeDetail(page);
   await expect(page.getByTestId("footer-contact")).toHaveText("微信 bunbunny_owner");
 
   await page.getByTestId("bag-pill").click();
@@ -164,7 +176,7 @@ test("home: ordering closed disables the checkout button but allows adding", asy
   await page.goto("/");
   await expect(page.getByText("暂未开放预订 🍞")).toBeVisible();
   await expect(page.getByText("下一轮预订开放时间请关注群内通知～")).toBeVisible();
-  await card(page, "p-redbean").getByRole("button", { name: "增加一个" }).click();
+  await addFromTile(page, "p-redbean");
   await expect(page.getByTestId("bag-count")).toContainText("1");
   await page.getByTestId("bag-pill").click();
   const button = page.getByTestId("bag-checkout");
@@ -182,7 +194,7 @@ test("checkout: lines, date states, brûlée hint, delivery gap", async ({ page 
   await expect(cheese.getByTestId("qty")).toHaveText("5");
   await expect(cheese.getByRole("button", { name: "增加一个 奶酪角" })).toBeVisible();
   await expect(cheese.getByTestId("line-breakdown")).toHaveText("$10.99 + $2.99 = $13.98");
-  await expect(page.getByTestId("lead-hint")).toHaveText("布蕾需提前两天");
+  await expect(page.getByTestId("lead-hint")).toHaveText("焦糖布蕾需提前 2 天");
 
   const date = (d: string) => page.locator(`[data-testid="date-card"][data-date="${d}"]`);
   await expect(date("2026-10-30")).toContainText("10/30 周五");
@@ -403,6 +415,17 @@ test("checkout: VALIDATION gets a new idempotency key; network error keeps it", 
   expect(bodies).toHaveLength(3);
   expect(bodies[1].idempotencyKey).toBe(bodies[0].idempotencyKey);
   expect(bodies[2].idempotencyKey).not.toBe(bodies[1].idempotencyKey);
+});
+
+test("checkout: the lead hint names the product with the longest lead time (D96)", async ({ page }) => {
+  await mockApis(page);
+  await seedCart(page, [{ productId: "p-redbean", qty: 1 }]);
+  await expect(page.getByTestId("date-card").first()).toBeVisible();
+  await expect(page.getByTestId("lead-hint")).toHaveCount(0); // a 1-day product: nothing to say
+  await seedCart(page, [{ productId: "p-redbean", qty: 1 }, { productId: "p-brulee", qty: 1 }]);
+  await expect(page.getByTestId("lead-hint")).toHaveText("焦糖布蕾需提前 2 天");
+  await seedCart(page, [{ productId: "p-brulee", qty: 1 }, { productId: "p-tart", qty: 1 }, { productId: "p-redbean", qty: 1 }]);
+  await expect(page.getByTestId("lead-hint")).toHaveText("法式塔需提前 3 天");
 });
 
 test("checkout: client-side checks and empty cart", async ({ page }) => {
