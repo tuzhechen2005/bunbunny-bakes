@@ -82,14 +82,20 @@ function mix(from: string, to: string, t: number): string {
   return toHex([0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * t) as Rgb);
 }
 
-/** The background's own hue, darkened until it reads at 7:1 (or as dark as it gets). */
+/** The background's own hue, darkened until it reads at 7:1; black if even that is not enough. */
 function darkTint(bg: string): string {
-  let ink = bg;
-  for (let k = 0; k <= 16; k++) {
-    ink = mix(bg, "#000000", 0.5 + k * 0.025);
+  for (let k = 0; k <= 20; k++) {
+    const ink = mix(bg, "#000000", 0.5 + k * 0.025);
     if (contrastRatio(ink, bg) >= 7) return ink;
   }
-  return ink;
+  return "#000000";
+}
+
+/** The cream light ink, or pure white when only white reaches 4.5:1. */
+function lightInk(bg: string): string {
+  return contrastRatio(LIGHT_INK, bg) < MIN_CONTRAST && contrastRatio("#FFFFFF", bg) >= MIN_CONTRAST
+    ? "#FFFFFF"
+    : LIGHT_INK;
 }
 
 /** A softer tone of `ink` (towards the background) that still reaches 4.5:1; `ink` itself if none does. */
@@ -107,7 +113,8 @@ export function fieldFor(bg: string | null | undefined): FieldColors {
   const fixed = FIXED[hex];
   if (fixed) return { bg: hex, ...fixed };
   const dark = darkTint(hex);
-  const ink = contrastRatio(dark, hex) >= contrastRatio(LIGHT_INK, hex) ? dark : LIGHT_INK;
+  const light = lightInk(hex);
+  const ink = contrastRatio(dark, hex) >= contrastRatio(light, hex) ? dark : light;
   return { bg: hex, ink, ink2: softer(ink, hex) };
 }
 

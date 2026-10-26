@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BunnyPlaceholder } from "@/components/customer/BunnyPlaceholder";
 import { copy } from "@/copy";
 import { adminApi } from "@/lib/adminApi";
@@ -126,34 +126,55 @@ export function PhotosField({
     applyProduct(result.data.product);
   }
 
-  function startDrag(e: React.PointerEvent<HTMLButtonElement>, id: string) {
+  // The drag listens on window: React moves the tile's node while reordering, which would drop
+  // pointer capture and the release would never reach the grip.
+  const drag = useRef<{ id: string; order: ProductImageDto[] } | null>(null);
+  const latest = useRef({ images, sendOrder });
+  useEffect(() => {
+    latest.current = { images, sendOrder };
+  });
+
+  function startDrag(id: string) {
     if (disabled || images.length < 2) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { id, order: images };
     setDraggingId(id);
     setDragOrder(images);
   }
 
-  function onDragMove(e: React.PointerEvent<HTMLButtonElement>) {
-    if (!draggingId || !dragOrder) return;
-    const over = dragOrder.find((img) => {
-      const r = tileRefs.current.get(img.id)?.getBoundingClientRect();
-      return r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-    });
-    if (!over || over.id === draggingId) return;
-    const from = dragOrder.findIndex((x) => x.id === draggingId);
-    const to = dragOrder.findIndex((x) => x.id === over.id);
-    const next = [...dragOrder];
-    next.splice(to, 0, next.splice(from, 1)[0]);
-    setDragOrder(next);
-  }
-
-  function endDrag() {
+  useEffect(() => {
     if (!draggingId) return;
-    const next = dragOrder;
-    setDraggingId(null);
-    if (next && !sameOrder(next, images)) void sendOrder(next);
-    else setDragOrder(null);
-  }
+    function onMove(e: PointerEvent) {
+      const d = drag.current;
+      if (!d) return;
+      const over = d.order.find((img) => {
+        const r = tileRefs.current.get(img.id)?.getBoundingClientRect();
+        return r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      });
+      if (!over || over.id === d.id) return;
+      const from = d.order.findIndex((x) => x.id === d.id);
+      const to = d.order.findIndex((x) => x.id === over.id);
+      const next = [...d.order];
+      next.splice(to, 0, next.splice(from, 1)[0]);
+      d.order = next;
+      setDragOrder(next);
+    }
+    function onEnd(e: Event) {
+      const d = drag.current;
+      drag.current = null;
+      setDraggingId(null);
+      const { images: current, sendOrder: send } = latest.current;
+      if (d && e.type !== "pointercancel" && !sameOrder(d.order, current)) void send(d.order);
+      else setDragOrder(null);
+    }
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onEnd);
+    window.addEventListener("pointercancel", onEnd);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onEnd);
+      window.removeEventListener("pointercancel", onEnd);
+    };
+  }, [draggingId]);
 
   const status =
     busy === "processing"
@@ -229,10 +250,7 @@ export function PhotosField({
                       aria-label={fill(t.photoDragAria, { n: index + 1 })}
                       data-testid="photo-grip"
                       disabled={disabled && !dragging}
-                      onPointerDown={(e) => startDrag(e, img.id)}
-                      onPointerMove={onDragMove}
-                      onPointerUp={endDrag}
-                      onPointerCancel={endDrag}
+                      onPointerDown={() => startDrag(img.id)}
                       style={{ touchAction: "none" }}
                       className="absolute left-1 top-1 flex size-11 cursor-grab items-center justify-center rounded-lg bg-card/90 text-ink shadow disabled:opacity-60"
                     >
@@ -253,6 +271,7 @@ export function PhotosField({
                   </button>
                   {confirmId === img.id && (
                     <div
+                      ref={(el) => el?.querySelector<HTMLButtonElement>("button")?.focus()}
                       role="alertdialog"
                       aria-label={t.photoDeleteConfirm}
                       className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-card/95 p-2 text-center"

@@ -154,7 +154,7 @@ test("pick a preset colour, a custom colour and see the warning; the menu follow
 
   await page.getByTestId("color-custom").fill("#787878");
   await expect(page.getByTestId("color-hex")).toHaveText("#787878");
-  await expect(page.getByTestId("color-warning")).toHaveText(t.colorWarning);
+  await expect(page.getByTestId("color-warning")).toHaveCount(0); // black or white always reads (>= 4.58:1)
   await page.screenshot({ path: `${SHOTS}/k1_data-colour-warning.png`, fullPage: true });
   await noOverflow(page);
 
@@ -188,4 +188,77 @@ test("new product page shows the colour picker (default 奶白) and the photo hi
   await expect(page.getByTestId("color-swatch-EFE7DA")).toHaveAttribute("aria-checked", "true");
   await expect(page.getByText(t.photoAfterSave)).toBeVisible();
   await noOverflow(page);
+});
+
+test("dragging the first photo to the LAST place is saved (mouse and CDP touch)", async ({ page, context }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto(`/admin/products/${seeded.products.red}`);
+  await page.getByTestId("photo-input").setInputFiles(["tests/fixtures/bun.jpg", "tests/fixtures/bun.png", "tests/fixtures/bun.webp"]);
+  await expect(tiles(page)).toHaveCount(3);
+  const ids = async () => tiles(page).evaluateAll((els) => els.map((e) => e.getAttribute("data-image-id")));
+  const [a, b, c] = await ids();
+
+  const centre = async (i: number, grip = false) => {
+    const box = (await (grip ? tiles(page).nth(i).getByTestId("photo-grip") : tiles(page).nth(i)).boundingBox())!;
+    return [box.x + box.width / 2, box.y + box.height / 2] as const;
+  };
+
+  // mouse
+  const [gx, gy] = await centre(0, true);
+  const [tx, ty] = await centre(2);
+  await page.mouse.move(gx, gy);
+  await page.mouse.down();
+  await page.mouse.move(tx, ty, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(ids).toEqual([b, c, a]);
+  await page.reload();
+  await expect.poll(ids).toEqual([b, c, a]);
+
+  // touch (CDP): the new first photo goes to the last place again
+  const cdp = await context.newCDPSession(page);
+  const touch = (type: string, x?: number, y?: number) =>
+    cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x: x!, y: y! }] });
+  const [sx, sy] = await centre(0, true);
+  const [ex, ey] = await centre(2);
+  await touch("touchStart", sx, sy);
+  for (let i = 1; i <= 10; i++) await touch("touchMove", sx + ((ex - sx) * i) / 10, sy + ((ey - sy) * i) / 10);
+  await touch("touchEnd");
+  await expect.poll(ids).toEqual([c, a, b]);
+  await page.reload();
+  await expect.poll(ids).toEqual([c, a, b]);
+});
+
+test("a real upload shows on the home card through the image optimizer; deleting it brings the bunny back", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  const home = page.getByTestId("product-card").filter({ hasText: "奶酥红豆包" });
+  await page.goto(`/admin/products/${seeded.products.red}`);
+  await page.getByTestId("photo-input").setInputFiles("tests/fixtures/bun-large.jpg");
+  await expect(tiles(page)).toHaveCount(1);
+
+  await page.goto("/");
+  await expect(home).toBeVisible();
+  const img = home.locator("img");
+  await expect(img).toHaveAttribute("src", /\/_next\/image\?url=%2Fapi%2Fimages%2F/);
+  await expect(img).toHaveAttribute("loading", "lazy");
+  await expect(home.getByTestId("bunny-placeholder")).toHaveCount(0);
+  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth)).toBeGreaterThan(0);
+
+  await page.goto(`/admin/products/${seeded.products.red}`);
+  await tiles(page).first().getByTestId("photo-delete").click();
+  await expect(page.getByTestId("photo-delete-yes")).toBeFocused();
+  await page.getByTestId("photo-delete-yes").click();
+  await expect(tiles(page)).toHaveCount(0);
+  await page.goto("/");
+  await expect(home.getByTestId("bunny-placeholder")).toBeVisible();
+  await expect(home.locator("img")).toHaveCount(0);
+});
+
+test("a small PNG is re-encoded as JPEG before upload (strips metadata)", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto(`/admin/products/${seeded.products.red}`);
+  await page.getByTestId("photo-input").setInputFiles("tests/fixtures/bun.png");
+  const preview = page.getByTestId("photo-preview");
+  await expect(preview).toHaveAttribute("src", /\.jpg$/);
+  const res = await page.request.get((await preview.getAttribute("src"))!);
+  expect(res.headers()["content-type"]).toBe("image/jpeg");
 });

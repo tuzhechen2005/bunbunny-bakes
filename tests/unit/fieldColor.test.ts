@@ -44,9 +44,29 @@ describe("fieldFor", () => {
     expect(contrastRatio("#777777", "#777777")).toBeCloseTo(1, 5);
   });
 
-  it("warns for a mid-tone nothing is readable on", () => {
-    expect(contrastWarning("#787878")).toBe(true);
+  it("no warning on mid-tones: black or white always reaches 4.5:1 (max is 4.58)", () => {
+    expect(contrastWarning("#787878")).toBe(false);
     expect(contrastWarning("#FFFFFF")).toBe(false);
+  });
+
+  it.each(["#787878", "#777777", "#006EFF"])("%s: ink reaches 4.5:1 whenever black or white does", (hex) => {
+    const f = fieldFor(hex);
+    const best = Math.max(contrastRatio("#000000", hex), contrastRatio("#FFFFFF", hex));
+    expect(contrastWarning(hex)).toBe(best < 4.5);
+    if (best >= 4.5) {
+      expect(contrastRatio(f.ink, hex)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(f.ink2, hex)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("property: warning if and only if neither black nor white reaches 4.5:1", () => {
+    const hexes: string[] = [];
+    for (let i = 1; i <= 3000; i++) hexes.push("#" + (((i * 2654435761) >>> 0) % 0x1000000).toString(16).padStart(6, "0").toUpperCase());
+    for (let v = 0; v <= 255; v++) hexes.push("#" + v.toString(16).padStart(2, "0").repeat(3).toUpperCase());
+    for (const hex of hexes) {
+      const best = Math.max(contrastRatio("#000000", hex), contrastRatio("#FFFFFF", hex));
+      expect(contrastWarning(hex), hex).toBe(best < 4.5);
+    }
   });
 
   it("every sampled colour either reaches 4.5:1 or warns", () => {
