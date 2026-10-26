@@ -27,24 +27,86 @@
   border-radius: 20px;
 }
 
+/* D100 entry card: a heartbeat (two beats, then a rest) with a soft shadow that blooms on each
+   beat and a small hop of the logo. Shadow on a pseudo-element so only opacity animates. */
 @keyframes game-breathe {
   0%,
+  60%,
   100% {
     transform: scale(1);
   }
-  50% {
-    transform: scale(1.03);
+  12% {
+    transform: scale(1.06);
+  }
+  24% {
+    transform: scale(0.995);
+  }
+  36% {
+    transform: scale(1.045);
+  }
+}
+@keyframes game-glow {
+  0%,
+  60%,
+  100% {
+    opacity: 0;
+  }
+  12%,
+  36% {
+    opacity: 1;
+  }
+  24% {
+    opacity: 0.4;
+  }
+}
+@keyframes game-hop {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  12% {
+    transform: translateY(-4px) rotate(-8deg);
+  }
+  24% {
+    transform: translateY(0) rotate(0);
+  }
+  36% {
+    transform: translateY(-2px) rotate(6deg);
   }
 }
 .game-entry {
-  animation: game-breathe 2.4s ease-in-out infinite;
+  position: relative;
+  animation: game-breathe 1.8s cubic-bezier(0.3, 0, 0.3, 1) infinite;
+  will-change: transform;
+}
+.game-entry::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    0 10px 28px -8px color-mix(in srgb, var(--c-ink) 30%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--c-ink) 12%, transparent);
+  opacity: 0;
+  animation: game-glow 1.8s cubic-bezier(0.3, 0, 0.3, 1) infinite;
+}
+.game-entry-logo {
+  animation: game-hop 1.8s cubic-bezier(0.3, 0, 0.3, 1) infinite;
+}
+.game-entry:active,
+.game-entry:active::after,
+.game-entry:active .game-entry-logo {
+  animation-play-state: paused;
 }
 .game-entry:active {
-  animation-play-state: paused;
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 @media (prefers-reduced-motion: reduce) {
-  .game-entry {
+  .game-entry,
+  .game-entry::after,
+  .game-entry-logo {
     animation: none;
   }
 }

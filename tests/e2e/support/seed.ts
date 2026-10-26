@@ -87,13 +87,14 @@ interface SeedOptions {
   openTomorrow?: boolean;
 }
 
-/** Truncate everything, then insert Setting, the 4 default products and the open dates. */
+/** Truncate everything (game tables too), then insert Setting, the 4 default products and the open dates. */
 export async function resetAndSeed(opts: SeedOptions = {}): Promise<Seeded> {
   const dates = openDates();
   return withDb(async (c) => {
     await c.query(
       `TRUNCATE "AuditLog","Notification","OrderItem","Order","OpenDateProductLimit","OpenDate","Product",
-                "Setting","AdminSession","PasswordReset","AdminUser","RateLimitHit" RESTART IDENTITY CASCADE`,
+                "Setting","AdminSession","PasswordReset","AdminUser","RateLimitHit",
+                "GameAward","GameRun","GameBan","GameTier" RESTART IDENTITY CASCADE`,
     );
     await c.query(
       `INSERT INTO "Setting" (id, "orderingEnabled", "ownerWechatId", "updatedAt") VALUES (1, $1, $2, now())`,

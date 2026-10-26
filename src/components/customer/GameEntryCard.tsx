@@ -11,8 +11,8 @@ const t = copy.customer.game;
 
 /**
  * Home entry to 消除大面包 (D100): below 「全部面包」. The weekly best is fetched lazily, a moment after the
- * card comes near the screen, so it is never part of the first load. Breathes (scale 1 to
- * 1.03) except under reduced motion. Any failure just keeps the neutral line.
+ * card comes near the screen, so it is never part of the first load. Beats like a heart (scale up to
+ * 1.06, game.css) except under reduced motion. Any failure just keeps the neutral line.
  */
 export function GameEntryCard() {
   const ref = useRef<HTMLAnchorElement>(null);
@@ -57,7 +57,7 @@ export function GameEntryCard() {
         className={`game-entry flex min-h-[84px] items-center gap-4 rounded-3xl bg-c-wash px-5 py-4 text-c-ink ${focusRing}`}
         data-testid="game-entry"
       >
-        <span className="grid size-14 shrink-0 place-items-center rounded-full bg-c-paper shadow-[inset_0_0_0_1.5px_var(--c-line)]">
+        <span className="game-entry-logo grid size-14 shrink-0 place-items-center rounded-full bg-c-paper shadow-[inset_0_0_0_1.5px_var(--c-line)]">
           <Logo className="h-10 w-auto" />
         </span>
         <span className="min-w-0 flex-1">
