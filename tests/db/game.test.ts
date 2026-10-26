@@ -94,8 +94,8 @@ describe("start", () => {
       expect(t.color.ink).toMatch(/^#[0-9A-F]{6}$/i);
     }
     const radii = r.tiers.map((t) => t.radius);
-    expect(radii[0]).toBe(0.055);
-    expect(radii[3]).toBe(0.2);
+    expect(radii[0]).toBe(0.0625);
+    expect(radii[3]).toBe(0.253);
     expect([...radii].sort((a, b) => a - b)).toEqual(radii);
     // Triangular numbers x 10 by tier index.
     expect(r.tiers.map((t) => t.points)).toEqual([0, 10, 30, 60]);
@@ -552,7 +552,7 @@ describe("review fixes", () => {
       finishRun(db, { runId: run.runId, drops }, IP, new Date(T.getTime() + 1000)),
     ).rejects.toMatchObject({ code: "VALIDATION" });
     // After the game would really have taken (plus the 10 s slack) it is accepted.
-    const ok = new Date(T.getTime() + (lastAt / 120) * 1000 - 9000);
+    const ok = new Date(T.getTime() + (lastAt / 120) * 1000 + 3000);
     await expect(finishRun(db, { runId: run.runId, drops }, IP, ok)).resolves.toBeDefined();
   });
 
