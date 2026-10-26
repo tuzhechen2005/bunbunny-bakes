@@ -92,12 +92,12 @@ export function defaultPoints(index: number): number {
   return (index * (index + 1) * 10) / 2;
 }
 
-/** Radius for product tier `i` of `n` (0.055 -> 0.145), rounded so snapshots stay readable. */
+/** Radius for product tier `i` of `n` (0.0625 -> 0.181), rounded so snapshots stay readable. */
 export function defaultRadius(i: number, n: number): number {
   const t = n <= 1 ? 0 : i / (n - 1);
-  return Math.round((0.055 + 0.09 * t) * 10000) / 10000;
+  return Math.round((0.0625 + 0.1185 * t) * 10000) / 10000;
 }
-export const BIG_RADIUS = 0.2;
+export const BIG_RADIUS = 0.253;
 
 /** `n` product tiers (>= 1) plus the 大面包 tier with the default radii and points. */
 export function defaultTierDefs(ids: readonly string[]): TierDef[] {

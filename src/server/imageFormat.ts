@@ -25,8 +25,8 @@ export function sniffImage(bytes: Uint8Array): ImageKind | null {
   return null;
 }
 
-/** `<productId uuid>/<32 hex>.<ext>` and nothing else (also rules out `..`, slashes, case tricks). */
-export const IMAGE_KEY_PATTERN = /^[0-9a-f-]{36}\/[0-9a-f]{32}\.(jpg|png|webp)$/;
+/** `<productId uuid>/<32 hex>.<ext>` or `game/<32 hex>.<ext>` (game tier images) and nothing else (also rules out `..`, slashes, case tricks). */
+export const IMAGE_KEY_PATTERN = /^(?:[0-9a-f-]{36}|game)\/[0-9a-f]{32}\.(jpg|png|webp)$/;
 
 export function isValidImageKey(key: string): boolean {
   return IMAGE_KEY_PATTERN.test(key);
