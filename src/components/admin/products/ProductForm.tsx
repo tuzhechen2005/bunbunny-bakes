@@ -7,8 +7,10 @@ import { AdminCard } from "@/components/admin/AdminCard";
 import { copy } from "@/copy";
 import type { CapacityMode, ProductStatus } from "@/domain/types";
 import { adminApi } from "@/lib/adminApi";
-import { fill, shortDate, type OverLimitDateDto, type ProductDto } from "./describe";
-import { PhotoField } from "./PhotoField";
+import { DEFAULT_FIELD_COLOR } from "@/lib/fieldColor";
+import { fill, shortDate, type OverLimitDateDto, type ProductDto, type ProductImageDto } from "./describe";
+import { ColorField } from "./ColorField";
+import { PhotosField } from "./PhotosField";
 import { centsToDollarInput, parseDollarsToCents } from "./money";
 
 const t = copy.admin.products;
@@ -43,6 +45,7 @@ interface FormState {
   leadDays: string;
   batchYield: string;
   status: ProductStatus;
+  fieldColor: string;
 }
 
 const str = (n: number | null) => (n === null ? "" : String(n));
@@ -63,6 +66,7 @@ function initialState(p?: ProductDto): FormState {
       leadDays: "1",
       batchYield: "",
       status: "ACTIVE",
+      fieldColor: DEFAULT_FIELD_COLOR,
     };
   }
   return {
@@ -79,6 +83,7 @@ function initialState(p?: ProductDto): FormState {
     leadDays: String(p.leadDays),
     batchYield: str(p.batchYield),
     status: p.status,
+    fieldColor: p.fieldColor ?? DEFAULT_FIELD_COLOR,
   };
 }
 
@@ -99,12 +104,13 @@ const API_FIELD_TO_FORM: Record<string, keyof FormState> = {
   leadDays: "leadDays",
   batchYield: "batchYield",
   status: "status",
+  fieldColor: "fieldColor",
 };
 
 type Payload = Record<string, string | number | null>;
 
 /** Validates what can be checked on the client; the server re-validates everything. */
-function buildPayload(f: FormState): { payload: Payload } | { errors: Errors } {
+function buildPayload(f: FormState, storedColor: string | null): { payload: Payload } | { errors: Errors } {
   const errors: Errors = {};
   const payload: Payload = { capacityMode: f.capacityMode, status: f.status };
 
@@ -146,6 +152,8 @@ function buildPayload(f: FormState): { payload: Payload } | { errors: Errors } {
   payload.dailyLimit = f.capacityMode === "INDEPENDENT" ? intOf("dailyLimit", true) : null;
   payload.leadDays = intOf("leadDays", true);
   payload.batchYield = intOf("batchYield", false);
+  // Untouched default stays "no colour chosen" (null) so a plain save does not write one.
+  payload.fieldColor = f.fieldColor === DEFAULT_FIELD_COLOR && storedColor === null ? null : f.fieldColor;
 
   return Object.keys(errors).length > 0 ? { errors } : { payload };
 }
@@ -174,7 +182,7 @@ export function ProductForm({ product }: Readonly<{ product?: ProductDto }>) {
   const router = useRouter();
   const editing = product !== undefined;
   const [form, setForm] = useState<FormState>(() => initialState(product));
-  const [imageUrl, setImageUrl] = useState<string | null>(product?.imageUrl ?? null);
+  const [images, setImages] = useState<ProductImageDto[]>(product?.images ?? []);
   const [leadTouched, setLeadTouched] = useState(editing);
   const [errors, setErrors] = useState<Errors>({});
   const [pending, setPending] = useState(false);
@@ -203,7 +211,7 @@ export function ProductForm({ product }: Readonly<{ product?: ProductDto }>) {
     setFormError(null);
     setSaved(false);
     setOverLimit([]);
-    const built = buildPayload(form);
+    const built = buildPayload(form, product?.fieldColor ?? null);
     if ("errors" in built) {
       setErrors(built.errors);
       return;
@@ -252,7 +260,7 @@ export function ProductForm({ product }: Readonly<{ product?: ProductDto }>) {
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       <AdminCard>
         <div className="flex flex-col gap-4">
-          <PhotoField productId={product?.id ?? null} imageUrl={imageUrl} onChange={setImageUrl} />
+          <PhotosField productId={product?.id ?? null} images={images} onChange={setImages} />
           <Field label={t.fieldName} error={errors.name}>
             <input
               className={inputClass}
@@ -262,6 +270,7 @@ export function ProductForm({ product }: Readonly<{ product?: ProductDto }>) {
               onChange={(e) => set("name", e.target.value)}
             />
           </Field>
+          <ColorField value={form.fieldColor} name={form.name} onChange={(hex) => set("fieldColor", hex)} />
           <Field label={t.fieldDescription} error={errors.description}>
             <textarea
               className={inputClass}
@@ -383,7 +392,11 @@ export function ProductForm({ product }: Readonly<{ product?: ProductDto }>) {
 
       <AdminCard>
         <div className="flex flex-col gap-4">
-          <Field label={t.fieldLeadDays} error={errors.leadDays}>
+          <Field
+            label={t.fieldLeadDays}
+            hint={Number(form.leadDays) >= 1 ? fill(t.leadDaysPreview, { n: form.leadDays }) : t.leadDaysPreviewNone}
+            error={errors.leadDays}
+          >
             <select
               className={inputClass}
               name="leadDays"

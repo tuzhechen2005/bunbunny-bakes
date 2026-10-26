@@ -133,6 +133,7 @@ export function formatValue(key: string, value: unknown, ctx: FormatContext = {}
     return clip(value);
   }
   if (Array.isArray(value)) {
+    if (key === "images") return value.map((u) => String(u).slice(-10, -4)).join(" → ");
     if (key === "violations") {
       return parseViolations(value)
         .map((v) => describeViolation(v, ctx.productNames ?? {}))

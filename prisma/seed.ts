@@ -28,6 +28,7 @@ export const DEFAULT_PRODUCTS = [
     doughG: 70,
     leadDays: 1,
     sortOrder: 1,
+    fieldColor: "#DCC5BB",
   },
   {
     name: "岩烧乳酪包",
@@ -38,6 +39,7 @@ export const DEFAULT_PRODUCTS = [
     doughG: 70,
     leadDays: 1,
     sortOrder: 2,
+    fieldColor: "#F0BF45",
   },
   {
     name: "奶酪角",
@@ -49,6 +51,7 @@ export const DEFAULT_PRODUCTS = [
     piecesPerRound: 4,
     leadDays: 1,
     sortOrder: 3,
+    fieldColor: "#CFDDEA",
   },
   {
     name: "焦糖布蕾",
@@ -60,6 +63,7 @@ export const DEFAULT_PRODUCTS = [
     batchYield: 3,
     leadDays: 2,
     sortOrder: 4,
+    fieldColor: "#B05219",
   },
 ] as const;
 

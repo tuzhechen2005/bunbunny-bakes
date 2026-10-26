@@ -1,13 +1,19 @@
 // GET /api/menu data (API_SPEC §2). Customer-safe: no grams, limits, usage, batch yield
 // or capacity mode ever leaves this module.
 
+import { fieldFor, type FieldColors } from "@/lib/fieldColor";
 import type { DbClient } from "./db";
 
 export interface MenuProduct {
   id: string;
   name: string;
   description: string;
+  /** The cover: always `images[0] ?? null`. */
   imageUrl: string | null;
+  /** Public photo URLs in display order, cover first (0-6). */
+  images: string[];
+  /** The product's home colours (D95); defaults filled in. */
+  field: FieldColors;
   unitPriceCents: number;
   bundleSize: number;
   bundlePriceCents: number | null;
@@ -37,6 +43,8 @@ export async function getMenu(db: DbClient): Promise<Menu> {
       name: true,
       description: true,
       imageUrl: true,
+      fieldColor: true,
+      images: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], select: { url: true } },
       unitPriceCents: true,
       bundleSize: true,
       bundlePriceCents: true,
@@ -46,17 +54,23 @@ export async function getMenu(db: DbClient): Promise<Menu> {
   });
   const menu: Menu = {
     orderingEnabled: settings.orderingEnabled,
-    products: rows.map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      imageUrl: p.imageUrl,
-      unitPriceCents: p.unitPriceCents,
-      bundleSize: p.bundleSize,
-      bundlePriceCents: p.bundlePriceCents,
-      status: p.status === "PAUSED" ? "PAUSED" : "ACTIVE",
-      leadDays: p.leadDays,
-    })),
+    products: rows.map((p) => {
+      // A row whose cover was set without a photos row still shows that cover.
+      const images = p.images.length > 0 ? p.images.map((i) => i.url) : p.imageUrl ? [p.imageUrl] : [];
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        imageUrl: images[0] ?? null,
+        images,
+        field: fieldFor(p.fieldColor),
+        unitPriceCents: p.unitPriceCents,
+        bundleSize: p.bundleSize,
+        bundlePriceCents: p.bundlePriceCents,
+        status: p.status === "PAUSED" ? ("PAUSED" as const) : ("ACTIVE" as const),
+        leadDays: p.leadDays,
+      };
+    }),
     pickupNote: settings.pickupNote,
     deliveryFeeCents: settings.deliveryFeeCents,
     freeDeliveryMinCents: settings.freeDeliveryMinCents,
