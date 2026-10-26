@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MIN_DROP_GAP, Session } from "@/components/game/engine";
+import { Session } from "@/components/game/engine";
 import type { TierView } from "@/components/game/types";
 
 const TIERS: TierView[] = [0.08, 0.11, 0.15, 0.2, 0.3].map((radius, i) => ({
@@ -13,15 +13,14 @@ const TIERS: TierView[] = [0.08, 0.11, 0.15, 0.2, 0.3].map((radius, i) => ({
 describe("game Session (UI-side wrapper of the engine)", () => {
   it("enforces the cool-down and logs monotonic drops", () => {
     const s = new Session(TIERS, "seed-a");
-    expect(s.canDrop()).toBe(false); // the very first drop also waits one cool-down
-    s.advance(MIN_DROP_GAP);
+    expect(s.canDrop()).toBe(true);
     expect(s.drop(0.5)).not.toBeNull();
     expect(s.drop(0.4)).toBeNull();
-    s.advance(MIN_DROP_GAP - 1);
+    s.advance(29);
     expect(s.canDrop()).toBe(false);
     s.advance(1);
     expect(s.drop(2)).not.toBeNull();
-    expect(s.drops.map((d) => d.at)).toEqual([30, 60]);
+    expect(s.drops.map((d) => d.at)).toEqual([0, 30]);
     // x is clamped into the board before it is logged
     expect(s.drops[1].x).toBeLessThanOrEqual(1);
   });
@@ -31,7 +30,7 @@ describe("game Session (UI-side wrapper of the engine)", () => {
       const s = new Session(TIERS, "seed-b");
       const seq: number[] = [];
       for (let i = 0; i < 20; i++) {
-        s.advance(MIN_DROP_GAP);
+        s.advance(30);
         seq.push(s.current());
         s.drop(0.1 + (i % 7) * 0.13);
       }

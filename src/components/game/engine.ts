@@ -1,88 +1,85 @@
-// The only file that knows where the engine comes from. Until L1's src/lib/game lands the UI runs on a
-// local stand-in with the same surface; swapping is this one import (and deleting standinEngine.ts).
-import { createGame } from "./standinEngine"; // -> import { createGame } from "@/lib/game";
-import type { Body, DropLog, GameEvent, RawEngine, TierView } from "./types";
+// The UI's view of the deterministic engine (src/lib/game, L1): a Session wraps one run, keeps the drop
+// log that is sent to the server and maps engine events to what the effects code wants.
+import { createGame, DROP_COOLDOWN_STEPS, STEP, type Game, type GameEvent as EngineEvent } from "@/lib/game";
+import type { Body, DropLog, GameEvent, TierView } from "./types";
 
-/** Simulation constants of the contract. */
-export const STEP_DT = 1 / 120;
-export const MIN_DROP_GAP = 30;
-export const MAX_DROPS = 600;
-export const MAX_STEPS = 200_000;
+export const STEP_DT = STEP;
 export const BOARD_HEIGHT = 1.5;
-/** Danger line, world units from the top. L1's engine exposes `dangerY` when it has one. */
-export const DEFAULT_DANGER_Y = 0.2;
 
-/** One play-through: the engine, the step counter and the drop log that is sent to the server. */
+function mapEvent(ev: EngineEvent, lastTier: number): GameEvent {
+  if (ev.type === "merge") {
+    return { type: "merge", tier: ev.tier, x: ev.x, y: ev.y, points: ev.points, big: ev.bigBig || ev.tier === lastTier };
+  }
+  if (ev.type === "drop") return { type: "drop", tier: ev.tier, x: ev.x, y: ev.y };
+  return { type: "over" };
+}
+
 export class Session {
-  readonly engine: RawEngine;
+  readonly game: Game;
   readonly drops: DropLog[] = [];
-  steps = 0;
-  private lastDropAt = 0;
   readonly dangerY: number;
-  /** Set when the client caps are reached before the engine says it is over. */
-  private capped = false;
 
   constructor(
     readonly tiers: TierView[],
     seed: string,
   ) {
-    this.engine = createGame({
+    this.game = createGame({
       seed,
       tiers: tiers.map((t) => ({ id: t.id, radius: t.radius, points: t.points })),
       width: 1,
       height: BOARD_HEIGHT,
     });
-    const d = (this.engine as { dangerY?: unknown }).dangerY;
-    this.dangerY = typeof d === "number" ? d : DEFAULT_DANGER_Y;
+    this.dangerY = this.game.state().dangerY;
   }
 
+  get steps() {
+    return this.game.steps;
+  }
   get score() {
-    return this.engine.score;
+    return this.game.score;
   }
   get over() {
-    return this.engine.over || this.capped;
+    return this.game.over;
   }
   get bodies(): Body[] {
-    return this.engine.state().bodies;
+    return this.game.state().bodies;
   }
+  /** Tier of the piece in hand. */
   current(): number {
-    return this.engine.nextPiece(0);
+    return this.game.nextPiece();
   }
+  /** Tier of the piece after it. */
   upcoming(): number {
-    return this.engine.nextPiece(1);
+    return this.game.state().preview;
   }
   /** 0..1: how far the cool-down has run since the last drop. */
   get cooled(): number {
-    return Math.min(1, Math.max(0, (this.steps - this.lastDropAt) / MIN_DROP_GAP));
+    const s = this.game.stepsSinceDrop();
+    return Number.isFinite(s) ? Math.min(1, s / DROP_COOLDOWN_STEPS) : 1;
   }
   canDrop(): boolean {
-    return !this.over && this.drops.length < MAX_DROPS && this.steps - this.lastDropAt >= MIN_DROP_GAP;
+    return this.game.canDrop();
   }
-  /** Drops the current piece at x (world units, clamped to the walls). */
-  drop(x: number): GameEvent | null {
-    if (!this.canDrop()) return null;
-    const tier = this.current();
-    const r = this.tiers[tier].radius;
-    const cx = Math.min(1 - r, Math.max(r, x));
-    this.engine.drop(cx);
-    this.drops.push({ x: cx, at: this.steps });
-    this.lastDropAt = this.steps;
-    return { type: "drop", tier, x: cx, y: r };
+  /** Drops the hand piece at x; returns the resulting events, or null when blocked (cool-down, game over). */
+  drop(x: number): GameEvent[] | null {
+    const at = this.game.steps;
+    const id = this.game.drop(x);
+    if (id === null) return null;
+    const body = this.game.state().bodies.find((b) => b.id === id);
+    this.drops.push({ x: body ? body.x : Math.min(1, Math.max(0, x)), at });
+    return this.drain();
   }
   /** Advances `n` fixed steps; returns the events in order. */
   advance(n: number): GameEvent[] {
     const out: GameEvent[] = [];
-    for (let i = 0; i < n && !this.over; i++) {
-      this.engine.step();
-      this.steps++;
-      const ev = this.engine.drainEvents();
-      if (ev.length) out.push(...ev);
-      // The server replays at most MAX_DROPS drops / MAX_STEPS steps: end the run at either cap.
-      if (this.steps >= MAX_STEPS || (this.drops.length >= MAX_DROPS && this.steps - this.lastDropAt >= 600)) {
-        this.capped = true;
-        out.push({ type: "over" });
-      }
+    for (let i = 0; i < n && !this.game.over; i++) {
+      this.game.step();
+      out.push(...this.drain());
     }
     return out;
+  }
+  private drain(): GameEvent[] {
+    const last = this.tiers.length - 1;
+    return this.game.drainEvents().map((e) => mapEvent(e, last));
   }
 }

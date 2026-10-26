@@ -45,6 +45,7 @@ export interface Leaderboard {
 }
 
 export interface Body {
+  id?: number;
   tier: number;
   x: number;
   y: number;
@@ -55,23 +56,3 @@ export type GameEvent =
   | { type: "drop"; tier: number; x: number; y: number }
   | { type: "merge"; tier: number; x: number; y: number; points: number; big: boolean }
   | { type: "over" };
-
-/** What the UI needs from the deterministic engine. */
-export interface RawEngine {
-  /** Tier index of the piece that will be dropped (k = 0) or of the one after it (k = 1). */
-  nextPiece(k?: number): number;
-  drop(x: number): void;
-  step(): void;
-  state(): { bodies: Body[] };
-  readonly score: number;
-  readonly over: boolean;
-  /** Returns the events since the last call and clears them. */
-  drainEvents(): GameEvent[];
-}
-
-export interface CreateGameOptions {
-  seed: string;
-  tiers: { id: string; radius: number; points: number }[];
-  width: 1;
-  height: number;
-}

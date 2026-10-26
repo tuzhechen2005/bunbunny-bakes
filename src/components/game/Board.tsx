@@ -110,10 +110,10 @@ export function Board({
     };
     const doDrop = (x: number) => {
       if (session.over) return;
-      const ev = session.drop(x);
-      if (ev) {
+      const evs = session.drop(x);
+      if (evs) {
         box.dataset.drops = String(session.drops.length);
-        emit(ev);
+        evs.forEach(emit);
         hud();
       }
     };
