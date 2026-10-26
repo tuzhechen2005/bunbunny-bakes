@@ -8,6 +8,8 @@ import { createAdminSession, resetAndSeed, type Seeded } from "./support/seed";
 const t = copy.admin.products;
 const SHOTS = "/Users/tuzhechen/Documents/bunbunny-bake/.orchestrator/screens";
 
+test.use({ browserName: "chromium" }); // CDP touch input below
+
 let seeded: Seeded;
 
 test.beforeEach(async ({ context, baseURL }) => {
@@ -216,7 +218,7 @@ test("dragging the first photo to the LAST place is saved (mouse and CDP touch)"
 
   // touch (CDP): the new first photo goes to the last place again
   const cdp = await context.newCDPSession(page);
-  const touch = (type: string, x?: number, y?: number) =>
+  const touch = (type: "touchStart" | "touchMove" | "touchEnd", x?: number, y?: number) =>
     cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x: x!, y: y! }] });
   const [sx, sy] = await centre(0, true);
   const [ex, ey] = await centre(2);

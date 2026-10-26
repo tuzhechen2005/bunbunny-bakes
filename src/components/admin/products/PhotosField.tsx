@@ -158,12 +158,13 @@ export function PhotosField({
       d.order = next;
       setDragOrder(next);
     }
-    function onEnd(e: Event) {
+    function onEnd() {
       const d = drag.current;
       drag.current = null;
       setDraggingId(null);
       const { images: current, sendOrder: send } = latest.current;
-      if (d && e.type !== "pointercancel" && !sameOrder(d.order, current)) void send(d.order);
+      // A cancel after the tile moved (the browser may cancel when its node is re-inserted) still saves.
+      if (d && !sameOrder(d.order, current)) void send(d.order);
       else setDragOrder(null);
     }
     window.addEventListener("pointermove", onMove);
@@ -212,7 +213,9 @@ export function PhotosField({
         <BunnyPlaceholder className="h-24 w-24 rounded-lg" />
       ) : (
         <ul className="grid grid-cols-2 gap-3" data-testid="photo-list">
-          {shown.map((img, index) => {
+          {images.map((img) => {
+            // Stable DOM order, visual order via CSS: moving the grip's node would cancel the gesture.
+            const index = shown.findIndex((x) => x.id === img.id);
             const dragging = draggingId === img.id;
             return (
               <li
@@ -223,6 +226,7 @@ export function PhotosField({
                 }}
                 data-testid="photo-tile"
                 data-image-id={img.id}
+                style={{ order: index }}
                 className={`flex flex-col gap-1 rounded-lg border p-1 ${
                   dragging ? "border-accent opacity-70 ring-2 ring-accent" : "border-line"
                 }`}
