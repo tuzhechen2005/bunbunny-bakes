@@ -209,7 +209,7 @@ export function Board({
       const over = session.over;
       r.draw(
         session.bodies,
-        { x: aimX, tier: session.current(), cooled: session.cooled, visible: !over, holding: touching },
+        { x: aimX, tier: session.current(), cooled: session.cooled, visible: !over },
         dt,
         now,
       );

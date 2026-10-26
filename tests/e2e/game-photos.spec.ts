@@ -9,7 +9,7 @@ test.use({ browserName: "chromium" });
 
 const PHOTO = readFileSync("tests/fixtures/bun-large.jpg");
 
-/** Share of the canvas' pixels that are not the board background (pieces, guide, effects). */
+/** Share of the canvas' pixels that are not the board background (pieces, effects). */
 async function inkShare(page: Page): Promise<number> {
   return page.getByTestId("game-canvas").evaluate((c: HTMLCanvasElement) => {
     const g = c.getContext("2d")!;
@@ -69,7 +69,7 @@ test("real photos: pieces are drawn with their picture, taps drop them and the s
   await expect(page.getByTestId("game-board")).toHaveAttribute("data-drops", "12");
   await page.waitForTimeout(2500);
   await page.screenshot({ path: "/Users/tuzhechen/Documents/bunbunny-bake/.orchestrator/screens/l2_photos.png" });
-  // Pieces are on the board (not an empty board with only a guide line).
+  // Pieces are on the board (not an empty board).
   expect(await inkShare(page)).toBeGreaterThan(0.02);
   // Keep going until something merged: the score rises.
   for (let i = 0; i < 40; i++) {

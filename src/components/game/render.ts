@@ -1,4 +1,4 @@
-// Canvas drawing of the board: pieces (pre-rendered sprites), aim guide, danger line and effects.
+// Canvas drawing of the board: pieces (pre-rendered sprites), danger line and effects.
 // Pure drawing, no React. Colours come in as `Theme` (read from the CSS tokens by the caller).
 import { photoUrl } from "@/lib/photo";
 import type { Body, GameEvent, TierView } from "./types";
@@ -121,8 +121,6 @@ export interface Aim {
   /** 0..1 cool-down progress (the piece fades in as it fills). */
   cooled: number;
   visible: boolean;
-  /** A finger is down: the guide is drawn strong. */
-  holding?: boolean;
 }
 
 export class BoardRenderer {
@@ -275,34 +273,6 @@ export class BoardRenderer {
     ctx.lineTo(w, dy);
     ctx.stroke();
     ctx.restore();
-
-    // Aim guide: where the piece would land.
-    if (aim?.visible) {
-      const pr = this.tiers[aim.tier].radius;
-      const ax = Math.min(1 - pr, Math.max(pr, aim.x));
-      let land = this.height - pr;
-      for (const b of bodies) {
-        const dx = Math.abs(b.x - ax);
-        const rr = b.r + pr;
-        if (dx < rr) land = Math.min(land, b.y - Math.sqrt(rr * rr - dx * dx));
-      }
-      ctx.save();
-      ctx.setLineDash([3, 8]);
-      ctx.lineCap = "round";
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = theme.ink;
-      ctx.globalAlpha = aim.holding ? 0.55 : 0.18 * aim.cooled;
-      ctx.beginPath();
-      ctx.moveTo(ax * w, (pr + 0.012 + pr) * w);
-      ctx.lineTo(ax * w, land * w);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.globalAlpha = aim.holding ? 0.4 : 0.14 * aim.cooled;
-      ctx.beginPath();
-      ctx.arc(ax * w, land * w, pr * w, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
 
     // Pieces.
     for (const b of bodies) {
