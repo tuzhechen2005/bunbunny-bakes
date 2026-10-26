@@ -4,12 +4,22 @@ import type { CapacityMode, ProductStatus } from "@/domain/types";
 
 const t = copy.admin.products;
 
+export interface ProductImageDto {
+  id: string;
+  url: string;
+  sortOrder: number;
+}
+
 /** The product as the admin API returns it (dates arrive as ISO strings). */
 export interface ProductDto {
   id: string;
   name: string;
   description: string;
+  /** The cover (images[0]). */
   imageUrl: string | null;
+  images: ProductImageDto[];
+  /** `#RRGGBB`, null = default 奶白. */
+  fieldColor: string | null;
   unitPriceCents: number;
   bundleSize: number;
   bundlePriceCents: number | null;

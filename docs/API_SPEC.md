@@ -37,13 +37,15 @@
 ```json
 {
   "orderingEnabled": true,
-  "products": [{ "id": "…", "name": "奶酥红豆包", "description": "…", "imageUrl": null,
+  "products": [{ "id": "…", "name": "奶酥红豆包", "description": "…", "imageUrl": null, "images": [], "field": { "bg": "#EFE7DA", "ink": "#…", "ink2": "#…" },
                  "unitPriceCents": 249, "bundleSize": 4, "bundlePriceCents": 899,
                  "status": "ACTIVE", "leadDays": 1 }],
   "pickupNote": "自提时间在下午 5 点以后，具体时间微信确认",
   "deliveryFeeCents": 500, "freeDeliveryMinCents": 2500, "maxQtyPerItem": 8
 }
 ```
+
+`images`：公开照片地址，按显示顺序，封面在前，0–6 张；`imageUrl` 永远等于 `images[0] ?? null`。`field`：这款商品的首页颜色（背景、字色、次要字色，十六进制），永远有值（没设置时是奶白）。订单视图里的商品 `imageUrl` 仍是封面。
 
 不返回任何克数、上限、已用量。`ARCHIVED` 商品不返回。
 
@@ -130,10 +132,13 @@
 | POST | `/api/admin/orders/{id}/payment` | `{ paid, method? }` |
 | GET | `/api/admin/calendar?from=&to=` | 每天：是否开放、各项上限、已用量、超限标记 |
 | PUT | `/api/admin/dates/{date}` | `{ isOpen, doughLimitG, deliveryEnabled, deliveryLimit, productLimits: { productId: n }, note }`；把上限调到低于已用量时返回警告，要店主确认 |
-| GET/POST | `/api/admin/products` | 列表 / 新增 |
 | PATCH | `/api/admin/products/{id}` | 修改；改了名额相关字段时，返回因此超限的开放日期 |
-| POST | `/api/admin/products/{id}/image` | 上传商品照片（Netlify Blobs，store `product-images`）。`multipart/form-data`，字段 `file`；最大 5 MB，只收 jpg/png/webp（按文件头字节判断，不看文件名）；成功返回 `{ product }`，并把 `imageUrl` 改成 `/api/images/<key>`、写 `product.update` 日志、删除旧照片；不合格返回 `VALIDATION`（中文提示） |
-| DELETE | `/api/admin/products/{id}/image` | 删除照片：`imageUrl` 变回 null（显示兔子占位图），删除文件并写日志 |
+| GET/POST | `/api/admin/products` | 列表 / 新增；每个商品带 `images: [{id, url, sortOrder}]`（封面在前）和 `fieldColor`（`#RRGGBB` 或 null，大小写不限、存成大写，格式不对 `VALIDATION`） |
+| POST | `/api/admin/products/{id}/images` | 追加一张照片（D98）。`multipart/form-data`，字段 `file`，一次一张；最大 5 MB，只收 jpg/png/webp（按文件头字节）；第一张就是封面；已有 6 张返回 `VALIDATION`（中文提示）；成功 201 `{ product }`，同步 `imageUrl`，写 `product.update` 日志（before/after 含 `imageUrl` 和 `images`） |
+| DELETE | `/api/admin/products/{id}/images/{imageId}` | 删除一张：文件一并删除，后面的往前补，删封面则下一张成为封面；找不到 404 |
+| PUT | `/api/admin/products/{id}/images/order` | `{ ids }` 必须正好列出该商品所有照片各一次（最多 6），第一个是封面；对不上返回 409 `STALE`；顺序没变不写日志 |
+| POST | `/api/admin/products/{id}/image` | 旧接口（保留）：替换封面（没有照片时就是添加第一张），其余照片不动，旧封面文件删除；返回 `{ product }` |
+| DELETE | `/api/admin/products/{id}/image` | 旧接口（保留）：删除封面（没有照片时什么都不做），下一张成为封面 |
 | GET/PUT | `/api/admin/settings` | |
 | GET | `/api/admin/logs?entityId=&from=&to=` | |
 | GET | `/api/admin/ledger?month=YYYY-MM` | 记账月汇总（D87）：`{ month, revenueCents, qty, deliveryFeeCents, receivableCents, byMethod: {WECHAT,ZELLE,VENMO,CASH,OTHER,UNSPECIFIED}, days: [{ date, revenueCents, qty, receivableCents }] }`。口径：按取货日；不含已取消/已拒绝；已付款订单（含运费）和手动记录计入营业额，未付款计入待收；件数只算已付款订单和手动记录里填的商品；已付款但 `paidMethod` 为空的订单算 `UNSPECIFIED`「未注明」（D94），与明确选的「其他」分开；月份格式错误 `VALIDATION` |

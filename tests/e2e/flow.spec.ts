@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
+import { addFromTile } from "./support/addFromTile";
 
 const CART_KEY = "bb_cart_v1";
 const PHOTO = fs.readFileSync(path.join(__dirname, "../fixtures/bun.jpg"));
@@ -48,12 +49,8 @@ async function openHome(page: Page) {
   await expect(page.getByTestId("rack")).toBeVisible();
 }
 
-const tile = (page: Page, id: string) => page.locator(`[data-testid="product-card"][data-product-id="${id}"]`);
-
-async function add(page: Page, id: string, n = 1) {
-  const plus = tile(page, id).getByRole("button", { name: "增加一个" });
-  for (let i = 0; i < n; i++) await plus.click();
-}
+/** Puts `n` of a product in the bag from its detail (D97). */
+const add = addFromTile;
 
 /** Waits until the sheet's opening animations are done (the spring owns `transform` until then). */
 const sheetSettled = (page: Page) =>
@@ -144,10 +141,13 @@ test.describe("bag sheet", () => {
     page,
   }) => {
     await openHome(page);
-    await add(page, "hd");
     const depth = () => page.evaluate(() => history.length);
-
+    // Measured before the add: the detail the bread comes from pushes and steps back its own entry.
     const before = await depth();
+    await add(page, "hd");
+    await expect
+      .poll(() => page.evaluate(() => (history.state as Record<string, unknown> | null)?.bbOverlay ?? null))
+      .toBeNull();
     await page.getByTestId("bag-pill").click();
     await expect(dialogOf(page)).toBeVisible();
     await expect.poll(depth).toBe(before + 1); // one entry for the sheet
