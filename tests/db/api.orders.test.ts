@@ -144,8 +144,10 @@ describe("POST /api/orders", () => {
 
       for (let i = 0; i < 5; i++) expect((await post(body(), {})).status).toBe(201);
       expect(warn).toHaveBeenCalled();
-      const hashes = (await db.order.findMany({ orderBy: { createdAt: "asc" } })).map((o) => o.ipHash);
-      expect(hashes.slice(1)).toEqual(Array(5).fill(hashIp("unknown", SECRET)));
+      // The clock is frozen, so every order has the same createdAt: compare the hashes as a multiset.
+      const hashes = (await db.order.findMany()).map((o) => o.ipHash).sort();
+      const expected = [hashIp("192.0.2.5", SECRET), ...Array(5).fill(hashIp("unknown", SECRET))].sort();
+      expect(hashes).toEqual(expected);
       const res = await post(body(), {});
       expect(res.status).toBe(429);
     } finally {
