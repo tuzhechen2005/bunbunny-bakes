@@ -18,14 +18,18 @@ export const RUN_TTL_MS = 2 * 60 * 60 * 1000;
 export const RATE_WINDOW_MS = 60 * 60 * 1000;
 export const START_LIMIT_PER_HOUR = 60;
 export const FINISH_LIMIT_PER_HOUR = 60;
+export const STEPS_PER_SECOND = 120;
+/** Allowed excess of simulated time over the real time since start (network, rounding). */
+export const PLAUSIBILITY_SLACK_MS = 10_000;
 export const NICKNAME_MAX = 10;
 export const LEADERBOARD_SIZE = 20;
 /** Largest finish body we read (600 drops are about 20 KB). */
 export const MAX_FINISH_BODY_BYTES = 64 * 1024;
 
 const codePoints = (s: string) => [...s].length;
-// Control characters, line/paragraph separators and bidi overrides (display spoofing).
-const BAD_NICK = /[\p{Cc}\p{Zl}\p{Zp}‪-‮⁦-⁩]/u;
+// Control, format (zero-width, bidi marks and overrides) and line/paragraph separator characters:
+// invisible or spoofing characters have no place in a nickname.
+const BAD_NICK = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
 const wechatId = z
   .string()
@@ -65,16 +69,18 @@ export function parseGameInput<S extends z.ZodType>(schema: S, input: unknown): 
 
 /** Case-insensitive, like order WeChat ids (D92). */
 export async function isBanned(db: DbClient, id: string): Promise<boolean> {
-  const n = await db.gameBan.count({ where: { wechatId: { equals: id, mode: "insensitive" } } });
-  return n > 0;
+  // lower() = lower() on purpose: Prisma's insensitive `equals` is an ILIKE, where % and _ are wildcards.
+  const rows = await db.$queryRaw<{ n: number }[]>`
+    SELECT count(*)::int AS n FROM "GameBan" WHERE lower("wechatId") = lower(${id.trim()})`;
+  return rows[0].n > 0;
 }
 
 /** Eligibility for the weekly prize: any order that is not CANCELLED or REJECTED (case-insensitive id). */
 export async function hasOrdered(db: DbClient, id: string): Promise<boolean> {
-  const n = await db.order.count({
-    where: { wechatId: { equals: id.trim(), mode: "insensitive" }, status: { notIn: ["CANCELLED", "REJECTED"] } },
-  });
-  return n > 0;
+  const rows = await db.$queryRaw<{ n: number }[]>`
+    SELECT count(*)::int AS n FROM "Order"
+    WHERE lower("wechatId") = lower(${id.trim()}) AND status::text NOT IN ('CANCELLED', 'REJECTED')`;
+  return rows[0].n > 0;
 }
 
 /** Counts a hit for the key inside a transaction and throws RATE_LIMITED past `limit` per hour. */
@@ -183,11 +189,25 @@ export async function finishRun(db: DbClient, input: unknown, ipHash: string, no
     if (e instanceof ReplayError) throw new AppError("VALIDATION", { message: copy.gameApi.badRun });
     throw e;
   }
+  // A real client cannot simulate faster than real time: reject "computed offline, submitted at once".
+  const playedSteps = outcome.over ? outcome.steps : (data.drops[data.drops.length - 1]?.at ?? 0);
+  const elapsedMs = now.getTime() - run.startedAt.getTime();
+  if ((playedSteps / STEPS_PER_SECOND) * 1000 > elapsedMs + PLAUSIBILITY_SLACK_MS) {
+    throw new AppError("VALIDATION", { message: copy.gameApi.badRun });
+  }
+  // A run finished after Monday 00:00 (Chicago) counts for the new week, whenever it started.
   const weekKey = weekKeyOf(now);
   // Only one finisher wins the run; a concurrent duplicate reads the stored result.
   const claimed = await db.gameRun.updateMany({
     where: { id: run.id, finishedAt: null },
-    data: { finishedAt: now, score: outcome.score, weekKey },
+    data: {
+      finishedAt: now,
+      score: outcome.score,
+      weekKey,
+      drops: data.drops as unknown as Prisma.InputJsonValue,
+      dropCount: data.drops.length,
+      simSteps: outcome.steps,
+    },
   });
   if (claimed.count === 0) {
     const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });

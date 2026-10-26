@@ -16,7 +16,7 @@ import {
   type ReplayDrop,
   type TierDef,
 } from "@/lib/game";
-import { botRun } from "../support/gameBot";
+import { botRun, greedyRun } from "../support/gameBot";
 
 const TIERS = defaultTierDefs(["a", "b", "c", "d", "e"]);
 const SMALL: TierDef[] = [
@@ -368,11 +368,11 @@ describe("determinism", () => {
     const bot = botRun("pinned", TIERS, 40);
     expect({ score: bot.score, over: bot.over, steps: bot.steps, hash: bot.finalHash, drops: bot.log.length }).toMatchInlineSnapshot(`
       {
-        "drops": 26,
-        "hash": "3e40d73c",
-        "over": true,
-        "score": 990,
-        "steps": 1519,
+        "drops": 40,
+        "hash": "d1bb9d84",
+        "over": false,
+        "score": 2290,
+        "steps": 2666,
       }
     `);
   });
@@ -383,6 +383,36 @@ describe("determinism", () => {
     const h1 = hashState(g.state());
     g.step();
     expect(hashState(g.state())).not.toBe(h1);
+  });
+});
+
+describe("caps end the game inside the engine", () => {
+  it("ends at MAX_STEPS even when nothing happens, and then refuses drops", () => {
+    const g = createGame({ seed: "idle", tiers: TIERS, width: 1, height: 1.5 });
+    g.drop(0.5);
+    while (g.steps < MAX_STEPS - 1) g.step();
+    expect(g.over).toBe(false);
+    g.step();
+    expect(g.over).toBe(true);
+    expect(g.steps).toBe(MAX_STEPS);
+    expect(g.drop(0.5)).toBeNull();
+    expect(g.drainEvents().filter((e) => e.type === "over")).toHaveLength(1);
+  });
+
+  it("ends after the MAX_DROPS-th drop (client and server agree on the score)", () => {
+    let found: ReturnType<typeof greedyRun> | null = null;
+    for (let s = 0; s < 40 && !found; s++) {
+      const r = greedyRun(`cap${s}`, TIERS, MAX_DROPS, 40);
+      if (r.drops === MAX_DROPS) found = r;
+    }
+    expect(found).not.toBeNull();
+    const r = found!;
+    expect(r.over).toBe(true);
+    const res = replay(`cap${r.seedIndex}`, TIERS, r.log);
+    expect(res).toMatchObject({ score: r.score, over: true });
+    // One more drop than the cap is rejected outright.
+    const extra = [...r.log, { x: 0.5, at: r.log[r.log.length - 1].at + 30 }];
+    expect(() => replay(`cap${r.seedIndex}`, TIERS, extra)).toThrow(ReplayError);
   });
 });
 

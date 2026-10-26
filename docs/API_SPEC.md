@@ -118,7 +118,7 @@
 - `wechatId` 规则同下单（1–40 字符）；`nickname` 去掉首尾空格后 1–10 个字符（按 Unicode 字符数），不能含控制字符、换行、双向覆盖字符。不合格 `422 VALIDATION`（带 `fields`）。
 - 被禁的微信号（不区分大小写）：`422 VALIDATION`，`message` 为友好提示。
 - `seed` 来自 `crypto.randomBytes`；每局只能结束一次，2 小时后过期。
-- `tiers` 按从小到大排列，最后一项 `id` 恒为 `"big"`。店主配置了至少 2 个商品等级就用店主的（`GameTier`），否则用在售商品（按菜单顺序，最多 5 个）+ 大面包，图为商品封面。`radius` 以棋盘宽度为 1，约 0.07 → 0.30；`points` 为合成出该级得分（等级序号的三角数 × 10，大面包等级也是），`color` 来自商品首页背景色。
+- `tiers` 按从小到大排列，最后一项 `id` 恒为 `"big"`。店主配置了至少 2 个商品等级就用店主的（`GameTier`），否则用在售商品（按菜单顺序，最多 5 个）+ 大面包，图为商品封面。`radius` 以棋盘宽度为 1，约 0.055 → 0.20（商品等级 0.055 → 0.145，大面包 0.20）；`points` 为合成出该级得分（等级序号的三角数 × 10，大面包等级也是），`color` 来自商品首页背景色。
 - 这一份等级配置在开始时存进 `GameRun.tiersSnapshot`，之后改配置只影响新的局。
 - 同一 IP 每小时最多 60 次（`RATE_LIMITED`，`game_start_ip:<ipHash>`）。
 
@@ -128,6 +128,10 @@
 - 服务器用这一局的 `seed` 和开始时的等级快照重放（最后一次投放之后继续模拟到静止或游戏结束，把连锁合成算进去），分数以服务器为准；客户端发来的任何分数字段都被忽略。
 - 一局只结束一次：重复提交返回已保存的结果（以第一次的投放记录为准），并发重复也只写一次。未知 `runId` → `404 NOT_FOUND`；超过 2 小时 → `422 VALIDATION`；该微信号在此期间被禁 → `422 VALIDATION`。
 - `weekKey` = 完成时刻所在周的周一（America/Chicago）`YYYY-MM-DD`。`best` 是该微信号（不区分大小写）本周最高分，`rank` 是本周排名（分数高在前，同分先完成者在前；隐藏的记录和被禁的微信号不参与），`week.start` 周一，`week.end` 周日。
+- 引擎自己在 600 次投放（第 600 次之后冷却一过）或 200000 步（约 27 分钟）时结束游戏，客户端和服务器用同一套上限，所以很长的一局也能正常计分；超出上限的投放记录（601 条以上）才会被拒绝。
+- 防作弊的真实时间检查：模拟的时长（`步数 / 120` 秒）不能超过从开始到提交的真实时间加 10 秒，否则 `422 VALIDATION`（真实玩家不可能比真实时间模拟得更快，这挡住"离线算好再一次性提交"）。
+- 通过验证的局会保存证据，供店主发奖前人工确认（D103）：`GameRun.drops`（投放记录）、`dropCount`、`simSteps`（时长 = `simSteps / 120` 秒）。
+- 跨周：周一 0:00（America/Chicago）之前开始、之后才提交的局算新的一周（`weekKey` 以提交时刻为准）。
 - 同一 IP 每小时最多 60 次（`game_finish_ip:<ipHash>`）。
 
 **`GET /api/game/leaderboard`** → `{ week: { start, end }, top: [{ rank, nickname, wechatMasked, score }] (最多 20), lastWinner: { nickname, wechatMasked, score } | null, myBest?: number }`

@@ -34,7 +34,7 @@ function build(items: { id: string; imageUrl: string | null }[], bigImageUrl: st
     imageUrl: it.imageUrl,
     color: tierColor(i),
   }));
-  tiers.push({ id: "big", radius: BIG_RADIUS, points: defaultPoints(n), imageUrl: bigImageUrl ?? BIG_IMAGE_URL, color: BIG_COLOR });
+  tiers.push({ id: "big", radius: BIG_RADIUS, points: defaultPoints(n), imageUrl: bigImageUrl || BIG_IMAGE_URL, color: BIG_COLOR });
   return tiers;
 }
 
@@ -45,10 +45,10 @@ export async function loadTierConfigs(db: DbClient): Promise<GameTierConfig[]> {
   });
   const configured = rows.filter((r) => !r.isBig).slice(0, MAX_PRODUCT_TIERS);
   const bigRow = rows.find((r) => r.isBig);
-  const bigImage = bigRow?.imageUrl ?? null;
+  const bigImage = bigRow?.imageUrl || null;
   if (configured.length >= 2) {
     return build(
-      configured.map((r) => ({ id: r.id, imageUrl: r.imageUrl ?? r.product?.imageUrl ?? null })),
+      configured.map((r) => ({ id: r.id, imageUrl: r.imageUrl || r.product?.imageUrl || null })),
       bigImage,
     );
   }
@@ -62,7 +62,7 @@ export async function loadTierConfigs(db: DbClient): Promise<GameTierConfig[]> {
     // A shop with no products still gets a playable (image-less) board.
     return build([{ id: "t0", imageUrl: null }, { id: "t1", imageUrl: null }], bigImage);
   }
-  return build(products.map((p) => ({ id: p.id, imageUrl: p.imageUrl })), bigImage);
+  return build(products.map((p) => ({ id: p.id, imageUrl: p.imageUrl || null })), bigImage);
 }
 
 /** Reads the tiers snapshot stored on a run; throws when it is not a valid tier list. */

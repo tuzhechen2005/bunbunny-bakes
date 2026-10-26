@@ -1,6 +1,16 @@
 // Server-side (and test) replay of a run: same seed + same tiers + same drop log = same score.
 
-import { createGame, DEFAULT_HEIGHT, DROP_COOLDOWN_STEPS, GRACE_STEPS, OVER_STEPS, type Game, type TierDef } from "./engine";
+import {
+  createGame,
+  DEFAULT_HEIGHT,
+  DROP_COOLDOWN_STEPS,
+  GRACE_STEPS,
+  MAX_DROPS,
+  MAX_STEPS,
+  OVER_STEPS,
+  type Game,
+  type TierDef,
+} from "./engine";
 
 export interface ReplayDrop {
   /** World x of the drop (0..1). */
@@ -15,8 +25,6 @@ export interface RunLog {
   drops: ReplayDrop[];
 }
 
-export const MAX_DROPS = 600;
-export const MAX_STEPS = 200_000;
 
 export interface ReplayResult {
   score: number;

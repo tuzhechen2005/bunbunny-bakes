@@ -36,20 +36,20 @@ export function engineBundleSource(): string {
 export const TRACE_SOURCE = `(function (E, seed, tiers, drops) {
   var g = E.createGame({ seed: seed, tiers: tiers, width: 1, height: 1.5 });
   var hashes = [];
-  var events = 0;
+  var events = 0, bigBig = 0;
   for (var i = 0; i < drops.length; i++) {
     while (g.steps < drops[i].at) {
       g.step();
       if (g.steps % 250 === 0) hashes.push(E.hashState(g.state()));
     }
     g.drop(drops[i].x);
-    events += g.drainEvents().length;
+    var evs = g.drainEvents(); events += evs.length; for (var k = 0; k < evs.length; k++) if (evs[k].bigBig) bigBig++;
   }
   E.settleGame(g);
   var s = g.state();
   var fin = g.drainEvents().length;
   var rp = E.replay(seed, tiers, drops);
-  return { score: g.score, over: g.over, steps: g.steps, finalHash: E.hashState(s), hashes: hashes, events: events + fin,
+  return { score: g.score, over: g.over, steps: g.steps, finalHash: E.hashState(s), hashes: hashes, events: events + fin, bigBig: bigBig,
            replayScore: rp.score, replaySteps: rp.steps,
            rng: (function () { var r = E.createRng(seed); return [r.next(), r.next(), r.int(1000)]; })(),
            bodies: s.bodies.map(function (b) { return [b.id, b.tier, b.x, b.y, b.r]; }) };

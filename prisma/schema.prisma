@@ -311,7 +311,7 @@ model ManualIncomeItem {
 
 /// 消除大面包 (D100-D105). Owner-configured tiers, small to large; the isBig row is the 大面包.
 model GameTier {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   productId String?  @db.Uuid
   sortOrder Int      @default(0)
   imageUrl  String?
@@ -327,7 +327,7 @@ model GameTier {
 
 /// One play. Created by /api/game/start, verified and scored by /api/game/finish.
 model GameRun {
-  id            String    @id @default(uuid()) @db.Uuid
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   seed          String
   wechatId      String
   nickname      String
@@ -335,6 +335,11 @@ model GameRun {
   startedAt     DateTime  @default(now()) @db.Timestamptz(3)
   finishedAt    DateTime? @db.Timestamptz(3)
   score         Int?
+  /// Evidence for the owner's manual check before awarding a prize (D103): the verified drop log,
+  /// its length and the simulated length (steps of 1/120 s; seconds = simSteps / 120).
+  drops         Json?
+  dropCount     Int?
+  simSteps      Int?
   /// Monday (Chicago) of the week the run was finished in, "YYYY-MM-DD".
   weekKey       String?
   ipHash        String?
@@ -349,7 +354,7 @@ model GameRun {
 
 /// Banned WeChat ids. Uniqueness is case-insensitive: see the lower("wechatId") index in the migration.
 model GameBan {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   wechatId  String
   reason    String?
   createdAt DateTime @default(now()) @db.Timestamptz(3)
@@ -357,7 +362,7 @@ model GameBan {
 
 /// The weekly winner's follow-up state (one per week).
 model GameAward {
-  id          String    @id @default(uuid()) @db.Uuid
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   weekKey     String    @unique
   runId       String    @db.Uuid
   contactedAt DateTime? @db.Timestamptz(3)

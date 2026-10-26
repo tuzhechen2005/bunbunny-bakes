@@ -70,6 +70,9 @@ export const DROP_COOLDOWN_STEPS = 30;
 export const OVER_STEPS = 180;
 /** A new body is ignored by the danger check for this long, so a piece in flight is not "above the line". */
 export const GRACE_STEPS = 90;
+/** Hard caps: the engine ends the game here, so client and server agree on the final score. */
+export const MAX_DROPS = 600;
+export const MAX_STEPS = 200_000;
 export const BIG_BIG_BONUS = 500;
 export const DEFAULT_HEIGHT = 1.5;
 /** Danger line, from the top of the board. */
@@ -89,12 +92,12 @@ export function defaultPoints(index: number): number {
   return (index * (index + 1) * 10) / 2;
 }
 
-/** Radius for product tier `i` of `n` (0.07 -> 0.22), rounded so snapshots stay readable. */
+/** Radius for product tier `i` of `n` (0.055 -> 0.145), rounded so snapshots stay readable. */
 export function defaultRadius(i: number, n: number): number {
   const t = n <= 1 ? 0 : i / (n - 1);
-  return Math.round((0.07 + 0.15 * t) * 10000) / 10000;
+  return Math.round((0.055 + 0.09 * t) * 10000) / 10000;
 }
-export const BIG_RADIUS = 0.3;
+export const BIG_RADIUS = 0.2;
 
 /** `n` product tiers (>= 1) plus the 大面包 tier with the default radii and points. */
 export function defaultTierDefs(ids: readonly string[]): TierDef[] {
@@ -126,6 +129,8 @@ export interface Game {
   readonly score: number;
   readonly over: boolean;
   readonly steps: number;
+  /** Number of drops so far. */
+  readonly drops: number;
   /** True when nothing moves and nothing is pending (safe to stop simulating until the next drop). */
   readonly asleep: boolean;
   /** Steps since the last drop (Infinity before the first). */
@@ -150,6 +155,7 @@ export function createGame(opts: GameOptions): Game {
   let over = false;
   let overTimer = 0;
   let lastDrop = -Infinity;
+  let dropCount = 0;
   let quiet = 0;
   let asleep = true;
   let events: GameEvent[] = [];
@@ -317,6 +323,7 @@ export function createGame(opts: GameOptions): Game {
       const body: Internal = { id: ++uid, tier, x: bx, y: by, px: bx, py: by, r, born: steps };
       bodies.push(body);
       lastDrop = steps;
+      dropCount++;
       quiet = 0;
       asleep = false;
       events.push({ type: "drop", step: steps, tier, x: bx, y: by });
@@ -332,6 +339,10 @@ export function createGame(opts: GameOptions): Game {
         } else {
           quiet = 0;
         }
+      }
+      if (!over && (steps >= MAX_STEPS || (dropCount >= MAX_DROPS && steps - lastDrop >= DROP_COOLDOWN_STEPS))) {
+        over = true;
+        events.push({ type: "over", step: steps });
       }
       if (!over) checkDanger();
     },
@@ -361,6 +372,9 @@ export function createGame(opts: GameOptions): Game {
     },
     get steps() {
       return steps;
+    },
+    get drops() {
+      return dropCount;
     },
     get asleep() {
       return asleep && !dangerPending();

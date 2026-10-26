@@ -1,6 +1,6 @@
 -- CreateTable
 CREATE TABLE "GameTier" (
-    "id" UUID NOT NULL,
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "productId" UUID,
     "sortOrder" INTEGER NOT NULL DEFAULT 0,
     "imageUrl" TEXT,
@@ -13,7 +13,7 @@ CREATE TABLE "GameTier" (
 
 -- CreateTable
 CREATE TABLE "GameRun" (
-    "id" UUID NOT NULL,
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "seed" TEXT NOT NULL,
     "wechatId" TEXT NOT NULL,
     "nickname" TEXT NOT NULL,
@@ -21,6 +21,9 @@ CREATE TABLE "GameRun" (
     "startedAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "finishedAt" TIMESTAMPTZ(3),
     "score" INTEGER,
+    "drops" JSONB,
+    "dropCount" INTEGER,
+    "simSteps" INTEGER,
     "weekKey" TEXT,
     "ipHash" TEXT,
     "hidden" BOOLEAN NOT NULL DEFAULT false,
@@ -30,7 +33,7 @@ CREATE TABLE "GameRun" (
 
 -- CreateTable
 CREATE TABLE "GameBan" (
-    "id" UUID NOT NULL,
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "wechatId" TEXT NOT NULL,
     "reason" TEXT,
     "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -40,7 +43,7 @@ CREATE TABLE "GameBan" (
 
 -- CreateTable
 CREATE TABLE "GameAward" (
-    "id" UUID NOT NULL,
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "weekKey" TEXT NOT NULL,
     "runId" UUID NOT NULL,
     "contactedAt" TIMESTAMPTZ(3),
