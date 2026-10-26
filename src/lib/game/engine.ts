@@ -84,6 +84,9 @@ const DAMPING = 0.994;
 const FLOOR_FRICTION = 0.8;
 const WALL_FRICTION = 0.9;
 const MERGE_SLACK = 1.02;
+/** Largest positional correction per body per pair and iteration, and largest travel per step (world units). */
+const MAX_PUSH = 0.006;
+const MAX_SPEED = 0.04;
 const QUIET = 0.00012;
 const SLEEP_STEPS = 60;
 
@@ -92,12 +95,12 @@ export function defaultPoints(index: number): number {
   return (index * (index + 1) * 10) / 2;
 }
 
-/** Radius for product tier `i` of `n` (0.0625 -> 0.181), rounded so snapshots stay readable. */
+/** Radius for product tier `i` of `n` (0.066 -> 0.199), rounded so snapshots stay readable. */
 export function defaultRadius(i: number, n: number): number {
   const t = n <= 1 ? 0 : i / (n - 1);
-  return Math.round((0.0625 + 0.1185 * t) * 10000) / 10000;
+  return Math.round((0.066 + 0.133 * t) * 10000) / 10000;
 }
-export const BIG_RADIUS = 0.253;
+export const BIG_RADIUS = 0.268;
 
 /** `n` product tiers (>= 1) plus the 大面包 tier with the default radii and points. */
 export function defaultTierDefs(ids: readonly string[]): TierDef[] {
@@ -219,8 +222,9 @@ export function createGame(opts: GameOptions): Game {
           const points = tiers[tier].points;
           score += points;
           const r = tiers[tier].radius;
-          const nx = mx;
-          const ny = my;
+          // The bigger body must still fit inside the walls and under the ceiling.
+          const nx = Math.min(Math.max(mx, r), W - r);
+          const ny = Math.max(my, r);
           created.push({
             id: ++uid,
             tier,
@@ -251,8 +255,8 @@ export function createGame(opts: GameOptions): Game {
     const n = bs.length;
     for (let i = 0; i < n; i++) {
       const b = bs[i];
-      const vx = (b.x - b.px) * DAMPING;
-      const vy = (b.y - b.py) * DAMPING;
+      const vx = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, (b.x - b.px) * DAMPING));
+      const vy = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, (b.y - b.py) * DAMPING));
       b.px = b.x;
       b.py = b.y;
       b.x += vx;
@@ -270,7 +274,7 @@ export function createGame(opts: GameOptions): Game {
           if (d2 < m * m) {
             if (d2 > 1e-12) {
               const d = Math.sqrt(d2);
-              const o = ((m - d) / d) * 0.5;
+              const o = Math.min((m - d) * 0.5, MAX_PUSH) / d;
               A.x -= dx * o;
               A.y -= dy * o;
               B.x += dx * o;
@@ -297,7 +301,11 @@ export function createGame(opts: GameOptions): Game {
           c.y = H - c.r;
           c.px = c.x - (c.x - c.px) * FLOOR_FRICTION;
         }
-        if (c.y < c.r - H) c.y = c.r - H;
+        // Solid ceiling at the top of the visible board: nothing ever leaves the screen upwards.
+        if (c.y < c.r) {
+          c.y = c.r;
+          if (c.py < c.y) c.py = c.y;
+        }
       }
     }
     let moved = 0;

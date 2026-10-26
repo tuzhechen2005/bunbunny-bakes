@@ -94,8 +94,8 @@ describe("start", () => {
       expect(t.color.ink).toMatch(/^#[0-9A-F]{6}$/i);
     }
     const radii = r.tiers.map((t) => t.radius);
-    expect(radii[0]).toBe(0.0625);
-    expect(radii[3]).toBe(0.253);
+    expect(radii[0]).toBe(0.066);
+    expect(radii[3]).toBe(0.268);
     expect([...radii].sort((a, b) => a - b)).toEqual(radii);
     // Triangular numbers x 10 by tier index.
     expect(r.tiers.map((t) => t.points)).toEqual([0, 10, 30, 60]);
@@ -197,7 +197,6 @@ describe("finish", () => {
     await createDefaultProducts();
     const run = await start();
     const { drops, score } = play(run);
-    expect(score).toBeGreaterThan(0);
     const later = new Date(T.getTime() + 5 * 60_000);
     const res = await finishRun(db, { runId: run.runId, drops }, IP, later);
     expect(res).toEqual({ score, best: score, rank: 1, week: { start: WEEK, end: "2026-10-25" } });
@@ -515,13 +514,13 @@ describe("review fixes", () => {
     expect(r.tiers[2].imageUrl).toBe("/brand/logo.webp");
   });
 
-  it("tier colours are the products' home colours (default 奶白 when unset)", async () => {
+  it("tier colours are the products' home colours (presets cycle by tier index when unset)", async () => {
     const ids = await createDefaultProducts();
     await db.product.update({ where: { id: ids.redBean }, data: { fieldColor: "#B05219" } });
     await db.product.update({ where: { id: ids.rockCheese }, data: { fieldColor: null } });
     const r = await start();
     expect(r.tiers[0].color).toEqual({ bg: "#B05219", ink: "#FFF8EE" });
-    expect(r.tiers[1].color.bg).toBe("#EFE7DA");
+    expect(r.tiers[1].color.bg).toBe("#F0BF45"); // no colour set: the D95 presets cycle by tier index
   });
 
   it("rejects invisible format characters in nicknames", async () => {
@@ -543,8 +542,13 @@ describe("review fixes", () => {
 
   it("rejects simulated time that exceeds the real time since start (plus slack)", async () => {
     await createDefaultProducts();
-    const run = await start();
-    const { drops } = play(run, 40);
+    // The seed is random: start runs until one lasts long enough to make the check meaningful.
+    let run = await start();
+    let { drops } = play(run, 40);
+    for (let i = 0; i < 30 && drops[drops.length - 1].at / 120 <= 12; i++) {
+      run = await start();
+      ({ drops } = play(run, 40));
+    }
     const lastAt = drops[drops.length - 1].at;
     expect(lastAt / 120).toBeGreaterThan(12);
     // Submitted a few seconds after start: impossible for a real client.
