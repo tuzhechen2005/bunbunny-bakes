@@ -139,6 +139,8 @@ export class BoardRenderer {
   reduced = false;
   /** Set when an image arrives so the sprites are rebuilt on the next frame. */
   dirty = true;
+  /** Called when a picture arrived: the owner draws a frame even if its loop is asleep. */
+  onImage: (() => void) | null = null;
 
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
@@ -151,6 +153,7 @@ export class BoardRenderer {
       this.imgs[i] = loadTierImage(t.imageUrl, () => {
         this.imgs[i] = loadTierImage(t.imageUrl, () => {});
         this.dirty = true;
+        this.onImage?.();
       });
     });
   }

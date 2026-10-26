@@ -66,6 +66,7 @@ export function Board({
     const r = new BoardRenderer(ctx, session.tiers, readTheme(), session.dangerY, 1.5);
     r.reduced = live.current.reduced;
     renderer.current = r;
+    r.onImage = () => wake();
 
     // ---- size ----
     const fit = () => {
@@ -103,6 +104,7 @@ export function Board({
     let lastHud = { score: -1, next: -1 };
     const hud = () => {
       const h = { score: session.score, next: session.upcoming() };
+      box.dataset.score = String(h.score);
       if (h.score !== lastHud.score || h.next !== lastHud.next) {
         lastHud = h;
         live.current.onHud(h);
