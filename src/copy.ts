@@ -345,6 +345,7 @@ export const copy = {
       removeConfirm: "删除「{name}」这一档？",
       addTier: "加一档面包",
       addPick: "选择面包",
+      dupProduct: "这款面包已经是一档了",
       noProductLeft: "没有可加的在售面包了",
       maxTiers: "最多 5 档面包",
       minTiers: "至少要保留 2 种面包",

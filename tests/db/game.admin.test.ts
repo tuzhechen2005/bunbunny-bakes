@@ -119,6 +119,7 @@ describe("tiers", () => {
     const paused = await db.product.create({ data: { name: "停售", unitPriceCents: 300, capacityMode: "INDEPENDENT", dailyLimit: 5, batchYield: 1, status: "PAUSED", description: "" } });
     expect((await tiersPOST(req("POST", "/api/admin/game/tiers", { productId: paused.id }))).status).toBe(422);
     expect((await tiersPOST(req("POST", "/api/admin/game/tiers", { productId: "nope" }))).status).toBe(422);
+    expect((await tiersPOST(req("POST", "/api/admin/game/tiers", { productId: P.brulee }))).status).toBe(422); // already a tier
     expect((await tiersPOST(req("POST", "/api/admin/game/tiers", { productId: extra.id }))).status).toBe(201);
     let v = await tiers();
     const ids = v.tiers.filter((x: { isBig: boolean }) => !x.isBig).map((x: { id: string }) => x.id);
@@ -132,7 +133,9 @@ describe("tiers", () => {
     expect((await orderPUT(req("PUT", "/api/admin/game/tiers/order", { ids: ids.slice(1) }))).status).toBe(422);
 
     // swap a product
-    expect((await tierPATCH(req("PATCH", "/x", { productId: P.brulee }), idCtx(reversed[0]))).status).toBe(200);
+    expect((await tierPATCH(req("PATCH", "/x", { productId: P.brulee }), idCtx(reversed[0]))).status).toBe(422); // duplicate
+    const swap = await db.product.create({ data: { name: "替换", unitPriceCents: 300, capacityMode: "INDEPENDENT", dailyLimit: 5, batchYield: 1, description: "" } });
+    expect((await tierPATCH(req("PATCH", "/x", { productId: swap.id }), idCtx(reversed[0]))).status).toBe(200);
 
     // remove down to 2
     for (const id of reversed.slice(0, 3)) expect((await tierDELETE(req("DELETE", "/x"), idCtx(id))).status).toBe(200);
@@ -220,6 +223,19 @@ describe("leaderboard", () => {
     expect(b.weeks).toContain(THIS_WEEK);
   });
 
+  it("下过单 matching is exact: _ and % are not wildcards", async () => {
+    await createOpenDate("2026-12-01");
+    await createOrder({ date: "2026-12-01", items: [{ productId: P.redBean, qty: 1 }], wechatId: "axb", status: "COMPLETED" });
+    await run("a_b", "甲", 10);
+    await run("%", "乙", 9);
+    await run("AXB", "丙", 8);
+    const b = await board();
+    const by = (w: string) => b.rows.find((r: { wechatId: string }) => r.wechatId === w).ordered;
+    expect(by("a_b")).toBe(false);
+    expect(by("%")).toBe(false);
+    expect(by("AXB")).toBe(true);
+  });
+
   it("rejects a bad week parameter and shows an empty past week", async () => {
     expect((await boardGET(req("GET", "/api/admin/game/leaderboard?week=2026-12-02"))).status).toBe(422); // not a Monday
     const b = await board("2026-11-02");
@@ -251,6 +267,8 @@ describe("leaderboard", () => {
     let b = await board();
     expect(b.bans).toHaveLength(1);
     expect(b.bans[0].reason).toBe("脚本 2");
+    const banAudits = await audits("game.ban");
+    expect(banAudits[1].before).toMatchObject({ reason: "脚本" });
     expect(b.winner.wechatId).toBe("fair_w");
     expect(b.rows.find((r: { wechatId: string }) => r.wechatId === "Cheater_W")).toMatchObject({ banned: true, rank: null });
     expect((await banDELETE(req("DELETE", "/x"), { params: Promise.resolve({ wechatId: "cheater_w" }) })).status).toBe(200);

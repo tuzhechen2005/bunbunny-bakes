@@ -11,7 +11,6 @@ import { fieldFor } from "@/lib/fieldColor";
 import { writeAudit } from "./audit";
 import type { DbClient, Tx } from "./db";
 import { AppError } from "./errors";
-import { hasOrdered } from "./game";
 import { MAX_PRODUCT_TIERS } from "./gameTiers";
 import { weekKeyOf } from "./gameWeek";
 import { imageUrlForKey, keyFromImageUrl } from "./imageFormat";
@@ -173,6 +172,7 @@ export async function addTier(db: DbClient, productId: string, now: Date): Promi
     const rows = await materialize(tx, now);
     if (productTierCount(rows) >= MAX_PRODUCT_TIERS) throw invalid(t.maxTiers);
     await assertActiveProduct(tx, productId);
+    if (rows.some((r) => !r.isBig && r.productId === productId)) throw invalid(t.dupProduct, "productId");
     const next = Math.max(-1, ...rows.filter((r) => !r.isBig).map((r) => r.sortOrder)) + 1;
     const ts = now.toISOString();
     const id = (
@@ -193,6 +193,7 @@ export async function updateTierProduct(db: DbClient, id: string, productId: str
     const row = rows.find((r) => r.id === id);
     if (!row || row.isBig) throw notFound();
     await assertActiveProduct(tx, productId);
+    if (rows.some((r) => !r.isBig && r.productId === productId && r.id !== id)) throw invalid(t.dupProduct, "productId");
     await tx.$executeRaw`UPDATE "GameTier" SET "productId" = ${productId}::uuid, "updatedAt" = ${now.toISOString()}::timestamptz WHERE "id"::text = ${id}`;
     await writeTierAudit(tx, "game.tier.update", id, now, { productId: row.productId }, { productId });
   });
@@ -349,9 +350,13 @@ const lc = (s: string) => s.toLowerCase();
 
 /** Which of these WeChat ids have ordered (L1's hasOrdered: not CANCELLED / REJECTED, case-insensitive). */
 export async function orderedSet(db: DbClient, wechatIds: string[]): Promise<Set<string>> {
-  const ids = [...new Set(wechatIds.map(lc))];
-  const flags = await Promise.all(ids.map((id) => hasOrdered(db, id)));
-  return new Set(ids.filter((_, i) => flags[i]));
+  const ids = [...new Set(wechatIds.map((w) => lc(w.trim())))];
+  if (ids.length === 0) return new Set();
+  // One query, same rule as hasOrdered; equality on lower() only (no LIKE/ILIKE patterns).
+  const rows = await db.$queryRaw<{ id: string }[]>`
+    SELECT DISTINCT lower("wechatId") AS id FROM "Order"
+    WHERE lower("wechatId") = ANY(${ids}::text[]) AND status::text NOT IN ('CANCELLED', 'REJECTED')`;
+  return new Set(rows.map((r) => r.id));
 }
 
 export const weekQuerySchema = z
@@ -485,6 +490,8 @@ export const banBodySchema = z.object({
 
 export async function banWechat(db: DbClient, input: z.output<typeof banBodySchema>, now: Date): Promise<void> {
   await db.$transaction(async (tx) => {
+    const prior = await tx.$queryRaw<{ reason: string | null }[]>`
+      SELECT "reason" FROM "GameBan" WHERE lower("wechatId") = lower(${input.wechatId})`;
     const inserted = await tx.$executeRaw`
       INSERT INTO "GameBan" ("wechatId","reason","createdAt")
       SELECT ${input.wechatId}, ${input.reason || null}, ${now.toISOString()}::timestamptz
@@ -497,6 +504,7 @@ export async function banWechat(db: DbClient, input: z.output<typeof banBodySche
       action: "game.ban",
       entityType: "GameBan",
       entityId: input.wechatId,
+      before: prior[0] ? { wechatId: input.wechatId, reason: prior[0].reason } : undefined,
       after: { wechatId: input.wechatId },
       reason: input.reason || null,
       at: now,
