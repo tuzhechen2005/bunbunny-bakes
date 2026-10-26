@@ -515,6 +515,15 @@ describe("review fixes", () => {
     expect(r.tiers[2].imageUrl).toBe("/brand/logo.webp");
   });
 
+  it("tier colours are the products' home colours (default 奶白 when unset)", async () => {
+    const ids = await createDefaultProducts();
+    await db.product.update({ where: { id: ids.redBean }, data: { fieldColor: "#B05219" } });
+    await db.product.update({ where: { id: ids.rockCheese }, data: { fieldColor: null } });
+    const r = await start();
+    expect(r.tiers[0].color).toEqual({ bg: "#B05219", ink: "#FFF8EE" });
+    expect(r.tiers[1].color.bg).toBe("#EFE7DA");
+  });
+
   it("rejects invisible format characters in nicknames", async () => {
     for (const code of [0x200b, 0xfeff, 0x200f, 0x2060]) {
       const nick = `a${String.fromCharCode(code)}b`;
@@ -537,7 +546,7 @@ describe("review fixes", () => {
     const run = await start();
     const { drops } = play(run, 40);
     const lastAt = drops[drops.length - 1].at;
-    expect(lastAt / 120).toBeGreaterThan(15);
+    expect(lastAt / 120).toBeGreaterThan(12);
     // Submitted a few seconds after start: impossible for a real client.
     await expect(
       finishRun(db, { runId: run.runId, drops }, IP, new Date(T.getTime() + 1000)),

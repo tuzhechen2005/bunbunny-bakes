@@ -4,7 +4,7 @@
 // the active products in menu order (up to 5) using each product's cover photo, plus the 大面包.
 
 import { BIG_RADIUS, defaultPoints, defaultRadius, type TierDef } from "@/lib/game";
-import { fieldFor } from "@/lib/field";
+import { FIELD_PRESETS, fieldFor } from "@/lib/fieldColor";
 import type { DbClient } from "./db";
 
 export const BIG_IMAGE_URL = "/brand/logo.webp";
@@ -16,23 +16,22 @@ export interface GameTierConfig extends TierDef {
   color: { bg: string; ink: string };
 }
 
-/**
- * Colour of product tier `index`. Today the home cycle (src/lib/field.ts); once products carry
- * their own colour (K1 `Product.fieldColor`), this is the one place to switch to it.
- */
-export function tierColor(index: number): { bg: string; ink: string } {
-  const f = fieldFor(index);
-  return { bg: f.field, ink: f.ink };
+
+interface TierItem {
+  id: string;
+  imageUrl: string | null;
+  /** Product home colour (D95); null = the default 奶白. */
+  fieldColor?: string | null;
 }
 
-function build(items: { id: string; imageUrl: string | null }[], bigImageUrl: string | null): GameTierConfig[] {
+function build(items: TierItem[], bigImageUrl: string | null): GameTierConfig[] {
   const n = items.length;
   const tiers: GameTierConfig[] = items.map((it, i) => ({
     id: it.id,
     radius: defaultRadius(i, n),
     points: defaultPoints(i),
     imageUrl: it.imageUrl,
-    color: tierColor(i),
+    color: ((f) => ({ bg: f.bg, ink: f.ink }))(fieldFor(it.fieldColor === undefined ? FIELD_PRESETS[i % FIELD_PRESETS.length].hex : it.fieldColor)),
   }));
   tiers.push({ id: "big", radius: BIG_RADIUS, points: defaultPoints(n), imageUrl: bigImageUrl || BIG_IMAGE_URL, color: BIG_COLOR });
   return tiers;
@@ -41,14 +40,14 @@ function build(items: { id: string; imageUrl: string | null }[], bigImageUrl: st
 export async function loadTierConfigs(db: DbClient): Promise<GameTierConfig[]> {
   const rows = await db.gameTier.findMany({
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    include: { product: { select: { imageUrl: true } } },
+    include: { product: { select: { imageUrl: true, fieldColor: true } } },
   });
   const configured = rows.filter((r) => !r.isBig).slice(0, MAX_PRODUCT_TIERS);
   const bigRow = rows.find((r) => r.isBig);
   const bigImage = bigRow?.imageUrl || null;
   if (configured.length >= 2) {
     return build(
-      configured.map((r) => ({ id: r.id, imageUrl: r.imageUrl || r.product?.imageUrl || null })),
+      configured.map((r) => ({ id: r.id, imageUrl: r.imageUrl || r.product?.imageUrl || null, fieldColor: r.product?.fieldColor ?? null })),
       bigImage,
     );
   }
@@ -56,13 +55,13 @@ export async function loadTierConfigs(db: DbClient): Promise<GameTierConfig[]> {
     where: { status: "ACTIVE" },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     take: MAX_PRODUCT_TIERS,
-    select: { id: true, imageUrl: true },
+    select: { id: true, imageUrl: true, fieldColor: true },
   });
   if (products.length === 0) {
     // A shop with no products still gets a playable (image-less) board.
     return build([{ id: "t0", imageUrl: null }, { id: "t1", imageUrl: null }], bigImage);
   }
-  return build(products.map((p) => ({ id: p.id, imageUrl: p.imageUrl || null })), bigImage);
+  return build(products.map((p) => ({ id: p.id, imageUrl: p.imageUrl || null, fieldColor: p.fieldColor })), bigImage);
 }
 
 /** Reads the tiers snapshot stored on a run; throws when it is not a valid tier list. */
