@@ -207,6 +207,64 @@ export const copy = {
       saveDone: "我已保存",
     },
 
+    /** 消除大面包 (D100–D105): the home entry card and the `/game` page. */
+    game: {
+      title: "消除大面包",
+      pageTitle: "消除大面包",
+      backLabel: "返回首页",
+      /** Home entry card: weekly best, the label before the score (e.g. "本周最高" 1280). */
+      entryBest: "本周最高",
+      entryNeutral: "来玩一局，上榜看看",
+      entryLabel: "玩消除大面包",
+      /** Start screen. */
+      startTitle: "合成大面包",
+      startHint: "相同的面包碰在一起会变大一级，最后合成大面包！",
+      wechatLabel: "微信号",
+      wechatPlaceholder: "你的微信号",
+      nicknameLabel: "昵称",
+      nicknamePlaceholder: "最多 10 个字",
+      wechatInvalid: "请填写微信号（最多 40 个字符）",
+      nicknameInvalid: "请填写昵称（1 到 10 个字）",
+      start: "开始游戏",
+      starting: "正在开始…",
+      startFailed: "现在开不了局，请稍后再试",
+      viewBoard: "排行榜",
+      /** D104 rule line; {contact} is the owner line when the menu has it. */
+      rules: "每周一 0:00 重新开始，上周第一名可领价值 $10 以内的面包一份（需在本店下过单）。",
+      rulesContact: "领奖请联系店主微信 {id}。",
+      /** Playing. */
+      score: "得分",
+      next: "下一个",
+      soundOn: "开启声音",
+      soundOff: "关闭声音",
+      boardLabel: "游戏棋盘，按住左右拖动瞄准，松开投放",
+      dangerLabel: "警戒线",
+      /** Game over sheet. */
+      overTitle: "游戏结束",
+      finalScore: "本局得分",
+      submitting: "正在提交成绩…",
+      submitFailed: "成绩还没提交成功",
+      retry: "重试",
+      confirmed: "成绩已上榜",
+      best: "本周最高",
+      rankPre: "本周第",
+      rankPost: "名",
+      again: "再来一局",
+      againDiscard: "放弃这局成绩，再来一局",
+      scoreDiffers: "以服务器记录的成绩为准",
+      toBoard: "看排行榜",
+      /** Leaderboard. */
+      boardTitle: "本周排行榜",
+      weekRange: "{start} – {end}",
+      lastWinner: "上周第一名",
+      myBest: "我的本周最高",
+      empty: "这周还没有人上榜，来当第一个！",
+      boardLoading: "正在加载…",
+      boardFailed: "排行榜加载失败",
+      closeBoard: "返回",
+      points: "{score} 分",
+    },
+
     /** `/orders`: the orders opened on this phone (D84). */
     myOrders: {
       pageTitle: "我的订单",

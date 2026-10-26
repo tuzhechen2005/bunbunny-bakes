@@ -15,6 +15,7 @@ import { useMotionPrefs } from "@/lib/motion/react";
 import { BagBar } from "./bag/BagBar";
 import { FlyLayer } from "./bag/FlyLayer";
 import { fill, safeLineTotal } from "./format";
+import { GameEntryCard } from "./GameEntryCard";
 import { ProductCard } from "./ProductCard";
 import { Detail, type DetailHandle } from "./rack/Detail";
 import { NameSwap } from "./rack/NameSwap";
@@ -400,6 +401,7 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
               </ul>
             </section>
           ) : null}
+          {menu && products.length > 0 ? <GameEntryCard /> : null}
           {menu ? <SiteFooter ownerWechatId={menu.ownerWechatId} home /> : null}
         </div>
       </div>
