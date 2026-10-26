@@ -1,0 +1,50 @@
+/* 消除大面包 page. Colours are the global tokens. */
+.game-board {
+  position: relative;
+  margin: 0 auto;
+  /* Fit the board between the bars: as wide as the column, or as wide as the height allows (aspect 2:3). */
+  width: min(100%, calc((100svh - 56px - 92px - 24px - env(safe-area-inset-bottom)) / 1.5));
+  min-width: 200px;
+  aspect-ratio: 2 / 3;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--c-wash);
+  box-shadow: inset 0 0 0 1.5px var(--c-line);
+}
+.game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+.game-canvas:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: -4px;
+  border-radius: 20px;
+}
+
+@keyframes game-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}
+.game-entry {
+  animation: game-breathe 2.4s ease-in-out infinite;
+}
+.game-entry:active {
+  animation-play-state: paused;
+  transform: scale(0.98);
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-entry {
+    animation: none;
+  }
+}
