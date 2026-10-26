@@ -1,29 +1,28 @@
 // Admin side of the 消除大面包 game (L3): tier configuration, leaderboard moderation, weekly award.
 //
-// The game tables (GameTier, GameRun, GameBan, GameAward) are owned by L1's migration. Until the
-// generated Prisma client knows them, this module talks to them with raw SQL written against the
-// contract in .orchestrator/briefs/l-tasks.md. Ids and productId are compared as text so the SQL
-// works whether L1 makes them uuid or text. After L1 merges: check column names, weekKey format
-// (assumed "YYYY-MM-DD" of the Chicago Monday) and that GameTier.imageUrl accepts '' (see WIRING).
+// Raw SQL is used for the game tables so every comparison is lower()/text based (no ILIKE: wechat
+// ids may contain _ and %). Ids are DB-generated uuids; GameTier.imageUrl is NULL when unset.
 
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { copy } from "@/copy";
-import { SHOP_TZ, addDays, isLocalDate, localDateOf, weekdayOf } from "@/domain/dates";
-import { fieldFor } from "@/lib/field";
+import { isLocalDate, weekdayOf } from "@/domain/dates";
+import { fieldFor } from "@/lib/fieldColor";
 import { writeAudit } from "./audit";
 import type { DbClient, Tx } from "./db";
 import { AppError } from "./errors";
+import { hasOrdered } from "./game";
+import { MAX_PRODUCT_TIERS } from "./gameTiers";
+import { weekKeyOf } from "./gameWeek";
 import { imageUrlForKey, keyFromImageUrl } from "./imageFormat";
 import type { ImageStore } from "./imageStore";
 import { readUploadedImage } from "./productImage";
 
-void SHOP_TZ;
 const t = copy.admin.game;
 
-export const MAX_PRODUCT_TIERS = 8;
+export { MAX_PRODUCT_TIERS };
 export const MIN_PRODUCT_TIERS = 2;
-const DEFAULT_TIER_COUNT = 5;
+const DEFAULT_TIER_COUNT = MAX_PRODUCT_TIERS;
 const BIG_SORT = 1000;
 
 const notFound = () => new AppError("NOT_FOUND");
@@ -31,12 +30,7 @@ const invalid = (message: string, field = "value") =>
   new AppError("VALIDATION", { message, extra: { fields: { [field]: message } } });
 const uuid = z.uuid();
 
-/** Monday (Chicago) of the week containing `now`, "YYYY-MM-DD". */
-export function weekKeyOf(now: Date): string {
-  const today = localDateOf(now);
-  const back = (weekdayOf(today) + 6) % 7;
-  return addDays(today, -back);
-}
+export { weekKeyOf };
 
 function lockTiers(tx: Tx) {
   return tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('game-tiers'))`;
@@ -94,30 +88,30 @@ export async function getTiers(db: DbClient): Promise<TiersView> {
   const [rows, products, allNames] = await Promise.all([
     tierRows(db),
     activeProducts(db),
-    db.product.findMany({ select: { id: true, name: true, imageUrl: true } }),
+    db.product.findMany({ select: { id: true, name: true, imageUrl: true, fieldColor: true } }),
   ]);
   const byId = new Map(allNames.map((p) => [p.id, p]));
   const configured = rows.length > 0;
   const productTiers: TierDto[] = configured
     ? rows
         .filter((r) => !r.isBig)
-        .map((r, i) => ({
+        .map((r) => ({
           id: r.id,
           productId: r.productId,
           productName: r.productId ? (byId.get(r.productId)?.name ?? null) : null,
           isBig: false,
           imageUrl: r.imageUrl,
           productImageUrl: r.productId ? (byId.get(r.productId)?.imageUrl ?? null) : null,
-          color: colorFor(i),
+          color: colorFor(r.productId ? byId.get(r.productId)?.fieldColor : null),
         }))
-    : products.slice(0, DEFAULT_TIER_COUNT).map((p, i) => ({
-        id: `default-${i}`,
+    : products.slice(0, DEFAULT_TIER_COUNT).map((p) => ({
+        id: `default-${p.id}`,
         productId: p.id,
         productName: p.name,
         isBig: false,
         imageUrl: null,
         productImageUrl: p.imageUrl,
-        color: colorFor(i),
+        color: colorFor(byId.get(p.id)?.fieldColor),
       }));
   const big = rows.find((r) => r.isBig);
   const tiers: TierDto[] = [
@@ -129,16 +123,18 @@ export async function getTiers(db: DbClient): Promise<TiersView> {
       isBig: true,
       imageUrl: big?.imageUrl ?? null,
       productImageUrl: null,
-      color: colorFor(productTiers.length),
+      color: BIG_COLOR,
     },
   ];
   return { configured, tiers, products };
 }
 
-function colorFor(index: number): { bg: string; ink: string } {
-  // TODO(K1 wiring): use the product's own field colour (fieldColor) once it exists.
-  const f = fieldFor(index);
-  return { bg: f.field, ink: f.ink };
+const BIG_COLOR = { bg: "#EFE7DA", ink: "#4A2723" }; // same as the game's big tier (gameTiers.ts)
+
+/** The product's home colour (D95), as the game draws the tier. */
+function colorFor(fieldColor: string | null | undefined): { bg: string; ink: string } {
+  const f = fieldFor(fieldColor);
+  return { bg: f.bg, ink: f.ink };
 }
 
 /** First write: store the defaults (active products in menu order, up to 5) plus the big tier. */
@@ -151,11 +147,11 @@ async function materialize(tx: Tx, now: Date): Promise<TierRow[]> {
   for (const p of products) {
     await tx.$executeRaw`
       INSERT INTO "GameTier" ("id","productId","sortOrder","imageUrl","isBig","createdAt","updatedAt")
-      VALUES (gen_random_uuid(), ${p.id}::uuid, ${i++}, '', false, ${ts}::timestamptz, ${ts}::timestamptz)`;
+      VALUES (gen_random_uuid(), ${p.id}::uuid, ${i++}, NULL, false, ${ts}::timestamptz, ${ts}::timestamptz)`;
   }
   await tx.$executeRaw`
     INSERT INTO "GameTier" ("id","productId","sortOrder","imageUrl","isBig","createdAt","updatedAt")
-    VALUES (gen_random_uuid(), NULL, ${BIG_SORT}, '', true, ${ts}::timestamptz, ${ts}::timestamptz)`;
+    VALUES (gen_random_uuid(), NULL, ${BIG_SORT}, NULL, true, ${ts}::timestamptz, ${ts}::timestamptz)`;
   return tierRows(tx);
 }
 
@@ -182,7 +178,7 @@ export async function addTier(db: DbClient, productId: string, now: Date): Promi
     const id = (
       await tx.$queryRaw<{ id: string }[]>`
         INSERT INTO "GameTier" ("id","productId","sortOrder","imageUrl","isBig","createdAt","updatedAt")
-        VALUES (gen_random_uuid(), ${productId}::uuid, ${next}, '', false, ${ts}::timestamptz, ${ts}::timestamptz)
+        VALUES (gen_random_uuid(), ${productId}::uuid, ${next}, NULL, false, ${ts}::timestamptz, ${ts}::timestamptz)
         RETURNING "id"::text AS id`
     )[0].id;
     await writeTierAudit(tx, "game.tier.add", id, now, undefined, { productId });
@@ -265,9 +261,9 @@ async function changeTierImage(
       const row = id === "big" ? rows.find((r) => r.isBig) : rows.find((r) => r.id === id);
       if (!row) throw notFound();
       oldUrl = row.imageUrl;
-      const url = newKey ? imageUrlForKey(newKey) : "";
+      const url = newKey ? imageUrlForKey(newKey) : null;
       await tx.$executeRaw`UPDATE "GameTier" SET "imageUrl" = ${url}, "updatedAt" = ${now.toISOString()}::timestamptz WHERE "id"::text = ${row.id}`;
-      await writeTierAudit(tx, "game.tier.image", row.id, now, { imageUrl: row.imageUrl }, { imageUrl: url || null });
+      await writeTierAudit(tx, "game.tier.image", row.id, now, { imageUrl: row.imageUrl }, { imageUrl: url });
     });
   } catch (e) {
     await bestEffortDelete(store, newKey);
@@ -303,6 +299,9 @@ export interface RunRowDto {
   banned: boolean;
   /** Has a non-cancelled, non-rejected order (the prize eligibility, D104). */
   ordered: boolean;
+  /** Evidence for the manual check before paying: number of drops and the simulated length. */
+  dropCount: number | null;
+  durationSec: number | null;
   /** Rank among the runs that count (best per WeChat id, not hidden, not banned); null otherwise. */
   rank: number | null;
 }
@@ -342,19 +341,17 @@ interface RawRun {
   score: number | null;
   finishedAt: Date | null;
   hidden: boolean;
+  dropCount: number | null;
+  simSteps: number | null;
 }
 
 const lc = (s: string) => s.toLowerCase();
 
-/** Which of these WeChat ids have an order that is not CANCELLED / REJECTED (case-insensitive). */
-// WIRING: L1 exports hasOrdered(wechatId); this is the same rule in one batched query.
-export async function orderedSet(db: Tx | DbClient, wechatIds: string[]): Promise<Set<string>> {
+/** Which of these WeChat ids have ordered (L1's hasOrdered: not CANCELLED / REJECTED, case-insensitive). */
+export async function orderedSet(db: DbClient, wechatIds: string[]): Promise<Set<string>> {
   const ids = [...new Set(wechatIds.map(lc))];
-  if (ids.length === 0) return new Set();
-  const rows = await db.$queryRaw<{ id: string }[]>`
-    SELECT DISTINCT lower("wechatId") AS id FROM "Order"
-    WHERE lower("wechatId") = ANY(${ids}::text[]) AND status NOT IN ('CANCELLED', 'REJECTED')`;
-  return new Set(rows.map((r) => r.id));
+  const flags = await Promise.all(ids.map((id) => hasOrdered(db, id)));
+  return new Set(ids.filter((_, i) => flags[i]));
 }
 
 export const weekQuerySchema = z
@@ -366,7 +363,7 @@ export async function getBoard(db: DbClient, week: string | undefined, now: Date
   const wk = week ?? currentWeek;
   const [runs, weekRows, bans, awardRows] = await Promise.all([
     db.$queryRaw<RawRun[]>`
-      SELECT "id"::text AS id, "wechatId", "nickname", "score", "finishedAt", "hidden"
+      SELECT "id"::text AS id, "wechatId", "nickname", "score", "finishedAt", "hidden", "dropCount", "simSteps"
       FROM "GameRun"
       WHERE "weekKey" = ${wk} AND "finishedAt" IS NOT NULL AND "score" IS NOT NULL
       ORDER BY "score" DESC, "finishedAt" ASC, "id" ASC LIMIT 300`,
@@ -383,7 +380,7 @@ export async function getBoard(db: DbClient, week: string | undefined, now: Date
   const awardRun = award
     ? ((
         await db.$queryRaw<RawRun[]>`
-          SELECT "id"::text AS id, "wechatId", "nickname", "score", "finishedAt", "hidden"
+          SELECT "id"::text AS id, "wechatId", "nickname", "score", "finishedAt", "hidden", "dropCount", "simSteps"
           FROM "GameRun" WHERE "id"::text = ${award.runId}`
       )[0] ?? null)
     : null;
@@ -409,6 +406,8 @@ export async function getBoard(db: DbClient, week: string | undefined, now: Date
       hidden: r.hidden,
       banned: isBanned,
       ordered: ordered.has(key),
+      dropCount: r.dropCount,
+      durationSec: r.simSteps === null ? null : Math.round(r.simSteps / 120),
       rank: rk,
     };
   });

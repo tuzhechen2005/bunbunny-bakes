@@ -31,7 +31,7 @@ interface View {
   products: Product[];
 }
 
-const MAX_TIERS = 8;
+const MAX_TIERS = 5;
 
 export function TiersPanel() {
   const [view, setView] = useState<View | null>(null);

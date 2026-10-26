@@ -4,7 +4,6 @@
 
 import { expect, test, type Page } from "@playwright/test";
 import { copy } from "../../src/copy";
-import { GAME_DDL } from "../db/gameTables"; // TEMPORARY until L1's migration creates the tables
 import { addDays, chicagoToday, createAdminSession, insertOrder, ITEM, resetAndSeed, withDb } from "./support/seed";
 
 const t = copy.admin.game;
@@ -23,7 +22,6 @@ async function noHorizontalScroll(page: Page) {
 async function seedGame() {
   const seeded = await resetAndSeed();
   await withDb(async (c) => {
-    for (const sql of GAME_DDL) await c.query(sql);
     await c.query(`TRUNCATE "GameTier","GameRun","GameBan","GameAward"`);
   });
   return seeded;
@@ -32,7 +30,7 @@ async function seedGame() {
 async function addRun(wechatId: string, nickname: string, score: number, minutesAgo: number) {
   await withDb((c) =>
     c.query(
-      `INSERT INTO "GameRun" ("wechatId","nickname","score","weekKey","finishedAt") VALUES ($1,$2,$3,$4, now() - ($5 || ' minutes')::interval)`,
+      `INSERT INTO "GameRun" ("seed","wechatId","nickname","tiersSnapshot","score","weekKey","finishedAt","dropCount","simSteps") VALUES ('s',$1,$2,'[]'::jsonb,$3,$4, now() - ($5 || ' minutes')::interval, 42, 3600)`,
       [wechatId, nickname, score, weekKey(), String(minutesAgo)],
     ),
   );
@@ -61,6 +59,7 @@ test("leaderboard: ranks, 下过单 badge, hide, ban, winner card", async ({ pag
   await expect(rows).toHaveCount(3);
   await expect(rows.first()).toContainText("alice_w");
   await expect(rows.first().getByTestId("run-ordered")).toHaveText(t.ordered);
+  await expect(rows.first().getByTestId("run-evidence")).toContainText("42 次落子 · 30 秒");
   await expect(rows.nth(1).getByTestId("run-ordered")).toHaveText(t.notOrdered);
   await expect(page.getByTestId("winner-card")).toContainText("艾丽");
   expect(await noHorizontalScroll(page)).toBe(true);

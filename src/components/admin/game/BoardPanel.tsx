@@ -21,6 +21,8 @@ interface Row {
   hidden: boolean;
   banned: boolean;
   ordered: boolean;
+  dropCount: number | null;
+  durationSec: number | null;
   rank: number | null;
 }
 interface Winner {
@@ -213,6 +215,11 @@ export function BoardPanel() {
                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted">
                   <span>{timeLabel(r.finishedAt)}</span>
                   <span className={chip}>{r.verified ? t.verified : t.unverified}</span>
+                  {r.dropCount !== null && r.durationSec !== null ? (
+                    <span data-testid="run-evidence">
+                      {fill(t.drops, { n: r.dropCount })} · {fill(t.duration, { s: r.durationSec })}
+                    </span>
+                  ) : null}
                   <span className={chip} data-testid="run-ordered">{r.ordered ? t.ordered : t.notOrdered}</span>
                   {r.hidden ? <span className={chip}>{t.hidden}</span> : null}
                   {r.banned ? <span className={`${chip} text-danger`}>{t.banned}</span> : null}

@@ -1,6 +1,5 @@
 // /api/admin/game/**: auth + origin, tier config (defaults, add/remove/min 2/reorder/image),
 // leaderboard moderation (hide, ban, ranks, eligibility), weekly award, AuditLog for every write.
-// The game tables come from tests/db/gameTables.ts until L1's migration lands.
 
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,7 +29,6 @@ import { createSession, hashPassword } from "@/server/auth";
 import { prisma } from "@/server/db";
 import { weekKeyOf } from "@/server/gameAdmin";
 import { getImageStore } from "@/server/imageStore";
-import { GAME_DDL } from "./gameTables";
 import { createDefaultProducts, createOpenDate, createOrder, createSettings, db, resetDb, type DefaultProductIds } from "./helpers";
 
 const SITE = "https://bunbunnybakes.shop";
@@ -56,7 +54,6 @@ const audits = (prefix: string) =>
 beforeAll(async () => {
   previousSiteUrl = process.env.SITE_URL;
   process.env.SITE_URL = SITE;
-  for (const sql of GAME_DDL) await db.$executeRawUnsafe(sql);
 });
 
 beforeEach(async () => {
@@ -82,8 +79,8 @@ const THIS_WEEK = weekKeyOf(new Date());
 async function run(wechatId: string, nickname: string, score: number, opts: { hidden?: boolean; minutesAgo?: number; week?: string } = {}) {
   const finished = new Date(Date.now() - (opts.minutesAgo ?? 0) * 60_000).toISOString();
   const rows = await db.$queryRaw<{ id: string }[]>`
-    INSERT INTO "GameRun" ("wechatId","nickname","score","weekKey","finishedAt","hidden")
-    VALUES (${wechatId}, ${nickname}, ${score}, ${opts.week ?? THIS_WEEK}, ${finished}::timestamptz, ${opts.hidden ?? false})
+    INSERT INTO "GameRun" ("seed","wechatId","nickname","tiersSnapshot","score","weekKey","finishedAt","hidden","dropCount","simSteps")
+    VALUES ('s', ${wechatId}, ${nickname}, '[]'::jsonb, ${score}, ${opts.week ?? THIS_WEEK}, ${finished}::timestamptz, ${opts.hidden ?? false}, 42, 3600)
     RETURNING "id"::text AS id`;
   return rows[0].id;
 }
@@ -102,8 +99,10 @@ describe("auth", () => {
 
 describe("tiers", () => {
   it("shows the defaults (active products) until the first save, then stores them", async () => {
+    await db.product.update({ where: { id: P.redBean }, data: { fieldColor: "#DCC5BB" } });
     let v = await tiers();
     expect(v.configured).toBe(false);
+    expect(v.tiers[0].color.bg).toBe("#DCC5BB");
     expect(v.tiers.filter((x: { isBig: boolean }) => !x.isBig)).toHaveLength(4);
     expect(v.tiers.at(-1).isBig).toBe(true);
     expect((await tiersPOST(req("POST", "/api/admin/game/tiers", {}))).status).toBe(201);
@@ -217,6 +216,7 @@ describe("leaderboard", () => {
     expect(b.rows.find((r: { wechatId: string }) => r.wechatId === "cara_w").ordered).toBe(false);
     expect(b.winner.wechatId).toBe("bob_w");
     expect(b.winner.stored).toBe(false);
+    expect(b.rows[0]).toMatchObject({ dropCount: 42, durationSec: 30 });
     expect(b.weeks).toContain(THIS_WEEK);
   });
 
