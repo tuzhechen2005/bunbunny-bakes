@@ -99,15 +99,14 @@ export function defaultPoints(index: number): number {
 }
 
 /**
- * Radius for product tier `i` of `n` (0.082 -> 0.247), rounded so snapshots stay readable. About 24%
- * larger than the first tuning (0.066 -> 0.199, big 0.268), which the owner found too easy (D106, D107):
- * with 4-8 product tiers a casual game now piles up after 30-45 drops.
+ * Radius for product tier `i` of `n` (0.071 -> 0.215), rounded so snapshots stay readable: 8% larger
+ * than the first tuning (0.066 -> 0.199), which the owner found a little too easy (D106).
  */
 export function defaultRadius(i: number, n: number): number {
   const t = n <= 1 ? 0 : i / (n - 1);
-  return Math.round((0.082 + 0.165 * t) * 10000) / 10000;
+  return Math.round((0.071 + 0.144 * t) * 10000) / 10000;
 }
-export const BIG_RADIUS = 0.28;
+export const BIG_RADIUS = 0.268;
 
 /** `n` product tiers (>= 1) plus the 大面包 tier with the default radii and points. */
 export function defaultTierDefs(ids: readonly string[]): TierDef[] {

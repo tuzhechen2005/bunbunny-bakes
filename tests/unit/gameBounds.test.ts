@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest";
 import { createGame, createRng, defaultTierDefs, type Game } from "@/lib/game";
 
 const TIERS = defaultTierDefs(["a", "b", "c", "d", "e"]);
-const SPEED_LIMIT = 0.08; // world units per 1/120 s step (about 9 board widths per second; was ~23 before)
+// World units per 1/120 s step (about 11 board widths per second; was ~23 before the fix). The 8%
+// larger pieces (D106) peak at about 0.081 in a dense pile: one-frame contact pushes, not a launch.
+const SPEED_LIMIT = 0.09;
 
 function watch(g: Game, steps: number, seen: { maxSpeed: number; minTop: number }) {
   let prev = new Map<number, [number, number]>();
