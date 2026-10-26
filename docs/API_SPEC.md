@@ -111,6 +111,39 @@
 
 商品照片（公开，不需要登录）。`key` 形如 `<商品id>/<32位随机十六进制>.<jpg|png|webp>`，格式不对或不存在返回 404（`..` 等路径一律 404）。返回文件本身，带 `Cache-Control: public, max-age=31536000, immutable`（key 是随机的，换照片就换 key）和 `X-Content-Type-Options: nosniff`。文件存在 Netlify Blobs（store `product-images`），在 Netlify 上不需要任何密钥；本地开发和测试用内存存储。
 
+### 消除大面包（D100–D105，`/api/game/**`，公开）
+
+引擎在 `src/lib/game/`（纯 TS，固定步长 1/120 秒，只用 + − × ÷ 和 `Math.sqrt/min/max/abs/floor`，V8 和 JavaScriptCore 结果逐位一致）。服务端实现在 `src/server/game.ts`、`gameTiers.ts`、`gameWeek.ts`。三个接口都带 `Cache-Control: no-store`；JSON 内容类型必填，请求体有大小上限（start 4 KB，finish 64 KB）。
+
+**`POST /api/game/start`** `{ wechatId, nickname }` → `201 { runId, seed, tiers: [{ id, radius, points, imageUrl, color: { bg, ink } }], expiresAt }`
+
+- `wechatId` 规则同下单（1–40 字符）；`nickname` 去掉首尾空格后 1–10 个字符（按 Unicode 字符数），不能含控制字符、换行、双向覆盖字符。不合格 `422 VALIDATION`（带 `fields`）。
+- 被禁的微信号（不区分大小写）：`422 VALIDATION`，`message` 为友好提示。
+- `seed` 来自 `crypto.randomBytes`；每局只能结束一次，2 小时后过期。
+- `tiers` 按从小到大排列，最后一项 `id` 恒为 `"big"`。店主配置了至少 2 个商品等级就用店主的（`GameTier`），否则用在售商品（按菜单顺序，最多 5 个）+ 大面包，图为商品封面。`radius` 以棋盘宽度为 1，约 0.0625 → 0.253（商品等级 0.0625 → 0.181，大面包 0.253）；`points` 为合成出该级得分（等级序号的三角数 × 10，大面包等级也是），`color` 来自商品首页背景色。
+- 这一份等级配置在开始时存进 `GameRun.tiersSnapshot`，之后改配置只影响新的局。
+- 同一 IP 每小时最多 60 次（`RATE_LIMITED`，`game_start_ip:<ipHash>`）。
+
+**`POST /api/game/finish`** `{ runId, drops: [{ x, at }] }` → `200 { score, best, rank, week: { start, end } }`
+
+- `x` ∈ [0,1]，`at` 为投放时的模拟步数（整数 0–200000），`drops` 最多 600 个，相邻两次至少 30 步（冷却 0.25 秒）。形状不对、超限、冷却违规、游戏结束后还在投放，一律 `422 VALIDATION`，这一局保持未结束，可以再提交。
+- 服务器用这一局的 `seed` 和开始时的等级快照重放（最后一次投放之后继续模拟到静止或游戏结束，把连锁合成算进去），分数以服务器为准；客户端发来的任何分数字段都被忽略。
+- 一局只结束一次：重复提交返回已保存的结果（以第一次的投放记录为准），并发重复也只写一次。未知 `runId` → `404 NOT_FOUND`；超过 2 小时 → `422 VALIDATION`；该微信号在此期间被禁 → `422 VALIDATION`。
+- `weekKey` = 完成时刻所在周的周一（America/Chicago）`YYYY-MM-DD`。`best` 是该微信号（不区分大小写）本周最高分，`rank` 是本周排名（分数高在前，同分先完成者在前；隐藏的记录和被禁的微信号不参与），`week.start` 周一，`week.end` 周日。
+- 引擎自己在 600 次投放（第 600 次之后冷却一过）或 200000 步（约 27 分钟）时结束游戏，客户端和服务器用同一套上限，所以很长的一局也能正常计分；超出上限的投放记录（601 条以上）才会被拒绝。
+- 防作弊的真实时间检查：模拟的时长（`步数 / 120` 秒）不能超过从开始到提交的真实时间加 10 秒，否则 `422 VALIDATION`（真实玩家不可能比真实时间模拟得更快，这挡住"离线算好再一次性提交"）。
+- 通过验证的局会保存证据，供店主发奖前人工确认（D103）：`GameRun.drops`（投放记录）、`dropCount`、`simSteps`（时长 = `simSteps / 120` 秒）。
+- 跨周：周一 0:00（America/Chicago）之前开始、之后才提交的局算新的一周（`weekKey` 以提交时刻为准）。
+- 同一 IP 每小时最多 60 次（`game_finish_ip:<ipHash>`）。
+
+**`GET /api/game/leaderboard`** → `{ week: { start, end }, top: [{ rank, nickname, wechatMasked, score }] (最多 20), lastWinner: { nickname, wechatMasked, score } | null, myBest?: number }`
+
+- 每个微信号只出现一次（取最高分）。永远不返回完整微信号：前 2 位 + `***` + 后 2 位（4 位及以下：首位 + `***`）。
+- `lastWinner`：上周 `GameAward` 指向的那一局；没有就是上周榜首。
+- `myBest`：调用者在查询参数 `?wechatId=` 或请求头 `x-game-wechat` 里带上自己的微信号时返回本周最高分（没有记录时不返回该字段）。
+
+服务端导出（给后台用）：`hasOrdered(db, wechatId)`（不区分大小写，存在状态不是 CANCELLED/REJECTED 的订单），`isBanned(db, wechatId)`，`maskWechat`，`weekKeyOf`、`weekRange`（`gameWeek.ts`）。
+
 ## 3. 店主接口（`/api/admin/**`，需要登录）
 
 **认证**：httpOnly、Secure、SameSite=Lax 的 session cookie。所有非 GET 请求检查 `Origin` 头必须是本站，防跨站请求伪造。
