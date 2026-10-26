@@ -22,8 +22,10 @@ const PRODUCT_KEYS = [
   "bundlePriceCents",
   "bundleSize",
   "description",
+  "field",
   "id",
   "imageUrl",
+  "images",
   "leadDays",
   "name",
   "status",
@@ -65,6 +67,30 @@ describe("GET /api/menu", () => {
     for (const leak of ["doughG", "roundG", "piecesPerRound", "dailyLimit", "batchYield", "capacityMode"]) {
       expect(text).not.toContain(leak);
     }
+  });
+
+  it("returns images (cover first) and the product's field colours; imageUrl is the cover", async () => {
+    await createSettings({ orderingEnabled: true });
+    const ids = await createDefaultProducts();
+    const url = (n: string) => `/api/images/${ids.redBean}/${n.repeat(32)}.jpg`;
+    await db.productImage.createMany({
+      data: [
+        { productId: ids.redBean, url: url("b"), sortOrder: 1 },
+        { productId: ids.redBean, url: url("a"), sortOrder: 0 },
+      ],
+    });
+    await db.product.update({ where: { id: ids.rockCheese }, data: { fieldColor: "#3A3633" } });
+    await db.product.update({ where: { id: ids.cheeseHorn }, data: { fieldColor: null } });
+    const body = await (await GET()).json();
+    const [red, rock, horn] = body.products;
+    expect(red.images).toEqual([url("a"), url("b")]);
+    expect(red.imageUrl).toBe(url("a"));
+    expect(red.field).toEqual({ bg: "#DCC5BB", ink: "#4A2723", ink2: "#674741" });
+    expect(rock.field).toMatchObject({ bg: "#3A3633", ink: "#FFF8EE" });
+    expect(horn.field.bg).toBe("#EFE7DA");
+    expect(rock.images).toEqual([]);
+    expect(rock.imageUrl).toBeNull();
+    for (const p of body.products) expect(p.imageUrl).toBe(p.images[0] ?? null);
   });
 
   it("returns the settings values", async () => {
