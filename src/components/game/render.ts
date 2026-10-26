@@ -30,6 +30,19 @@ export function loadTierImage(url: string | null, onLoad: () => void): HTMLImage
   return null;
 }
 
+let displayFamily: string | null = null;
+/** The `font-display` CSS family list, read once from the :root variable; sans-serif off the DOM. */
+function displayFont(): string {
+  if (displayFamily === null) {
+    displayFamily = "sans-serif";
+    if (typeof document !== "undefined") {
+      const v = getComputedStyle(document.documentElement).getPropertyValue("--font-display").trim();
+      if (v) displayFamily = v;
+    }
+  }
+  return displayFamily;
+}
+
 /** One piece: tier colour disc, the bread picture clipped inside, a soft gloss and a thin border. */
 export function drawTierDisc(
   ctx: CanvasRenderingContext2D,
@@ -56,6 +69,15 @@ export function drawTierDisc(
     const d = (r - border) * 2;
     ctx.drawImage(img, sx, sy, side, side, cx - d / 2, cy - d / 2, d, d);
     ctx.restore();
+  }
+  const initial = img && img.naturalWidth > 0 ? "" : ([...(tier.name ?? "")][0] ?? "");
+  if (initial) {
+    // A game-only piece with no picture yet (D107): the first character of its name, in the tier ink.
+    ctx.fillStyle = tier.color.ink;
+    ctx.font = `900 ${Math.round(r * 1.05)}px ${displayFont()}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(initial, cx, cy + r * 0.05);
   }
   const g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.05, cx, cy, r);
   g.addColorStop(0, "rgba(255,255,255,0.34)");

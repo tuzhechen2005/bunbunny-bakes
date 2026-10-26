@@ -89,7 +89,7 @@ describe("start", () => {
     expect(r.tiers[0].imageUrl).toBe("/api/images/a.webp");
     expect(r.tiers[3].imageUrl).toBe("/brand/logo.webp");
     for (const t of r.tiers) {
-      expect(Object.keys(t).sort()).toEqual(["color", "id", "imageUrl", "points", "radius"]);
+      expect(Object.keys(t).sort()).toEqual(["color", "id", "imageUrl", "name", "points", "radius"]);
       expect(t.color.bg).toMatch(/^#[0-9A-F]{6}$/i);
       expect(t.color.ink).toMatch(/^#[0-9A-F]{6}$/i);
     }
@@ -101,7 +101,7 @@ describe("start", () => {
     expect(r.tiers.map((t) => t.points)).toEqual([0, 10, 30, 60]);
   });
 
-  it("uses at most 5 products", async () => {
+  it("uses at most 8 products", async () => {
     await createDefaultProducts();
     await db.product.create({
       data: { name: "p5", unitPriceCents: 100, capacityMode: "INDEPENDENT", sortOrder: 9, dailyLimit: 5 },
@@ -109,7 +109,7 @@ describe("start", () => {
     await db.product.create({
       data: { name: "p6", unitPriceCents: 100, capacityMode: "INDEPENDENT", sortOrder: 10, dailyLimit: 5 },
     });
-    expect((await start()).tiers).toHaveLength(6);
+    expect((await start()).tiers).toHaveLength(7); // 6 products + the big one
   });
 
   it("owner-configured tiers win over the default, in sortOrder, with their own image", async () => {

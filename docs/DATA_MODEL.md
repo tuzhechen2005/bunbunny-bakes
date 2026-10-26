@@ -169,7 +169,7 @@
 
 ### 消除大面包的表（D100–D105）
 
-**GameTier**：店主配置的等级。`id`、`productId`（→ Product，商品被删时置空）、`sortOrder`（从小到大）、`imageUrl`（去掉白底的图，可空，空则用商品封面）、`isBig`（大面包那一行，logo 图）、`createdAt`、`updatedAt`。没有任何配置时用在售商品作默认。
+**GameTier**：店主配置的等级（最多 8 档面包 + 大面包，D107）。`id`、`productId`（→ Product，商品被删时置空）、`sortOrder`（从小到大）、`imageUrl`（去掉白底的图，可空，空则用商品封面）、`name`（可空，1–12 字符：游戏专用面包的名字，或覆盖商品名）、`fieldColor`（可空，`#RRGGBB`，有 CHECK：游戏专用面包的底色，或覆盖商品颜色；空 = 商品颜色，再空 = 预设色轮换）、`isBig`（大面包那一行，logo 图）、`createdAt`、`updatedAt`。非大面包且 `productId` 为空 = 游戏专用面包（商品被删后留下的等级也一样，名字可能为空，后台提示要先起名字）。没有任何配置时用在售商品作默认。
 
 **GameRun**：一局。`id`、`seed`、`wechatId`、`nickname`、`tiersSnapshot`（开始时的等级配置，JSON）、`startedAt`、`finishedAt`（可空；有值说明已验证并保存）、`score`（服务器重放得到）、`drops`（通过验证的投放记录，JSON）、`dropCount`、`simSteps`（模拟步数，时长 = simSteps / 120 秒，后台给店主看）、`weekKey`（完成时所在周的周一，America/Chicago，`YYYY-MM-DD`）、`ipHash`（24 小时后由定时清理置空）、`hidden`（店主隐藏，默认 false）。索引：`(weekKey, score desc)`、`wechatId`、`lower(wechatId)`、`startedAt`。
 

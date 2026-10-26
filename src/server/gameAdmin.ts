@@ -43,6 +43,8 @@ interface TierRow {
   sortOrder: number;
   imageUrl: string | null;
   isBig: boolean;
+  name: string | null;
+  fieldColor: string | null;
 }
 
 export interface TierDto {
@@ -50,6 +52,12 @@ export interface TierDto {
   productId: string | null;
   productName: string | null;
   isBig: boolean;
+  /** No product behind it (D107): the tier carries its own name and colour. */
+  gameOnly: boolean;
+  /** The name the game shows (own name, else the product's); "" for a game-only piece that lost its name. */
+  name: string;
+  /** The tier's own colour override (`#RRGGBB`); null = the product's colour. */
+  fieldColor: string | null;
   imageUrl: string | null;
   /** The product's cover photo (shown when the tier has no image of its own). */
   productImageUrl: string | null;
@@ -71,7 +79,7 @@ export interface TiersView {
 
 const tierRows = (tx: Tx | DbClient): Promise<TierRow[]> =>
   tx.$queryRaw<TierRow[]>`
-    SELECT "id"::text AS id, "productId"::text AS "productId", "sortOrder", NULLIF("imageUrl", '') AS "imageUrl", "isBig"
+    SELECT "id"::text AS id, "productId"::text AS "productId", "sortOrder", NULLIF("imageUrl", '') AS "imageUrl", "isBig", "name", "fieldColor"
     FROM "GameTier" ORDER BY "isBig" ASC, "sortOrder" ASC, "createdAt" ASC`;
 
 async function activeProducts(db: Tx | DbClient): Promise<PickerProduct[]> {
@@ -94,20 +102,29 @@ export async function getTiers(db: DbClient): Promise<TiersView> {
   const productTiers: TierDto[] = configured
     ? rows
         .filter((r) => !r.isBig)
-        .map((r) => ({
-          id: r.id,
-          productId: r.productId,
-          productName: r.productId ? (byId.get(r.productId)?.name ?? null) : null,
-          isBig: false,
-          imageUrl: r.imageUrl,
-          productImageUrl: r.productId ? (byId.get(r.productId)?.imageUrl ?? null) : null,
-          color: colorFor(r.productId ? byId.get(r.productId)?.fieldColor : null),
-        }))
+        .map((r) => {
+          const prod = r.productId ? byId.get(r.productId) : undefined;
+          return {
+            id: r.id,
+            productId: r.productId,
+            productName: prod?.name ?? null,
+            isBig: false,
+            gameOnly: !r.productId,
+            name: r.name ?? prod?.name ?? "",
+            fieldColor: r.fieldColor,
+            imageUrl: r.imageUrl,
+            productImageUrl: prod?.imageUrl ?? null,
+            color: colorFor(r.fieldColor ?? prod?.fieldColor),
+          };
+        })
     : products.slice(0, DEFAULT_TIER_COUNT).map((p) => ({
         id: `default-${p.id}`,
         productId: p.id,
         productName: p.name,
         isBig: false,
+        gameOnly: false,
+        name: p.name,
+        fieldColor: null,
         imageUrl: null,
         productImageUrl: p.imageUrl,
         color: colorFor(byId.get(p.id)?.fieldColor),
@@ -120,6 +137,9 @@ export async function getTiers(db: DbClient): Promise<TiersView> {
       productId: null,
       productName: null,
       isBig: true,
+      gameOnly: false,
+      name: copy.customer.brand.brandName,
+      fieldColor: null,
       imageUrl: big?.imageUrl ?? null,
       productImageUrl: null,
       color: BIG_COLOR,
@@ -136,7 +156,7 @@ function colorFor(fieldColor: string | null | undefined): { bg: string; ink: str
   return { bg: f.bg, ink: f.ink };
 }
 
-/** First write: store the defaults (active products in menu order, up to 5) plus the big tier. */
+/** First write: store the defaults (active products in menu order, up to 8) plus the big tier. */
 async function materialize(tx: Tx, now: Date): Promise<TierRow[]> {
   const existing = await tierRows(tx);
   if (existing.length > 0) return existing;
@@ -182,6 +202,63 @@ export async function addTier(db: DbClient, productId: string, now: Date): Promi
         RETURNING "id"::text AS id`
     )[0].id;
     await writeTierAudit(tx, "game.tier.add", id, now, undefined, { productId });
+  });
+}
+
+const hex = z.string().regex(/^#[0-9A-Fa-f]{6}$/).transform((v) => v.toUpperCase());
+// Trimmed, 1-12 characters (by Unicode code point), no control or bidi/format characters.
+const pieceName = z
+  .string()
+  .trim()
+  .refine((v) => [...v].length >= 1 && [...v].length <= 12 && !/[\p{Cc}\p{Cf}\u2028\u2029]/u.test(v));
+
+export const gamePieceSchema = z.object({ name: pieceName, fieldColor: hex });
+export const tierEditSchema = z.object({ name: pieceName.optional(), fieldColor: hex.nullable().optional() });
+
+/** Adds a game-only piece (D107): a name and a colour, no product. */
+export async function addGamePiece(db: DbClient, input: unknown, now: Date): Promise<void> {
+  const parsed = gamePieceSchema.safeParse(input);
+  if (!parsed.success) {
+    const field = parsed.error.issues[0]?.path[0] === "fieldColor" ? "fieldColor" : "name";
+    throw invalid(field === "name" ? t.pieceNameInvalid : t.pieceColorInvalid, field);
+  }
+  const { name, fieldColor } = parsed.data;
+  await db.$transaction(async (tx) => {
+    await lockTiers(tx);
+    const rows = await materialize(tx, now);
+    if (productTierCount(rows) >= MAX_PRODUCT_TIERS) throw invalid(t.maxTiers);
+    const next = Math.max(-1, ...rows.filter((r) => !r.isBig).map((r) => r.sortOrder)) + 1;
+    const ts = now.toISOString();
+    const id = (
+      await tx.$queryRaw<{ id: string }[]>`
+        INSERT INTO "GameTier" ("id","productId","sortOrder","imageUrl","name","fieldColor","isBig","createdAt","updatedAt")
+        VALUES (gen_random_uuid(), NULL, ${next}, NULL, ${name}, ${fieldColor}, false, ${ts}::timestamptz, ${ts}::timestamptz)
+        RETURNING "id"::text AS id`
+    )[0].id;
+    await writeTierAudit(tx, "game.tier.add", id, now, undefined, { name, fieldColor });
+  });
+}
+
+/** Edits a non-big tier's name and/or colour. `fieldColor: null` resets to the product's colour. */
+export async function updateTierLook(db: DbClient, id: string, input: unknown, now: Date): Promise<void> {
+  if (!uuid.safeParse(id).success) throw notFound();
+  const parsed = tierEditSchema.safeParse(input);
+  if (!parsed.success) {
+    const field = parsed.error.issues[0]?.path[0] === "fieldColor" ? "fieldColor" : "name";
+    throw invalid(field === "name" ? t.pieceNameInvalid : t.pieceColorInvalid, field);
+  }
+  const { name, fieldColor } = parsed.data;
+  if (name === undefined && fieldColor === undefined) throw invalid(t.loadFailed);
+  await db.$transaction(async (tx) => {
+    await lockTiers(tx);
+    const rows = await materialize(tx, now);
+    const row = rows.find((r) => r.id === id);
+    if (!row || row.isBig) throw notFound();
+    const nextName = name === undefined ? row.name : name;
+    const nextColor = fieldColor === undefined ? row.fieldColor : fieldColor;
+    if (!row.productId && nextColor === null) throw invalid(t.pieceColorInvalid, "fieldColor");
+    await tx.$executeRaw`UPDATE "GameTier" SET "name" = ${nextName}, "fieldColor" = ${nextColor}, "updatedAt" = ${now.toISOString()}::timestamptz WHERE "id"::text = ${id}`;
+    await writeTierAudit(tx, "game.tier.update", id, now, { name: row.name, fieldColor: row.fieldColor }, { name: nextName, fieldColor: nextColor });
   });
 }
 
