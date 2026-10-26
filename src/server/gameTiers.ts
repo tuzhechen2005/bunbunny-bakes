@@ -31,7 +31,7 @@ function build(items: TierItem[], bigImageUrl: string | null): GameTierConfig[] 
     radius: defaultRadius(i, n),
     points: defaultPoints(i),
     imageUrl: it.imageUrl,
-    color: ((f) => ({ bg: f.bg, ink: f.ink }))(fieldFor(it.fieldColor === undefined ? FIELD_PRESETS[i % FIELD_PRESETS.length].hex : it.fieldColor)),
+    color: ((f) => ({ bg: f.bg, ink: f.ink }))(fieldFor(it.fieldColor || FIELD_PRESETS[i % FIELD_PRESETS.length].hex)),
   }));
   tiers.push({ id: "big", radius: BIG_RADIUS, points: defaultPoints(n), imageUrl: bigImageUrl || BIG_IMAGE_URL, color: BIG_COLOR });
   return tiers;

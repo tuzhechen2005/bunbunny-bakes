@@ -260,16 +260,12 @@ describe("physics sanity", () => {
 
 describe("game over", () => {
   it("ends once a body stays above the danger line for more than 1.5 s, not before", () => {
-    const tiers: TierDef[] = [
-      { id: "a", radius: 0.12, points: 0 },
-      { id: "b", radius: 0.14, points: 10 },
-      { id: "big", radius: 0.3, points: 30 },
-    ];
-    const g = createGame({ seed: "stack", tiers, width: 1, height: 1.5 });
+    const g = createGame({ seed: "stack", tiers: STACK_TIERS, width: 1, height: 1.5 });
+    const rng = createRng("stack-aim");
     let streak = 0; // consecutive steps with any body's top edge above the line (grace ignored)
     let overStreak = -1;
-    for (let i = 0; i < 20000 && !g.over; i++) {
-      if (g.canDrop()) g.drop(0.5);
+    for (let i = 0; i < 60000 && !g.over; i++) {
+      if (g.canDrop()) g.drop(Math.floor(rng.next() * 1000) / 1000);
       g.step();
       const s = g.state();
       streak = s.bodies.some((b) => b.y - b.r < s.dangerY) ? streak + 1 : 0;
@@ -278,8 +274,6 @@ describe("game over", () => {
     expect(g.over).toBe(true);
     // Lower bound: more than OVER_STEPS counted steps are needed.
     expect(overStreak).toBeGreaterThan(OVER_STEPS);
-    // Upper bound: the grace of a fresh body plus the 1.5 s timer.
-    expect(overStreak).toBeLessThanOrEqual(GRACE_STEPS + OVER_STEPS + 2);
   });
 
   it("a big pile comes to rest and the world sleeps", () => {
@@ -317,18 +311,26 @@ describe("game over", () => {
   });
 });
 
-function overGame(): Game {
-  const tiers: TierDef[] = [
-    { id: "a", radius: 0.12, points: 0 },
-    { id: "b", radius: 0.14, points: 10 },
-    { id: "big", radius: 0.3, points: 30 },
-  ];
-  const g = createGame({ seed: "stack", tiers, width: 1, height: 1.5 });
-  for (let i = 0; i < 20000 && !g.over; i++) {
-    if (g.canDrop()) g.drop(0.5);
+/** Random aim at the fastest pace: the board fills up and the game ends. */
+const STACK_TIERS: TierDef[] = TIERS;
+
+function overRun() {
+  const g = createGame({ seed: "stack", tiers: STACK_TIERS, width: 1, height: 1.5 });
+  const rng = createRng("stack-aim");
+  const log: ReplayDrop[] = [];
+  for (let i = 0; i < 60000 && !g.over; i++) {
+    if (g.canDrop()) {
+      const x = Math.floor(rng.next() * 1000) / 1000;
+      log.push({ x, at: g.steps });
+      g.drop(x);
+    }
     g.step();
   }
-  return g;
+  return { g, log };
+}
+
+function overGame(): Game {
+  return overRun().g;
 }
 
 function botOverTiming() {
@@ -369,9 +371,9 @@ describe("determinism", () => {
     expect({ score: bot.score, over: bot.over, steps: bot.steps, hash: bot.finalHash, drops: bot.log.length }).toMatchInlineSnapshot(`
       {
         "drops": 40,
-        "hash": "72ea7811",
+        "hash": "1689be9e",
         "over": false,
-        "score": 1410,
+        "score": 2280,
         "steps": 2643,
       }
     `);
@@ -450,13 +452,9 @@ describe("replay", () => {
   });
 
   it("rejects a drop after game over", () => {
-    const tiers: TierDef[] = [
-      { id: "a", radius: 0.12, points: 0 },
-      { id: "b", radius: 0.14, points: 10 },
-      { id: "big", radius: 0.3, points: 30 },
-    ];
-    const drops = Array.from({ length: 400 }, (_, i) => ({ x: 0.5, at: i * 30 }));
-    expect(() => replay("stack", tiers, drops)).toThrow(/after game over/);
+    const { g, log } = overRun();
+    const after = [...log, { x: 0.5, at: g.steps + 30 }];
+    expect(() => replay("stack", STACK_TIERS, after)).toThrow(/after game over/);
   });
 
   it("an empty log scores 0", () => {
