@@ -370,11 +370,11 @@ describe("determinism", () => {
     const bot = botRun("pinned", TIERS, 40);
     expect({ score: bot.score, over: bot.over, steps: bot.steps, hash: bot.finalHash, drops: bot.log.length }).toMatchInlineSnapshot(`
       {
-        "drops": 40,
-        "hash": "1689be9e",
-        "over": false,
-        "score": 2280,
-        "steps": 2643,
+        "drops": 37,
+        "hash": "6870e4d0",
+        "over": true,
+        "score": 1220,
+        "steps": 2155,
       }
     `);
   });

@@ -94,7 +94,7 @@ describe("start", () => {
       expect(t.color.ink).toMatch(/^#[0-9A-F]{6}$/i);
     }
     const radii = r.tiers.map((t) => t.radius);
-    expect(radii[0]).toBe(0.066);
+    expect(radii[0]).toBe(0.076);
     expect(radii[3]).toBe(0.268);
     expect([...radii].sort((a, b) => a - b)).toEqual(radii);
     // Triangular numbers x 10 by tier index.

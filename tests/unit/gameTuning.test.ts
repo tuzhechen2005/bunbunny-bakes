@@ -1,6 +1,6 @@
 // Game feel is part of the contract: changing radii, gravity, danger line or points changes how long a
-// game lasts. These fixed seeds pin it: a casual (random) player's game piles up after about a minute
-// of drops, a careful (greedy) player rarely reaches the 600-drop cap, and scores spread widely.
+// game lasts. These fixed seeds pin it: a casual (random) player's game piles up after 25-60 drops
+// (the radii were made 15% larger after owners found the first tuning, 60-150, too easy), a careful (greedy) player rarely reaches the 600-drop cap, and scores spread widely.
 // With fewer products the chain of tiers is shorter, so the game is a little easier: 4 products get
 // slightly wider bounds than the 5 products of a fully set up shop.
 
@@ -17,10 +17,10 @@ describe.each([
   const tiers = defaultTierDefs(ids);
   const seeds = Array.from({ length: 20 }, (_, i) => i);
 
-  it("random play ends by piling up: median 60-150 drops, max below the bound", () => {
+  it("random play ends by piling up: median 25-60 drops, max below the bound", () => {
     const drops = seeds.map((s) => botRun(`r${s}`, tiers, MAX_DROPS).log.length);
-    expect(median(drops)).toBeGreaterThanOrEqual(60);
-    expect(median(drops)).toBeLessThanOrEqual(150);
+    expect(median(drops)).toBeGreaterThanOrEqual(25);
+    expect(median(drops)).toBeLessThanOrEqual(60);
     expect(Math.max(...drops)).toBeLessThan(randomMax);
   });
 

@@ -95,10 +95,13 @@ export function defaultPoints(index: number): number {
   return (index * (index + 1) * 10) / 2;
 }
 
-/** Radius for product tier `i` of `n` (0.066 -> 0.199), rounded so snapshots stay readable. */
+/**
+ * Radius for product tier `i` of `n` (0.076 -> 0.229), rounded so snapshots stay readable. 15% larger
+ * than the first tuning (0.066 -> 0.199), which owners found too easy: a game now lasts about half as long.
+ */
 export function defaultRadius(i: number, n: number): number {
   const t = n <= 1 ? 0 : i / (n - 1);
-  return Math.round((0.066 + 0.133 * t) * 10000) / 10000;
+  return Math.round((0.076 + 0.153 * t) * 10000) / 10000;
 }
 export const BIG_RADIUS = 0.268;
 
