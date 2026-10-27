@@ -1,5 +1,6 @@
 // Periodic cleanup, run by /api/cron/outbox (API_SPEC §4, SECURITY §1). Idempotent.
 
+import { cleanupAssistantUsage } from "./assistant/usage";
 import type { DbClient } from "./db";
 import { weekKeyOf, weekStartInstant } from "./gameWeek";
 
@@ -27,6 +28,8 @@ export async function cleanup(db: DbClient, now: Date): Promise<CleanupCounts> {
   await db.gameRun.deleteMany({ where: { finishedAt: null, startedAt: { lt: weekStartInstant(weekKeyOf(now)) } } });
   // Game runs keep their IP hash for 24 hours too (not part of the reported counts).
   await db.gameRun.updateMany({ where: { startedAt: { lt: dayAgo }, ipHash: { not: null } }, data: { ipHash: null } });
+  // 小小🐰 counts (with IP hashes) only matter for the current Chicago day (D118).
+  await cleanupAssistantUsage(db, now);
   return {
     rateLimitHits: rateLimitHits.count,
     adminSessions: adminSessions.count,

@@ -374,6 +374,12 @@ export const copy = {
     },
   },
 
+  /** 小小🐰 server fallbacks (src/server/assistant), used only when the model's reply is empty. */
+  assistantApi: {
+    emptyReply: "我在呢～想要什么面包、哪天取？跟我说就行",
+    suggestionReply: "帮你配好啦，点下面的卡片放进纸袋就行",
+  },
+
   /** 消除大面包 API messages (src/server/game.ts); safe to show customers. */
   gameApi: {
     banned: "这个微信号暂时不能参加游戏，有疑问请加微信联系店主",

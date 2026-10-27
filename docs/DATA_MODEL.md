@@ -168,6 +168,16 @@
 
 `key`（例如 `order_ip:<ipHash>`）、`at`。查询最近 10 分钟的条数（D86）；超过 24 小时的记录在每 5 分钟的定时任务里清理。
 
+### AssistantUsage（小小🐰 每天的句数，D118）
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| day | date | America/Chicago 的日期 |
+| ipHash | text | 访客 IP 的哈希；`'*'` = 全站合计那一行 |
+| count | int | 这一天问了几句 |
+
+主键 `(day, ipHash)`。每句话在调用 DeepSeek 之前用一条 `INSERT … ON CONFLICT DO UPDATE SET count = count + 1 RETURNING count` 原子加一（先加访客，没超才加全站），所以并发请求也不会越过上限。**不存任何对话内容**，日志里也没有。今天以前的行由每 5 分钟的清理任务删除。
+
 ### 消除大面包的表（D100–D105）
 
 **GameTier**：店主配置的等级（最多 8 档面包 + 大面包，D107）。`id`、`productId`（→ Product，商品被删时置空）、`sortOrder`（从小到大）、`imageUrl`（去掉白底的图，可空，空则用商品封面）、`name`（可空，1–12 字符：游戏专用面包的名字，或覆盖商品名）、`fieldColor`（可空，`#RRGGBB`，有 CHECK：游戏专用面包的底色，或覆盖商品颜色；空 = 商品颜色，再空 = 预设色轮换）、`isBig`（大面包那一行，logo 图）、`createdAt`、`updatedAt`。非大面包且 `productId` 为空 = 游戏专用面包（商品被删后留下的等级也一样，名字可能为空，后台提示要先起名字）。没有任何配置时用在售商品作默认。
