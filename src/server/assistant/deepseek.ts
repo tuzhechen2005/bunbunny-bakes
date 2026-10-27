@@ -32,8 +32,11 @@ export interface ChatRequest {
   messages: ChatMessage[];
   tools: readonly unknown[];
   toolChoice: "auto" | "none";
-  signal: AbortSignal;
+  /** Abort the call after this long (setTimeout, so it can be driven by fake timers in tests). */
+  timeoutMs: number;
 }
+
+export const MAX_TOKENS = 250;
 
 function isToolCall(x: unknown): x is ToolCall {
   if (!x || typeof x !== "object") return false;
@@ -43,6 +46,16 @@ function isToolCall(x: unknown): x is ToolCall {
 }
 
 export async function chatCompletion(req: ChatRequest): Promise<ChatResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(0, req.timeoutMs));
+  try {
+    return await send(req, controller.signal);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function send(req: ChatRequest, signal: AbortSignal): Promise<ChatResult> {
   let res: Response;
   try {
     res = await fetch(`${req.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
@@ -54,13 +67,13 @@ export async function chatCompletion(req: ChatRequest): Promise<ChatResult> {
         tools: req.tools,
         tool_choice: req.toolChoice,
         temperature: 0.3,
-        max_tokens: 400,
+        max_tokens: MAX_TOKENS,
         stream: false,
       }),
-      signal: req.signal,
+      signal,
     });
   } catch (e) {
-    throw new UpstreamError(req.signal.aborted ? "timeout" : `network ${(e as Error)?.name ?? "error"}`);
+    throw new UpstreamError(signal.aborted ? "timeout" : `network ${(e as Error)?.name ?? "error"}`);
   }
   // 402 = DeepSeek balance exhausted; 401 bad key; 429/5xx overloaded.
   if (!res.ok) throw new UpstreamError(`status ${res.status}`);
@@ -68,7 +81,7 @@ export async function chatCompletion(req: ChatRequest): Promise<ChatResult> {
   try {
     body = await res.json();
   } catch {
-    throw new UpstreamError(req.signal.aborted ? "timeout" : "bad json");
+    throw new UpstreamError(signal.aborted ? "timeout" : "bad json");
   }
   const message = (body as { choices?: { message?: Record<string, unknown> }[] })?.choices?.[0]?.message;
   if (!message) throw new UpstreamError("no choices");

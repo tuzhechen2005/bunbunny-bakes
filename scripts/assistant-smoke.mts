@@ -37,7 +37,12 @@ async function main(): Promise<void> {
   const realFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     if (++calls > budget) throw new Error("smoke: upstream call budget exhausted");
-    return realFetch(input, init);
+    const t = Date.now();
+    try {
+      return await realFetch(input, init);
+    } finally {
+      console.log(`  upstream call ${calls}: ${Date.now() - t} ms`);
+    }
   }) as typeof fetch;
 
   try {
@@ -58,15 +63,16 @@ async function main(): Promise<void> {
 
     for (const q of questions.length ? questions : DEFAULT_QUESTIONS) {
       const before = calls;
+      const started = new Date();
       const outcome = await askAssistant(
         db,
         { messages: [{ role: "user", content: q }], cart: [] },
         "smoke-local",
-        new Date(),
+        started,
         env,
       );
       console.log(`\nQ: ${q}`);
-      console.log(`status ${outcome.status} · upstream calls ${calls - before}`);
+      console.log(`status ${outcome.status} · upstream calls ${calls - before} · ${Date.now() - started.getTime()} ms`);
       if (outcome.status === 200) {
         console.log(`A: ${outcome.body.reply}`);
         const s = outcome.body.suggestion;

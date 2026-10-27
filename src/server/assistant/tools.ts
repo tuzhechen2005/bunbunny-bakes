@@ -227,7 +227,7 @@ function cutoffText(ctx: ToolContext, lines: CartLine[], date: LocalDate): strin
 }
 
 /** Server-side price of a validated cart (same rules as checkout); lines are merged and ACTIVE. */
-function priceFor(ctx: ToolContext, lines: CartLine[]) {
+function priceFor(ctx: ToolContext, lines: CartLine[], fulfillment: Fulfillment) {
   const priced = lines.map((l) => {
     const p = ctx.menu.products.find((x) => x.id === l.productId)!;
     return {
@@ -236,7 +236,13 @@ function priceFor(ctx: ToolContext, lines: CartLine[]) {
       price: { unitPriceCents: p.unitPriceCents, bundleSize: p.bundleSize, bundlePriceCents: p.bundlePriceCents },
     };
   });
-  return priceCart(priced, ctx.fulfillment, ctx.menu);
+  const pricing = priceCart(priced, fulfillment, ctx.menu);
+  return {
+    小计: formatCents(pricing.subtotalCents),
+    ...(fulfillment === "DELIVERY"
+      ? { 运费: formatCents(pricing.deliveryFeeCents), 合计: formatCents(pricing.totalCents) }
+      : {}),
+  };
 }
 
 function getMenuTool(ctx: ToolContext) {
@@ -263,6 +269,7 @@ function checkDateTool(ctx: ToolContext, raw: unknown) {
     label: dayLabel(args.date),
     state: problems.length ? "PROBLEM" : plan.state,
     meaning: problems.length ? problems.join("；") : STATE_TEXT[plan.state],
+    ...(problems.length ? {} : priceFor(ctx, r.lines, args.fulfillment ?? ctx.fulfillment)),
     ...(plan.state === "AVAILABLE" && !problems.length ? { cutoff: cutoffText(ctx, r.lines, args.date) } : {}),
     ...(plan.hints.length ? { 办法: plan.hints.map((h) => hintView(ctx, h)) } : {}),
   };
@@ -297,14 +304,10 @@ function proposeCartTool(ctx: ToolContext, raw: unknown) {
     }
   }
   ctx.suggestion = { items: r.lines, date, note: plainText(scrubPii(args.note), NOTE_MAX) };
-  const pricing = priceFor(ctx, r.lines);
   return {
     ok: true,
     说明: "已经给顾客看建议卡片了，顾客自己点「放进纸袋」再下单",
-    小计: formatCents(pricing.subtotalCents),
-    ...(ctx.fulfillment === "DELIVERY"
-      ? { 运费: formatCents(pricing.deliveryFeeCents), 合计: formatCents(pricing.totalCents) }
-      : {}),
+    ...priceFor(ctx, r.lines, ctx.fulfillment),
   };
 }
 

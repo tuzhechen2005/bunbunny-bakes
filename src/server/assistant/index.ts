@@ -1,7 +1,12 @@
 // POST /api/assistant logic (C3, D117, D118). The route handler stays thin.
 //
 // Order of checks: body shape → key configured → IP hash → daily limits (counted before the
-// upstream call) → model loop (≤ 4 tool rounds, one 20 s deadline for the whole request).
+// upstream call) → model loop (≤ 3 model calls = ≤ 2 tool rounds + a forced-text call).
+//
+// Time budget: Netlify kills a function at 10 s, so the whole request — DB reads included —
+// gets BUDGET_MS from its arrival. Each model call gets min(remaining, PER_CALL_MS); a call is
+// never started with less than MIN_CALL_MS left. Out of time / upstream failure: the
+// validated suggestion if there already is one (200 + a fixed reply), else 503.
 // Nothing the customer typed is stored or logged; it is PII-scrubbed before it leaves.
 
 import { z } from "zod";
@@ -10,7 +15,9 @@ import type { CartLine, Fulfillment } from "@/domain/types";
 import { loadAvailabilityInput } from "../availabilityData";
 import type { DbClient } from "../db";
 import { AppError } from "../errors";
+import { clientIp } from "../http";
 import { getMenu } from "../menu";
+import { hashIp } from "../tokens";
 import { mergeLines } from "../orders";
 import { issuesToFields, MAX_LINES, MAX_QTY_SCHEMA } from "../orderSchemas";
 import { chatCompletion, UpstreamError, type ChatMessage } from "./deepseek";
@@ -23,10 +30,15 @@ import { takeMessage } from "./usage";
 export const MAX_MESSAGES = 12;
 export const MESSAGE_MAX = 500;
 export const REPLY_MAX = 400;
-export const MAX_TOOL_ROUNDS = 4;
+/** Model calls per request: up to 2 with tools, the last one is forced to answer in text. */
+export const MAX_MODEL_CALLS = 3;
 /** Tool calls executed per round; extra ones get an error result. */
-const MAX_CALLS_PER_ROUND = 6;
-export const DEADLINE_MS = 20_000;
+export const MAX_CALLS_PER_ROUND = 6;
+/** Whole request, from arrival (Netlify's limit is 10 s). */
+export const BUDGET_MS = 8_500;
+export const PER_CALL_MS = 4_500;
+/** Don't start a model call with less time than this left. */
+export const MIN_CALL_MS = 1_500;
 
 const codePoints = (s: string) => [...s].length;
 
@@ -82,7 +94,17 @@ export function parseAssistantBody(raw: unknown): AssistantRequest {
   return r.data;
 }
 
-const UNAVAILABLE = { status: 503, body: { error: "ASSISTANT_UNAVAILABLE" } } as const;
+/** IP hash for the daily limit; null (→ 503, nothing counted) when IP_HASH_SECRET is missing. */
+export function assistantIpHash(request: Request): string | null {
+  const secret = process.env.IP_HASH_SECRET;
+  if (!secret) {
+    console.error("/api/assistant: IP_HASH_SECRET is not set; refusing");
+    return null;
+  }
+  return hashIp(clientIp(request), secret);
+}
+
+const UNAVAILABLE ={ status: 503, body: { error: "ASSISTANT_UNAVAILABLE" } } as const;
 
 export async function askAssistant(
   db: DbClient,
@@ -113,39 +135,51 @@ export async function askAssistant(
     ...req.messages.map((m) => ({ role: m.role, content: scrubPii(m.content) }) as ChatMessage),
   ];
 
-  const signal = AbortSignal.timeout(DEADLINE_MS);
+  const deadline = now.getTime() + BUDGET_MS;
+  const giveUp = (reason: string): AssistantOutcome => {
+    console.error(`/api/assistant: ${reason}`);
+    // A validated card already exists: it is the useful part, the customer paid a message for it.
+    if (ctx.suggestion) {
+      return {
+        status: 200,
+        body: { reply: copy.assistantApi.suggestionReply, suggestion: ctx.suggestion, remaining: usage.remaining },
+      };
+    }
+    return UNAVAILABLE;
+  };
+
   let content = "";
-  try {
-    for (let round = 0; ; round++) {
-      const last = round >= MAX_TOOL_ROUNDS;
-      const result = await chatCompletion({
+  for (let call = 0; ; call++) {
+    const remaining = deadline - Date.now();
+    if (remaining < MIN_CALL_MS) return giveUp("out of time");
+    const last = call >= MAX_MODEL_CALLS - 1;
+    let result;
+    try {
+      result = await chatCompletion({
         apiKey,
         baseUrl: env.baseUrl,
         model: env.model,
         messages,
         tools: TOOL_DEFINITIONS,
         toolChoice: last ? "none" : "auto",
-        signal,
+        timeoutMs: Math.min(remaining, PER_CALL_MS),
       });
-      if (last || result.toolCalls.length === 0) {
-        content = result.content;
-        break;
-      }
-      messages.push({ role: "assistant", content: result.content || null, tool_calls: result.toolCalls });
-      result.toolCalls.forEach((call, i) => {
-        const output =
-          i < MAX_CALLS_PER_ROUND
-            ? runTool(ctx, call.function.name, call.function.arguments)
-            : { error: "一次调用的工具太多了" };
-        messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(output) });
-      });
+    } catch (e) {
+      if (e instanceof UpstreamError) return giveUp(e.reason);
+      throw e;
     }
-  } catch (e) {
-    if (e instanceof UpstreamError) {
-      console.error(`/api/assistant: ${e.reason}`);
-      return UNAVAILABLE;
+    if (last || result.toolCalls.length === 0) {
+      content = result.content;
+      break;
     }
-    throw e;
+    messages.push({ role: "assistant", content: result.content || null, tool_calls: result.toolCalls });
+    result.toolCalls.forEach((tc, i) => {
+      const output =
+        i < MAX_CALLS_PER_ROUND
+          ? runTool(ctx, tc.function.name, tc.function.arguments)
+          : { error: "一次调用的工具太多了" };
+      messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(output) });
+    });
   }
 
   const reply =

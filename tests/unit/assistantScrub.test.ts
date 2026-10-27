@@ -36,7 +36,29 @@ describe("scrubPii", () => {
     "I want 4 brioche buns please",
     "价格是 $12.99 吗",
     "2026-11-05 有吗",
+    "Tell me what bread is on 11/5",
+    "Can you tell me 2 options?",
+    "一共3座位",
+    "周四 12点 取 3 个",
   ])("keeps %s", (input) => {
     expect(scrubPii(input)).toBe(input);
+  });
+
+  it.each([
+    ["要3个红豆包送到大学路12号", "要3个红豆包送到", "12号"],
+    ["我要红豆包3个送到大学路12号可以吗", "我要红豆包3个送到", "12号"],
+    ["周四要两个泡芙送到5楼", "周四要两个泡芙送到", "5楼"],
+    ["送到幸福小区5栋2单元301室，要4个奶酪角", "要4个奶酪角", "301"],
+  ])("keeps the order in %s but masks the address", (input, kept, secret) => {
+    const out = scrubPii(input);
+    expect(out).toContain(kept);
+    expect(out).not.toContain(secret);
+    expect(out).toContain("***");
+  });
+
+  it("masks full-width digits and ids", () => {
+    expect(scrubPii("手机１３８１２３４５６７８")).not.toMatch(/138|１３８/);
+    expect(scrubPii("ｂｕｎｎｙ＿２０２４ 是我")).toBe("*** 是我");
+    expect(scrubPii("周四能取吗？")).toBe("周四能取吗？");
   });
 });

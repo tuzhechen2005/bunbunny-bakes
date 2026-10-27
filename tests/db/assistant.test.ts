@@ -6,6 +6,8 @@ vi.mock("next/server", async (importOriginal) => ({
   connection: async () => {},
 }));
 import { POST } from "@/app/api/assistant/route";
+import { copy } from "@/copy";
+import { BUDGET_MS, PER_CALL_MS } from "@/server/assistant";
 import { GLOBAL_DAILY_LIMIT, GLOBAL_KEY, VISITOR_DAILY_LIMIT } from "@/server/assistant/usage";
 import { prisma } from "@/server/db";
 import { toDbDate } from "@/server/dbDates";
@@ -27,11 +29,14 @@ const IP = "203.0.113.7";
 const ENV_KEYS = ["SITE_URL", "IP_HASH_SECRET", "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL", "ASSISTANT_MODEL"] as const;
 const saved: Record<string, string | undefined> = {};
 
-type Upstream = { content?: string | null; tool_calls?: { id: string; name: string; args: unknown }[] } | Response;
+type Reply = { content?: string | null; tool_calls?: { id: string; name: string; args: unknown }[] } | Response;
+/** `delay`: answer after this many (fake) ms, or never (Infinity); aborts reject like fetch. */
+type Upstream = Reply | { delay: number; then?: Reply };
 let script: Upstream[];
+let inflight = 0;
 let sent: { url: string; body: Record<string, unknown>; headers: Record<string, string> }[];
 
-function upstream(u: Upstream): Response {
+function upstream(u: Reply): Response {
   if (u instanceof Response) return u;
   const message: Record<string, unknown> = { role: "assistant", content: u.content ?? null };
   if (u.tool_calls) {
@@ -69,6 +74,23 @@ beforeEach(async () => {
       });
       const next = script.shift();
       if (!next) throw new Error("unexpected upstream call");
+      if (!(next instanceof Response) && "delay" in next) {
+        inflight++;
+        return new Promise<Response>((resolve, reject) => {
+          const done = () => inflight--;
+          const timer =
+            Number.isFinite(next.delay) &&
+            setTimeout(() => {
+              done();
+              resolve(upstream(next.then ?? { content: "好的" }));
+            }, next.delay);
+          init.signal?.addEventListener("abort", () => {
+            if (timer) clearTimeout(timer);
+            done();
+            reject(new DOMException("aborted", "AbortError"));
+          });
+        });
+      }
       return upstream(next);
     }),
   );
@@ -212,7 +234,7 @@ describe("POST /api/assistant: model loop", () => {
     const { url, body, headers } = sent[0];
     expect(url).toBe("https://api.deepseek.com/chat/completions");
     expect(headers.authorization).toBe("Bearer sk-test");
-    expect(body).toMatchObject({ model: "deepseek-chat", tool_choice: "auto", temperature: 0.3, max_tokens: 400, stream: false });
+    expect(body).toMatchObject({ model: "deepseek-chat", tool_choice: "auto", temperature: 0.3, max_tokens: 250, stream: false });
     expect((body.tools as { function: { name: string } }[]).map((t) => t.function.name)).toEqual([
       "get_menu",
       "check_date",
@@ -244,9 +266,9 @@ describe("POST /api/assistant: model loop", () => {
     await createOpenDate("2026-10-21"); // Wed
     await createOpenDate("2026-10-22"); // Thu
     script.push(
-      { tool_calls: [{ id: "c1", name: "get_menu", args: {} }] },
       {
         tool_calls: [
+          { id: "c1", name: "get_menu", args: {} },
           { id: "c2", name: "check_date", args: { items: [{ product: "p1", qty: 2 }], date: "2026-10-22" } },
           { id: "c3", name: "find_dates", args: { items: [{ product: "p4", qty: 1 }] } },
         ],
@@ -266,7 +288,7 @@ describe("POST /api/assistant: model loop", () => {
       suggestion: { items: [{ productId: ids.redBean, qty: 2 }], date: "2026-10-22", note: "两个红豆包，周四取" },
       remaining: VISITOR_DAILY_LIMIT - 1,
     });
-    expect(sent).toHaveLength(4);
+    expect(sent).toHaveLength(3);
     const results = toolResults();
     const menu = results.c1 as { products: { id: string; name: string; pickupDays: string }[] };
     expect(menu.products.map((p) => p.id)).toEqual(["p1", "p2", "p3", "p4"]);
@@ -363,14 +385,33 @@ describe("POST /api/assistant: model loop", () => {
     expect(body.reply.length).toBeGreaterThan(0); // fallback when the model says nothing
   });
 
-  it("stops after 4 tool rounds: the 5th call has tool_choice none", async () => {
-    for (let i = 0; i < 4; i++) script.push({ tool_calls: [{ id: `t${i}`, name: "get_menu", args: {} }] });
-    script.push({ content: "好的" });
+  it("never more than 3 model calls: 2 tool rounds, the 3rd call has tool_choice none", async () => {
+    for (let i = 0; i < 5; i++) script.push({ tool_calls: [{ id: `t${i}`, name: "get_menu", args: {} }] });
     const res = await call(user("你好"));
     expect(res.status).toBe(200);
-    expect(sent).toHaveLength(5);
-    expect(sent.slice(0, 4).every((s) => s.body.tool_choice === "auto")).toBe(true);
-    expect(sent[4].body.tool_choice).toBe("none");
+    expect(sent).toHaveLength(3);
+    expect(sent.slice(0, 2).every((s) => s.body.tool_choice === "auto")).toBe(true);
+    expect(sent[2].body.tool_choice).toBe("none");
+    expect((await res.json()).reply.length).toBeGreaterThan(0);
+  });
+
+  it("runs at most 6 tool calls per round", async () => {
+    script.push(
+      { tool_calls: Array.from({ length: 7 }, (_, i) => ({ id: `g${i}`, name: "get_menu", args: {} })) },
+      { content: "好的" },
+    );
+    await call(user("你好"));
+    const r = toolResults();
+    for (let i = 0; i < 6; i++) expect(r[`g${i}`]).toHaveProperty("products");
+    expect(r.g6).toEqual({ error: expect.any(String) });
+  });
+
+  it("find_dates returns at most 5 dates", async () => {
+    for (let d = 21; d <= 30; d++) await createOpenDate(`2026-10-${d}`);
+    script.push({ tool_calls: [{ id: "f", name: "find_dates", args: { items: [{ product: "p1", qty: 1 }] } }] }, { content: "好的" });
+    await call(user("哪天能取"));
+    const f = toolResults().f as { dates: { date: string }[] };
+    expect(f.dates.map((d) => d.date)).toEqual(["2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25"]);
   });
 
   it("caps the reply at 400 characters", async () => {
@@ -404,5 +445,91 @@ describe("POST /api/assistant: model loop", () => {
     );
     expect((await call(user("你好"))).status).toBe(503);
     spy.mockRestore();
+  });
+});
+
+describe("POST /api/assistant: time budget (fake timers)", () => {
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(NOW);
+  });
+
+  /** Advances fake time only while an upstream call is in flight (DB work runs in real time). */
+  async function drive(p: Promise<Response>): Promise<Response> {
+    let done = false;
+    p.then(
+      () => (done = true),
+      () => (done = true),
+    );
+    while (!done) {
+      if (inflight > 0) await vi.advanceTimersByTimeAsync(50);
+      else await new Promise((r) => setImmediate(r));
+    }
+    return p;
+  }
+
+  it("(a) a hanging upstream ends within the budget: 503, only the reason is logged", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    script.push({ delay: Infinity });
+    const t0 = Date.now();
+    const res = await drive(call(user("我的秘密问题")));
+    expect(Date.now() - t0).toBeLessThanOrEqual(BUDGET_MS);
+    expect(res.status).toBe(503);
+    expect(spy.mock.calls).toEqual([["/api/assistant: timeout"]]);
+    spy.mockRestore();
+  });
+
+  it("(b) a validated suggestion survives a hanging second call: 200 with the fixed reply", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    script.push(
+      {
+        delay: 1000,
+        then: { tool_calls: [{ id: "p", name: "propose_cart", args: { items: [{ product: "p1", qty: 2 }], note: "两个红豆包" } }] },
+      },
+      { delay: Infinity },
+    );
+    const t0 = Date.now();
+    const res = await drive(call(user("帮我配两个红豆包")));
+    expect(Date.now() - t0).toBeLessThanOrEqual(BUDGET_MS);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      reply: copy.assistantApi.suggestionReply,
+      suggestion: { items: [{ productId: ids.redBean, qty: 2 }], date: null, note: "两个红豆包" },
+      remaining: VISITOR_DAILY_LIMIT - 1,
+    });
+    spy.mockRestore();
+  });
+
+  it("(c) no call is started with less than the floor left", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const tools = { tool_calls: [{ id: "m", name: "get_menu", args: {} }] };
+    // 4.4 s + 2.7 s = 7.1 s used, 1.4 s left < the 1.5 s floor.
+    script.push({ delay: 4400, then: tools }, { delay: 2700, then: tools }, { content: "不该被调用" });
+    const res = await drive(call(user("你好")));
+    expect(res.status).toBe(503);
+    expect(sent).toHaveLength(2);
+    expect(spy.mock.calls).toEqual([["/api/assistant: out of time"]]);
+    spy.mockRestore();
+  });
+
+  it("each call gets at most the per-call cap", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    script.push({ delay: Infinity });
+    const t0 = Date.now();
+    await drive(call(user("你好")));
+    const took = Date.now() - t0;
+    expect(took).toBeGreaterThanOrEqual(PER_CALL_MS);
+    expect(took).toBeLessThan(PER_CALL_MS + 200);
+    spy.mockRestore();
+  });
+
+  it("(d) never more than 3 upstream calls even when each is fast", async () => {
+    for (let i = 0; i < 5; i++) {
+      script.push({ delay: 100, then: { tool_calls: [{ id: `t${i}`, name: "get_menu", args: {} }] } });
+    }
+    const res = await drive(call(user("你好")));
+    expect(res.status).toBe(200);
+    expect(sent).toHaveLength(3);
   });
 });

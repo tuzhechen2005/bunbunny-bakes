@@ -8,7 +8,7 @@ const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g;
 
 // A WeChat (or similar) id after a keyword: masked whatever it looks like.
 const KEYWORD_ID =
-  /((?:微信号?|微信id|wechat(?:\s*id)?|weixin|wx|vx|v信|加我|电话|手机号?|phone|tel|mobile|qq)\s*(?:号|id)?\s*(?:是|为|:|：|=)?\s*)([A-Za-z0-9_+\-.()\s]{3,30}[A-Za-z0-9_)])/giu;
+  /((?:微信号?|微信id|v信|加我|电话|手机号?|(?<![A-Za-z])(?:wechat(?:\s*id)?|weixin|wx|vx|phone|tel|mobile|qq)(?![A-Za-z]))\s*(?:号|id)?\s*(?:是|为|:|：|=)?\s*)([A-Za-z0-9_+\-.()\s]{3,30}[A-Za-z0-9_)])/giu;
 
 // US-style street address: "123 N. University Ave Apt 4B", "1600 Pennsylvania Avenue".
 const STREET_TYPES =
@@ -21,10 +21,16 @@ const US_ADDRESS = new RegExp(
 const UNIT = /(?:\b(?:Apt|Apartment|Unit|Suite|Ste)\.?\s*|#)\s*\d+[A-Za-z]?\b/gi;
 const ZIP = /\b[A-Z]{2}\s+\d{5}(?:-\d{4})?\b/g;
 
-// Chinese address pieces: "大学路123号", "幸福小区5栋2单元301室", "12号楼".
-const CN_ADDRESS =
-  /[\p{Script=Han}A-Za-z0-9]{0,8}(?:路|街|大道|大街|巷|弄|胡同)\s*\d+\s*号(?:\s*[\p{Script=Han}\d-]{0,12}?(?:室|楼|单元|栋|座|层))?/gu;
-const CN_BUILDING = /[\p{Script=Han}]{0,6}(?:小区|公寓|花园|大厦)?\s*\d+\s*(?:号楼|栋|幢|座|单元|室|楼)(?:\s*\d+\s*(?:单元|室|层|号))*/gu;
+// Chinese address pieces: "大学路123号" → "大学路***", "5栋2单元301室" / "12号楼" / "5楼" → "***".
+// Masking starts at the road keyword / the number, never earlier, so the words in front
+// ("要3个红豆包送到…") survive. A road name alone is not a deliverable address.
+const CN_ROAD_NUMBER =
+  /(路|街|大道|大街|巷|弄|胡同)\s*\d+\s*号(?:\s*\d+\s*(?:号楼|栋|幢|单元|室|层|楼|号|座(?=\s*\d|楼)))*/gu;
+const CN_BUILDING = /\d+\s*(?:号楼|栋|幢|单元|室|楼|座(?=\s*\d|楼))(?:\s*\d+\s*(?:号楼|栋|幢|单元|室|层|楼|号))*/gu;
+
+// Full-width ASCII letters/digits and id punctuation (＠．＋－＿) → ASCII (NFKC on just these,
+// so Chinese punctuation such as ，？ is left as typed).
+const FULL_WIDTH = /[＋－．０-９＠-Ｚ＿ａ-ｚ]/g;
 
 // Phone numbers: +86 / CN mobile, US (555) 123-4567, any longer digit run.
 const PHONE =
@@ -38,14 +44,14 @@ function wechatLike(token: string): boolean {
 }
 
 export function scrubPii(text: string): string {
-  let s = text;
+  let s = text.replace(FULL_WIDTH, (c) => c.normalize("NFKC"));
   s = s.replace(EMAIL, MASK);
   s = s.replace(KEYWORD_ID, (_m, lead: string) => `${lead}${MASK}`);
   s = s.replace(US_ADDRESS, MASK);
   s = s.replace(ZIP, MASK);
   s = s.replace(UNIT, MASK);
-  s = s.replace(CN_ADDRESS, MASK);
-  s = s.replace(CN_BUILDING, (m) => (/\d/.test(m) ? MASK : m));
+  s = s.replace(CN_ROAD_NUMBER, (_m, road: string) => `${road}${MASK}`);
+  s = s.replace(CN_BUILDING, MASK);
   s = s.replace(PHONE, MASK);
   s = s.replace(WECHAT_LIKE, (m) => (wechatLike(m) ? MASK : m));
   // Collapse runs like "*** ***" left by overlapping patterns.

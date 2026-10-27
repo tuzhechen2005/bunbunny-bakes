@@ -2,10 +2,10 @@
 
 import { connection, NextResponse } from "next/server";
 import { copy } from "@/copy";
-import { askAssistant, parseAssistantBody } from "@/server/assistant";
+import { askAssistant, assistantIpHash, parseAssistantBody } from "@/server/assistant";
 import { prisma } from "@/server/db";
 import { isAppError } from "@/server/errors";
-import { gameIpHash, readGameJson } from "@/server/gameRoute";
+import { readGameJson } from "@/server/gameRoute";
 import { jsonError, noStore } from "@/server/http";
 import { checkOrigin } from "@/server/origin";
 
@@ -13,12 +13,14 @@ import { checkOrigin } from "@/server/origin";
 const MAX_BODY_BYTES = 64 * 1024;
 
 export async function POST(request: Request): Promise<Response> {
+  // The time budget (BUDGET_MS) counts from here, DB reads included.
+  const arrivedAt = new Date();
   const forbidden = checkOrigin(request);
   if (forbidden) return forbidden;
   try {
     const body = parseAssistantBody(await readGameJson(request, MAX_BODY_BYTES));
     await connection();
-    const outcome = await askAssistant(prisma, body, gameIpHash(request), new Date());
+    const outcome = await askAssistant(prisma, body, assistantIpHash(request), arrivedAt);
     return noStore(NextResponse.json(outcome.body, { status: outcome.status }));
   } catch (e) {
     // C3: a bad request body is 400 here (other customer APIs use 422).

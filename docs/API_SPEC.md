@@ -180,11 +180,14 @@
 返回：
 
 - `200 { reply, suggestion?, remaining }`：`reply` 纯文本（去掉 HTML/Markdown/链接/不可见字符，最多 400 字符）；`suggestion = { items: { productId, qty }[], date: "YYYY-MM-DD" | null, note }`（`note` 最多 100 字符），只有模型调用了 `propose_cart` 且通过校验才有；`remaining` = 这个访客今天还能问几句。
-- `429 { error: "ASSISTANT_LIMIT" }`：同一 IP 哈希每天（America/Chicago）20 句，或全站每天 500 句。
-- `503 { error: "ASSISTANT_UNAVAILABLE" }`：没配 `DEEPSEEK_API_KEY`（不计次数）、缺 `IP_HASH_SECRET`、DeepSeek 返回错误（含 402 余额不足）、网络错误、20 秒超时。网站其他功能不受影响。
+- `429 { error: "ASSISTANT_LIMIT" }`：同一 IP 哈希每天（America/Chicago）20 句，或全站每天 500 句。先计访客、没超才计全站：访客自己超限不占全站额度；被全站上限拒绝的那一句仍算访客的一句。
+- `503 { error: "ASSISTANT_UNAVAILABLE" }`：没配 `DEEPSEEK_API_KEY`（不计次数）、缺 `IP_HASH_SECRET`（不计次数）、DeepSeek 返回错误（含 402 余额不足）、网络错误、超时（见下）。网站其他功能不受影响。
 - `400 { error: "VALIDATION", message, fields }`：请求体不对（注意：这里是 400，其他顾客接口是 422）。
+- `403 { error: "FORBIDDEN_ORIGIN" }`：`Origin` 不对。
 
-流程：校验 → 有 key → 计数（在调用 DeepSeek 之前，原子加一）→ 把所有消息里像微信号/电话/邮箱/地址的内容换成 `***` → 调用 `${DEEPSEEK_BASE_URL}/chat/completions`（`fetch`，非流式，`tools` + `tool_choice: "auto"`，`temperature 0.3`，`max_tokens 400`）→ 最多 4 轮工具调用，第 5 次调用 `tool_choice: "none"`；整个请求一个 20 秒期限。
+流程：校验 → 有 key → 计数（在调用 DeepSeek 之前，原子加一）→ 把所有消息里像微信号/电话/邮箱/地址的内容换成 `***` → 调用 `${DEEPSEEK_BASE_URL}/chat/completions`（`fetch`，非流式，`tools` + `tool_choice: "auto"`，`temperature 0.3`，`max_tokens 250`）→ 最多 3 次模型调用：最多 2 轮工具调用，第 3 次 `tool_choice: "none"` 必须直接回答。
+
+时间预算（Netlify 函数 10 秒就会被杀）：从请求到达开始整个请求 8.5 秒（数据库读取也算在内）；每次模型调用最多 `min(剩余, 4.5 秒)`；剩余不足 1.5 秒就不再发起调用。超时或 DeepSeek 出错时：如果已经有通过校验的建议卡片 → `200 { reply: copy.assistantApi.suggestionReply, suggestion, remaining }`；否则 `503 ASSISTANT_UNAVAILABLE`。
 
 系统提示（`prompt.ts`）：小小🐰 的身份和规则、今天日期、接单开关、截止时间、自提说明、运费和免运费门槛、每单每种上限、菜单（名字、价格、组合价、提前天数、可取货的星期、简介）、顾客纸袋和取货方式。没有店主微信号、克数、名额。
 
@@ -193,7 +196,7 @@
 | 工具 | 参数 | 返回 |
 |---|---|---|
 | `get_menu` | — | 商品（短 id `p1…`、名字、价格、组合价、状态、提前天数、可取货的日子、简介）、每种上限、是否接单 |
-| `check_date` | `items, date, fulfillment?` | 这一天的状态（`planCart`；不开放的日子是 `NOT_OFFERED`）、可订时的截止时间、FULL/WEEKDAY 时的办法（REDUCE / SPLIT，只有商品名和件数） |
+| `check_date` | `items, date, fulfillment?` | 服务器算的小计（配送时含运费、合计）、这一天的状态（`planCart`；不开放的日子是 `NOT_OFFERED`）、可订时的截止时间、FULL/WEEKDAY 时的办法（REDUCE / SPLIT，只有商品名和件数） |
 | `find_dates` | `items, fulfillment?` | 最近 ≤ 5 个 AVAILABLE 的日子和截止时间 |
 | `propose_cart` | `items, date?, note` | 校验（商品存在且在售、每种 ≤ `maxQtyPerItem`、日期填了就必须 AVAILABLE）后成为响应里的 `suggestion`，并返回服务器算的小计（配送时含运费、合计） |
 
