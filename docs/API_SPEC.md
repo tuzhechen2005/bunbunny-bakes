@@ -119,7 +119,7 @@
 
 - `wechatId` 规则同下单（1–40 字符）；`nickname` 去掉首尾空格后 1–10 个字符（按 Unicode 字符数），不能含控制字符、换行、双向覆盖字符。不合格 `422 VALIDATION`（带 `fields`）。
 - 被禁的微信号（不区分大小写）：`422 VALIDATION`，`message` 为友好提示。
-- `seed` 来自 `crypto.randomBytes`；每局只能结束一次，2 小时后过期。
+- `seed` 来自 `crypto.randomBytes`；每局只能结束一次。`expiresAt` = 开始之后的下一个周一 0:00（America/Chicago，夏令时自动处理），这一局在此之前都可以提交（D111，客户端存档用同一个时间作废）；没有 2 小时的限制了。
 - `tiers` 按从小到大排列，最后一项 `id` 恒为 `"big"`。店主配置了至少 2 个商品等级就用店主的（`GameTier`），否则用在售商品（按菜单顺序，最多 8 个）+ 大面包，图为商品封面。`radius` 以棋盘宽度为 1，约 0.071 → 0.268（商品等级 0.071 → 0.215，大面包 0.268；D106）。每次只掉最小的 3 档，商品等级 ≥ 7 时 4 档；`points` 为合成出该级得分（等级序号的三角数 × 10，大面包等级也是），`color` 来自商品首页背景色。
 - 这一份等级配置在开始时存进 `GameRun.tiersSnapshot`，之后改配置只影响新的局。
 - 每个等级带 `name`（游戏专用面包自己的名字，否则是商品名；大面包是店名；只用于显示，不进重放快照）。没有图片的等级（游戏专用面包在店主上传图片之前）画成底色圆 + 名字的第一个字。
@@ -132,22 +132,25 @@
 - `DELETE /tiers/{id}`、`PUT /tiers/order`、`POST|DELETE /tiers/{id}/image`：对游戏专用面包同样适用。
 - 同一 IP 每小时最多 60 次（`RATE_LIMITED`，`game_start_ip:<ipHash>`）。
 
-**`POST /api/game/finish`** `{ runId, drops: [{ x, at }] }` → `200 { score, best, rank, week: { start, end } }`
+**`POST /api/game/finish`** `{ runId, drops: [{ x, at }] }` → `200 { score, best, rank, week: { start, end }, personalBest, newRecord }`
 
 - `x` ∈ [0,1]，`at` 为投放时的模拟步数（整数 0–200000），`drops` 最多 600 个，相邻两次至少 30 步（冷却 0.25 秒）。形状不对、超限、冷却违规、游戏结束后还在投放，一律 `422 VALIDATION`，这一局保持未结束，可以再提交。
 - 服务器用这一局的 `seed` 和开始时的等级快照重放（最后一次投放之后继续模拟到静止或游戏结束，把连锁合成算进去），分数以服务器为准；客户端发来的任何分数字段都被忽略。
-- 一局只结束一次：重复提交返回已保存的结果（以第一次的投放记录为准），并发重复也只写一次。未知 `runId` → `404 NOT_FOUND`；超过 2 小时 → `422 VALIDATION`；该微信号在此期间被禁 → `422 VALIDATION`。
+- 一局只结束一次：重复提交返回已保存的结果（以第一次的投放记录为准），并发重复也只写一次。未知 `runId` → `404 NOT_FOUND`；到了 `expiresAt`（含这一刻）→ `422 VALIDATION`（「这一局已经过期，请重新开始」）；该微信号在此期间被禁 → `422 VALIDATION`。
 - `weekKey` = 完成时刻所在周的周一（America/Chicago）`YYYY-MM-DD`。`best` 是该微信号（不区分大小写）本周最高分，`rank` 是本周排名（分数高在前，同分先完成者在前；隐藏的记录和被禁的微信号不参与），`week.start` 周一，`week.end` 周日。
 - 引擎自己在 600 次投放（第 600 次之后冷却一过）或 200000 步（约 27 分钟）时结束游戏，客户端和服务器用同一套上限，所以很长的一局也能正常计分；超出上限的投放记录（601 条以上）才会被拒绝。
 - 防作弊的真实时间检查：模拟的时长（`步数 / 120` 秒）不能超过从开始到提交的真实时间加 10 秒，否则 `422 VALIDATION`（真实玩家不可能比真实时间模拟得更快，这挡住"离线算好再一次性提交"）。
 - 通过验证的局会保存证据，供店主发奖前人工确认（D103）：`GameRun.drops`（投放记录）、`dropCount`、`simSteps`（时长 = `simSteps / 120` 秒）。
-- 跨周：周一 0:00（America/Chicago）之前开始、之后才提交的局算新的一周（`weekKey` 以提交时刻为准）。
+- 跨周：周一 0:00（America/Chicago）之前开始的局，过了 0:00 就过期，不能再提交，所以一局永远算在开始的那一周（`weekKey` 仍按提交时刻计算，两者相同）。
+- `personalBest`：该微信号（不区分大小写）所有时间的最高分，包括这一局；隐藏的记录不算。
+- `newRecord`：这一局现在就是排行榜上的 `allTime`（全站历史最高）。因为同分时先完成的在前，这等于"分数严格高于之前所有算数的局"；全站第一局完成时也是 `true`。重复提交时重新计算（被别人超过后就是 `false`）。
 - 同一 IP 每小时最多 60 次（`game_finish_ip:<ipHash>`）。
 
-**`GET /api/game/leaderboard`** → `{ week: { start, end }, top: [{ rank, nickname, wechatMasked, score }] (最多 20), lastWinner: { nickname, wechatMasked, score } | null, myBest?: number }`
+**`GET /api/game/leaderboard`** → `{ week: { start, end }, top: [{ rank, nickname, wechatMasked, score }] (最多 20), lastWinner: { nickname, wechatMasked, score } | null, allTime: { nickname, wechatMasked, score } | null, myBest?: number }`
 
 - 每个微信号只出现一次（取最高分）。永远不返回完整微信号：前 2 位 + `***` + 后 2 位（4 位及以下：首位 + `***`）。
 - `lastWinner`：上周 `GameAward` 指向的那一局；没有就是上周榜首。
+- `allTime`（D113「👑 历史最高」）：所有周里已完成、未隐藏、微信号未被禁的局中分数最高的一局，同分先完成者在前；还没有这样的局时为 `null`。只有荣誉没有奖品。
 - `myBest`：调用者在查询参数 `?wechatId=` 或请求头 `x-game-wechat` 里带上自己的微信号时返回本周最高分（没有记录时不返回该字段）。
 
 服务端导出（给后台用）：`hasOrdered(db, wechatId)`（不区分大小写，存在状态不是 CANCELLED/REJECTED 的订单），`isBanned(db, wechatId)`，`maskWechat`，`weekKeyOf`、`weekRange`（`gameWeek.ts`）。
@@ -206,10 +209,11 @@
 
 | 路径 | 频率（America/Chicago） | 做什么 |
 |---|---|---|
-| POST `/api/cron/outbox` | 每 5 分钟 | 发送 `nextAttemptAt ≤ now` 的待发通知；清理过期的频率记录和登录会话 |
+| POST `/api/cron/outbox` | 每 5 分钟 | 发送 `nextAttemptAt ≤ now` 的待发通知；清理过期的频率记录和登录会话；删除开始于本周一 0:00 之前、一直没完成的游戏局（已过期） |
+| POST `/api/cron/game-winner` | 每周一 09:00 | 上周（刚结束的那一周）游戏排行榜第一名的邮件（D114，`NOTIFICATIONS.md` 第 6 节）入队，`dedupeKey = game_winner:<上周一>`，入队后立即发送（`send` 同 summary），重复调用只发一次；上周没有算数的局时返回 `{ status: "empty" }`，什么都不发 |
 | POST `/api/cron/summary` | 每天 20:05 | 生成生产汇总（`CAPACITY_RULES.md` 第 10 节）并入队，`dedupeKey = summary:<明天日期>`，入队后立即发送（响应里的 `send` 是发送结果，失败的由 outbox 重试），重复调用只发一次 |
 
-两个接口都必须可以安全地重复调用。
+三个接口都必须可以安全地重复调用。
 
 ## 5. 环境变量
 

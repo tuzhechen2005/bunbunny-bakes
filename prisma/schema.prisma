@@ -69,6 +69,7 @@ enum NotificationKind {
   CUSTOMER_CANCELLED
   DAILY_SUMMARY
   PASSWORD_RESET
+  GAME_WINNER
 }
 
 enum NotificationStatus {

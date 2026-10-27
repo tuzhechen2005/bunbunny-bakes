@@ -120,7 +120,7 @@ export async function startRun(db: DbClient, input: unknown, ipHash: string, now
   return { runId: run.id, seed, tiers, expiresAt: runExpiresAt(now).toISOString() };
 }
 
-interface BoardRow {
+export interface BoardRow {
   id: string;
   wechatId: string;
   nickname: string;
@@ -150,6 +150,11 @@ function rankedSql(weekKey: string) {
 
 async function topOfWeek(db: DbClient, weekKey: string, limit: number): Promise<BoardRow[]> {
   return db.$queryRaw<BoardRow[]>`${rankedSql(weekKey)} SELECT * FROM ranked ORDER BY rank LIMIT ${limit}`;
+}
+
+/** The whole ranked board of a week (full WeChat ids: server and owner use only). */
+export async function rankedWeek(db: DbClient, weekKey: string): Promise<BoardRow[]> {
+  return db.$queryRaw<BoardRow[]>`${rankedSql(weekKey)} SELECT * FROM ranked ORDER BY rank`;
 }
 
 interface AllTimeRow {

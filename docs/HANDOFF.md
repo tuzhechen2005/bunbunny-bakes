@@ -20,7 +20,7 @@
 5. **待确认的订单立即占名额，而且不会自动失效。**（旧 PRD 里的 10 分钟、12 小时都作废。）
 6. **运费**：不满 $25 也能配送，只是收 $5。（旧 PRD 写的"满 $25 才能配送"作废。）
 7. **名额按商品的当前设置算，价格按下单时的快照算。**
-8. **Vercel 免费版的定时任务一天只能跑一次，而且可能晚最多 59 分钟**，所以定时任务用 cron-job.org 按芝加哥时间触发（D33）。
+8. **Vercel 免费版的定时任务一天只能跑一次，而且可能晚最多 59 分钟**，所以定时任务用 cron-job.org 按芝加哥时间触发（D33）。现在一共三个任务（时区 America/Chicago，请求头 `Authorization: Bearer {CRON_SECRET}`）：`/api/cron/outbox` 每 5 分钟、`/api/cron/summary` 每天 20:05、`/api/cron/game-winner` **每周一 09:00**（上周游戏冠军邮件，D114；N 批上线时要在 cron-job.org 新建这一个，见 `NOTIFICATIONS.md` 第 7 节）。
 
 ## 3. 下一步
 
