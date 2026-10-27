@@ -227,6 +227,31 @@ export const copy = {
       saveDone: "我已保存",
     },
 
+    /** 小小🐰 assistant (N4): entry button, sheet, suggestion card and error lines. */
+    assistant: {
+      name: "小小🐰",
+      entryLabel: "问问",
+      entryAria: "问问小小🐰",
+      close: "关闭",
+      opener: "想要什么面包、哪天取？跟我说就行",
+      chips: ["周四能取什么", "泡芙怎么订", "可以配送吗"],
+      inputLabel: "想问什么",
+      inputPlaceholder: "想问什么",
+      send: "发送",
+      privacy: "请不要在这里输入微信号或地址",
+      typing: "小小🐰 正在想",
+      /** e.g. "奶酪角 ×2" */
+      itemLine: "{name} ×{qty}",
+      /** e.g. "取货 11/5 周四" */
+      dateLine: "取货 {date}",
+      apply: "放进纸袋",
+      replaceAsk: "替换纸袋里的面包？",
+      replaceYes: "替换",
+      replaceNo: "不用了",
+      limit: "今天问太多啦，可以直接用下面的按钮下单",
+      unavailable: "小小🐰 暂时不在，可以直接下单哦",
+    },
+
     /** 消除大面包 (D100–D105): the home entry card and the `/game` page. */
     game: {
       title: "消除大面包",

@@ -12,6 +12,7 @@ import { applyField, productField } from "@/lib/field";
 import { flyToBag } from "@/lib/flyToBag";
 import { pushOverlay } from "@/lib/overlayHistory";
 import { useMotionPrefs } from "@/lib/motion/react";
+import { AssistantEntry } from "./assistant/AssistantEntry";
 import { BagBar } from "./bag/BagBar";
 import { FlyLayer } from "./bag/FlyLayer";
 import { fill, safeLineTotal } from "./format";
@@ -386,7 +387,7 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
           </section>
 
           {menu && products.length > 0 ? (
-            <section className="hm-list" aria-labelledby="hm-list-title">
+            <section id="hm-list" className="hm-list" aria-labelledby="hm-list-title">
               <h2 className="hm-sec-t" id="hm-list-title">
                 {b.listTitle}
               </h2>
@@ -434,6 +435,9 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
         compact={phase === "detail"}
       />
       <FlyLayer />
+      {menu && products.length > 0 ? (
+        <AssistantEntry mode="home" products={products} maxQty={maxQty} suppressed={phase !== "home"} />
+      ) : null}
     </div>
   );
 }
