@@ -19,6 +19,8 @@ import {
 const A: LocalDate = "2026-10-30"; // Fri
 const B: LocalDate = "2026-10-31"; // Sat
 const NOW = new Date("2026-10-27T15:00:00Z");
+/** Factory orders are stamped before NOW so updatedAt = max(now, prev + 1 ms) stays NOW whatever the real clock says. */
+const SEEDED = new Date(NOW.getTime() - 3_600_000);
 
 let P: DefaultProductIds;
 
@@ -48,7 +50,8 @@ async function placed(
   items: { productId: string; qty: number }[],
   over: { date?: LocalDate; status?: OrderStatus; fulfillment?: "PICKUP" | "DELIVERY" } = {},
 ) {
-  const o = await createOrder({ date: over.date ?? A, items, status: over.status, fulfillment: over.fulfillment });
+  const created = await createOrder({ date: over.date ?? A, items, status: over.status, fulfillment: over.fulfillment });
+  const o = await db.order.update({ where: { id: created.id }, data: { createdAt: SEEDED, updatedAt: SEEDED } });
   return { id: o.id, viewToken: o.viewToken, stamp: o.updatedAt.toISOString() };
 }
 

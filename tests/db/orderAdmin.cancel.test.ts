@@ -21,6 +21,8 @@ import {
 const DATE: LocalDate = "2026-10-30"; // bread cutoff 10/29 20:00 CDT = 10/30 01:00Z
 const CUTOFF = new Date("2026-10-30T01:00:00Z");
 const NOW = new Date("2026-10-27T15:00:00Z");
+/** Factory orders are stamped before NOW so updatedAt = max(now, prev + 1 ms) stays NOW whatever the real clock says. */
+const SEEDED = new Date(NOW.getTime() - 3_600_000);
 
 let P: DefaultProductIds;
 
@@ -51,7 +53,7 @@ async function placed(
   over: { status?: "NEW" | "CONTACTED" | "CONFIRMED" | "BAKING" | "READY" | "COMPLETED" | "CANCELLED" | "REJECTED"; cutoffAt?: Date } = {},
 ) {
   const o = await createOrder({ date: DATE, items, status: over.status });
-  return db.order.update({ where: { id: o.id }, data: { cutoffAt: over.cutoffAt ?? CUTOFF } });
+  return db.order.update({ where: { id: o.id }, data: { cutoffAt: over.cutoffAt ?? CUTOFF, createdAt: SEEDED, updatedAt: SEEDED } });
 }
 
 async function doughOf(date: LocalDate): Promise<number> {
