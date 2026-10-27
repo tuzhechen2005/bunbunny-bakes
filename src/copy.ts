@@ -1164,6 +1164,22 @@ export const copy = {
         unconfirmedStatus: { NEW: "新订单", CONTACTED: "已联系" },
         openAdmin: "[打开后台] → {url}",
       },
+      /** Weekly game winner (D114): Monday 9:00, last week's #1. */
+      gameWinner: {
+        subject: "👑 上周游戏冠军 {nickname}｜{score} 分",
+        subjectWarn: "⚠️ 上周游戏冠军 {nickname}｜{score} 分｜没下过单",
+        header: "【{start} – {end} 的第一名】",
+        nicknameLine: "昵称：{nickname}",
+        wechatLine: "微信号：{wechatId}",
+        scoreLine: "分数：{score}",
+        orderedLine: "下过单：{ordered}",
+        yes: "是",
+        no: "否",
+        warn: "⚠️ 第一名还没下过单，要不要发奖由你决定。",
+        runnerUpHeader: "【下过单的最高者：第 {rank} 名】",
+        noRunnerUp: "榜上没有下过单的人。",
+        openAdmin: "[打开游戏后台] → {url}",
+      },
     },
   },
 } as const;

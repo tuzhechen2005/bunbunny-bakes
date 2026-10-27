@@ -15,10 +15,10 @@ import {
   getLeaderboard,
   hasOrdered,
   isBanned,
-  RUN_TTL_MS,
   START_LIMIT_PER_HOUR,
   startRun,
 } from "@/server/game";
+import { runExpiresAt } from "@/server/gameWeek";
 import { cleanup } from "@/server/maintenance";
 import { botRun } from "../support/gameBot";
 import { getRequest, jsonRequest, NOW } from "./api.helpers";
@@ -83,7 +83,8 @@ describe("start", () => {
     const r = await start();
     expect(Object.keys(r).sort()).toEqual(["expiresAt", "runId", "seed", "tiers"]);
     expect(r.seed).toMatch(/^[0-9a-f]{32}$/);
-    expect(new Date(r.expiresAt).getTime()).toBe(T.getTime() + RUN_TTL_MS);
+    // The weekly reset after the start: Monday 2026-10-26 00:00 CDT.
+    expect(r.expiresAt).toBe("2026-10-26T05:00:00.000Z");
     // 3 active products + big.
     expect(r.tiers.map((t) => t.id)).toEqual([ids.redBean, ids.cheeseHorn, ids.brulee, "big"]);
     expect(r.tiers[0].imageUrl).toBe("/api/images/a.webp");
@@ -199,7 +200,14 @@ describe("finish", () => {
     const { drops, score } = play(run);
     const later = new Date(T.getTime() + 5 * 60_000);
     const res = await finishRun(db, { runId: run.runId, drops }, IP, later);
-    expect(res).toEqual({ score, best: score, rank: 1, week: { start: WEEK, end: "2026-10-25" } });
+    expect(res).toEqual({
+      score,
+      best: score,
+      rank: 1,
+      week: { start: WEEK, end: "2026-10-25" },
+      personalBest: score,
+      newRecord: true,
+    });
     const row = await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } });
     expect(row).toMatchObject({ score, weekKey: WEEK, hidden: false });
     expect(row.finishedAt?.getTime()).toBe(later.getTime());
@@ -242,17 +250,47 @@ describe("finish", () => {
     await expect(finishRun(db, { runId: "nope", drops: [] }, IP, LATER)).rejects.toMatchObject({ code: "VALIDATION" });
   });
 
-  it("rejects a run older than 2 hours", async () => {
+  it("a run can be finished long after 2 hours, until the weekly reset (exclusive)", async () => {
     const run = await start();
+    const { drops, score } = play(run, 5);
+    const reset = runExpiresAt(T); // Mon 2026-10-26 00:00 CDT
+    expect(reset.toISOString()).toBe("2026-10-26T05:00:00.000Z");
+    // At the reset (and after it) the run is expired and stays open.
+    for (const at of [reset, new Date(reset.getTime() + 1)]) {
+      await expect(finishRun(db, { runId: run.runId, drops }, IP, at)).rejects.toMatchObject({
+        code: "VALIDATION",
+        message: "这一局已经过期，请重新开始",
+      });
+    }
+    expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).finishedAt).toBeNull();
+    // 1 ms before the reset (days past the old 2 h TTL) it still counts, for the start's week.
+    const res = await finishRun(db, { runId: run.runId, drops }, IP, new Date(reset.getTime() - 1));
+    expect(res).toMatchObject({ score, week: { start: WEEK } });
+  });
+
+  it("across the fall DST change: a run started Mon 10-26 survives to Mon 11-02 00:00 CST", async () => {
+    // Week of 2026-10-26 contains Sun 11-01 (CDT -> CST); the reset is 06:00Z, not 05:00Z.
+    const started = new Date("2026-10-26T05:00:00Z"); // Mon 00:00 CDT, first instant of the week
+    const run = await start("wx_dst", "Dst", IP, started);
+    expect(run.expiresAt).toBe("2026-11-02T06:00:00.000Z");
     const { drops } = play(run, 5);
-    const late = new Date(T.getTime() + RUN_TTL_MS + 1);
-    await expect(finishRun(db, { runId: run.runId, drops }, IP, late)).rejects.toMatchObject({ code: "VALIDATION" });
-    const row = await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } });
-    expect(row.finishedAt).toBeNull();
-    // Exactly at the limit still counts.
     await expect(
-      finishRun(db, { runId: run.runId, drops }, IP, new Date(T.getTime() + RUN_TTL_MS)),
-    ).resolves.toBeDefined();
+      finishRun(db, { runId: run.runId, drops }, IP, new Date("2026-11-02T06:00:00Z")),
+    ).rejects.toMatchObject({ code: "VALIDATION" });
+    const res = await finishRun(db, { runId: run.runId, drops }, IP, new Date("2026-11-02T05:30:00Z")); // Sun 23:30 CST
+    expect(res.week).toEqual({ start: "2026-10-26", end: "2026-11-01" });
+  });
+
+  it("across the spring DST change: the week of 2027-03-08 resets at Mon 03-15 00:00 CDT", async () => {
+    const started = new Date("2027-03-14T16:00:00Z"); // Sun 11:00 CDT (after the 02:00 jump)
+    const run = await start("wx_spring", "Spr", IP, started);
+    expect(run.expiresAt).toBe("2027-03-15T05:00:00.000Z");
+    const { drops } = play(run, 5);
+    await expect(
+      finishRun(db, { runId: run.runId, drops }, IP, new Date("2027-03-15T05:00:00Z")),
+    ).rejects.toMatchObject({ code: "VALIDATION" });
+    const res = await finishRun(db, { runId: run.runId, drops }, IP, new Date("2027-03-15T04:59:59Z"));
+    expect(res.week.start).toBe("2027-03-08");
   });
 
   it("rejects malformed and over-cap drop logs with VALIDATION and leaves the run open", async () => {
@@ -563,29 +601,123 @@ describe("review fixes", () => {
     await expect(finishRun(db, { runId: run.runId, drops }, IP, ok)).resolves.toBeDefined();
   });
 
-  it("cleanup deletes unfinished runs older than a day and keeps finished and recent ones", async () => {
+  it("cleanup deletes unfinished runs of past weeks only (they expired) and keeps finished and this week's ones", async () => {
     const old = new Date(T.getTime() - 25 * 3_600_000);
+    const lastWeek = new Date("2026-10-19T04:59:59Z"); // Sun 10-18 23:59:59 CDT
     const mk = (finishedAt: Date | null, startedAt: Date) =>
       db.gameRun.create({
         data: { seed: "s", wechatId: "w", nickname: "n", tiersSnapshot: [], startedAt, finishedAt, score: finishedAt ? 1 : null, ipHash: "h" },
       });
-    const stale = await mk(null, old);
+    const stale = await mk(null, lastWeek);
+    // Started yesterday, this week: still resumable (D111), only its IP hash goes.
+    const resumable = await mk(null, old);
     const done = await mk(old, old);
     const fresh = await mk(null, new Date(T.getTime() - 3_600_000));
     await cleanup(db, T);
     expect(await db.gameRun.findUnique({ where: { id: stale.id } })).toBeNull();
+    expect((await db.gameRun.findUniqueOrThrow({ where: { id: resumable.id } })).ipHash).toBeNull();
     expect((await db.gameRun.findUniqueOrThrow({ where: { id: done.id } })).ipHash).toBeNull();
     expect((await db.gameRun.findUniqueOrThrow({ where: { id: fresh.id } })).ipHash).toBe("h");
   });
 
-  it("a run started before Monday 00:00 and finished after it counts for the new week", async () => {
+  it("a run started before Monday 00:00 cannot be finished after it (the reset ends it, D111)", async () => {
     const sunday = new Date("2026-10-26T04:30:00Z"); // Sun 23:30 CDT, week of 10-19
     const run = await start("wx_sun", "Sun", IP, sunday);
+    expect(run.expiresAt).toBe("2026-10-26T05:00:00.000Z");
     const { drops } = play(run, 6);
     const monday = new Date("2026-10-26T05:30:00Z"); // Mon 00:30 CDT
-    const res = await finishRun(db, { runId: run.runId, drops }, IP, monday);
-    expect(res.week.start).toBe("2026-10-26");
-    expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).weekKey).toBe("2026-10-26");
+    await expect(finishRun(db, { runId: run.runId, drops }, IP, monday)).rejects.toMatchObject({ code: "VALIDATION" });
+    const res = await finishRun(db, { runId: run.runId, drops }, IP, new Date("2026-10-26T04:59:00Z"));
+    expect(res.week.start).toBe("2026-10-19");
+  });
+});
+
+describe("all-time record, personalBest and newRecord (D113)", () => {
+  it("allTime is null with no eligible runs, then the highest score of all weeks (masked)", async () => {
+    expect((await getLeaderboard(db, T)).allTime).toBeNull();
+    await insertRun({ wechatId: "wx_old_king", nickname: "Old", score: 9000, weekKey: "2026-09-28" });
+    await insertRun({ wechatId: "wx_now", nickname: "Now", score: 500 });
+    const board = await getLeaderboard(db, T);
+    expect(board.allTime).toEqual({ nickname: "Old", wechatMasked: "wx***ng", score: 9000 });
+    expect(Object.keys(board.allTime!).sort()).toEqual(["nickname", "score", "wechatMasked"]);
+    expect(JSON.stringify(board)).not.toContain("wx_old_king");
+  });
+
+  it("allTime leaves out hidden runs and banned ids (case-insensitive); ties go to the earliest finish", async () => {
+    await insertRun({ wechatId: "wx_hidden", score: 9999, hidden: true });
+    await insertRun({ wechatId: "wx_banned", score: 8888, weekKey: "2026-10-12" });
+    await db.gameBan.create({ data: { wechatId: "WX_BANNED" } });
+    await insertRun({ wechatId: "wx_late", nickname: "Late", score: 700, finishedAt: new Date("2026-10-20T12:00:00Z") });
+    await insertRun({ wechatId: "wx_early", nickname: "Early", score: 700, finishedAt: new Date("2026-10-14T12:00:00Z"), weekKey: "2026-10-12" });
+    expect((await getLeaderboard(db, T)).allTime).toMatchObject({ nickname: "Early", score: 700 });
+    await db.gameRun.updateMany({ where: { wechatId: "wx_hidden" }, data: { hidden: false } });
+    expect((await getLeaderboard(db, T)).allTime).toMatchObject({ score: 9999 });
+  });
+
+  it("personalBest is the all-time best of the id (any week, any case), this run included, hidden runs not counted", async () => {
+    await insertRun({ wechatId: "wx_pb", score: 4000, weekKey: "2026-10-05" });
+    await insertRun({ wechatId: "WX_PB", score: 99999, weekKey: "2026-10-12", hidden: true });
+    await insertRun({ wechatId: "wx_other", score: 50000 });
+    const run = await start("wx_PB", "Pb");
+    const { drops, score } = play(run, 6);
+    expect(score).toBeLessThan(4000);
+    const res = await finishRun(db, { runId: run.runId, drops }, IP, LATER);
+    // best/rank stay weekly; personalBest is all-time.
+    expect(res).toMatchObject({ score, best: score, rank: 2, personalBest: 4000, newRecord: false });
+  });
+
+  it("personalBest is this run's score when it is the player's best", async () => {
+    await insertRun({ wechatId: "wx_pb2", score: 1, weekKey: "2026-10-05" });
+    const run = await start("wx_pb2", "Pb2");
+    const { drops, score } = play(run, 10);
+    const res = await finishRun(db, { runId: run.runId, drops }, IP, LATER);
+    expect(res.personalBest).toBe(score);
+  });
+
+  it("newRecord: true for the first finished run ever and when strictly beating the record; false on a tie", async () => {
+    const first = await start("wx_first", "F");
+    const p = play(first, 10);
+    expect((await finishRun(db, { runId: first.runId, drops: p.drops }, IP, LATER)).newRecord).toBe(true);
+
+    // A tie with the record is not a new record (the earlier finish keeps the crown).
+    const tie = await start("wx_tie", "T", IP, new Date(T.getTime() + 1000));
+    await finishRun(db, { runId: tie.runId, drops: p.drops }, IP, new Date(LATER.getTime() + 1000));
+    // Another seed scores differently: force the tie through the stored score; a repeated finish recomputes.
+    await db.gameRun.update({ where: { id: tie.runId }, data: { score: p.score } });
+    const again = await finishRun(db, { runId: tie.runId, drops: [] }, IP, new Date(LATER.getTime() + 2000));
+    expect(again.newRecord).toBe(false);
+
+    // Lower the record below a fresh run: that run beats it strictly.
+    await db.gameRun.updateMany({ where: { wechatId: { in: ["wx_first", "wx_tie"] } }, data: { score: 0 } });
+    const champ = await start("wx_champ", "C");
+    const c = play(champ, 10);
+    expect(c.score).toBeGreaterThan(0);
+    const res = await finishRun(db, { runId: champ.runId, drops: c.drops }, IP, LATER);
+    expect(res.newRecord).toBe(true);
+    expect((await getLeaderboard(db, LATER)).allTime).toMatchObject({ nickname: "C", score: c.score });
+    // Lower than the record: false.
+    await db.gameRun.update({ where: { id: champ.runId }, data: { score: c.score } });
+    await insertRun({ wechatId: "wx_huge", score: c.score + 1000, weekKey: "2026-10-05" });
+    const low = await start("wx_low", "L");
+    const l = play(low, 3);
+    expect((await finishRun(db, { runId: low.runId, drops: l.drops }, IP, LATER)).newRecord).toBe(false);
+  });
+
+  it("the finish route returns personalBest and newRecord; the leaderboard route returns allTime", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(T);
+      const run = await (await startPOST(jsonRequest("/api/game/start", { wechatId: "wx_api", nickname: "Api" }))).json();
+      expect(run.expiresAt).toBe("2026-10-26T05:00:00.000Z");
+      const { drops, score } = play(run);
+      vi.setSystemTime(LATER);
+      const body = await (await finishPOST(jsonRequest("/api/game/finish", { runId: run.runId, drops }))).json();
+      expect(body).toMatchObject({ score, personalBest: score, newRecord: true });
+      const board = await (await leaderboardGET(getRequest("/api/game/leaderboard"))).json();
+      expect(board.allTime).toEqual({ nickname: "Api", wechatMasked: "wx***pi", score });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

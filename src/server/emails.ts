@@ -6,6 +6,7 @@ import { formatCents } from "@/domain/pricing";
 import type { DailySummary } from "@/domain/summary";
 import type { DbClient } from "./db";
 import { fromDbDate } from "./dbDates";
+import type { GameWinnerPayload, WinnerLine } from "./gameWinner";
 
 export interface RenderedEmail {
   subject: string;
@@ -15,7 +16,7 @@ export interface RenderedEmail {
 /** The fields of a Notification row the renderer needs. */
 export interface NotificationToRender {
   id: string;
-  kind: "NEW_ORDER" | "CUSTOMER_CANCELLED" | "DAILY_SUMMARY" | "PASSWORD_RESET";
+  kind: "NEW_ORDER" | "CUSTOMER_CANCELLED" | "DAILY_SUMMARY" | "PASSWORD_RESET" | "GAME_WINNER";
   dedupeKey: string;
   payload: unknown;
 }
@@ -215,6 +216,36 @@ function renderDailySummary(n: NotificationToRender): RenderedEmail {
   return { subject, text: sections.map((sec) => sec.join("\n")).join("\n\n") };
 }
 
+function winnerLines(l: WinnerLine): string[] {
+  const g = t.gameWinner;
+  return [
+    fill(g.nicknameLine, { nickname: l.nickname }),
+    fill(g.wechatLine, { wechatId: l.wechatId }),
+    fill(g.scoreLine, { score: l.score }),
+    fill(g.orderedLine, { ordered: l.ordered ? g.yes : g.no }),
+  ];
+}
+
+/** D114: last week's #1 (full WeChat id, score, ordered); ⚠️ + the best player who has ordered. */
+function renderGameWinner(n: NotificationToRender): RenderedEmail {
+  const g = t.gameWinner;
+  const p = payloadObject(n) as unknown as GameWinnerPayload;
+  if (!p.winner || !p.week) throw new Error(`GAME_WINNER notification ${n.id}: payload has no winner`);
+  const w = p.winner;
+  const sections: string[][] = [
+    [fill(g.header, { start: dayLabel(p.week.start), end: dayLabel(p.week.end) }), ...winnerLines(w)],
+  ];
+  if (!w.ordered) {
+    sections.push([g.warn]);
+    sections.push(p.runnerUp ? [fill(g.runnerUpHeader, { rank: p.runnerUp.rank }), ...winnerLines(p.runnerUp)] : [g.noRunnerUp]);
+  }
+  sections.push([fill(g.openAdmin, { url: `${siteUrl(p.siteUrl)}/admin/game` })]);
+  return {
+    subject: fill(w.ordered ? g.subject : g.subjectWarn, { nickname: w.nickname, score: w.score }),
+    text: sections.map((sec) => sec.join("\n")).join("\n\n"),
+  };
+}
+
 /**
  * Render one notification to the owner's email. Reads whatever it needs
  * (order, settings) from the database at send time. Must not have side effects.
@@ -234,6 +265,8 @@ export async function renderNotification(
       return renderPasswordReset(notification);
     case "DAILY_SUMMARY":
       return renderDailySummary(notification);
+    case "GAME_WINNER":
+      return renderGameWinner(notification);
     default:
       throw new Error(`renderNotification: unknown kind ${String(notification.kind)}`);
   }

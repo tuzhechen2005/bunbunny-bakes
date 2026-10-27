@@ -1,6 +1,7 @@
 // Periodic cleanup, run by /api/cron/outbox (API_SPEC §4, SECURITY §1). Idempotent.
 
 import type { DbClient } from "./db";
+import { weekKeyOf, weekStartInstant } from "./gameWeek";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -21,8 +22,9 @@ export async function cleanup(db: DbClient, now: Date): Promise<CleanupCounts> {
   const ordersIpHashCleared = await db.$executeRaw`
     UPDATE "Order" SET "ipHash" = NULL
     WHERE "createdAt" < ${dayAgo} AND "ipHash" IS NOT NULL`;
-  // Runs that were started and never finished are dropped after a day (nothing refers to them).
-  await db.gameRun.deleteMany({ where: { finishedAt: null, startedAt: { lt: dayAgo } } });
+  // Unfinished runs live until the weekly reset after their start (D111): drop the ones started
+  // before this week's Monday 00:00 Chicago (expired, nothing refers to them).
+  await db.gameRun.deleteMany({ where: { finishedAt: null, startedAt: { lt: weekStartInstant(weekKeyOf(now)) } } });
   // Game runs keep their IP hash for 24 hours too (not part of the reported counts).
   await db.gameRun.updateMany({ where: { startedAt: { lt: dayAgo }, ipHash: { not: null } }, data: { ipHash: null } });
   return {
