@@ -22,7 +22,7 @@ export interface MenuProduct {
   status: "ACTIVE" | "PAUSED";
   leadDays: number;
   /** Chicago weekdays the product can be picked up (0 = Sunday ... 6 = Saturday); empty = every day (C1). */
-  pickupWeekdays?: number[];
+  pickupWeekdays: number[];
 }
 
 export interface Menu {

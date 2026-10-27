@@ -1,5 +1,6 @@
 // N2: weekday tags, WEEKDAY date cards and the C1 date hints (REDUCE / SPLIT) against mocked APIs.
 import { expect, test, type Page } from "@playwright/test";
+import { insertOrder, ITEM, resetAndSeed, withDb } from "./support/seed";
 
 const CART_KEY = "bb_cart_v1";
 const DATE_KEY = "bb_cart_date_v1";
@@ -206,5 +207,61 @@ test.describe("checkout hints", () => {
     const b = (await page.getByTestId("hint-apply").boundingBox())!;
     expect(b.height).toBeGreaterThanOrEqual(44);
     await page.screenshot({ path: "/Users/tuzhechen/Documents/bunbunny-bake/.orchestrator/screens/n2_checkout-hint-320.png" });
+  });
+});
+
+// The same flows against the REAL server (no /api/availability or /api/orders mocks): the test DB is
+// re-seeded; the cheese wedge is restricted to the weekday of the second open date.
+test.describe("checkout hints, real API", () => {
+  test.describe.configure({ mode: "serial" });
+
+  test("WEEKDAY + SPLIT: the first order holds only the bread, the wedge stays in the bag with its date", async ({ page }) => {
+    const seeded = await resetAndSeed();
+    const { red, wedge } = seeded.products;
+    const { d1, d2 } = seeded.dates;
+    const wd = new Date(`${d2}T00:00:00Z`).getUTCDay();
+    await withDb((c) => c.query(`UPDATE "Product" SET "pickupWeekdays" = $1 WHERE id = $2`, [[wd], wedge]));
+    await seed(page, [{ productId: red, qty: 2 }, { productId: wedge, qty: 1 }]);
+    await expect(card(page, d1)).toHaveAttribute("data-state", "WEEKDAY");
+    await expect(card(page, d1)).toContainText("奶酪角仅周");
+    await card(page, d1).click();
+    const row = page.locator('[data-testid="hint-row"][data-kind="SPLIT_WEEKDAY"]');
+    await expect(row).toContainText("奶酪角只能周");
+    await row.getByTestId("hint-apply").click();
+    await expect(page.getByTestId("split-notice")).toBeVisible();
+    await expect(card(page, d1)).toHaveAttribute("data-state", "AVAILABLE");
+    await page.getByLabel("微信号").fill("wx_real_split");
+    await page.getByTestId("submit").click();
+    await expect(page).toHaveURL(/\/o\//);
+    const ordered = await withDb((c) =>
+      c.query<{ productId: string; qty: number }>(
+        `SELECT oi."productId", oi.qty FROM "OrderItem" oi JOIN "Order" o ON o.id = oi."orderId" WHERE o."wechatId" = 'wx_real_split'`,
+      ),
+    );
+    expect(ordered.rows).toEqual([{ productId: red, qty: 2 }]);
+    expect(await page.evaluate(([c, d]) => [localStorage.getItem(c), localStorage.getItem(d)], [CART_KEY, DATE_KEY] as const)).toEqual([
+      JSON.stringify([{ productId: wedge, qty: 1 }]),
+      d2,
+    ]);
+    await page.goto("/checkout");
+    await expect(card(page, d2)).toHaveAttribute("aria-pressed", "true");
+    expect(await page.evaluate((k) => localStorage.getItem(k), DATE_KEY)).toBeNull();
+  });
+
+  test("FULL + REDUCE: one tap drops a piece and the date becomes orderable", async ({ page }) => {
+    const seeded = await resetAndSeed();
+    const { red } = seeded.products;
+    const { d3 } = seeded.dates;
+    // 20 x 70 g = 1400 of 1600 g: 200 g left, so 2 red beans fit and 3 do not.
+    await insertOrder({ date: d3, wechatId: "full_wx", status: "CONFIRMED", items: [ITEM.red(red, 20)] });
+    await seed(page, [{ productId: red, qty: 3 }]);
+    await expect(card(page, d3)).toHaveAttribute("data-state", "FULL");
+    await card(page, d3).click();
+    const row = page.locator('[data-testid="hint-row"][data-kind="REDUCE"]');
+    await expect(row).toContainText("去掉 1 个奶酥红豆包，就能订");
+    await row.getByTestId("hint-apply").click();
+    await expect(page.getByTestId("qty")).toHaveText("2");
+    await expect(card(page, d3)).toHaveAttribute("data-state", "AVAILABLE");
+    await expect(card(page, d3)).toHaveAttribute("aria-pressed", "true");
   });
 });

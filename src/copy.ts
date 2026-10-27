@@ -165,8 +165,6 @@ export const copy = {
       blockedUnavailable: "有商品暂停供应，请先移除",
       /** Date card reason of a WEEKDAY date, e.g. "泡芙仅周三" */
       stateWeekday: "{name}仅{days}",
-      /** POST /api/orders WEEKDAY_UNAVAILABLE */
-      weekdayUnavailable: "有面包不能在这天取，请选择其他日期",
       /** Hint rows under a full / weekday date (owner-approved wording). {day} is e.g. "11/5 周四" */
       hintReduce: "去掉 {remove}，就能订 {day}",
       hintReduceApply: "改好",

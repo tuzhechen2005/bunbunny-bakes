@@ -639,7 +639,7 @@ export function CheckoutPage() {
     if (err.error === "FULL" || err.error === "WEEKDAY_UNAVAILABLE") setHintDate(selectedDate);
     switch (err.error) {
       case "WEEKDAY_UNAVAILABLE":
-        raiseSubmitError({ message: t.weekdayUnavailable, where: "date" });
+        raiseSubmitError({ message: copy.errors.WEEKDAY_UNAVAILABLE, where: "date" });
         break;
       case "FULL":
         raiseSubmitError(
