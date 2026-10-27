@@ -93,6 +93,8 @@ export const copy = {
       photoPos: "第 {i} / {n} 张",
       /** Detail page, shown when leadDays > 1 (D96), e.g. "需提前 2 天预订" */
       leadHint: "需提前 {n} 天预订",
+      /** Tile and detail tag of a product with pickup weekdays, e.g. "仅周三、周六" (C1) */
+      weekdayOnly: "仅{days}",
       qtyLabelNamed: "{name} 已选 {qty} 个",
       /** Name of a grid tile (the whole tile opens the detail), e.g. "查看 奶酪角" */
       viewDetail: "查看 {name}",
@@ -161,12 +163,32 @@ export const copy = {
       switchDate: "改成 {day}",
       /** Why 确认提交预订 is disabled while a product is paused or unavailable. */
       blockedUnavailable: "有商品暂停供应，请先移除",
+      /** Date card reason of a WEEKDAY date, e.g. "泡芙仅周三" */
+      stateWeekday: "{name}仅{days}",
+      /** POST /api/orders WEEKDAY_UNAVAILABLE */
+      weekdayUnavailable: "有面包不能在这天取，请选择其他日期",
+      /** Hint rows under a full / weekday date (owner-approved wording). {day} is e.g. "11/5 周四" */
+      hintReduce: "去掉 {remove}，就能订 {day}",
+      hintReduceApply: "改好",
+      hintSplitCapacity: "{day} 可以先订 {here} 个，剩下 {rest} 个可以订 {restDay}",
+      hintSplitCapacityApply: "先订{weekday}",
+      hintSplitWeekday: "{name}只能{days}取，可以分两单下",
+      hintSplitWeekdayApply: "先订其他面包（{weekday}）",
+      /** "{n} 个{name}" joined with "、" */
+      pieces: "{n} 个{name}",
+      pieceJoin: "、",
+      /** Shown while a split order is being placed: only `here` is in this order. */
+      splitNotice: "先订这些，其余 {n} 个留在纸袋里",
+      splitUndo: "改回",
     },
     /** Order page /o/{token} (PAGES.md), also the "order submitted" page. */
     order: {
       pageTitle: "订单",
       newTitle: "预订成功",
       copyLink: "复制订单链接",
+      /** After the first order of a split: {items} e.g. "1 个泡芙" */
+      splitRest: "还有 {items}在纸袋里，等你下第二单",
+      splitRestButton: "去下第二单",
       loading: "加载中…",
       loadFailed: "加载失败，请稍后刷新",
       retry: "重新加载",

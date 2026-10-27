@@ -7,7 +7,7 @@ import { formatCents } from "@/domain/pricing";
 import type { MenuProduct } from "@/lib/api";
 import { isOwnPhoto, PHOTO_SIZES, type PhotoVariant } from "@/lib/photo";
 import { BunnyPlaceholder } from "./BunnyPlaceholder";
-import { fill } from "./format";
+import { fill, weekdayTag } from "./format";
 
 const t = copy.customer.home;
 
@@ -130,6 +130,11 @@ export function ProductCard({
             </small>
           ) : null}
         </span>
+        {weekdayTag(product) ? (
+          <span className="hm-t-note" data-testid="weekday-tag">
+            {weekdayTag(product)}
+          </span>
+        ) : null}
         {paused ? <span className="hm-t-note">{t.paused}</span> : null}
       </button>
     </li>

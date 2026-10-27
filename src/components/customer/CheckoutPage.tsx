@@ -8,24 +8,25 @@ import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import "@/components/ui/ui.css";
 import { copy } from "@/copy";
-import { dayLabel } from "@/domain/dates";
+import { dayLabel, weekdayOf } from "@/domain/dates";
 import { formatCents } from "@/domain/pricing";
 import {
   fetchAvailability,
   submitOrder,
   uuidV4,
   type Availability,
+  type DateHint,
   type DateOption,
   type Fulfillment,
   type MenuProduct,
 } from "@/lib/api";
-import { cart, useCart, useHydrated, type CartItem } from "@/lib/cart";
+import { cart, clearPreferredDate, getPreferredDate, setPreferredDate, useCart, useHydrated, type CartItem } from "@/lib/cart";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { myOrders } from "@/lib/myOrders";
 import { pendingSave } from "@/lib/pendingSave";
 import { FieldError } from "./checkout/FieldError";
 import { RollNumber } from "./checkout/RollNumber";
-import { breakdownText, fill, formatDollars } from "./format";
+import { breakdownText, fill, formatDollars, weekdayList } from "./format";
 import { ProductPhoto } from "./ProductCard";
 import { SiteFooter } from "./SiteFooter";
 import { useMenu } from "./useMenu";
@@ -40,6 +41,17 @@ const NOTE_COUNTER_FROM = 240;
 const EASE = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 /** sessionStorage key the order page reads to draw the bag (G4). */
 const LAST_BAG_KEY = "bunbunny:lastBag";
+/** sessionStorage key the order page reads for the "second order is waiting" line (C1 split). */
+const SPLIT_REST_KEY = "bunbunny:splitRest";
+
+/** A split order in progress: this order takes `here`; `rest` stays in the bag for the second one. */
+interface SplitPlan {
+  here: CartItem[];
+  rest: CartItem[];
+  restDate: string | null;
+}
+
+const pieceCount = (list: readonly CartItem[]) => list.reduce((n, i) => n + i.qty, 0);
 
 type AvailState =
   | { status: "idle" | "loading" | "error"; data: Availability | null }
@@ -112,35 +124,44 @@ function DateCard({
   option,
   selected,
   reduced,
+  reason,
   onSelect,
 }: {
   option: DateOption;
   selected: boolean;
   reduced: boolean;
+  /** WEEKDAY dates: why, e.g. "泡芙仅周三". */
+  reason?: string;
   onSelect: () => void;
 }) {
   const available = option.state === "AVAILABLE";
+  // A full / weekday date with hints can be tapped to show them; it still cannot be ordered as is.
+  const tappable = available || (!!option.hints && option.hints.length > 0);
   const stateText =
     option.state === "AVAILABLE"
       ? (option.cutoffLabel ?? "")
       : option.state === "CUTOFF"
         ? t.stateCutoff
-        : option.state === "FULL"
-          ? t.stateFull
-          : t.stateDeliveryFull;
+        : option.state === "WEEKDAY"
+          ? (reason ?? t.stateFull)
+          : option.state === "FULL"
+            ? t.stateFull
+            : t.stateDeliveryFull;
   const [md, weekday] = splitDayLabel(option.date);
   // Closed days (cutoff, full) strike the date through; delivery-only-full stays readable.
-  const struck = option.state === "CUTOFF" || option.state === "FULL";
+  const struck = option.state === "CUTOFF" || option.state === "FULL" || option.state === "WEEKDAY";
   const tone = available
     ? selected
       ? "border-c-ink bg-c-ink text-c-paper"
       : "border-c-line bg-c-paper text-c-ink"
-    : "cursor-not-allowed border-c-wash bg-c-wash text-c-grey/70";
+    : selected
+      ? "border-c-ink bg-c-wash text-c-grey"
+      : `${tappable ? "" : "cursor-not-allowed "}border-c-wash bg-c-wash text-c-grey/70`;
   return (
     <button
       type="button"
       className={`flex min-h-[112px] w-[100px] flex-none snap-start flex-col items-start justify-between rounded-[20px] border-[1.5px] px-3.5 pt-3.5 pb-[13px] text-left transition-[background-color,border-color,color,transform] duration-[250ms] ${tone} ${available ? "active:scale-[0.96] motion-reduce:active:scale-100" : ""} ${focusRing}`}
-      disabled={!available}
+      disabled={!tappable}
       aria-pressed={selected}
       onClick={(e) => {
         const el = e.currentTarget;
@@ -155,6 +176,7 @@ function DateCard({
       data-testid="date-card"
       data-date={option.date}
       data-state={option.state}
+      data-hints={!available && tappable ? "true" : undefined}
     >
       <span className={`font-num text-[27px] leading-none font-bold ${struck ? "line-through decoration-2" : ""}`}>{md}</span>
       {" "}
@@ -164,6 +186,71 @@ function DateCard({
       </small>
     </button>
   );
+}
+
+function HintButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className={`min-h-11 shrink-0 rounded-full border-[1.5px] border-c-red px-4 text-sm font-bold text-c-red ${focusRing}`}
+      data-testid="hint-apply"
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** One-tap ways out of a full / weekday date (C1 hints). Quantities only. */
+function HintRows({
+  option,
+  byId,
+  onReduce,
+  onSplit,
+}: {
+  option: DateOption;
+  byId: Map<string, MenuProduct>;
+  onReduce: (hint: Extract<DateHint, { kind: "REDUCE" }>) => void;
+  onSplit: (hint: Extract<DateHint, { kind: "SPLIT" }>) => void;
+}) {
+  const day = safeDayLabel(option.date);
+  const weekday = splitDayLabel(option.date)[1];
+  const rows: ReactNode[] = [];
+  (option.hints ?? []).forEach((hint, k) => {
+    let text: string | null = null;
+    let button: ReactNode = null;
+    if (hint.kind === "REDUCE") {
+      const parts = hint.remove.flatMap((r) => {
+        const p = byId.get(r.productId);
+        return p ? [fill(t.pieces, { n: r.qty, name: p.name })] : [];
+      });
+      if (parts.length === 0) return;
+      text = fill(t.hintReduce, { remove: parts.join(t.pieceJoin), day });
+      button = <HintButton label={t.hintReduceApply} onClick={() => onReduce(hint)} />;
+    } else if (hint.kind === "SPLIT" && hint.reason === "CAPACITY") {
+      if (!hint.restDate || hint.here.length === 0) return;
+      text = fill(t.hintSplitCapacity, {
+        day,
+        here: pieceCount(hint.here),
+        rest: pieceCount(hint.rest),
+        restDay: safeDayLabel(hint.restDate),
+      });
+      button = <HintButton label={fill(t.hintSplitCapacityApply, { weekday })} onClick={() => onSplit(hint)} />;
+    } else if (hint.kind === "SPLIT" && hint.reason === "WEEKDAY") {
+      const restricted = byId.get(hint.rest[0]?.productId ?? "");
+      if (!restricted || hint.here.length === 0) return;
+      text = fill(t.hintSplitWeekday, { name: restricted.name, days: weekdayList(restricted.pickupWeekdays ?? []) });
+      button = <HintButton label={fill(t.hintSplitWeekdayApply, { weekday })} onClick={() => onSplit(hint)} />;
+    }
+    if (!text) return;
+    rows.push(
+      <div key={k} className="mt-2 flex items-center gap-3" data-testid="hint-row" data-kind={hint.kind === "SPLIT" ? `SPLIT_${hint.reason}` : hint.kind}>
+        <p className="min-w-0 flex-1">{text}</p>
+        {button}
+      </div>,
+    );
+  });
+  return rows.length ? <>{rows}</> : null;
 }
 
 /** Four date cards while the dates load (same size as the real ones, so nothing jumps). */
@@ -198,7 +285,16 @@ export function CheckoutPage() {
   const liveItems = useCart();
   // Set when the order is created: the form stays on screen (button 提交中…) while the page navigates.
   const [frozen, setFrozen] = useState<readonly CartItem[] | null>(null);
-  const items = frozen ?? liveItems;
+  const cartItems = frozen ?? liveItems;
+  // A split order: this order holds only `here`, the rest waits in the bag.
+  // It belongs to the bag it was made from: when the bag changes the plan is void.
+  const liveKey = JSON.stringify(liveItems);
+  const [splitRaw, setSplitRaw] = useState<{ plan: SplitPlan; liveKey: string } | null>(null);
+  const splitPlan = splitRaw && splitRaw.liveKey === liveKey ? splitRaw.plan : null;
+  const setSplitPlan = (plan: SplitPlan | null) => setSplitRaw(plan ? { plan, liveKey } : null);
+  // A full / weekday date the customer tapped to see its hints.
+  const [hintDate, setHintDate] = useState<string | null>(null);
+  const items = splitPlan ? splitPlan.here : cartItems;
   const hydrated = useHydrated();
   const { reduced } = useMotionPrefs();
 
@@ -238,6 +334,8 @@ export function CheckoutPage() {
       setSubmitError(null);
       setWechatError(null);
       setSelectedDate(null);
+      setSplitRaw(null);
+      setHintDate(null);
       setAvailTick((n) => n + 1);
       keyRef.current = uuidV4();
     }
@@ -247,6 +345,7 @@ export function CheckoutPage() {
   }, []);
 
   const cartKey = JSON.stringify(items);
+
   const menuReady = menuStatus === "ready";
   const showForm = hydrated && menuReady && !!menu && items.length > 0;
 
@@ -284,8 +383,17 @@ export function CheckoutPage() {
         }
         const data = result.data;
         setAvail({ status: "ready", data });
+        // Hand-off from a split order / the assistant: preselect the preferred date once, if it is open.
+        let preferred: string | null = null;
+        if (!finished.current) {
+          const pref = getPreferredDate();
+          if (pref) {
+            clearPreferredDate();
+            if (data.dates.some((d) => d.date === pref && d.state === "AVAILABLE")) preferred = pref;
+          }
+        }
         setSelectedDate((current) =>
-          current && data.dates.some((d) => d.date === current && d.state === "AVAILABLE") ? current : null,
+          current && data.dates.some((d) => d.date === current && d.state === "AVAILABLE") ? current : preferred,
         );
       });
     }, 150);
@@ -409,6 +517,32 @@ export function CheckoutPage() {
   // Say why 确认提交预订 is disabled (the totals themselves always come from the server).
   const blockedReason = hasUnavailable ? t.blockedUnavailable : hasCartProblem ? copy.errors.QTY_LIMIT : null;
 
+  /** After an order: empty the bag, or leave the rest of a split in it (with its preferred date). */
+  function leaveRest(split: SplitPlan | null) {
+    if (!split) {
+      cart.clear();
+      return;
+    }
+    cart.replace(split.rest);
+    if (split.restDate) setPreferredDate(split.restDate);
+  }
+
+  const applyReduce = (hint: Extract<DateHint, { kind: "REDUCE" }>) => {
+    for (const r of hint.remove) {
+      const current = cart.getItems().find((i) => i.productId === r.productId)?.qty ?? 0;
+      cart.setQty(r.productId, current - r.qty, current);
+    }
+    if (hintDate) setSelectedDate(hintDate);
+    setHintDate(null);
+    setSubmitError(null);
+  };
+  const applySplit = (hint: Extract<DateHint, { kind: "SPLIT" }>) => {
+    setSplitPlan({ here: hint.here, rest: hint.rest, restDate: hint.restDate });
+    if (hintDate) setSelectedDate(hintDate);
+    setHintDate(null);
+    setSubmitError(null);
+  };
+
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (submittingRef.current) return;
@@ -440,6 +574,8 @@ export function CheckoutPage() {
     });
 
     inflight.current = false;
+    const split = splitPlan;
+    const liveAtSubmit = JSON.stringify(cartItems);
     if (result.ok) {
       // Everything below also runs when the customer has already left this page: the response is
       // still handled, so the order is in 我的订单 and its save-link modal is still due.
@@ -458,17 +594,34 @@ export function CheckoutPage() {
         /* storage unavailable (private mode, quota): the order page falls back */
       }
       rememberOrder(viewToken, orderNo);
+      if (split) {
+        // The second order is a normal order the customer places themselves (C1 split).
+        try {
+          sessionStorage.setItem(
+            SPLIT_REST_KEY,
+            JSON.stringify({
+              token: viewToken,
+              items: split.rest.flatMap((r) => {
+                const p = byId.get(r.productId);
+                return p ? [{ name: p.name, qty: r.qty }] : [];
+              }),
+            }),
+          );
+        } catch {
+          /* optional */
+        }
+      }
       keyRef.current = uuidV4();
       finished.current = true;
       if (mounted.current) {
         setFrozen(items);
-        cart.clear();
+        leaveRest(split);
         router.replace(`/o/${encodeURIComponent(viewToken)}?new=1`);
         return; // stay locked while navigating; the next show of this page starts over
       }
       // Gone already: do not pull them to the order page; only empty the bag if it is still this
       // order, and unlock so a later visit to this (preserved) page is not stuck on 提交中…
-      if (JSON.stringify(cart.getItems()) === cartKey) cart.clear();
+      if (JSON.stringify(cart.getItems()) === liveAtSubmit) leaveRest(split);
       submittingRef.current = false;
       setSubmitting(false);
       return;
@@ -483,7 +636,11 @@ export function CheckoutPage() {
       return;
     }
     requery();
+    if (err.error === "FULL" || err.error === "WEEKDAY_UNAVAILABLE") setHintDate(selectedDate);
     switch (err.error) {
+      case "WEEKDAY_UNAVAILABLE":
+        raiseSubmitError({ message: t.weekdayUnavailable, where: "date" });
+        break;
       case "FULL":
         raiseSubmitError(
           typeof err.suggestion === "string" && err.suggestion
@@ -513,6 +670,17 @@ export function CheckoutPage() {
     }
   }
 
+  // Why a WEEKDAY date is closed: the first cart product (in bag order) that cannot be picked up that day.
+  const weekdayReason = (date: string): string | undefined => {
+    const wd = weekdayOf(date);
+    const line = lines.find((l) => (l.product.pickupWeekdays?.length ?? 0) > 0 && !l.product.pickupWeekdays!.includes(wd));
+    return line ? fill(t.stateWeekday, { name: line.product.name, days: weekdayList(line.product.pickupWeekdays!) }) : undefined;
+  };
+  const hintOption = hintDate ? data?.dates.find((d) => d.date === hintDate) : undefined;
+  const hintRows =
+    hintOption && (hintOption.state === "FULL" || hintOption.state === "WEEKDAY") && hintOption.hints?.length ? (
+      <HintRows option={hintOption} byId={byId} onReduce={applyReduce} onSplit={applySplit} />
+    ) : null;
   const delivery = fulfillment === "DELIVERY";
   const dateError = submitError?.where === "date" ? submitError : null;
   const bottomError = submitError?.where === "submit" ? submitError : null;
@@ -528,6 +696,23 @@ export function CheckoutPage() {
         ) : null}
 
         <form onSubmit={onSubmit} className="flex flex-col" noValidate>
+          {splitPlan ? (
+            <div className="mt-3 flex items-center gap-3 text-[13.5px] leading-snug font-semibold" data-testid="split-notice">
+              <p className="min-w-0 flex-1">{fill(t.splitNotice, { n: pieceCount(splitPlan.rest) })}</p>
+              <button
+                type="button"
+                className={`min-h-11 shrink-0 px-2 text-sm font-bold underline ${focusRing}`}
+                data-testid="split-undo"
+                onClick={() => {
+                  setSplitPlan(null);
+                  setSelectedDate(null);
+                }}
+              >
+                {t.splitUndo}
+              </button>
+            </div>
+          ) : null}
+
           {/* Cart lines */}
           <ul className="mt-3 flex flex-col divide-y divide-c-line" aria-label={t.cartTitle} data-rise="">
             {lines.map(({ productId, qty, product }) => {
@@ -562,7 +747,7 @@ export function CheckoutPage() {
                     >
                       {t.remove}
                     </button>
-                  ) : (
+                  ) : splitPlan ? null : (
                     <Stepper
                       size="md"
                       tone="wash"
@@ -601,11 +786,17 @@ export function CheckoutPage() {
                     <DateCard
                       key={d.date}
                       option={d}
-                      selected={selectedDate === d.date}
+                      selected={selectedDate === d.date || hintDate === d.date}
                       reduced={reduced}
+                      reason={d.state === "WEEKDAY" ? weekdayReason(d.date) : undefined}
                       onSelect={() => {
-                        setSelectedDate(d.date);
                         setSubmitError(null);
+                        if (d.state === "AVAILABLE") {
+                          setSelectedDate(d.date);
+                          setHintDate(null);
+                        } else {
+                          setHintDate(d.date);
+                        }
                       }}
                     />
                   ))}
@@ -626,13 +817,15 @@ export function CheckoutPage() {
             ) : null}
             {dateError ? (
               <FieldError message={dateError.message} seq={errorSeq} testId="submit-error">
-                {dateError.suggestion ? (
+                {hintRows}
+                {dateError.suggestion && !hintRows ? (
                   <button
                     type="button"
                     className={`mt-2 min-h-11 rounded-full border-[1.5px] border-c-red px-4 text-sm font-bold text-c-red ${focusRing}`}
                     data-testid="suggestion"
                     onClick={() => {
                       setSelectedDate(dateError.suggestion!);
+                      setHintDate(null);
                       setSubmitError(null);
                     }}
                   >
@@ -640,6 +833,11 @@ export function CheckoutPage() {
                   </button>
                 ) : null}
               </FieldError>
+            ) : null}
+            {!dateError && hintRows ? (
+              <div role="status" className="mt-2.5 text-[13.5px] leading-snug font-semibold text-c-red" data-testid="hints">
+                {hintRows}
+              </div>
             ) : null}
           </Block>
 

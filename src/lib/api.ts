@@ -21,6 +21,8 @@ export interface MenuProduct {
   bundlePriceCents: number | null;
   status: "ACTIVE" | "PAUSED";
   leadDays: number;
+  /** Chicago weekdays the product can be picked up (0 = Sunday ... 6 = Saturday); empty = every day (C1). */
+  pickupWeekdays?: number[];
 }
 
 export interface Menu {
@@ -34,11 +36,18 @@ export interface Menu {
   ownerWechatId?: string | null;
 }
 
-export type DateState = "AVAILABLE" | "CUTOFF" | "FULL" | "DELIVERY_FULL";
+export type DateState = "AVAILABLE" | "CUTOFF" | "WEEKDAY" | "FULL" | "DELIVERY_FULL";
+
+/** One-tap ways out of a FULL / WEEKDAY date (C1). Only cart quantities, never limits. */
+export type DateHint =
+  | { kind: "REDUCE"; remove: CartItem[] }
+  | { kind: "SPLIT"; reason: "CAPACITY" | "WEEKDAY"; here: CartItem[]; rest: CartItem[]; restDate: string | null };
 
 export interface DateOption {
   date: string;
   state: DateState;
+  /** Only on FULL / WEEKDAY dates, and only for a non-empty cart. */
+  hints?: DateHint[];
   /** Only for AVAILABLE dates. */
   cutoffAt?: string;
   cutoffLabel?: string;
