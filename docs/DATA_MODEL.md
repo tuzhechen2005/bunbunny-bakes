@@ -42,6 +42,7 @@
 | dailyLimit | int? | `INDEPENDENT` 必填，默认上限 |
 | batchYield | int? | 只用于生产汇总（布蕾 3） |
 | leadDays | int | 面团类默认 1，布蕾 2 |
+| pickupWeekdays | int[] | 可取货的星期几（D115），0 = 周日 … 6 = 周六，按芝加哥取货日期算；`[]` = 每天都可以（默认，现有商品不变）。存成从小到大、不重复；选满 7 天存成 `[]`。CHECK：只能是 0–6、没有 NULL、不能 7 个都有。迁移 `20261027120000_product_pickup_weekdays` |
 | status | enum | `ACTIVE` / `PAUSED` / `ARCHIVED`（下架，前台不显示） |
 | sortOrder | int | |
 
@@ -222,6 +223,7 @@ NEW ──▶ CONTACTED ──▶ CONFIRMED ──▶ BAKING ──▶ READY ─
 2. 读 `Setting`：`orderingEnabled = false` → 拒绝。
 3. 读购物车里的商品：有不在售的 → 拒绝；数量超过 `maxQtyPerItem` → 拒绝。
 4. 算 `cutoffAt`；`now ≥ cutoffAt` → 拒绝。`now` 由调用方传入，便于测试。
+4b. 购物车里有商品这天（星期几）不能取（D115）→ 拒绝 `WEEKDAY_UNAVAILABLE`（附 `productIds`）。在同一个锁住这一天的事务里检查。
 5. 频率限制：IP 最近 10 分钟 ≥ 5 笔（D86），或这个微信号这天已有 2 笔 `NEW`/`CONTACTED` → 拒绝。
 6. 读这一天所有占名额订单的明细，用 `CAPACITY_RULES.md` 的纯函数算 before / after：面团、每个独立限额商品、配送单数。任何一项超 → 拒绝，并返回推荐日期（推荐日期在事务外另算即可，只是展示）。
 7. `seq = coalesce(max(seq), 0) + 1`（这一天已被锁住，所以安全）；生成 `orderNo`、`viewToken`。
@@ -231,7 +233,7 @@ NEW ──▶ CONTACTED ──▶ CONFIRMED ──▶ BAKING ──▶ READY ─
 
 **幂等**：`idempotencyKey` 冲突时，不报错，直接返回已有订单的 `viewToken`，让前端跳转到同一个订单页。
 
-**店主改单**：同样的流程，但第 6 步的 before 不含这笔订单原来的明细；如果改了取货日期，就**按日期从早到晚**依次锁住新旧两天，避免死锁；超限时返回所有超限项，店主填写原因后带 `override=true` 重新提交。
+**店主改单**：同样的流程，但第 6 步的 before 不含这笔订单原来的明细；如果改了取货日期，就**按日期从早到晚**依次锁住新旧两天，避免死锁；超限时返回所有超限项（包括 `WEEKDAY`：商品这天不能取），店主填写原因后带 `override=true` 重新提交。店主代客下单同样：星期几限制和名额一样可以写原因超限。
 
 **顾客或店主取消**：锁住这一天 → 改状态 → 写日志 →（顾客取消时）写入 `customer_cancelled:<id>` 通知。
 

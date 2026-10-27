@@ -307,6 +307,8 @@ export const copy = {
     /** FULL when there is no suggested date (PAGES.md checkout errors). */
     FULL_NO_SUGGESTION: "暂时没有可以容纳这个订单的日期，可以减少数量或加微信联系店主",
     DELIVERY_FULL: "这一天的配送名额满了，可以改成自提～",
+    /** D115: a cart product cannot be picked up on that weekday. */
+    WEEKDAY_UNAVAILABLE: "有商品这一天不能取，请换一天或分开下单",
     RATE_LIMITED: "提交太频繁了，请稍后再试，或加微信联系店主",
     NOT_CANCELLABLE: "这个订单现在不能取消了，请加微信联系店主",
     /** CUTOFF_PASSED on customer cancel (API_SPEC.md POST /api/o/{token}/cancel). */
@@ -713,8 +715,11 @@ export const copy = {
         imageUrl: "封面照片",
         images: "照片",
         fieldColor: "首页颜色",
+        pickupWeekdays: "可取货的日子",
         order: "商品顺序",
       },
+      /** pickupWeekdays = [] (D115). */
+      everyDay: "每天",
       /** One product in a list, e.g. 「奶酪角 ×3」. */
       itemChip: "{name} ×{qty}",
       /** One per-day limit, e.g. 「奶酪角 5」. */
@@ -870,6 +875,7 @@ export const copy = {
         product: "{day} {name}：上限 {limit}，保存后 {after}，超出 {over}",
         delivery: "{day} 配送：上限 {limit}，保存后 {after}，超出 {over}",
         deliveryDisabled: "{day} 这天不配送",
+        weekday: "{day} {name}：只能{days}取",
         unknownProduct: "商品",
       },
       staleTitle: "这笔订单刚刚在别处改过，请刷新后再操作",
@@ -997,6 +1003,7 @@ export const copy = {
       violationProduct: "{date} {name} {after} / {limit}（超 {over}）",
       violationDelivery: "{date} 配送 {after} / {limit}（超 {over}）",
       violationDeliveryDisabled: "{date} 这天不配送",
+      violationWeekday: "{date} {name} 只能{days}取",
       sheetBack: "返回",
       working: "处理中…",
       logActions: {
@@ -1091,6 +1098,12 @@ export const copy = {
       leadDaysDay: "{n} 天",
       leadDaysPreview: "需提前 {n} 天预订",
       leadDaysPreviewNone: "取货当天截止前都可预订",
+      /** D115: pickup weekday chips, index 0 = Sunday. */
+      fieldPickupWeekdays: "可取货的日子",
+      pickupWeekdayChips: ["日", "一", "二", "三", "四", "五", "六"],
+      pickupWeekdaysHint: "不选 = 每天都可以",
+      /** Joins several weekdays in admin texts, e.g. "周三、周六". */
+      weekdaySeparator: "、",
       fieldColor: "首页颜色",
       colorHint: "顾客首页翻到这款面包时的背景色",
       colorCustom: "自定义",

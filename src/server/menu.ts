@@ -19,6 +19,8 @@ export interface MenuProduct {
   bundlePriceCents: number | null;
   status: "ACTIVE" | "PAUSED";
   leadDays: number;
+  /** D115: 0 = Sunday … 6 = Saturday; [] = every day. */
+  pickupWeekdays: number[];
 }
 
 export interface Menu {
@@ -50,6 +52,7 @@ export async function getMenu(db: DbClient): Promise<Menu> {
       bundlePriceCents: true,
       status: true,
       leadDays: true,
+      pickupWeekdays: true,
     },
   });
   const menu: Menu = {
@@ -69,6 +72,7 @@ export async function getMenu(db: DbClient): Promise<Menu> {
         bundlePriceCents: p.bundlePriceCents,
         status: p.status === "PAUSED" ? ("PAUSED" as const) : ("ACTIVE" as const),
         leadDays: p.leadDays,
+        pickupWeekdays: p.pickupWeekdays,
       };
     }),
     pickupNote: settings.pickupNote,

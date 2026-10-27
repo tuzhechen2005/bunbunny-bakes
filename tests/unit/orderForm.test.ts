@@ -127,6 +127,9 @@ describe("describeViolation / parseViolations", () => {
       "配送",
     );
     expect(describeViolation({ kind: "DELIVERY_DISABLED", date: "2026-10-30" }, names)).toContain("不配送");
+    expect(
+      describeViolation({ kind: "WEEKDAY", date: "2026-10-29", productId: A, weekdays: [3, 6] }, names),
+    ).toBe("10/29 周四 奶酥红豆包：只能周三、周六取");
   });
 
   it("parseViolations ignores junk", () => {

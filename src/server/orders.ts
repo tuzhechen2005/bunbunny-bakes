@@ -9,6 +9,7 @@ import { checkDay } from "@/domain/capacity";
 import { cutoffAt as computeCutoffAt, isBeforeCutoff, leadDaysOf } from "@/domain/cutoff";
 import { compareLocalDate, localDateOf } from "@/domain/dates";
 import { priceCart } from "@/domain/pricing";
+import { weekdayViolations } from "@/domain/weekdays";
 import type { CartLine, Fulfillment, LocalDate, Violation } from "@/domain/types";
 import { copy } from "@/copy";
 import { Prisma } from "@/generated/prisma/client";
@@ -274,6 +275,12 @@ export async function createCustomerOrder(
       const cutoffAt = cartCutoff(cart, date, products, settings);
       if (!isBeforeCutoff(now, cutoffAt)) throw new AppError("CUTOFF_PASSED");
 
+      // 6b. Pickup weekdays (D115): checked under the day lock, before capacity.
+      const weekday = weekdayViolations(date, cart, products);
+      if (weekday.length) {
+        throw new AppError("WEEKDAY_UNAVAILABLE", { extra: { productIds: weekday.map((v) => v.productId) } });
+      }
+
       // 7. Rate limits (D38, D86).
       if (ipHash) {
         const rlKey = `order_ip:${ipHash}`;
@@ -398,13 +405,17 @@ export async function createAdminOrder(
     }
 
     const day = await loadDayContext(tx, date, settings, products);
-    const { violations } = checkDay({
-      date,
-      existing: day.orders,
-      candidate: { items: cart, fulfillment: data.fulfillment },
-      products,
-      limits: day.limits,
-    });
+    // Weekday restrictions (D115) are overridable like capacity, with the same reason flow.
+    const violations: Violation[] = [
+      ...weekdayViolations(date, cart, products),
+      ...checkDay({
+        date,
+        existing: day.orders,
+        candidate: { items: cart, fulfillment: data.fulfillment },
+        products,
+        limits: day.limits,
+      }).violations,
+    ];
     const overridden = violations.length > 0;
     if (overridden && !data.override) {
       throw new AppError("OVER_LIMIT", { extra: { violations } });

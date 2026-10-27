@@ -5,6 +5,7 @@ import { copy } from "@/copy";
 import { fill } from "@/components/customer/format";
 import { formatCents } from "@/domain/pricing";
 import type { Fulfillment, OrderStatus, Violation } from "@/domain/types";
+import { weekdaysLabel } from "@/lib/orderForm";
 import { statusLabel } from "./statusUi";
 
 const t = copy.admin.orders;
@@ -126,6 +127,12 @@ export function describeViolation(v: Violation, productName: (id: string) => str
       return fill(t.violationDelivery, { date: v.date, after: v.after, limit: v.limit, over: v.over });
     case "DELIVERY_DISABLED":
       return fill(t.violationDeliveryDisabled, { date: v.date });
+    case "WEEKDAY":
+      return fill(t.violationWeekday, {
+        date: v.date,
+        name: productName(v.productId),
+        days: weekdaysLabel(v.weekdays),
+      });
   }
 }
 

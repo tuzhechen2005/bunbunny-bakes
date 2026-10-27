@@ -524,6 +524,7 @@ describe("loadSettings / loadProductMap / loadDayContext", () => {
       piecesPerRound: null,
       dailyLimit: null,
       leadDays: 1,
+      pickupWeekdays: [],
       name: "下架面包",
       status: "ARCHIVED",
       unitPriceCents: 300,
@@ -672,7 +673,7 @@ describe("AppError", () => {
       [
         "VALIDATION", "ORDERING_DISABLED", "DATE_CLOSED", "CUTOFF_PASSED", "PRODUCT_UNAVAILABLE",
         "QTY_LIMIT", "FULL", "DELIVERY_FULL", "RATE_LIMITED", "NOT_CANCELLABLE", "OVER_LIMIT",
-        "STALE", "UNAUTHORIZED", "NOT_FOUND",
+        "STALE", "UNAUTHORIZED", "NOT_FOUND", "WEEKDAY_UNAVAILABLE",
       ].sort(),
     );
     const statuses = Object.fromEntries(ERROR_CODES.map((c) => [c, new AppError(c).httpStatus]));

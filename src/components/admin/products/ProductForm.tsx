@@ -46,6 +46,8 @@ interface FormState {
   batchYield: string;
   status: ProductStatus;
   fieldColor: string;
+  /** Selected weekdays (0 = Sunday); none = every day. */
+  pickupWeekdays: number[];
 }
 
 const str = (n: number | null) => (n === null ? "" : String(n));
@@ -67,6 +69,7 @@ function initialState(p?: ProductDto): FormState {
       batchYield: "",
       status: "ACTIVE",
       fieldColor: DEFAULT_FIELD_COLOR,
+      pickupWeekdays: [],
     };
   }
   return {
@@ -84,6 +87,7 @@ function initialState(p?: ProductDto): FormState {
     batchYield: str(p.batchYield),
     status: p.status,
     fieldColor: p.fieldColor ?? DEFAULT_FIELD_COLOR,
+    pickupWeekdays: p.pickupWeekdays ?? [],
   };
 }
 
@@ -105,9 +109,10 @@ const API_FIELD_TO_FORM: Record<string, keyof FormState> = {
   batchYield: "batchYield",
   status: "status",
   fieldColor: "fieldColor",
+  pickupWeekdays: "pickupWeekdays",
 };
 
-type Payload = Record<string, string | number | null>;
+type Payload = Record<string, string | number | number[] | null>;
 
 /** Validates what can be checked on the client; the server re-validates everything. */
 function buildPayload(f: FormState, storedColor: string | null): { payload: Payload } | { errors: Errors } {
@@ -119,7 +124,7 @@ function buildPayload(f: FormState, storedColor: string | null): { payload: Payl
   payload.name = name;
   payload.description = f.description.trim();
 
-  const intOf = (key: keyof FormState, required: boolean): number | null => {
+  const intOf = (key: Exclude<keyof FormState, "pickupWeekdays">, required: boolean): number | null => {
     const raw = f[key].trim();
     if (!raw) {
       if (required) errors[key] = t.requiredField;
@@ -154,6 +159,7 @@ function buildPayload(f: FormState, storedColor: string | null): { payload: Payl
   payload.batchYield = intOf("batchYield", false);
   // Untouched default stays "no colour chosen" (null) so a plain save does not write one.
   payload.fieldColor = f.fieldColor === DEFAULT_FIELD_COLOR && storedColor === null ? null : f.fieldColor;
+  payload.pickupWeekdays = [...f.pickupWeekdays].sort((a, b) => a - b);
 
   return Object.keys(errors).length > 0 ? { errors } : { payload };
 }
@@ -175,6 +181,46 @@ function Field({
         </span>
       )}
     </label>
+  );
+}
+
+/** D115: seven toggle chips 日一二三四五六; none selected = every day. */
+function WeekdayField({
+  value,
+  error,
+  onChange,
+}: Readonly<{ value: number[]; error?: string; onChange: (days: number[]) => void }>) {
+  const toggle = (d: number) =>
+    onChange(value.includes(d) ? value.filter((x) => x !== d) : [...value, d].sort((a, b) => a - b));
+  return (
+    <fieldset className="flex flex-col gap-1" data-testid="pickup-weekdays">
+      <legend className="mb-1 text-sm font-medium">{t.fieldPickupWeekdays}</legend>
+      <div className="flex flex-wrap gap-2">
+        {t.pickupWeekdayChips.map((label, d) => {
+          const on = value.includes(d);
+          return (
+            <button
+              key={d}
+              type="button"
+              aria-pressed={on}
+              data-weekday={d}
+              onClick={() => toggle(d)}
+              className={`min-h-11 min-w-11 rounded-full border px-3 text-base ${
+                on ? "border-accent bg-accent text-accent-ink" : "border-line bg-card"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <span className="text-sm text-muted">{t.pickupWeekdaysHint}</span>
+      {error && (
+        <span role="alert" className="text-sm text-danger">
+          {error}
+        </span>
+      )}
+    </fieldset>
   );
 }
 
@@ -413,6 +459,11 @@ export function ProductForm({ product }: Readonly<{ product?: ProductDto }>) {
               ))}
             </select>
           </Field>
+          <WeekdayField
+            value={form.pickupWeekdays}
+            error={errors.pickupWeekdays}
+            onChange={(days) => set("pickupWeekdays", days)}
+          />
           <Field label={t.fieldBatchYield} hint={t.batchYieldHint} error={errors.batchYield}>
             <input
               className={inputClass}

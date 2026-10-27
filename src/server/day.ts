@@ -101,6 +101,7 @@ export async function loadProductMap(tx: Tx): Promise<ProductInfoMap> {
       piecesPerRound: p.piecesPerRound,
       dailyLimit: p.dailyLimit,
       leadDays: p.leadDays,
+      pickupWeekdays: p.pickupWeekdays,
       name: p.name,
       status: p.status,
       unitPriceCents: p.unitPriceCents,

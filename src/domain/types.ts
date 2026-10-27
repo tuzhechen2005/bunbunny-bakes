@@ -47,6 +47,11 @@ export interface CapacityProduct {
   /** Default daily limit for INDEPENDENT products. */
   dailyLimit: number | null;
   leadDays: number;
+  /**
+   * Weekdays (0 = Sunday … 6 = Saturday, Chicago date of the pickup) this product can be
+   * picked up on (D115). Absent or empty = every day.
+   */
+  pickupWeekdays?: readonly number[];
 }
 
 export interface CartLine {
@@ -82,7 +87,9 @@ export type Violation =
   | { kind: "DOUGH"; date: LocalDate; limit: number; after: number; over: number }
   | { kind: "PRODUCT"; date: LocalDate; productId: string; limit: number; after: number; over: number }
   | { kind: "DELIVERY"; date: LocalDate; limit: number; after: number; over: number }
-  | { kind: "DELIVERY_DISABLED"; date: LocalDate };
+  | { kind: "DELIVERY_DISABLED"; date: LocalDate }
+  /** The product cannot be picked up on this weekday (D115); `weekdays` = the allowed ones. */
+  | { kind: "WEEKDAY"; date: LocalDate; productId: string; weekdays: number[] };
 
 export interface FeeSettings {
   deliveryFeeCents: Cents;

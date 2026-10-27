@@ -80,6 +80,11 @@ function totalsOf(orders: DayOrder[], products: ProductMap): Map<string, number>
   return totals;
 }
 
+/** Dough grams of `total` pieces of one product on one day (0 for INDEPENDENT). */
+export function productDough(product: CapacityProduct, total: number): number {
+  return doughOfProduct(product, total);
+}
+
 function doughOfProduct(product: CapacityProduct, total: number): number {
   switch (product.capacityMode) {
     case "DOUGH_PER_UNIT":

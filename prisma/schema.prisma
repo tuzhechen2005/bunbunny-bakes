@@ -113,6 +113,9 @@ model Product {
   dailyLimit       Int?
   batchYield       Int?
   leadDays         Int           @default(1)
+  /// D115: weekdays (0 = Sunday … 6 = Saturday, Chicago pickup date) it can be picked up on.
+  /// Sorted, distinct, never all seven; [] = every day.
+  pickupWeekdays   Int[]         @default([])
   status           ProductStatus @default(ACTIVE)
   sortOrder        Int           @default(0)
   createdAt        DateTime      @default(now()) @db.Timestamptz(3)

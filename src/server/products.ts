@@ -8,6 +8,7 @@ import { copy } from "@/copy";
 import { usage } from "@/domain/capacity";
 import { localDateOf } from "@/domain/dates";
 import { OCCUPYING_STATUSES, type CapacityMode, type LocalDate } from "@/domain/types";
+import { normalizeWeekdays } from "@/domain/weekdays";
 import { isHexColor } from "@/lib/fieldColor";
 import type { Prisma, Product } from "@/generated/prisma/client";
 import { writeAudit } from "./audit";
@@ -45,6 +46,13 @@ const fieldColor = z
   .refine(isHexColor, { message: "Use #RRGGBB" })
   .transform((s) => s.toUpperCase());
 
+/** D115: distinct weekdays 0–6; stored sorted, all seven -> [] (= every day). */
+const pickupWeekdays = z
+  .array(z.number().int().min(0).max(6))
+  .max(7)
+  .refine((days) => new Set(days).size === days.length, { message: "Duplicate weekdays" })
+  .transform((days) => normalizeWeekdays(days));
+
 /** Photos in display order (cover first) travel with every product the admin API returns. */
 export const PRODUCT_INCLUDE = {
   images: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
@@ -68,6 +76,7 @@ const shape = {
   sortOrder: intIn(-1_000_000, 1_000_000),
   /** Home background `#RRGGBB`; null = default 奶白 (D95). */
   fieldColor: fieldColor.nullable(),
+  pickupWeekdays,
 };
 
 type Fields = { [K in keyof typeof shape]: z.output<(typeof shape)[K]> };
@@ -111,6 +120,7 @@ const createSchema = z
     status: true,
     sortOrder: true,
     fieldColor: true,
+    pickupWeekdays: true,
   })
   .strict();
 
@@ -146,7 +156,13 @@ function pickFields(p: Product): Fields {
     status: p.status,
     sortOrder: p.sortOrder,
     fieldColor: p.fieldColor,
+    pickupWeekdays: p.pickupWeekdays,
   };
+}
+
+function sameValue(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => x === b[i]);
+  return a === b;
 }
 
 /** The product row without its photos (what the audit log keeps). */
@@ -181,6 +197,7 @@ export async function createProduct(db: DbClient, input: unknown, now: Date): Pr
     status: data.status ?? "ACTIVE",
     sortOrder: data.sortOrder ?? 0,
     fieldColor: data.fieldColor ?? null,
+    pickupWeekdays: data.pickupWeekdays ?? [],
   });
   return db.$transaction(async (tx) => {
     let sortOrder = data.sortOrder;
@@ -223,7 +240,7 @@ export async function updateProduct(
 
     // Validation applies to the merged result (a mode switch needs its new fields).
     const merged = parseOrThrow(fullSchema, { ...pickFields(before), ...patch });
-    const changed = (Object.keys(merged) as (keyof Fields)[]).filter((k) => merged[k] !== before[k]);
+    const changed = (Object.keys(merged) as (keyof Fields)[]).filter((k) => !sameValue(merged[k], before[k]));
     if (changed.length === 0) return { product: before, overLimitDates: [] };
 
     const capacityChanged = CAPACITY_KEYS.some((k) => changed.includes(k));
