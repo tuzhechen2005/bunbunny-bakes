@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { uuidV4 } from "@/lib/api";
-import { CART_STORAGE_KEY, createCartStore, type StorageLike } from "@/lib/cart";
+import {
+  CART_STORAGE_KEY,
+  PREFERRED_DATE_KEY,
+  clearPreferredDate,
+  createCartStore,
+  getPreferredDate,
+  setPreferredDate,
+  type StorageLike,
+} from "@/lib/cart";
 
 function memoryStorage(initial: Record<string, string> = {}): StorageLike & { data: Record<string, string> } {
   const data = { ...initial };
@@ -194,5 +202,53 @@ describe("uuidV4", () => {
 
   it("works with no crypto at all", () => {
     expect(uuidV4({})).toMatch(V4);
+  });
+});
+
+describe("preferred date hand-off", () => {
+  function withStorage(data: Record<string, string>) {
+    vi.stubGlobal("window", {
+      localStorage: {
+        getItem: (k: string) => (k in data ? data[k] : null),
+        setItem: (k: string, v: string) => void (data[k] = v),
+        removeItem: (k: string) => void delete data[k],
+      },
+    });
+  }
+
+  it("sets, reads and clears bb_cart_date_v1", () => {
+    const data: Record<string, string> = {};
+    withStorage(data);
+    expect(getPreferredDate()).toBeNull();
+    setPreferredDate("2026-11-04");
+    expect(data[PREFERRED_DATE_KEY]).toBe("2026-11-04");
+    expect(getPreferredDate()).toBe("2026-11-04");
+    clearPreferredDate();
+    expect(getPreferredDate()).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("ignores malformed dates and survives a blocked storage", () => {
+    const data: Record<string, string> = { [PREFERRED_DATE_KEY]: "tomorrow" };
+    withStorage(data);
+    expect(getPreferredDate()).toBeNull();
+    setPreferredDate("11/4");
+    expect(data[PREFERRED_DATE_KEY]).toBe("tomorrow");
+    vi.stubGlobal("window", {
+      get localStorage(): never {
+        throw new Error("SecurityError");
+      },
+    });
+    expect(() => setPreferredDate("2026-11-04")).not.toThrow();
+    expect(getPreferredDate()).toBeNull();
+    expect(() => clearPreferredDate()).not.toThrow();
+    vi.unstubAllGlobals();
+  });
+
+  it("replace() swaps the whole cart", () => {
+    const store = createCartStore(() => memoryStorage());
+    store.increment("a", 8);
+    store.replace([{ productId: "b", qty: 2 }]);
+    expect(store.getItems()).toEqual([{ productId: "b", qty: 2 }]);
   });
 });

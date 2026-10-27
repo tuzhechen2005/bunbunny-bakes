@@ -32,6 +32,7 @@ const product = (over: Partial<MenuProduct> = {}): MenuProduct => ({
   bundlePriceCents: 899,
   status: "ACTIVE",
   leadDays: 1,
+  pickupWeekdays: [],
   ...over,
 });
 

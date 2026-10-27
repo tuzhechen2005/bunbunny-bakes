@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import { copy } from "@/copy";
+import { cart } from "@/lib/cart";
 import { formatCents } from "@/domain/pricing";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { myOrders } from "@/lib/myOrders";
@@ -43,6 +44,30 @@ function Frame({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** The bread a split order left in the bag (written by checkout), only for this order's token. */
+function readSplitRest(token: string): string | null {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem("bunbunny:splitRest") ?? "null") as {
+      token?: unknown;
+      items?: { productId?: unknown; name?: unknown; qty?: unknown }[];
+    } | null;
+    if (!raw || raw.token !== token || !Array.isArray(raw.items)) return null;
+    // Only while the bag still holds those items; once it does not, the note is dropped.
+    const bag = cart.getItems();
+    const held = raw.items.every((i) => bag.some((b) => b.productId === i.productId && b.qty >= (i.qty as number)));
+    if (!held) {
+      sessionStorage.removeItem("bunbunny:splitRest");
+      return null;
+    }
+    const parts = raw.items.flatMap((i) =>
+      typeof i?.name === "string" && typeof i.qty === "number" ? [fill(copy.customer.checkout.pieces, { n: i.qty, name: i.name })] : [],
+    );
+    return parts.length ? parts.join(copy.customer.checkout.pieceJoin) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function OrderPage() {
   const params = useParams<{ token: string }>();
   const token = params.token;
@@ -58,6 +83,7 @@ export function OrderPage() {
   }, [hasNewParam, pathname, router]);
 
   // Straight after ordering the bag is drawn from the bread checkout saved while the order loads.
+  const [splitRest] = useState(() => readSplitRest(token));
   const [preBag] = useState(() => (isNew ? savedBagItems(token) : null));
 
   // The save-link dialog: due right after ordering, and again on every later visit until 我已保存
@@ -265,6 +291,19 @@ export function OrderPage() {
               {/* Nothing is left to pay for after the order is finished or cancelled (D93). */}
               {!finished && <p className="mt-2 text-[13px] leading-normal text-c-grey">{t.payOnReceipt}</p>}
             </section>
+
+            {splitRest && (
+              <section data-rest="" style={rest(3)} data-testid="split-rest" className="mt-4 flex items-center gap-3 rounded-[24px] bg-c-paper p-5">
+                <p className="min-w-0 flex-1 text-[14.5px] leading-snug font-bold">{fill(t.splitRest, { items: splitRest })}</p>
+                <Link
+                  href="/checkout"
+                  data-testid="split-rest-go"
+                  className={`flex min-h-11 shrink-0 items-center rounded-full bg-c-ink px-4 text-sm font-bold text-c-paper ${focusRing}`}
+                >
+                  {t.splitRestButton}
+                </Link>
+              </section>
+            )}
 
             <section data-rest="" style={rest(3)} className="mt-4 rounded-[24px] bg-c-paper p-5">
               <OrderLinkCopy token={token} />

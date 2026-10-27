@@ -5,7 +5,7 @@ import { copy } from "@/copy";
 import { formatCents } from "@/domain/pricing";
 import type { MenuProduct } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
-import { fill, safeLineTotal } from "../format";
+import { fill, safeLineTotal, weekdayTag } from "../format";
 import { bindDrag } from "./drag";
 import { focusQuietly } from "./focus";
 import { DownIcon, LeftIcon, MinusIcon, PlusIcon, RightIcon } from "./icons";
@@ -383,6 +383,11 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
           {product.leadDays > 1 ? (
             <p className="hm-dt-lead" data-testid="detail-lead">
               {fill(t.leadHint, { n: product.leadDays })}
+            </p>
+          ) : null}
+          {weekdayTag(product) ? (
+            <p className="hm-dt-lead" data-testid="detail-weekday">
+              {weekdayTag(product)}
             </p>
           ) : null}
           {paused ? <p className="hm-dt-note">{t.paused}</p> : room <= 0 ? <p className="hm-dt-note">{t.maxReached}</p> : null}

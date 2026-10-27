@@ -45,3 +45,17 @@ export function breakdownText(qty: number, p: MenuProduct): string {
   if (bundlesCents === 0 || restCents === 0) return formatCents(total);
   return `${formatCents(bundlesCents)} + ${formatCents(restCents)} = ${formatCents(total)}`;
 }
+
+/** "周三、周六" for pickup weekdays (0 = Sunday), Monday first. */
+export function weekdayList(days: readonly number[]): string {
+  return [...days]
+    .sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7))
+    .map((d) => copy.dates.weekdays[d])
+    .join(copy.customer.checkout.pieceJoin);
+}
+
+/** "仅周三、周六", or null when the product can be picked up any day. */
+export function weekdayTag(p: Pick<MenuProduct, "pickupWeekdays">): string | null {
+  const days = p.pickupWeekdays;
+  return days && days.length > 0 ? fill(copy.customer.home.weekdayOnly, { days: weekdayList(days) }) : null;
+}

@@ -35,6 +35,8 @@ export interface CartStore {
   consumeRemovedNotice(): boolean;
   /** Re-reads the storage (another tab changed the cart) and notifies when the cart differs. */
   refresh(): void;
+  /** Replaces the whole cart (the rest of a split order). */
+  replace(next: readonly CartItem[]): void;
   /** Total number of pieces. */
   count(): number;
 }
@@ -173,6 +175,9 @@ export function createCartStore(getStorage: () => StorageLike | null | undefined
       return had;
     },
     refresh,
+    replace(next) {
+      commit(sanitize(next));
+    },
     count() {
       return load().reduce((sum, i) => sum + i.qty, 0);
     },
@@ -189,6 +194,36 @@ if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
     if (e.key === null || e.key === CART_STORAGE_KEY) cart.refresh();
   });
+}
+
+/** Preferred pickup date (YYYY-MM-DD) handed from the bag / a split order / the assistant to checkout. */
+export const PREFERRED_DATE_KEY = "bb_cart_date_v1";
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function setPreferredDate(date: string): void {
+  if (!DATE_RE.test(date)) return;
+  try {
+    window.localStorage.setItem(PREFERRED_DATE_KEY, date);
+  } catch {
+    // Storage blocked: the hand-off is only a convenience.
+  }
+}
+
+export function getPreferredDate(): string | null {
+  try {
+    const raw = window.localStorage.getItem(PREFERRED_DATE_KEY);
+    return raw && DATE_RE.test(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPreferredDate(): void {
+  try {
+    window.localStorage.removeItem(PREFERRED_DATE_KEY);
+  } catch {
+    // ignore
+  }
 }
 
 function getServerSnapshot(): readonly CartItem[] {
