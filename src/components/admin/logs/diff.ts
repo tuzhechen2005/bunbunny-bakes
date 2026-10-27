@@ -7,7 +7,7 @@ import { copy } from "@/copy";
 import { dayLabel, SHOP_TZ } from "@/domain/dates";
 import type { Fulfillment, LocalDate, OrderStatus } from "@/domain/types";
 import { statusLabel } from "../orders/statusUi";
-import { describeViolation, parseViolations } from "@/lib/orderForm";
+import { describeViolation, parseViolations, weekdaysLabel } from "@/lib/orderForm";
 
 const t = copy.admin.logs;
 const orders = copy.admin.orders;
@@ -99,6 +99,9 @@ function formatItems(list: unknown[]): string {
 }
 
 export function formatValue(key: string, value: unknown, ctx: FormatContext = {}): string {
+  if (key === "pickupWeekdays" && Array.isArray(value)) {
+    return value.length === 0 ? t.everyDay : weekdaysLabel(value.filter((d): d is number => typeof d === "number"));
+  }
   if (isEmpty(value)) return t.emptyValue;
   if (typeof value === "boolean") return value ? t.yes : t.no;
   if (typeof value === "number") {

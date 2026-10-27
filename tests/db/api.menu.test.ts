@@ -28,6 +28,7 @@ const PRODUCT_KEYS = [
   "images",
   "leadDays",
   "name",
+  "pickupWeekdays",
   "status",
   "unitPriceCents",
 ];

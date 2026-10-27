@@ -3,6 +3,7 @@
 import { checkDay } from "./capacity";
 import { cutoffAt as computeCutoffAt, cutoffLabel, isBeforeCutoff, leadDaysOf } from "./cutoff";
 import { addDays, compareLocalDate, localDateOf } from "./dates";
+import { hintsFor, type DateHint } from "./hints";
 import type {
   CapacityProduct,
   CartLine,
@@ -13,13 +14,17 @@ import type {
   ProductStatus,
   Violation,
 } from "./types";
+import { weekdayViolations } from "./weekdays";
+
+export type { DateHint } from "./hints";
 
 /** Customers see open dates up to this many days after today (API_SPEC POST /api/availability). */
 const VISIBLE_DAYS = 60;
 /** leadDays used when the cart has no known products. */
 const DEFAULT_LEAD_DAYS = 1;
 
-export type DateState = "AVAILABLE" | "CUTOFF" | "FULL" | "DELIVERY_FULL";
+/** Precedence (CAPACITY_RULES §7): CUTOFF > WEEKDAY > FULL > DELIVERY_FULL > AVAILABLE. */
+export type DateState = "AVAILABLE" | "CUTOFF" | "WEEKDAY" | "FULL" | "DELIVERY_FULL";
 
 export interface AvailProduct extends CapacityProduct {
   status: ProductStatus;
@@ -58,6 +63,14 @@ export interface DateEntry {
   state: DateState;
   cutoffAt: Date;
   cutoffLabel: string;
+  /** Only on FULL / WEEKDAY dates of a non-empty cart, and only when there is one (§7.2). */
+  hints?: DateHint[];
+}
+
+/** One date for one cart: what `listAvailability` reports for it. */
+export interface DatePlan {
+  state: DateState;
+  hints: DateHint[];
 }
 
 export interface AvailabilityResult {
@@ -111,6 +124,12 @@ export function evaluateDay(input: AvailabilityInput, day: OpenDay): DayEvaluati
     return { state: "CUTOFF", cutoffAt, violations: [] };
   }
 
+  // Rule 2b (D115): every cart product must be available on this weekday.
+  const weekday = weekdayViolations(day.date, lines, input.products);
+  if (weekday.length > 0) {
+    return { state: "WEEKDAY", cutoffAt, violations: weekday };
+  }
+
   const { violations } = checkDay({
     date: day.date,
     existing: day.orders,
@@ -139,16 +158,65 @@ function visibleDays(input: AvailabilityInput): OpenDay[] {
     .sort((a, b) => compareLocalDate(a.date, b.date));
 }
 
+/** Merged known lines (one per product, first-seen order): what hints work on. */
+function hintCart(input: AvailabilityInput): CartLine[] {
+  const totals = new Map<string, number>();
+  for (const line of knownLines(input.cart, input.products)) {
+    totals.set(line.productId, (totals.get(line.productId) ?? 0) + line.qty);
+  }
+  return [...totals].map(([productId, qty]) => ({ productId, qty }));
+}
+
+function planDay(
+  input: AvailabilityInput,
+  day: OpenDay,
+  visible: OpenDay[],
+  hasProblems: boolean,
+): DatePlan & { cutoffAt: Date } {
+  const { state, cutoffAt } = evaluateDay(input, day);
+  if (hasProblems || (state !== "FULL" && state !== "WEEKDAY")) return { state, cutoffAt, hints: [] };
+  const cart = hintCart(input);
+  if (cart.length === 0) return { state, cutoffAt, hints: [] };
+  const hints = hintsFor({
+    cart,
+    products: input.products,
+    fulfillment: input.fulfillment,
+    day,
+    state,
+    visible,
+    stateOf: (sub, d) => evaluateDay({ ...input, cart: sub }, d).state,
+  });
+  return { state, cutoffAt, hints };
+}
+
 export function listAvailability(input: AvailabilityInput): AvailabilityResult {
   const problems = cartProblems(input.cart, input.products, input.maxQtyPerItem);
   if (!input.orderingEnabled) {
     return { orderingEnabled: false, cartProblems: problems, dates: [] };
   }
-  const dates = visibleDays(input).map((day): DateEntry => {
-    const { state, cutoffAt } = evaluateDay(input, day);
-    return { date: day.date, state, cutoffAt, cutoffLabel: cutoffLabel(cutoffAt) };
+  const visible = visibleDays(input);
+  const dates = visible.map((day): DateEntry => {
+    const { state, cutoffAt, hints } = planDay(input, day, visible, problems.length > 0);
+    const entry: DateEntry = { date: day.date, state, cutoffAt, cutoffLabel: cutoffLabel(cutoffAt) };
+    if (hints.length > 0) entry.hints = hints;
+    return entry;
   });
   return { orderingEnabled: true, cartProblems: problems, dates };
+}
+
+/**
+ * State and hints of one date for the cart, exactly as `listAvailability` reports them.
+ * null when the date is not offered to customers (ordering off, not an open day, or
+ * outside today < date ≤ today + 60).
+ */
+export function planCart(input: AvailabilityInput, date: LocalDate): DatePlan | null {
+  const problems = cartProblems(input.cart, input.products, input.maxQtyPerItem);
+  if (!input.orderingEnabled) return null;
+  const visible = visibleDays(input);
+  const day = visible.find((d) => d.date === date);
+  if (!day) return null;
+  const { state, hints } = planDay(input, day, visible, problems.length > 0);
+  return { state, hints };
 }
 
 /**

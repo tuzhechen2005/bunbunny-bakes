@@ -20,6 +20,7 @@
 | `QTY_LIMIT` | 409 | 超过每单上限 |
 | `FULL` | 409 | 面团或独立限额已满（附 `suggestion` 或 null） |
 | `DELIVERY_FULL` | 409 | 配送已满，自提仍可 |
+| `WEEKDAY_UNAVAILABLE` | 409 | 购物车里有商品这天（星期几）不能取（D115），附 `productIds` |
 | `RATE_LIMITED` | 429 | 太频繁（同一 IP 10 分钟最多 5 笔，D86；同一微信号同一取货日最多 2 笔未确认订单） |
 | `NOT_CANCELLABLE` | 409 | 当前状态不能取消 |
 | `OVER_LIMIT` | 409 | 店主操作超限，附 `violations`，可带 `override` 重试 |
@@ -39,13 +40,13 @@
   "orderingEnabled": true,
   "products": [{ "id": "…", "name": "奶酥红豆包", "description": "…", "imageUrl": null, "images": [], "field": { "bg": "#EFE7DA", "ink": "#…", "ink2": "#…" },
                  "unitPriceCents": 249, "bundleSize": 4, "bundlePriceCents": 899,
-                 "status": "ACTIVE", "leadDays": 1 }],
+                 "status": "ACTIVE", "leadDays": 1, "pickupWeekdays": [] }],
   "pickupNote": "自提时间在下午 5 点以后，具体时间微信确认",
   "deliveryFeeCents": 500, "freeDeliveryMinCents": 2500, "maxQtyPerItem": 8
 }
 ```
 
-`images`：公开照片地址，按显示顺序，封面在前，0–6 张；`imageUrl` 永远等于 `images[0] ?? null`。`field`：这款商品的首页颜色（背景、字色、次要字色，十六进制），永远有值（没设置时是奶白）。订单视图里的商品 `imageUrl` 仍是封面。
+`pickupWeekdays`：可取货的星期几（0 = 周日 … 6 = 周六），`[]` = 每天（D115）。`images`：公开照片地址，按显示顺序，封面在前，0–6 张；`imageUrl` 永远等于 `images[0] ?? null`。`field`：这款商品的首页颜色（背景、字色、次要字色，十六进制），永远有值（没设置时是奶白）。订单视图里的商品 `imageUrl` 仍是封面。
 
 不返回任何克数、上限、已用量。`ARCHIVED` 商品不返回。
 
@@ -62,13 +63,20 @@
   "cartProblems": [],
   "dates": [
     { "date": "2026-10-30", "state": "AVAILABLE", "cutoffAt": "2026-10-30T01:00:00Z", "cutoffLabel": "10/29 周四 20:00 截止" },
-    { "date": "2026-10-31", "state": "FULL" },
-    { "date": "2026-11-01", "state": "DELIVERY_FULL" }
+    { "date": "2026-10-31", "state": "FULL",
+      "hints": [{ "kind": "REDUCE", "remove": [{ "productId": "…", "qty": 1 }] },
+                { "kind": "SPLIT", "reason": "CAPACITY", "here": [{ "productId": "…", "qty": 2 }],
+                  "rest": [{ "productId": "…", "qty": 1 }], "restDate": "2026-10-30" }] },
+    { "date": "2026-11-01", "state": "DELIVERY_FULL" },
+    { "date": "2026-11-02", "state": "WEEKDAY",
+      "hints": [{ "kind": "SPLIT", "reason": "WEEKDAY", "here": [{ "productId": "…", "qty": 2 }],
+                  "rest": [{ "productId": "…", "qty": 1 }], "restDate": null }] }
   ]
 }
 ```
 
-- `state`：`AVAILABLE` / `CUTOFF` / `FULL` / `DELIVERY_FULL`。只列出今天之后、60 天之内的开放日期。
+- `state`：`AVAILABLE` / `CUTOFF` / `WEEKDAY` / `FULL` / `DELIVERY_FULL`（优先级见 `CAPACITY_RULES.md` §7）。`WEEKDAY`：这天开放、没截止，但购物车里至少有一款商品这天（星期几）不能取。只列出今天之后、60 天之内的开放日期。
+- `hints`（可选）：只出现在 `FULL` / `WEEKDAY` 的日期上，而且只有算得出提示时才有（规则见 `CAPACITY_RULES.md` §7.2）。只有购物车数量，没有克数、上限、已用量、剩余量。`REDUCE`：购物车去掉 `remove` 后，这天能作为一单放下。`SPLIT`：这天先下 `here`，`rest` 留在购物车；`restDate` 是 `rest` 单独能订的最近日期（`WEEKDAY` 时可能为 `null`）。
 - `cartProblems`：例如 `[{ "productId": "…", "error": "QTY_LIMIT" }]`。
 - 只是展示用，不锁任何东西。
 
@@ -173,7 +181,7 @@
 | POST | `/api/admin/orders/{id}/payment` | `{ paid, method? }` |
 | GET | `/api/admin/calendar?from=&to=` | 每天：是否开放、各项上限、已用量、超限标记 |
 | PUT | `/api/admin/dates/{date}` | `{ isOpen, doughLimitG, deliveryEnabled, deliveryLimit, productLimits: { productId: n }, note }`；把上限调到低于已用量时返回警告，要店主确认 |
-| PATCH | `/api/admin/products/{id}` | 修改；改了名额相关字段时，返回因此超限的开放日期 |
+| PATCH | `/api/admin/products/{id}` | 修改；改了名额相关字段时，返回因此超限的开放日期。`pickupWeekdays`（D115）：0–6 的整数数组、不能重复，存成从小到大，选满 7 天存成 `[]`（= 每天），格式不对 `VALIDATION`；改动写 `product.update` 日志 |
 | GET/POST | `/api/admin/products` | 列表 / 新增；每个商品带 `images: [{id, url, sortOrder}]`（封面在前）和 `fieldColor`（`#RRGGBB` 或 null，大小写不限、存成大写，格式不对 `VALIDATION`） |
 | POST | `/api/admin/products/{id}/images` | 追加一张照片（D98）。`multipart/form-data`，字段 `file`，一次一张；最大 5 MB，只收 jpg/png/webp（按文件头字节）；第一张就是封面；已有 6 张返回 `VALIDATION`（中文提示）；成功 201 `{ product }`，同步 `imageUrl`，写 `product.update` 日志（before/after 含 `imageUrl` 和 `images`） |
 | DELETE | `/api/admin/products/{id}/images/{imageId}` | 删除一张：文件一并删除，后面的往前补，删封面则下一张成为封面；找不到 404 |
@@ -197,6 +205,8 @@
   "violations": [{ "kind": "DOUGH", "date": "2026-10-30", "limit": 1600, "after": 1720, "over": 120 },
                  { "kind": "DELIVERY", "date": "2026-10-30", "limit": 8, "after": 9, "over": 1 }] }
 ```
+
+`violations` 的 `kind`：`DOUGH`、`PRODUCT`（附 `productId`）、`DELIVERY`、`DELIVERY_DISABLED`、`WEEKDAY`（D115：`{ "kind": "WEEKDAY", "date", "productId", "weekdays": [3] }`，这款商品这天不能取，`weekdays` 是它可以取的星期几）。代客下单、改单、更正状态重新占名额时都会检查。
 
 店主填写原因后，带 `override: true, reason: "…"` 再提交一次。
 

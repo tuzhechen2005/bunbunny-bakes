@@ -12,6 +12,7 @@
 // set updatedAt = max(now, previous updatedAt + 1 ms), so the token always changes.
 
 import { checkDay } from "@/domain/capacity";
+import { weekdayViolations } from "@/domain/weekdays";
 import { cutoffAt as computeCutoffAt, leadDaysOf } from "@/domain/cutoff";
 import { compareLocalDate, localDateOf } from "@/domain/dates";
 import { priceCart } from "@/domain/pricing";
@@ -235,7 +236,10 @@ const summarySelect = {
   updatedAt: true,
 } as const satisfies Prisma.OrderSelect;
 
-/** Capacity violations of `candidate` on `date`, not counting this order's current content. */
+/**
+ * Weekday (D115) and capacity violations of `candidate` on `date`, not counting this
+ * order's current content. All of them can be overridden with a reason.
+ */
 async function violationsFor(
   tx: Tx,
   orderId: string,
@@ -246,14 +250,17 @@ async function violationsFor(
   const settings = await loadSettings(tx);
   const productMap = products ?? (await loadProductMap(tx));
   const day = await loadDayContext(tx, date, settings, productMap);
-  return checkDay({
-    date,
-    existing: day.orders,
-    candidate,
-    excludeOrderId: orderId,
-    products: productMap,
-    limits: day.limits,
-  }).violations;
+  return [
+    ...weekdayViolations(date, candidate.items, productMap),
+    ...checkDay({
+      date,
+      existing: day.orders,
+      candidate,
+      excludeOrderId: orderId,
+      products: productMap,
+      limits: day.limits,
+    }).violations,
+  ];
 }
 
 async function auditOverride(tx: Tx, orderId: string, violations: Violation[], reason: string | null, now: Date) {

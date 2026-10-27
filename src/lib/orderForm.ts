@@ -180,7 +180,21 @@ export function describeViolation(v: Violation, productNames: Record<string, str
       return fill(t.delivery, { day, limit: v.limit, after: v.after, over: v.over });
     case "DELIVERY_DISABLED":
       return fill(t.deliveryDisabled, { day });
+    case "WEEKDAY":
+      return fill(t.weekday, {
+        day,
+        name: productNames[v.productId] ?? t.unknownProduct,
+        days: weekdaysLabel(v.weekdays),
+      });
   }
+}
+
+/** "周三、周六" for [3, 6] (copy.dates.weekdays, joined). */
+export function weekdaysLabel(days: readonly number[]): string {
+  return days
+    .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+    .map((d) => copy.dates.weekdays[d])
+    .join(copy.admin.products.weekdaySeparator);
 }
 
 /** Defensive parse of `violations` from an OVER_LIMIT response body. */

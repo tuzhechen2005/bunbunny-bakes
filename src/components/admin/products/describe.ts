@@ -30,6 +30,8 @@ export interface ProductDto {
   dailyLimit: number | null;
   batchYield: number | null;
   leadDays: number;
+  /** D115: 0 = Sunday … 6 = Saturday; [] = every day. */
+  pickupWeekdays: number[];
   status: ProductStatus;
   sortOrder: number;
 }
