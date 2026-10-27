@@ -19,6 +19,15 @@ export interface HudState {
   next: number;
 }
 
+/** Android only (iOS ignores it); optional like every haptic. */
+function vibratePattern(p: number[]): void {
+  try {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") navigator.vibrate(p);
+  } catch {
+    /* ignore */
+  }
+}
+
 function readTheme(): Theme {
   const cs = getComputedStyle(document.documentElement);
   const v = (n: string) => cs.getPropertyValue(n).trim();
@@ -43,18 +52,21 @@ export function Board({
   reduced,
   onHud,
   onOver,
+  onDrop,
 }: {
   session: Session;
   soundOn: boolean;
   reduced: boolean;
   onHud: (h: HudState) => void;
   onOver: () => void;
+  /** After every drop (D111: the autosave). */
+  onDrop?: () => void;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const live = useRef({ soundOn, reduced, onHud, onOver });
+  const live = useRef({ soundOn, reduced, onHud, onOver, onDrop });
   useEffect(() => {
-    live.current = { soundOn, reduced, onHud, onOver };
+    live.current = { soundOn, reduced, onHud, onOver, onDrop };
   });
   const renderer = useRef<BoardRenderer | null>(null);
 
@@ -95,8 +107,9 @@ export function Board({
       if (ev.type === "drop") {
         if (L.soundOn) sound.drop();
       } else if (ev.type === "merge") {
-        if (L.soundOn) (ev.big ? sound.big : () => sound.merge(ev.tier))();
-        if (ev.big || !L.reduced) haptic(ev.big ? 40 : 12);
+        if (L.soundOn) (ev.bigBig ? sound.bigBig : ev.big ? sound.big : () => sound.merge(ev.tier))();
+        if (ev.bigBig) vibratePattern([30, 40, 30, 40, 30, 40, 120]);
+        else if (ev.big || !L.reduced) haptic(ev.big ? 40 : 12);
       } else if (ev.type === "over") {
         if (L.soundOn) sound.over();
       }
@@ -118,6 +131,7 @@ export function Board({
         box.dataset.drops = String(session.drops.length);
         evs.forEach(emit);
         hud();
+        live.current.onDrop?.();
       }
     };
     const doDrop = (x: number) => {
@@ -247,6 +261,7 @@ export function Board({
       } else if (!(session.over && finished && !r.animating)) start();
     };
     document.addEventListener("visibilitychange", onVis);
+    box.dataset.drops = String(session.drops.length);
     hud();
     fit();
     start();

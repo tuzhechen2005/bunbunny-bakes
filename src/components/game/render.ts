@@ -105,6 +105,9 @@ interface Particle {
   max: number;
   size: number;
   color: string;
+  /** Confetti: a small rotating rectangle instead of a dot. */
+  rot?: number;
+  spin?: number;
 }
 interface Ring {
   x: number;
@@ -131,6 +134,7 @@ interface Pop {
 }
 
 const POP_S = 0.34;
+const BANNER_S = 1.5;
 const easeOutBack = (t: number) => {
   const c1 = 2.1;
   const c3 = c1 + 1;
@@ -156,6 +160,10 @@ export class BoardRenderer {
   private floaters: Floater[] = [];
   private pops: Pop[] = [];
   private shake = 0;
+  /** D109 big + big: white flash, centred "+500" and a confetti burst that follows the scale-up. */
+  private flash = 0;
+  private banner: { t: number; text: string } | null = null;
+  private burst: { t: number; x: number; y: number } | null = null;
   reduced = false;
   /** Set when an image arrives so the sprites are rebuilt on the next frame. */
   dirty = true;
@@ -213,6 +221,15 @@ export class BoardRenderer {
 
   /** Reacts to engine events with particles, rings, floating points and a pop on the new piece. */
   onEvent(ev: GameEvent) {
+    if (ev.type === "merge" && ev.bigBig) {
+      this.banner = { t: 0, text: `+${ev.points}` };
+      if (!this.reduced) {
+        this.flash = 1;
+        this.shake = 1;
+        this.burst = { t: 0, x: ev.x * this.w, y: ev.y * this.w };
+      }
+      return;
+    }
     if (this.reduced) return;
     if (ev.type === "merge") {
       const t = this.tiers[ev.tier];
@@ -246,12 +263,46 @@ export class BoardRenderer {
     }
   }
 
+  private spawnConfetti(x: number, y: number) {
+    const palette = [...this.tiers.map((t) => t.color.bg), this.theme.red, this.theme.ink];
+    const n = 90;
+    for (let i = 0; i < n && this.particles.length < 200; i++) {
+      const a = (i / n) * Math.PI * 2 + (i % 5) * 0.21;
+      const sp = 170 + ((i * 47) % 190);
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 120,
+        life: 0,
+        max: 1.4 + (i % 4) * 0.1,
+        size: 4 + (i % 4),
+        color: palette[i % palette.length],
+        rot: i * 0.7,
+        spin: ((i % 7) - 3) * 4,
+      });
+    }
+  }
+
   private step(dt: number) {
+    if (this.flash > 0) this.flash = Math.max(0, this.flash - dt / 0.35);
+    if (this.banner) {
+      this.banner.t += dt;
+      if (this.banner.t >= BANNER_S) this.banner = null;
+    }
+    if (this.burst) {
+      this.burst.t += dt;
+      if (this.burst.t >= 0.2) {
+        this.spawnConfetti(this.burst.x, this.burst.y);
+        this.burst = null;
+      }
+    }
     for (const p of this.particles) {
       p.life += dt;
       p.vy += 420 * dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
+      if (p.rot !== undefined) p.rot += (p.spin ?? 0) * dt;
     }
     this.particles = this.particles.filter((p) => p.life < p.max);
     for (const r of this.rings) r.t += dt;
@@ -265,7 +316,7 @@ export class BoardRenderer {
 
   /** True while an effect is still moving (the loop keeps drawing). */
   get animating() {
-    return this.particles.length + this.rings.length + this.floaters.length + this.pops.length > 0 || this.shake > 0;
+    return this.particles.length + this.rings.length + this.floaters.length + this.pops.length > 0 || this.shake > 0 || this.flash > 0 || this.banner !== null || this.burst !== null;
   }
 
   draw(bodies: Body[], aim: Aim | null, dt: number, now: number) {
@@ -332,6 +383,14 @@ export class BoardRenderer {
     for (const p of this.particles) {
       ctx.globalAlpha = 1 - p.life / p.max;
       ctx.fillStyle = p.color;
+      if (p.rot !== undefined) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillRect(-p.size, -p.size / 2, p.size * 2, p.size);
+        ctx.restore();
+        continue;
+      }
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size * (1 - 0.5 * (p.life / p.max)), 0, Math.PI * 2);
       ctx.fill();
@@ -350,6 +409,35 @@ export class BoardRenderer {
       ctx.fillText(f.text, f.x, f.y - k * 34);
     }
     ctx.globalAlpha = 1;
+    if (this.flash > 0) {
+      ctx.globalAlpha = this.flash * 0.85;
+      ctx.fillStyle = theme.paper;
+      ctx.fillRect(-10, -10, w + 20, h + 20);
+      ctx.globalAlpha = 1;
+    }
+    if (this.banner) {
+      const t = this.banner.t;
+      let alpha = 1;
+      let scale = 1;
+      if (this.reduced) {
+        alpha = Math.min(1, t / 0.2, (BANNER_S - t) / 0.4);
+      } else {
+        scale = t < 0.22 ? 0.4 + 0.75 * easeOutBack(t / 0.22) * 0.9 : 1.1 - 0.1 * Math.min(1, (t - 0.22) / 0.3);
+        alpha = Math.min(1, (BANNER_S - t) / 0.4);
+      }
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, alpha);
+      ctx.translate(w / 2, h * 0.42);
+      ctx.scale(scale, scale);
+      ctx.font = `900 ${Math.round(w * 0.24)}px ${theme.numFont}`;
+      ctx.lineJoin = "round";
+      ctx.lineWidth = Math.round(w * 0.04);
+      ctx.strokeStyle = theme.paper;
+      ctx.strokeText(this.banner.text, 0, 0);
+      ctx.fillStyle = theme.ink;
+      ctx.fillText(this.banner.text, 0, 0);
+      ctx.restore();
+    }
     ctx.restore();
   }
 }

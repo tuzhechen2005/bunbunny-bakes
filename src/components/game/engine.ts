@@ -8,7 +8,7 @@ export const BOARD_HEIGHT = 1.5;
 
 function mapEvent(ev: EngineEvent, lastTier: number): GameEvent {
   if (ev.type === "merge") {
-    return { type: "merge", tier: ev.tier, x: ev.x, y: ev.y, points: ev.points, big: ev.bigBig || ev.tier === lastTier };
+    return { type: "merge", tier: ev.tier, x: ev.x, y: ev.y, points: ev.points, big: ev.bigBig || ev.tier === lastTier, bigBig: ev.bigBig };
   }
   if (ev.type === "drop") return { type: "drop", tier: ev.tier, x: ev.x, y: ev.y };
   return { type: "over" };
@@ -30,6 +30,25 @@ export class Session {
       height: BOARD_HEIGHT,
     });
     this.dangerY = this.game.state().dangerY;
+  }
+
+  /**
+   * Rebuilds a saved run (D111) by replaying its drops through the deterministic engine. Returns null
+   * when the log cannot be replayed (corrupt save): the caller then discards it.
+   */
+  static restore(tiers: TierView[], seed: string, drops: readonly DropLog[]): Session | null {
+    const s = new Session(tiers, seed);
+    for (const d of drops) {
+      if (!d || !Number.isInteger(d.at) || d.at < s.steps || typeof d.x !== "number" || !Number.isFinite(d.x)) return null;
+      while (s.steps < d.at) {
+        if (s.over) return null;
+        s.game.step();
+      }
+      if (s.over || s.game.drop(d.x) === null) return null;
+      s.game.drainEvents();
+      s.drops.push({ x: d.x, at: d.at });
+    }
+    return s.over ? null : s;
   }
 
   get steps() {

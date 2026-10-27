@@ -12,6 +12,7 @@ test("real game: play to game over, the server confirms the score and the board 
   test.setTimeout(240_000);
   await resetAndSeed();
   await page.goto("/game");
+  await page.getByTestId("game-menu-start").click();
   await page.getByTestId("game-wechat").fill("real_player_1");
   await page.getByTestId("game-nickname").fill("真玩家");
   await page.getByTestId("game-start").click();

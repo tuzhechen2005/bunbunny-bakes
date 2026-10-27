@@ -3,7 +3,7 @@
   position: relative;
   margin: 0 auto;
   /* Fit the board between the bars: as wide as the column, or as wide as the height allows (aspect 2:3). */
-  width: min(100%, calc((100svh - 56px - 92px - 24px - env(safe-area-inset-bottom)) / 1.5));
+  width: min(100%, calc((100svh - 56px - 92px - 88px - env(safe-area-inset-bottom)) / 1.5));
   min-width: 200px;
   aspect-ratio: 2 / 3;
   border-radius: 20px;
@@ -107,6 +107,29 @@
   .game-entry,
   .game-entry::after,
   .game-entry-logo {
+    animation: none;
+  }
+}
+
+/* D113 new record: the crown line pops in once. */
+@keyframes game-record-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.game-record-pop {
+  animation: game-record-pop 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-record-pop {
     animation: none;
   }
 }
