@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import { copy } from "@/copy";
+import { cart } from "@/lib/cart";
 import { formatCents } from "@/domain/pricing";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { myOrders } from "@/lib/myOrders";
@@ -48,9 +49,16 @@ function readSplitRest(token: string): string | null {
   try {
     const raw = JSON.parse(sessionStorage.getItem("bunbunny:splitRest") ?? "null") as {
       token?: unknown;
-      items?: { name?: unknown; qty?: unknown }[];
+      items?: { productId?: unknown; name?: unknown; qty?: unknown }[];
     } | null;
     if (!raw || raw.token !== token || !Array.isArray(raw.items)) return null;
+    // Only while the bag still holds those items; once it does not, the note is dropped.
+    const bag = cart.getItems();
+    const held = raw.items.every((i) => bag.some((b) => b.productId === i.productId && b.qty >= (i.qty as number)));
+    if (!held) {
+      sessionStorage.removeItem("bunbunny:splitRest");
+      return null;
+    }
     const parts = raw.items.flatMap((i) =>
       typeof i?.name === "string" && typeof i.qty === "number" ? [fill(copy.customer.checkout.pieces, { n: i.qty, name: i.name })] : [],
     );

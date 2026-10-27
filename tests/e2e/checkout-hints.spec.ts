@@ -14,7 +14,7 @@ type Item = { productId: string; qty: number };
 
 const open = (date: string) => ({ date, state: "AVAILABLE", cutoffAt: "2026-11-30T01:00:00Z", cutoffLabel: "截止" });
 
-async function mock(page: Page, dates: (items: Item[]) => unknown[], posted: unknown[] = []) {
+async function mock(page: Page, dates: (items: Item[]) => unknown[], posted: unknown[] = [], orderFails = false) {
   await page.route("**/api/menu", (r) =>
     r.fulfill({ json: { orderingEnabled: true, products: PRODUCTS, pickupNote: "", deliveryFeeCents: 500, freeDeliveryMinCents: 2500, maxQtyPerItem: 8 } }),
   );
@@ -31,6 +31,7 @@ async function mock(page: Page, dates: (items: Item[]) => unknown[], posted: unk
   });
   await page.route("**/api/orders", (r) => {
     posted.push(r.request().postDataJSON());
+    if (orderFails) return r.fulfill({ status: 409, json: { error: "FULL", message: "x", suggestion: null } });
     r.fulfill({ status: 201, json: { orderNo: "1105-001", viewToken: "tok-split", url: "/o/tok-split" } });
   });
   await page.route("**/api/o/tok-split", (r) => r.fulfill({ status: 404, json: { error: "NOT_FOUND", message: "x" } }));
@@ -118,7 +119,7 @@ test.describe("checkout hints", () => {
       await expect(page).toHaveURL(/\/o\/tok-split/);
       expect(JSON.parse((await page.evaluate(() => sessionStorage.getItem("bunbunny:splitRest"))) ?? "null")).toEqual({
         token: "tok-split",
-        items: [{ name: "泡芙", qty: 1 }],
+        items: [{ productId: "p-puff", name: "泡芙", qty: 1 }],
       });
       expect(await page.evaluate(([c, d]) => [localStorage.getItem(c), localStorage.getItem(d)], [CART_KEY, DATE_KEY] as const)).toEqual([
         JSON.stringify(rest),
@@ -126,6 +127,57 @@ test.describe("checkout hints", () => {
       ]);
     });
   }
+
+  test("split-in-split is impossible: no hints while a split is active, 改回 brings them back", async ({ page }) => {
+    const hint = { kind: "SPLIT", reason: "CAPACITY", here: [{ productId: "p-bread", qty: 2 }, { productId: "p-two", qty: 1 }], rest: [{ productId: "p-puff", qty: 1 }], restDate: "2026-11-04" };
+    await mock(page, (items) => [
+      open("2026-11-04"),
+      items.length === 3 ? { date: "2026-11-05", state: "FULL", hints: [hint] } : open("2026-11-05"),
+      { date: "2026-11-07", state: "FULL", hints: [{ kind: "SPLIT", reason: "CAPACITY", here: [{ productId: "p-bread", qty: 2 }], rest: [{ productId: "p-two", qty: 1 }], restDate: "2026-11-04" }] },
+    ]);
+    await seed(page, [{ productId: "p-bread", qty: 2 }, { productId: "p-puff", qty: 1 }, { productId: "p-two", qty: 1 }]);
+    await card(page, "2026-11-05").click();
+    await page.getByTestId("hint-apply").click();
+    await expect(page.getByTestId("split-notice")).toBeVisible();
+    await card(page, "2026-11-07").click();
+    await expect(page.getByTestId("hint-row")).toHaveCount(0);
+    await expect(page.getByTestId("hint-apply")).toHaveCount(0);
+    await page.getByTestId("split-undo").click();
+    await card(page, "2026-11-07").click();
+    await expect(page.getByTestId("hint-row")).toHaveCount(1);
+  });
+
+  test("a failed split order (409) leaves the bag and plan intact and writes no preferred date", async ({ page }) => {
+    const posted: unknown[] = [];
+    const whole = [{ productId: "p-bread", qty: 2 }, { productId: "p-puff", qty: 1 }];
+    const hint = { kind: "SPLIT", reason: "CAPACITY", here: [{ productId: "p-bread", qty: 2 }], rest: [{ productId: "p-puff", qty: 1 }], restDate: "2026-11-04" };
+    await mock(
+      page,
+      (items) => [open("2026-11-04"), items.length === 1 ? open("2026-11-05") : { date: "2026-11-05", state: "FULL", hints: [hint] }],
+      posted,
+      true,
+    );
+    await seed(page, whole);
+    await card(page, "2026-11-05").click();
+    await page.getByTestId("hint-apply").click();
+    await page.getByLabel("微信号").fill("wx_test");
+    await page.getByTestId("submit").click();
+    await expect.poll(() => posted.length).toBe(1);
+    await expect(page.getByTestId("submit-error")).toBeVisible();
+    await expect(page.getByTestId("split-notice")).toBeVisible();
+    expect(await page.evaluate(([c, d]) => [localStorage.getItem(c), localStorage.getItem(d)], [CART_KEY, DATE_KEY] as const)).toEqual([JSON.stringify(whole), null]);
+  });
+
+  test("the second-order note is dropped once the bag no longer holds the rest", async ({ page }) => {
+    await mock(page, () => []);
+    await page.goto("/");
+    await page.evaluate(() => {
+      sessionStorage.setItem("bunbunny:splitRest", JSON.stringify({ token: "tok-split", items: [{ productId: "p-puff", name: "泡芙", qty: 1 }] }));
+    });
+    await page.goto("/o/tok-split");
+    await expect(page.getByTestId("split-rest")).toHaveCount(0);
+    expect(await page.evaluate(() => sessionStorage.getItem("bunbunny:splitRest"))).toBeNull();
+  });
 
   test("preferred date is preselected once and cleared", async ({ page }) => {
     await mock(page, () => [open("2026-11-04"), open("2026-11-05")]);

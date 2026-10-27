@@ -603,7 +603,7 @@ export function CheckoutPage() {
               token: viewToken,
               items: split.rest.flatMap((r) => {
                 const p = byId.get(r.productId);
-                return p ? [{ name: p.name, qty: r.qty }] : [];
+                return p ? [{ productId: r.productId, name: p.name, qty: r.qty }] : [];
               }),
             }),
           );
@@ -678,7 +678,7 @@ export function CheckoutPage() {
   };
   const hintOption = hintDate ? data?.dates.find((d) => d.date === hintDate) : undefined;
   const hintRows =
-    hintOption && (hintOption.state === "FULL" || hintOption.state === "WEEKDAY") && hintOption.hints?.length ? (
+    !splitPlan && hintOption && (hintOption.state === "FULL" || hintOption.state === "WEEKDAY") && hintOption.hints?.length ? (
       <HintRows option={hintOption} byId={byId} onReduce={applyReduce} onSplit={applySplit} />
     ) : null;
   const delivery = fulfillment === "DELIVERY";
