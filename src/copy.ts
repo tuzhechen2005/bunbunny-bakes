@@ -234,6 +234,26 @@ export const copy = {
       starting: "正在开始…",
       startFailed: "现在开不了局，请稍后再试",
       viewBoard: "排行榜",
+      /** Menu (D110). */
+      resume: "继续上一局",
+      lastScore: "上局 {score} 分",
+      restart: "重新开始",
+      restartTitle: "上一局的进度会丢掉，确定吗？",
+      restartConfirm: "重新开始",
+      keepPlaying: "再想想",
+      /** Leaving a run (D111). */
+      exit: "退出",
+      exitSave: "保存进度再走",
+      exitDiscard: "不保存",
+      exitTitle: "退出这一局？",
+      /** Result sheet closed (D112): the bar under the final board. */
+      close: "关闭",
+      barAgain: "再来一局",
+      barScore: "看分数",
+      /** Crown (D113). */
+      crown: "👑 历史最高",
+      personalBest: "我的历史最高",
+      newRecord: "👑 新纪录！",
       /** D104 rule line; {contact} is the owner line when the menu has it. */
       rules: "每周一 0:00 重新开始，上周第一名可领总共价值 $10 以内的面包（需在本店下过单）。",
       rulesContact: "领奖请联系店主微信 {id}。",

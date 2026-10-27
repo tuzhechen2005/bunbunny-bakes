@@ -62,6 +62,17 @@ export function LeaderboardView({ wechatId, version = 0 }: { wechatId: string; v
   const { data } = state;
   return (
     <div className="px-5 pb-8" data-testid="game-board-list">
+      {data.allTime ? (
+        <div className="mb-4 rounded-2xl bg-c-wash px-4 py-3" data-testid="game-all-time">
+          <p className="m-0 text-xs font-bold text-c-grey">{t.crown}</p>
+          <p className="m-0 mt-1 flex items-baseline justify-between gap-3">
+            <span className="font-display min-w-0 truncate text-[15px] text-c-ink">
+              {data.allTime.nickname} <span className="font-num text-xs text-c-grey">{data.allTime.wechatMasked}</span>
+            </span>
+            <span className="font-num text-xl text-c-ink">{data.allTime.score}</span>
+          </p>
+        </div>
+      ) : null}
       <p className="m-0 text-[13px] text-c-grey">{fill(t.weekRange, { start: md(data.week.start), end: md(data.week.end) })}</p>
       {typeof data.myBest === "number" ? (
         <p className="mt-3 flex items-baseline justify-between rounded-2xl bg-c-wash px-4 py-3 text-sm font-bold text-c-ink" data-testid="game-my-best">

@@ -69,6 +69,15 @@ export const sound = {
     [0, 4, 7, 12, 16].forEach((s, i) => tone("sine", freq(s - 12), t + i * 0.06, 0.9, 0.28));
     tone("triangle", freq(0), t + 0.3, 1.1, 0.2);
   },
+  /** D109 big + big: a rising fanfare, a bright chord and a falling sparkle. Only the biggest moment gets it. */
+  bigBig() {
+    const c = ensure();
+    if (!c) return;
+    const t = c.currentTime;
+    [0, 4, 7, 12, 16, 19, 24].forEach((s, i) => tone("triangle", freq(s - 12), t + i * 0.05, 0.5, 0.26));
+    [12, 16, 19, 24].forEach((s) => tone("sine", freq(s), t + 0.38, 1.3, 0.22));
+    tone("sine", freq(28), t + 0.4, 0.9, 0.12, freq(16));
+  },
   over() {
     const c = ensure();
     if (!c) return;

@@ -38,7 +38,7 @@ interface Api {
   finishes: { runId: string; drops: { x: number; at: number }[] }[];
   failFinishOnce: boolean;
   stallFinishOnce: boolean;
-  result: { score: number; best: number; rank: number | null };
+  result: { score: number; best: number; rank: number | null; personalBest?: number; newRecord?: boolean };
   startError: { status: number; body: unknown } | null;
 }
 
@@ -73,7 +73,14 @@ async function mockApi(page: Page, board: object | number = BOARD): Promise<Api>
   return api;
 }
 
+/** The menu (D110) comes first; the form opens from 「开始游戏」. */
+async function openForm(page: Page) {
+  const menuStart = page.getByTestId("game-menu-start");
+  if (await menuStart.isVisible()) await menuStart.click();
+}
+
 async function startGame(page: Page, wechat = "bunbunny_fan", nick = "小面包") {
+  await openForm(page);
   await page.getByTestId("game-wechat").fill(wechat);
   await page.getByTestId("game-nickname").fill(nick);
   await page.getByTestId("game-start").click();
@@ -145,6 +152,7 @@ test("start form: validation, rules line with the owner WeChat, remembered value
   const api = await mockApi(page);
   await page.goto("/game");
   await expect(page.getByTestId("game-rules")).toContainText("bunbunny_bakes");
+  await page.getByTestId("game-menu-start").click();
   await page.getByTestId("game-start").click();
   await expect(page.getByText(g.wechatInvalid)).toBeVisible();
   await expect(page.getByText(g.nicknameInvalid)).toBeVisible();
@@ -164,7 +172,10 @@ test("start form: validation, rules line with the owner WeChat, remembered value
   await expect(page.getByTestId("game-canvas")).toBeVisible();
   expect(api.starts.at(-1)).toEqual({ wechatId: "bunbunny_fan", nickname: "小面包" });
 
+  await page.getByTestId("game-exit").click();
+  await page.getByTestId("game-exit-discard").click();
   await page.reload();
+  await page.getByTestId("game-menu-start").click();
   await expect(page.getByTestId("game-wechat")).toHaveValue("bunbunny_fan");
   await expect(page.getByTestId("game-nickname")).toHaveValue("小面包");
 });
@@ -253,7 +264,7 @@ test("leaderboard view: top list, last winner, my best", async ({ page }) => {
   await expect(page.getByTestId("game-last-winner")).toContainText("老王");
   await expect(page.getByTestId("game-my-best")).toContainText("777");
   await page.getByTestId("game-board-close").click();
-  await expect(page.getByTestId("game-start")).toBeVisible();
+  await expect(page.getByTestId("game-menu-start")).toBeVisible();
 });
 
 test("320 px: the start screen and the board do not scroll sideways", async ({ page }) => {
@@ -290,9 +301,10 @@ test("leaderboard and back after game over: no second finish, the sheet keeps th
   api.startError = { status: 500, body: { error: "INTERNAL", message: "x" } };
   await page.getByTestId("game-again").click();
   await expect(page.getByTestId("game-form-error")).toBeVisible();
+  await page.getByTestId("game-form-back").click();
   await page.getByTestId("game-open-board").click();
   await page.getByTestId("game-board-close").click();
-  await expect(page.getByTestId("game-start")).toBeVisible();
+  await expect(page.getByTestId("game-menu-start")).toBeVisible();
   expect(api.finishes).toHaveLength(1);
 });
 
@@ -320,4 +332,207 @@ test("the start screen and the leaderboard's first row hint at the weekly prize 
   const rows = page.getByTestId("game-row");
   await expect(rows.first().getByTestId("game-prize-mark")).toBeVisible();
   await expect(page.getByTestId("game-prize-mark")).toHaveCount(1);
+});
+
+// ---- N5: menu, autosave, result sheet, crown (D109-D113) ----
+
+async function dropSome(page: Page, n: number) {
+  const box = (await page.getByTestId("game-canvas").boundingBox())!;
+  for (let i = 0; i < n; i++) {
+    await page.mouse.click(box.x + box.width * (0.2 + 0.15 * (i % 5)), box.y + box.height * 0.3);
+    await page.waitForTimeout(300);
+  }
+}
+
+const SAVE = "bb_game_save_v1";
+
+test("menu: no save shows start and board; a save shows continue with the last score, restart and board", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/game");
+  await expect(page.getByTestId("game-menu-start")).toBeVisible();
+  await expect(page.getByTestId("game-open-board")).toBeVisible();
+  await expect(page.getByTestId("game-resume")).toHaveCount(0);
+  await expect(page.getByTestId("game-prize-line")).toHaveText(g.prizeLine);
+  await expect(page.getByTestId("game-rules")).toBeVisible();
+
+  await startGame(page);
+  await dropSome(page, 4);
+  await page.getByTestId("game-exit").click();
+  await page.getByTestId("game-exit-save").click();
+  await expect(page.getByTestId("game-resume")).toBeVisible();
+  await expect(page.getByTestId("game-menu-start")).toHaveCount(0);
+  await expect(page.getByTestId("game-restart")).toBeVisible();
+  await expect(page.getByTestId("game-open-board")).toBeVisible();
+  await expect(page.getByTestId("game-resume-score")).toContainText(/^上局 \d+ 分$/);
+});
+
+test("autosave: reload, continue, the same drops are back and new drops append", async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto("/game");
+  await startGame(page);
+  await dropSome(page, 5);
+  await expect(page.getByTestId("game-board")).toHaveAttribute("data-drops", "5");
+  const saved = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)!), SAVE);
+  expect(saved).toMatchObject({ v: 1, runId: "run-1", seed: "seed-e2e", nickname: "小面包", expiresAt: "2099-01-01T00:00:00Z" });
+  expect(saved.drops).toHaveLength(5);
+
+  await page.reload();
+  await expect(page.getByTestId("game-resume-score")).toContainText(String(saved.score));
+  await page.getByTestId("game-resume").click();
+  await expect(page.getByTestId("game-canvas")).toBeVisible();
+  await expect(page.getByTestId("game-board")).toHaveAttribute("data-drops", "5");
+  await expect(page.getByTestId("game-score")).toHaveText(String(saved.score));
+  expect(api.starts).toHaveLength(1); // no new run was started
+  await page.waitForTimeout(600);
+  await dropSome(page, 1);
+  await expect(page.getByTestId("game-board")).toHaveAttribute("data-drops", "6");
+  const after = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)!), SAVE);
+  expect(after.drops).toHaveLength(6);
+  expect(after.drops.slice(0, 5)).toEqual(saved.drops);
+  expect(after.runId).toBe("run-1");
+});
+
+test("exit sheet: 保存进度再走 keeps the save, 不保存 deletes it; restart asks first", async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto("/game");
+  await startGame(page);
+  await dropSome(page, 3);
+  await page.getByTestId("game-exit").click();
+  await page.getByTestId("game-exit-save").click();
+  await expect(page.getByTestId("game-resume")).toBeVisible();
+  expect(await page.evaluate((k) => localStorage.getItem(k), SAVE)).not.toBeNull();
+
+  await page.getByTestId("game-restart").click();
+  await expect(page.getByTestId("game-restart-sheet")).toContainText(g.restartTitle);
+  await page.getByTestId("game-restart-cancel").click();
+  await expect(page.getByTestId("game-resume")).toBeVisible();
+  await page.getByTestId("game-restart").click();
+  await page.getByTestId("game-restart-confirm").click();
+  await expect(page.getByTestId("game-start")).toBeVisible();
+  expect(await page.evaluate((k) => localStorage.getItem(k), SAVE)).toBeNull();
+
+  await page.getByTestId("game-start").click();
+  await expect(page.getByTestId("game-canvas")).toBeVisible();
+  expect(api.starts).toHaveLength(2);
+  await dropSome(page, 2);
+  await page.getByTestId("game-exit").click();
+  await page.getByTestId("game-exit-discard").click();
+  await expect(page.getByTestId("game-menu-start")).toBeVisible();
+  expect(await page.evaluate((k) => localStorage.getItem(k), SAVE)).toBeNull();
+});
+
+test("an expired save is deleted and not offered", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript((k) => {
+    localStorage.setItem(
+      k,
+      JSON.stringify({ v: 1, runId: "old", seed: "s", tiers: [{}, {}, {}], drops: [{ x: 0.5, at: 0 }], nickname: "n", expiresAt: "2020-01-01T00:00:00Z", score: 900 }),
+    );
+  }, SAVE);
+  await page.goto("/game");
+  await expect(page.getByTestId("game-menu-start")).toBeVisible();
+  await expect(page.getByTestId("game-resume")).toHaveCount(0);
+  expect(await page.evaluate((k) => localStorage.getItem(k), SAVE)).toBeNull();
+});
+
+test("result sheet: × closes it, the final board stays with a bottom bar, 看分数 reopens it, 再来一局 starts a new run", async ({ page }) => {
+  test.setTimeout(120_000);
+  const api = await mockApi(page);
+  await page.goto("/game");
+  await startGame(page);
+  await playUntilOver(page);
+  await expect(page.getByTestId("game-best")).toHaveText("456");
+  expect(await page.evaluate((k) => localStorage.getItem(k), SAVE)).toBeNull(); // over: no save
+  await expect(page.getByTestId("game-bar")).toHaveCount(0);
+  await page.getByTestId("game-over-close").click();
+  await expect(page.getByTestId("game-over-sheet")).toHaveCount(0);
+  await expect(page.getByTestId("game-canvas")).toBeVisible();
+  await expect(page.getByTestId("game-bar")).toContainText(g.barAgain);
+  await expect(page.getByTestId("game-bar")).toContainText(g.barScore);
+  await page.getByTestId("game-bar-score").click();
+  await expect(page.getByTestId("game-over-sheet")).toBeVisible();
+  await expect(page.getByTestId("game-best")).toHaveText("456");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("game-over-sheet")).toHaveCount(0);
+  await page.getByTestId("game-bar-again").click();
+  await expect(page.getByTestId("game-bar")).toHaveCount(0);
+  await expect(page.getByTestId("game-board")).toHaveAttribute("data-drops", "0");
+  expect(api.starts).toHaveLength(2);
+  expect(api.finishes).toHaveLength(1);
+});
+
+test("crown: the leaderboard shows 历史最高 when there is one", async ({ page }) => {
+  await mockApi(page, { ...BOARD, allTime: { nickname: "冠军兔", wechatMasked: "ch***01", score: 9999 } });
+  await page.goto("/game");
+  await page.getByTestId("game-open-board").click();
+  const crown = page.getByTestId("game-all-time");
+  await expect(crown).toContainText(g.crown);
+  await expect(crown).toContainText("冠军兔");
+  await expect(crown).toContainText("ch***01");
+  await expect(crown).toContainText("9999");
+});
+
+test("crown: no block while allTime is null", async ({ page }) => {
+  await mockApi(page, { ...BOARD, allTime: null });
+  await page.goto("/game");
+  await page.getByTestId("game-open-board").click();
+  await expect(page.getByTestId("game-row")).toHaveCount(2);
+  await expect(page.getByTestId("game-all-time")).toHaveCount(0);
+});
+
+for (const reduced of [false, true]) {
+  test(`result sheet: personal best and the new-record moment (reduced motion: ${reduced})`, async ({ page }) => {
+    test.setTimeout(120_000);
+    if (reduced) await page.emulateMedia({ reducedMotion: "reduce" });
+    const api = await mockApi(page);
+    api.result = { score: 123, best: 456, rank: 3, personalBest: 777, newRecord: true };
+    await page.goto("/game");
+    await startGame(page);
+    await playUntilOver(page);
+    await expect(page.getByTestId("game-personal-best")).toHaveText("777");
+    await expect(page.getByTestId("game-new-record")).toHaveText(g.newRecord);
+    const anim = await page.getByTestId("game-new-record").evaluate((e) => getComputedStyle(e).animationName);
+    expect(anim).toBe(reduced ? "none" : "game-record-pop");
+  });
+}
+
+test("result sheet: no new-record line when it is not a record", async ({ page }) => {
+  test.setTimeout(120_000);
+  const api = await mockApi(page);
+  api.result = { score: 123, best: 456, rank: 3, personalBest: 900, newRecord: false };
+  await page.goto("/game");
+  await startGame(page);
+  await playUntilOver(page);
+  await expect(page.getByTestId("game-personal-best")).toHaveText("900");
+  await expect(page.getByTestId("game-new-record")).toHaveCount(0);
+});
+
+test("320 px: menu with a save, exit sheet and the bottom bar fit without sideways scroll", async ({ page }) => {
+  test.setTimeout(120_000);
+  await mockApi(page);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto("/game");
+  await startGame(page);
+  await dropSome(page, 2);
+  await page.getByTestId("game-exit").click();
+  await expect(page.getByTestId("game-exit-sheet")).toBeVisible();
+  await page.getByTestId("game-exit-save").click();
+  await expect(page.getByTestId("game-resume")).toBeVisible();
+  const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  expect(await fits()).toBe(true);
+  for (const id of ["game-resume", "game-restart", "game-open-board"]) {
+    expect((await page.getByTestId(id).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  }
+  await page.getByTestId("game-resume").click();
+  const boardBefore = (await page.getByTestId("game-board").boundingBox())!;
+  await playUntilOver(page);
+  await page.getByTestId("game-over-close").click();
+  await expect(page.getByTestId("game-bar")).toBeVisible();
+  expect(await fits()).toBe(true);
+  const bar = (await page.getByTestId("game-bar").boundingBox())!;
+  const board = (await page.getByTestId("game-board").boundingBox())!;
+  // The bar is an overlay: the canvas keeps its size and the bar sits over its lower part, inside the screen.
+  expect(Math.abs(board.height - boardBefore.height)).toBeLessThan(1);
+  expect(bar.y).toBeLessThan(board.y + board.height);
+  expect(bar.y + bar.height).toBeLessThanOrEqual(640);
 });

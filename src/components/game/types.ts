@@ -31,6 +31,10 @@ export interface FinishResult {
   /** null when the server could not rank the run. */
   rank: number | null;
   week: { start: string; end: string } | string;
+  /** C2 (D113): all-time best of this WeChat ID, this run included. */
+  personalBest?: number;
+  /** C2 (D113): this run is now the all-time record. */
+  newRecord?: boolean;
 }
 
 export interface LeaderboardRow {
@@ -45,6 +49,8 @@ export interface Leaderboard {
   top: LeaderboardRow[];
   lastWinner: { nickname: string; wechatMasked: string; score: number } | null;
   myBest?: number;
+  /** C2 (D113): the all-time best of everyone, null while nobody has finished a run. */
+  allTime?: { nickname: string; wechatMasked: string; score: number } | null;
 }
 
 export interface Body {
@@ -57,5 +63,5 @@ export interface Body {
 
 export type GameEvent =
   | { type: "drop"; tier: number; x: number; y: number }
-  | { type: "merge"; tier: number; x: number; y: number; points: number; big: boolean }
+  | { type: "merge"; tier: number; x: number; y: number; points: number; big: boolean; bigBig: boolean }
   | { type: "over" };

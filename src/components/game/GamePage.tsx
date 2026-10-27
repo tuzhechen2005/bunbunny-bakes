@@ -14,6 +14,7 @@ import { LeaderboardView } from "./LeaderboardView";
 import { PieceChip } from "./PieceChip";
 import { Session } from "./engine";
 import { finishRun, isRetryable, readRemembered, startRun, writeRemembered } from "./gameApi";
+import { clearSave, readSave, writeSave, type GameSave } from "./save";
 import { sound, unlockAudio } from "./sound";
 import type { FinishResult } from "./types";
 import "./game.css";
@@ -21,7 +22,7 @@ import "./game.css";
 const t = copy.customer.game;
 const SHEET_DELAY_MS = 800;
 
-type Phase = "start" | "playing" | "over" | "board";
+type Phase = "menu" | "form" | "playing" | "over" | "board";
 type Finish =
   | { state: "submitting" }
   | { state: "ok"; result: FinishResult }
@@ -67,7 +68,7 @@ function SpeakerButton({ on, onToggle }: { on: boolean; onToggle: () => void }) 
 
 export function GamePage() {
   const { reduced } = useMotionPrefs();
-  const [phase, setPhase] = useState<Phase>("start");
+  const [phase, setPhase] = useState<Phase>("menu");
   const [wechatId, setWechatId] = useState("");
   const [nickname, setNickname] = useState("");
   const [soundOn, setSoundOn] = useState(false);
@@ -83,8 +84,15 @@ export function GamePage() {
   const [finish, setFinish] = useState<Finish>({ state: "submitting" });
   const [sheetOpen, setSheetOpen] = useState(false);
   const [boardVersion, setBoardVersion] = useState(0);
-  /** Where 返回 on the leaderboard goes: the finished run it was opened from, or the start screen. */
-  const [boardFrom, setBoardFrom] = useState<"start" | "over">("start");
+  /** Where 返回 on the leaderboard goes: the finished run it was opened from, or the menu. */
+  const [boardFrom, setBoardFrom] = useState<"menu" | "over">("menu");
+  /** The saved run on this phone (D111), shown on the menu. */
+  const [save, setSave] = useState<GameSave | null>(null);
+  const [dialog, setDialog] = useState<"restart" | "exit" | null>(null);
+  const dialogRef = useRef<SheetHandle>(null);
+  const afterDialog = useRef<() => void>(() => {});
+  /** What the autosave needs besides the session. */
+  const meta = useRef({ seed: "", expiresAt: "", nickname: "" });
   /** Runs whose finish was already sent (at most one automatic submit per run) and the one in flight. */
   const submitted = useRef(new Set<string>());
   const inflight = useRef<string | null>(null);
@@ -99,6 +107,7 @@ export function GamePage() {
     setWechatId(r.wechatId);
     setNickname(r.nickname);
     setSoundOn(r.sound);
+    setSave(readSave());
     /* eslint-enable react-hooks/set-state-in-effect */
     let alive = true;
     fetchMenu().then((m) => {
@@ -139,13 +148,56 @@ export function GamePage() {
     }
   }, []);
 
+  const persist = useCallback(() => {
+    const s = sessionRef.current;
+    if (!s || s.over || s.drops.length === 0) return;
+    const m = meta.current;
+    writeSave({ v: 1, runId: runId.current, seed: m.seed, tiers: s.tiers, drops: s.drops, nickname: m.nickname, expiresAt: m.expiresAt, score: s.score });
+  }, []);
+
+  const toMenu = () => {
+    sessionRef.current = null;
+    setSession(null);
+    setSheetOpen(false);
+    setSave(readSave());
+    setPhase("menu");
+  };
+
+  const resume = () => {
+    const sv = readSave();
+    const s = sv ? Session.restore(sv.tiers, sv.seed, sv.drops) : null;
+    if (!sv || !s) {
+      clearSave();
+      setSave(null);
+      return;
+    }
+    if (soundOn) unlockAudio();
+    runId.current = sv.runId;
+    inflight.current = null;
+    meta.current = { seed: sv.seed, expiresAt: sv.expiresAt, nickname: sv.nickname };
+    sessionRef.current = s;
+    setSession(s);
+    setRunKey(sv.runId);
+    setHud({ score: s.score, next: s.upcoming() });
+    setSheetOpen(false);
+    setPhase("playing");
+  };
+
+  const closeDialogThen = (fn: () => void) => {
+    afterDialog.current = fn;
+    dialogRef.current?.close();
+  };
+
   const begin = async (e?: FormEvent) => {
     e?.preventDefault();
     if (starting) return;
     const v = validate(wechatId, nickname);
     setErrors(v);
     setFormError(null);
-    if (v.wechat || v.nick) return;
+    if (v.wechat || v.nick) {
+      setPhase("form");
+      return;
+    }
     setStarting(true);
     if (soundOn) unlockAudio();
     const w = wechatId.trim();
@@ -155,10 +207,12 @@ export function GamePage() {
     if (!r.ok || !Array.isArray(r.data.tiers) || r.data.tiers.length < 3) {
       setFormError(r.ok ? t.startFailed : r.error.message);
       setSheetOpen(false);
-      setPhase("start");
+      setPhase("form");
       return;
     }
     writeRemembered({ wechatId: w, nickname: n });
+    clearSave();
+    meta.current = { seed: r.data.seed, expiresAt: r.data.expiresAt, nickname: n };
     runId.current = r.data.runId;
     inflight.current = null;
     setHud({ score: 0, next: 0 });
@@ -171,6 +225,7 @@ export function GamePage() {
   };
 
   const onOver = useCallback(() => {
+    clearSave();
     setPhase("over");
     if (sessionRef.current && !submitted.current.has(runId.current)) void submit(sessionRef.current, runId.current);
     timers.current.push(setTimeout(() => setSheetOpen(true), reduced ? 0 : SHEET_DELAY_MS));
@@ -181,13 +236,30 @@ export function GamePage() {
     sheetRef.current?.close();
   };
 
+  const exitButton =
+    phase === "playing" ? (
+      <button
+        type="button"
+        onClick={() => setDialog("exit")}
+        className={`min-h-11 shrink-0 rounded-full px-3 text-sm font-bold text-c-ink ${focusRing}`}
+        data-testid="game-exit"
+      >
+        {t.exit}
+      </button>
+    ) : null;
+
   const top = (
     <TopBar
       backHref="/"
       backLabel={t.backLabel}
       title={t.pageTitle}
       titleAs="h1"
-      right={<SpeakerButton on={soundOn} onToggle={toggleSound} />}
+      right={
+        <div className="flex items-center">
+          {exitButton}
+          <SpeakerButton on={soundOn} onToggle={toggleSound} />
+        </div>
+      }
     />
   );
 
@@ -205,7 +277,7 @@ export function GamePage() {
                 if (boardFrom === "over" && session?.over) {
                   setPhase("over");
                   setSheetOpen(true);
-                } else setPhase("start");
+                } else setPhase("menu");
               }}
               className={`min-h-11 rounded-full bg-c-wash px-5 text-sm font-bold ${focusRing}`}
               data-testid="game-board-close"
@@ -219,9 +291,108 @@ export function GamePage() {
     );
   }
 
-  // ---------------- start ----------------
-  if (phase === "start" || !session) {
+  // ---------------- menu (D110) ----------------
+  if (phase === "menu") {
     const rules = [t.rules, owner ? fill(t.rulesContact, { id: owner }) : ""].join("");
+    const secondary = `min-h-11 w-full rounded-full bg-c-wash text-[15px] font-bold ${focusRing}`;
+    return (
+      <Shell>
+        {top}
+        <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
+          <h2 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.startTitle}</h2>
+          <p className="m-0 mt-2 text-sm leading-relaxed text-c-grey">{t.startHint}</p>
+          <p className="font-display m-0 mt-6 text-center text-[15px] leading-snug text-c-ink" data-testid="game-prize-line">
+            {t.prizeLine}
+          </p>
+          <div className="mt-4 flex flex-col gap-3">
+            {save ? (
+              <>
+                <button
+                  type="button"
+                  onClick={resume}
+                  className={`font-display h-[72px] w-full rounded-full bg-c-ink text-lg text-c-paper ${focusRing}`}
+                  data-testid="game-resume"
+                >
+                  {t.resume}
+                  <span className="font-num mt-0.5 block text-xs font-normal opacity-70" data-testid="game-resume-score">
+                    {fill(t.lastScore, { score: String(save.score) })}
+                  </span>
+                </button>
+                <button type="button" onClick={() => setDialog("restart")} className={secondary} data-testid="game-restart">
+                  {t.restart}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setFormError(null);
+                  setPhase("form");
+                }}
+                className={`font-display h-14 w-full rounded-full bg-c-ink text-lg text-c-paper ${focusRing}`}
+                data-testid="game-menu-start"
+              >
+                {t.start}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setBoardFrom("menu");
+                setPhase("board");
+              }}
+              className={secondary}
+              data-testid="game-open-board"
+            >
+              {t.viewBoard}
+            </button>
+          </div>
+          <p className="mt-auto pt-8 text-[13px] leading-[1.7] text-c-grey" data-testid="game-rules">
+            {rules}
+          </p>
+        </main>
+        {dialog === "restart" ? (
+          <Sheet
+            ref={dialogRef}
+            label={t.restartTitle}
+            onClosed={() => {
+              setDialog(null);
+              const fn = afterDialog.current;
+              afterDialog.current = () => {};
+              fn();
+            }}
+            className="px-6 pt-7 pb-[calc(24px+env(safe-area-inset-bottom))]"
+            panelTestId="game-restart-sheet"
+          >
+            <p className="font-display m-0 text-center text-xl leading-snug">{t.restartTitle}</p>
+            <div className="mt-6 flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() =>
+                  closeDialogThen(() => {
+                    clearSave();
+                    setSave(null);
+                    setFormError(null);
+                    setPhase("form");
+                  })
+                }
+                className={`font-display h-14 w-full rounded-full bg-c-ink text-lg text-c-paper ${focusRing}`}
+                data-testid="game-restart-confirm"
+              >
+                {t.restartConfirm}
+              </button>
+              <button type="button" onClick={() => closeDialogThen(() => {})} className={secondary} data-testid="game-restart-cancel">
+                {t.keepPlaying}
+              </button>
+            </div>
+          </Sheet>
+        ) : null}
+      </Shell>
+    );
+  }
+
+  // ---------------- form ----------------
+  if (phase === "form" || !session) {
     const input =
       "h-12 w-full rounded-2xl border border-c-line bg-c-paper px-4 text-base text-c-ink placeholder:text-c-grey-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-c-ink";
     return (
@@ -229,7 +400,6 @@ export function GamePage() {
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
           <h2 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.startTitle}</h2>
-          <p className="m-0 mt-2 text-sm leading-relaxed text-c-grey">{t.startHint}</p>
           <form onSubmit={begin} noValidate className="mt-6 flex flex-col gap-4" data-testid="game-form">
             <label className="block">
               <span className="mb-1.5 block text-[13px] font-bold">{t.wechatLabel}</span>
@@ -275,9 +445,6 @@ export function GamePage() {
                 {formError}
               </p>
             ) : null}
-            <p className="font-display m-0 mt-1 text-center text-[15px] leading-snug text-c-ink" data-testid="game-prize-line">
-              {t.prizeLine}
-            </p>
             <button
               type="submit"
               disabled={starting}
@@ -288,19 +455,13 @@ export function GamePage() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                setBoardFrom("start");
-                setPhase("board");
-              }}
+              onClick={() => setPhase("menu")}
               className={`min-h-11 w-full rounded-full bg-c-wash text-[15px] font-bold ${focusRing}`}
-              data-testid="game-open-board"
+              data-testid="game-form-back"
             >
-              {t.viewBoard}
+              {t.closeBoard}
             </button>
           </form>
-          <p className="mt-auto pt-8 text-[13px] leading-[1.7] text-c-grey" data-testid="game-rules">
-            {rules}
-          </p>
         </main>
       </Shell>
     );
@@ -314,7 +475,7 @@ export function GamePage() {
   return (
     <Shell>
       {top}
-      <main className="flex flex-1 flex-col items-stretch px-2 pb-[calc(12px+env(safe-area-inset-bottom))]">
+      <main className="relative flex flex-1 flex-col items-stretch px-2 pb-[calc(12px+env(safe-area-inset-bottom))]">
         <div className="flex h-[92px] shrink-0 items-center justify-between px-2" data-testid="game-hud">
           <div>
             <p className="m-0 text-xs font-bold text-c-grey">{t.score}</p>
@@ -336,22 +497,104 @@ export function GamePage() {
             reduced={reduced}
             onHud={setHud}
             onOver={onOver}
+            onDrop={persist}
           />
         </div>
+          {phase === "over" && !sheetOpen ? (
+            <div className="absolute inset-x-2 bottom-[calc(12px+env(safe-area-inset-bottom))] z-10 flex h-12 items-stretch overflow-hidden rounded-full border border-c-line bg-c-paper/90 text-c-ink backdrop-blur-sm" data-testid="game-bar">
+              <button
+                type="button"
+                onClick={() => void begin()}
+                disabled={finish.state === "submitting"}
+                className={`font-display flex-1 text-base disabled:opacity-50 ${focusRing}`}
+                data-testid="game-bar-again"
+              >
+                {t.barAgain}
+              </button>
+              <span aria-hidden="true" className="self-center opacity-50">
+                ·
+              </span>
+              <button
+                type="button"
+                onClick={() => setSheetOpen(true)}
+                className={`font-display flex-1 text-base ${focusRing}`}
+                data-testid="game-bar-score"
+              >
+                {t.barScore}
+              </button>
+            </div>
+          ) : null}
       </main>
+
+      {dialog === "exit" ? (
+        <Sheet
+          ref={dialogRef}
+          label={t.exitTitle}
+          onClosed={() => {
+            setDialog(null);
+            const fn = afterDialog.current;
+            afterDialog.current = () => {};
+            fn();
+          }}
+          className="px-6 pt-7 pb-[calc(24px+env(safe-area-inset-bottom))]"
+          panelTestId="game-exit-sheet"
+        >
+          <p className="font-display m-0 text-center text-xl leading-snug">{t.exitTitle}</p>
+          <div className="mt-6 flex flex-col gap-2.5">
+            <button
+              type="button"
+              onClick={() =>
+                closeDialogThen(() => {
+                  persist();
+                  toMenu();
+                })
+              }
+              className={`font-display h-14 w-full rounded-full bg-c-ink text-lg text-c-paper ${focusRing}`}
+              data-testid="game-exit-save"
+            >
+              {t.exitSave}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                closeDialogThen(() => {
+                  clearSave();
+                  toMenu();
+                })
+              }
+              className={`min-h-11 w-full rounded-full bg-c-wash text-[15px] font-bold ${focusRing}`}
+              data-testid="game-exit-discard"
+            >
+              {t.exitDiscard}
+            </button>
+          </div>
+        </Sheet>
+      ) : null}
 
       {phase === "over" && sheetOpen ? (
         <Sheet
           ref={sheetRef}
           label={t.overTitle}
-          dismissible={false}
           onClosed={() => {
             setSheetOpen(false);
-            afterSheet.current();
+            const fn = afterSheet.current;
+            afterSheet.current = () => {};
+            fn();
           }}
           className="px-6 pt-7 pb-[calc(24px+env(safe-area-inset-bottom))]"
           panelTestId="game-over-sheet"
         >
+          <button
+            type="button"
+            onClick={() => sheetRef.current?.close()}
+            aria-label={t.close}
+            className={`absolute top-2 right-2 grid size-11 place-items-center rounded-full text-c-ink ${focusRing}`}
+            data-testid="game-over-close"
+          >
+            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
           <h2 className="font-display m-0 text-center text-[28px] leading-none tracking-[-0.03em]">{t.overTitle}</h2>
           <p className="m-0 mt-5 text-center text-xs font-bold text-c-grey">{t.finalScore}</p>
           <p className="font-num m-0 text-center text-[56px] leading-[1.1]" data-testid="game-final-score">
@@ -403,6 +646,21 @@ export function GamePage() {
               </div>
             )}
           </div>
+          {finish.state === "ok" && typeof finish.result.personalBest === "number" ? (
+            <div className="mt-1 text-center">
+              {finish.result.newRecord ? (
+                <p
+                  className={`font-display m-0 mb-1 text-xl ${reduced ? "" : "game-record-pop"}`}
+                  data-testid="game-new-record"
+                >
+                  {t.newRecord}
+                </p>
+              ) : null}
+              <p className="m-0 text-sm font-bold">
+                {t.personalBest} <span className="font-num text-xl font-normal" data-testid="game-personal-best">{finish.result.personalBest}</span>
+              </p>
+            </div>
+          ) : null}
           <div className="mt-4 flex flex-col gap-2.5">
             <button
               type="button"

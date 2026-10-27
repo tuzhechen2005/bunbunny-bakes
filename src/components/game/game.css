@@ -110,3 +110,26 @@
     animation: none;
   }
 }
+
+/* D113 new record: the crown line pops in once. */
+@keyframes game-record-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.game-record-pop {
+  animation: game-record-pop 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-record-pop {
+    animation: none;
+  }
+}
