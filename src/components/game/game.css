@@ -3,7 +3,7 @@
   position: relative;
   margin: 0 auto;
   /* Fit the board between the bars: as wide as the column, or as wide as the height allows (aspect 2:3). */
-  width: min(100%, calc((100svh - 56px - 92px - 88px - env(safe-area-inset-bottom)) / 1.5));
+  width: min(100%, calc((100svh - 56px - 92px - 24px - env(safe-area-inset-bottom)) / 1.5));
   min-width: 200px;
   aspect-ratio: 2 / 3;
   border-radius: 20px;

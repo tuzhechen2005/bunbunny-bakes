@@ -475,7 +475,7 @@ export function GamePage() {
   return (
     <Shell>
       {top}
-      <main className="flex flex-1 flex-col items-stretch px-2 pb-[calc(12px+env(safe-area-inset-bottom))]">
+      <main className="relative flex flex-1 flex-col items-stretch px-2 pb-[calc(12px+env(safe-area-inset-bottom))]">
         <div className="flex h-[92px] shrink-0 items-center justify-between px-2" data-testid="game-hud">
           <div>
             <p className="m-0 text-xs font-bold text-c-grey">{t.score}</p>
@@ -500,9 +500,8 @@ export function GamePage() {
             onDrop={persist}
           />
         </div>
-        <div className="flex h-16 shrink-0 items-end" data-testid="game-bar-slot">
           {phase === "over" && !sheetOpen ? (
-            <div className="flex h-12 w-full items-stretch overflow-hidden rounded-full bg-c-ink text-c-paper" data-testid="game-bar">
+            <div className="absolute inset-x-2 bottom-[calc(12px+env(safe-area-inset-bottom))] z-10 flex h-12 items-stretch overflow-hidden rounded-full border border-c-line bg-c-paper/90 text-c-ink backdrop-blur-sm" data-testid="game-bar">
               <button
                 type="button"
                 onClick={() => void begin()}
@@ -525,7 +524,6 @@ export function GamePage() {
               </button>
             </div>
           ) : null}
-        </div>
       </main>
 
       {dialog === "exit" ? (

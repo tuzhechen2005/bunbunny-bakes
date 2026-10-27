@@ -524,12 +524,15 @@ test("320 px: menu with a save, exit sheet and the bottom bar fit without sidewa
     expect((await page.getByTestId(id).boundingBox())!.height).toBeGreaterThanOrEqual(44);
   }
   await page.getByTestId("game-resume").click();
+  const boardBefore = (await page.getByTestId("game-board").boundingBox())!;
   await playUntilOver(page);
   await page.getByTestId("game-over-close").click();
   await expect(page.getByTestId("game-bar")).toBeVisible();
   expect(await fits()).toBe(true);
   const bar = (await page.getByTestId("game-bar").boundingBox())!;
   const board = (await page.getByTestId("game-board").boundingBox())!;
-  expect(bar.y).toBeGreaterThanOrEqual(board.y + board.height - 1);
+  // The bar is an overlay: the canvas keeps its size and the bar sits over its lower part, inside the screen.
+  expect(Math.abs(board.height - boardBefore.height)).toBeLessThan(1);
+  expect(bar.y).toBeLessThan(board.y + board.height);
   expect(bar.y + bar.height).toBeLessThanOrEqual(640);
 });
