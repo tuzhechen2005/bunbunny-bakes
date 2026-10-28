@@ -96,7 +96,9 @@ export function IridescentOrb({ size = 72, thinking = false }: IridescentOrbProp
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
   const { reduced, degraded } = useMotionPrefs();
-  const still = reduced || degraded;
+  // Test hook: use the reduced-motion still frame for e2e tests that count rAF calls.
+  const noOrbMotion = typeof window !== "undefined" && (window as unknown as { __noOrbMotion?: boolean }).__noOrbMotion === true;
+  const still = reduced || degraded || noOrbMotion;
   const thinkingRef = useRef(thinking);
   useEffect(() => {
     thinkingRef.current = thinking;
