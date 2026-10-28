@@ -78,6 +78,7 @@ test("owner adds game-only pieces, then a customer plays a full game on 8 tiers"
   // customer: the game starts with 8 tiers + the big one
   const started = page.waitForResponse((r) => r.url().endsWith("/api/game/start") && r.request().method() === "POST");
   await page.goto("/game");
+  await page.getByTestId("game-menu-start").click();
   await page.getByTestId("game-wechat").fill("m1_player");
   await page.getByTestId("game-nickname").fill("试玩");
   await page.getByTestId("game-start").click();

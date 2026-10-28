@@ -35,6 +35,7 @@ test("real photos: pieces are drawn with their picture, taps drop them and the s
   }
 
   await page.goto("/game");
+  await page.getByTestId("game-menu-start").click();
   await page.getByTestId("game-wechat").fill("photo_player");
   await page.getByTestId("game-nickname").fill("有图");
   await page.getByTestId("game-start").click();
