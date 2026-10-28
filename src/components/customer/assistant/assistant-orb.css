@@ -1,0 +1,207 @@
+/*
+ * Fallback for the 小小🐰 entry orb when WebGL is unavailable: adapted from "Glass Orb" in VoiceOrbs (https://github.com/amunozdev/voiceorbs),
+ * MIT License, Copyright (c) 2026 Alexis Munoz. Trimmed to the idle state for the fixed-light customer
+ * site; the hue animation (a filter repaint every frame) is dropped so every running animation is a
+ * compositor-only transform/opacity change. The orb's two colours are its own decorative palette.
+ */
+
+.ao-orb {
+  --orb-size: 72px;
+  --glass-from: #a78bfa;
+  --glass-to: #38bdf8;
+  --glass-blend: color-mix(in oklab, var(--glass-from), var(--glass-to) 50%);
+  --glass-fill: color-mix(in oklab, var(--glass-blend), transparent 62%);
+  --glass-edge: color-mix(in oklab, color-mix(in oklab, var(--glass-from), #171a2b 55%), transparent 35%);
+  --glass-depth: color-mix(in oklab, color-mix(in oklab, var(--glass-from), #10131f 42%), transparent 46%);
+  --glass-contact: color-mix(in oklab, color-mix(in oklab, var(--glass-from), #10131f 55%), transparent 50%);
+  --glass-halo: color-mix(in oklab, var(--glass-blend), transparent 32%);
+  --glass-caustic: color-mix(in oklab, color-mix(in oklab, var(--glass-to), #ffffff 55%), transparent 28%);
+  --glass-spec-counter: color-mix(in oklab, color-mix(in oklab, var(--glass-to), #ffffff 42%), transparent 70%);
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--orb-size);
+  height: var(--orb-size);
+  isolation: isolate;
+}
+
+.ao-halo {
+  position: absolute;
+  inset: -8%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--glass-halo) 18%, transparent 66%);
+  opacity: 0.85;
+}
+
+.ao-aura {
+  position: absolute;
+  inset: 2.5%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 20deg,
+    var(--glass-from),
+    color-mix(in oklch, var(--glass-from), #ff3ea5 34%) 18%,
+    var(--glass-to) 42%,
+    color-mix(in oklch, var(--glass-to), #ffb54d 30%) 64%,
+    color-mix(in oklch, var(--glass-from), #ffffff 24%) 82%,
+    var(--glass-from)
+  );
+  filter: blur(8px);
+  opacity: 0.8;
+  animation: ao-rotate 9s linear infinite;
+}
+
+.ao-sphere {
+  position: absolute;
+  inset: 10%;
+  border-radius: 50%;
+  background-color: var(--glass-fill);
+  background-image:
+    radial-gradient(60% 30% at 50% 96%, var(--glass-caustic), transparent 70%),
+    radial-gradient(85% 60% at 50% 112%, var(--glass-depth), transparent 74%),
+    linear-gradient(
+      148deg,
+      color-mix(in oklab, var(--glass-from), transparent 74%),
+      color-mix(in oklab, var(--glass-to), transparent 68%) 90%
+    );
+  -webkit-backdrop-filter: blur(10px) saturate(1.5) brightness(1.05);
+  backdrop-filter: blur(10px) saturate(1.5) brightness(1.05);
+  box-shadow:
+    inset 0 0 0 1px var(--glass-edge),
+    inset 0 2px 8px color-mix(in oklab, #ffffff, transparent 62%),
+    inset 0 -8px 18px var(--glass-depth),
+    0 12px 26px -10px var(--glass-contact);
+  animation: ao-breathe 3.2s ease-in-out infinite;
+}
+
+.ao-sheen {
+  position: absolute;
+  inset: 10%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 40deg,
+    transparent 0deg 60deg,
+    rgba(255, 255, 255, 0.85) 102deg,
+    transparent 148deg 236deg,
+    color-mix(in oklab, #ffffff, transparent 55%) 268deg,
+    transparent 306deg
+  );
+  opacity: 0.14;
+  -webkit-mask: radial-gradient(closest-side, #000 52%, rgba(0, 0, 0, 0.35) 78%, transparent 97%);
+  mask: radial-gradient(closest-side, #000 52%, rgba(0, 0, 0, 0.35) 78%, transparent 97%);
+  animation: ao-rotate 14s linear infinite;
+}
+
+.ao-rim {
+  position: absolute;
+  inset: 10%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from -70deg,
+    transparent 0deg,
+    rgba(255, 255, 255, 0.9) 42deg,
+    color-mix(in oklab, var(--glass-to), #ffffff 55%) 78deg,
+    transparent 148deg,
+    color-mix(in oklab, color-mix(in oklab, var(--glass-from), #ffffff 45%), transparent 45%) 208deg,
+    transparent 268deg
+  );
+  opacity: 0.85;
+  -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 5px), #000 calc(100% - 4px), #000 calc(100% - 1px), transparent);
+  mask: radial-gradient(closest-side, transparent calc(100% - 5px), #000 calc(100% - 4px), #000 calc(100% - 1px), transparent);
+}
+
+.ao-spec {
+  position: absolute;
+  inset: 10%;
+  border-radius: 50%;
+  background:
+    radial-gradient(10% 7% at 31% 25%, rgba(255, 255, 255, 0.95) 88%, transparent 92%),
+    radial-gradient(20% 14% at 33% 28%, rgba(255, 255, 255, 0.45), transparent 74%),
+    radial-gradient(15% 10% at 69% 79%, var(--glass-spec-counter), transparent 78%);
+  animation: ao-shimmer 7s ease-in-out infinite alternate;
+}
+
+@keyframes ao-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ao-shimmer {
+  from {
+    opacity: 0.72;
+    transform: translate3d(-0.6%, 0.4%, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0.6%, -0.4%, 0);
+  }
+}
+
+@keyframes ao-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+/* Engines without color-mix (old in-app browsers): a plain two-colour glass ball. */
+@supports not (color: color-mix(in oklab, red, blue)) {
+  .ao-halo {
+    background: radial-gradient(closest-side, rgba(150, 160, 250, 0.55) 18%, transparent 66%);
+  }
+  .ao-aura {
+    background: conic-gradient(from 20deg, #a78bfa, #f472b6, #38bdf8, #fbbf24, #a78bfa);
+  }
+  .ao-sphere {
+    background: linear-gradient(148deg, rgba(167, 139, 250, 0.55), rgba(56, 189, 248, 0.5));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 12px 26px -10px rgba(16, 19, 31, 0.5);
+  }
+  .ao-rim {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ao-aura,
+  .ao-sphere,
+  .ao-sheen,
+  .ao-spec {
+    animation: none;
+  }
+}
+
+/* The WebGL orb (IridescentOrb): a static soft glow behind the canvas so the light orb stands out on
+   the paper background; the canvas itself is the only animated part. */
+.ao-iris {
+  position: relative;
+  display: block;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+}
+.ao-iris::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(192, 132, 252, 0.45), rgba(103, 232, 249, 0.25) 60%, transparent 100%);
+  filter: blur(6px);
+}
+.ao-iris::after {
+  content: "";
+  position: absolute;
+  inset: 4%;
+  border-radius: 50%;
+  box-shadow: 0 10px 24px -8px rgba(16, 19, 31, 0.45);
+}
+.ao-iris-canvas {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+}

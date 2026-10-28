@@ -230,8 +230,7 @@ export const copy = {
     /** 小小🐰 assistant (N4): entry button, sheet, suggestion card and error lines. */
     assistant: {
       name: "小小🐰",
-      entryLabel: "问问",
-      entryAria: "问问小小🐰",
+      entryAria: "找小小🐰帮忙选面包",
       close: "关闭",
       opener: "想要什么面包、哪天取？跟我说就行",
       chips: ["周四能取什么", "泡芙怎么订", "可以配送吗"],

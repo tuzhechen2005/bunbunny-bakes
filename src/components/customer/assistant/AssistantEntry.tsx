@@ -9,7 +9,7 @@ import { askAssistant, ASSISTANT_MAX_CHARS, type AssistantMessage, type Assistan
 import { cart, setPreferredDate, useCart } from "@/lib/cart";
 import { flyToBag, getBagTargetRect } from "@/lib/flyToBag";
 import { AssistantSheet, type ChatRow } from "./AssistantSheet";
-import { BunnyIcon } from "./BunnyIcon";
+import { IridescentOrb } from "./IridescentOrb";
 
 const t = copy.customer.assistant;
 
@@ -30,7 +30,7 @@ function inView(el: Element | null, depth = 1): boolean {
 }
 
 /**
- * The round ink 「问问」 button and its sheet. Home: only while the 「全部面包」 section is on screen
+ * The glass-orb button and its sheet. Home: only while the 「全部面包」 section is on screen
  * (never over the hero), sitting above the bag bar. Checkout: bottom right, hidden while the submit
  * button is on screen so it never covers it. The conversation lives here, so it survives closing
  * the sheet; it is never stored.
@@ -129,7 +129,7 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
       <div
         className={`pointer-events-none fixed inset-x-0 bottom-0 z-[47] mx-auto flex max-w-[430px] justify-end px-4 safe-x transition-opacity duration-200 ${
           mode === "home"
-            ? "pb-[calc(14px+60px+12px+env(safe-area-inset-bottom))]"
+            ? "pb-[calc(14px+60px+8px+env(safe-area-inset-bottom))]"
             : "pb-[calc(16px+env(safe-area-inset-bottom))]"
         } ${visible ? "opacity-100" : "invisible opacity-0"}`}
         inert={!visible}
@@ -140,11 +140,10 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
           type="button"
           onClick={() => setOpen(true)}
           aria-label={t.entryAria}
-          className={`pointer-events-auto flex size-[60px] flex-col items-center justify-center gap-0.5 rounded-full bg-c-ink text-c-paper shadow-[0_10px_22px_-10px_rgba(0,0,0,0.55)] transition-transform duration-200 active:scale-95 motion-reduce:transition-none ${focusRing}`}
+          className={`pointer-events-auto grid size-[72px] place-items-center rounded-full transition-transform duration-200 active:scale-95 motion-reduce:transition-none ${focusRing}`}
           data-testid="assistant-entry"
         >
-          <BunnyIcon className="size-6" />
-          <span className="text-[11px] leading-none font-bold">{t.entryLabel}</span>
+          <IridescentOrb />
         </button>
       </div>
       {open ? (
