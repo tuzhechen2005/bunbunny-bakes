@@ -180,15 +180,15 @@ describe("weekly winner email with 兔了个兔 (one email, two sections)", () =
     expect(email.subject).toBe("⚠️ 上周游戏冠军｜消除大面包 big_one 900 分 · 兔了个兔 tu_one 300 分｜有冠军没下过单");
     expect(email.text).toBe(
       [
-        "===== 消除大面包 =====",
         "【10/19 周一 – 10/25 周日 的第一名】",
+        "",
+        "===== 消除大面包 =====",
         "昵称：big_one",
         "微信号：big_one",
         "分数：900",
         "下过单：是",
         "",
         "===== 兔了个兔 =====",
-        "【10/19 周一 – 10/25 周日 的第一名】",
         "昵称：tu_one",
         "微信号：tu_one",
         "分数：300",
@@ -215,7 +215,7 @@ describe("weekly winner email with 兔了个兔 (one email, two sections)", () =
     expect(p).toMatchObject({ winner: null, runnerUp: null, tu: { winner: { wechatId: "tu_one" } } });
     const email = await render();
     expect(email.subject).toBe("👑 上周游戏冠军｜兔了个兔 tu_one 300 分");
-    expect(email.text.startsWith("===== 消除大面包 =====\n上周没有人上榜。\n\n===== 兔了个兔 =====\n")).toBe(true);
+    expect(email.text.startsWith("【10/19 周一 – 10/25 周日 的第一名】\n\n===== 消除大面包 =====\n上周没有人上榜。\n\n===== 兔了个兔 =====\n昵称：tu_one\n")).toBe(true);
   });
 
   it("only the first game had runs: no tu key, the email is exactly game 1's", async () => {
