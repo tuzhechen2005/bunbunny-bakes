@@ -78,6 +78,8 @@ test.describe("assistant", () => {
     await expect(entry).toBeHidden();
     await scrollToList(page);
     await expect(entry).toBeVisible();
+    // It grows in from a point (about 0.9 s); measure the full size.
+    await expect.poll(async () => (await entry.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(78);
     const e = (await entry.boundingBox())!;
     const bag = (await page.getByTestId("bag-pill").boundingBox())!;
     expect(e.y + e.height).toBeLessThanOrEqual(bag.y);
