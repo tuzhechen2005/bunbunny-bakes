@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Stepper } from "@/components/ui/Stepper";
+import { AssistantEntry } from "./assistant/AssistantEntry";
 import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import "@/components/ui/ui.css";
@@ -1004,6 +1005,7 @@ export function CheckoutPage() {
         </form>
       </main>
       <SiteFooter ownerWechatId={menu.ownerWechatId} />
+      <AssistantEntry mode="checkout" products={menu.products} maxQty={menu.maxQtyPerItem} fulfillment={fulfillment} />
     </Shell>
   );
 }
