@@ -130,7 +130,7 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
   return (
     <>
       <div
-        className={`pointer-events-none fixed inset-x-0 bottom-0 z-[47] mx-auto flex max-w-[430px] justify-end px-4 safe-x transition-opacity duration-200 ${
+        className={`pointer-events-none fixed inset-x-0 bottom-0 z-[47] mx-auto flex max-w-[430px] justify-end px-4 safe-x transition-opacity duration-500 ${
           mode === "home"
             ? "pb-[calc(14px+60px+8px+env(safe-area-inset-bottom))]"
             : "pb-[calc(16px+env(safe-area-inset-bottom))]"
@@ -148,7 +148,9 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
             if (question) void send(question);
           }}
           aria-label={question ?? t.entryAria}
-          className={`pointer-events-auto flex h-[80px] items-center rounded-full p-[3px] transition-[background-color,box-shadow] duration-300 active:scale-[0.97] motion-reduce:transition-none ${
+          className={`pointer-events-auto flex h-[80px] items-center rounded-full p-[3px] origin-[calc(100%-40px)_50%] transition-[background-color,box-shadow,scale,translate] duration-[300ms,300ms,900ms] ease-[ease,ease,cubic-bezier(0.22,1.2,0.36,1)] active:scale-[0.97] motion-reduce:transition-none ${
+            visible ? "scale-100" : "scale-0 motion-reduce:scale-100"
+          } ${
             question ? "bg-c-ink/90 shadow-[0_12px_30px_-12px_rgba(0,0,0,0.6)] ring-1 ring-white/15" : "bg-transparent"
           } ${focusRing}`}
           data-testid="assistant-entry"
