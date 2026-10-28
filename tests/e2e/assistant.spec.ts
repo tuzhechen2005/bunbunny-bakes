@@ -121,6 +121,46 @@ test.describe("assistant", () => {
     await expect(page.getByTestId("assistant-reply")).toHaveCount(2);
   });
 
+  test("a question bubble pops up beside the orb; a tap asks it, the sheet orb thinks while waiting", async ({ page }) => {
+    let release: () => void = () => {};
+    const held = new Promise<void>((r) => (release = r));
+    let body: { messages: { role: string; content: string }[] } | null = null;
+    await page.route("**/api/assistant", async (route) => {
+      body = route.request().postDataJSON();
+      await held;
+      await route.fulfill({ json: { reply: "周四有奶酪角。", remaining: 19 } });
+    });
+    await openHome(page);
+    await scrollToList(page);
+    const ask = page.getByTestId("assistant-teaser-ask");
+    await expect(ask).toHaveText("这周四能取什么？", { timeout: 6000 });
+    await expect(page.getByTestId("assistant-teaser")).toHaveCSS("opacity", "1");
+    await ask.click();
+    await expect(page.getByRole("dialog", { name: "小小🐰" })).toBeVisible();
+    await expect(page.getByTestId("assistant-sheet-orb")).toHaveAttribute("data-thinking", "1");
+    await expect(page.getByTestId("assistant-typing")).toBeVisible();
+    expect(body!.messages).toEqual([{ role: "user", content: "这周四能取什么？" }]);
+    release();
+    await expect(page.getByTestId("assistant-reply")).toContainText("周四有奶酪角");
+    await expect(page.getByTestId("assistant-sheet-orb")).toHaveAttribute("data-thinking", "0");
+    // Once the customer used it, no more bubbles this session.
+    await page.getByTestId("assistant-close").click();
+    await page.waitForTimeout(3500);
+    await expect(page.getByTestId("assistant-teaser")).toHaveCSS("opacity", "0");
+  });
+
+  test("closing a bubble stops them for the session", async ({ page }) => {
+    await openHome(page);
+    await scrollToList(page);
+    await expect(page.getByTestId("assistant-teaser")).toHaveCSS("opacity", "1", { timeout: 6000 });
+    await page.getByTestId("assistant-teaser-close").click();
+    await expect(page.getByTestId("assistant-teaser")).toHaveCSS("opacity", "0");
+    await page.reload();
+    await scrollToList(page);
+    await page.waitForTimeout(3500);
+    await expect(page.getByTestId("assistant-teaser")).toHaveCSS("opacity", "0");
+  });
+
   test("suggestion replaces the bag (after asking) and sets the preferred date", async ({ page }) => {
     await page.route("**/api/assistant", (route) => route.fulfill({ json: SUGGESTION }));
     await openHome(page);

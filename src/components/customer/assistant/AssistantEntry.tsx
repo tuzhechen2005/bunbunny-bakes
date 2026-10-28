@@ -10,6 +10,7 @@ import { cart, setPreferredDate, useCart } from "@/lib/cart";
 import { flyToBag, getBagTargetRect } from "@/lib/flyToBag";
 import { AssistantSheet, type ChatRow } from "./AssistantSheet";
 import { IridescentOrb } from "./IridescentOrb";
+import { AssistantTeaser, turnTeasersOff } from "./AssistantTeaser";
 
 const t = copy.customer.assistant;
 
@@ -135,10 +136,21 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
         inert={!visible}
         data-testid="assistant-entry-wrap"
       >
+        <AssistantTeaser
+          active={visible}
+          questions={mode === "home" ? t.teasers : t.teasersCheckout}
+          onAsk={(q) => {
+            setOpen(true);
+            void send(q);
+          }}
+        />
         <button
           ref={opener}
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            turnTeasersOff();
+            setOpen(true);
+          }}
           aria-label={t.entryAria}
           className={`pointer-events-auto grid size-[72px] place-items-center rounded-full transition-transform duration-200 active:scale-95 motion-reduce:transition-none ${focusRing}`}
           data-testid="assistant-entry"

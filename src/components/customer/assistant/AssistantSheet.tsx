@@ -9,6 +9,7 @@ import type { MenuProduct } from "@/lib/api";
 import { ASSISTANT_MAX_CHARS, type AssistantSuggestion } from "@/lib/assistant";
 import { CloseIcon } from "../bag/icons";
 import { fill } from "../format";
+import { IridescentOrb } from "./IridescentOrb";
 
 const t = copy.customer.assistant;
 
@@ -122,7 +123,12 @@ export function AssistantSheet({ rows, waiting, limited, hasCart, products, onSe
       >
         <CloseIcon className="size-5" />
       </button>
-      <h2 className="font-display m-0 shrink-0 px-5 pt-5 text-[26px] leading-[1.1] tracking-[-0.04em] text-c-ink">{t.name}</h2>
+      <div className="flex shrink-0 items-center gap-3 px-5 pt-4 pr-16">
+        <span className="shrink-0" data-testid="assistant-sheet-orb" data-thinking={waiting ? "1" : "0"}>
+          <IridescentOrb size={44} thinking={waiting} />
+        </span>
+        <h2 className="font-display m-0 text-[26px] leading-[1.1] tracking-[-0.04em] text-c-ink">{t.name}</h2>
+      </div>
 
       <div ref={listRef} data-sheet-scroll="" className="min-h-0 flex-1 overflow-auto overscroll-contain px-5 pt-3 pb-2" data-testid="assistant-list">
         <p className="text-[15px] leading-relaxed text-c-grey" data-testid="assistant-opener">
