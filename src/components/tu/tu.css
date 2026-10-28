@@ -135,6 +135,20 @@
 .tu-banner {
   animation: tu-banner 1.3s ease-out both;
 }
+/* A tile that was hidden under others and shows up: a soft pop, no longer than 250 ms. */
+@keyframes tu-reveal {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.tu-reveal {
+  animation: tu-reveal 0.24s ease-out both;
+}
 @keyframes tu-fade {
   from {
     opacity: 0;
@@ -149,6 +163,9 @@
   }
   .tu-order-done {
     animation: none;
+  }
+  .tu-reveal {
+    animation: tu-fade 0.2s both;
   }
   .tu-float,
   .tu-banner {

@@ -10,6 +10,7 @@ import { BAG_SIZE, createTuGame, MIN_TAP_GAP_MS, type TuEvent, type TuGame, type
 import { haptic } from "@/lib/motion/react";
 import { photoUrl } from "@/lib/photo";
 import type { TuTapLog } from "./tuApi";
+import { isVisible, revealedIds } from "./tuVisible";
 import "./tu.css";
 
 const t = copy.customer.tu;
@@ -104,6 +105,8 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
     setGeo({ minX, minY, bw: maxX - minX, bh: maxY - minY });
   }, []);
   const [view, setView] = useState<View | null>(null);
+  /** Tiles that were just revealed (they pop in once). */
+  const [popIn, setPopIn] = useState<number[]>([]);
   const [area, setArea] = useState({ w: 0, h: 0 });
   const areaRef = useRef<HTMLDivElement>(null);
   const chain = useRef<Promise<void>>(Promise.resolve());
@@ -126,7 +129,9 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
   // The game is built once per run (the page remounts this component with a new key).
   useEffect(() => {
     alive.current = true;
-    const g = createTuGame({ seed, tiers: tiers.map((x) => ({ id: x.id })) });
+    // Test seam: e2e may inject a scripted engine (the server replays every tap with the real one anyway).
+    const make = (globalThis as { __tuEngine?: typeof createTuGame }).__tuEngine ?? createTuGame;
+    const g = make({ seed, tiers: tiers.map((x) => ({ id: x.id })) });
     for (const tp of initialTaps ?? []) g.tap(tp.id);
     game.current = g;
     taps.current = [...(initialTaps ?? [])];
@@ -247,6 +252,11 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
     taps.current = [...taps.current, { id, at }];
     cb.current.onProgress({ taps: taps.current, score: g.score });
     const after = g.state();
+    const shown = revealedIds(events);
+    if (shown.length) {
+      setPopIn(shown);
+      later(() => setPopIn((p) => (p === shown ? [] : p)), 400);
+    }
     const hasBatch = events.some((e) => e.type === "batch");
     const mv = events.find((e) => e.type === "move");
     if (mv && mv.type === "move") flyFrom.current = { rect, slot: mv.slot };
@@ -332,11 +342,11 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
 
       <div ref={areaRef} className="relative flex flex-1 items-start justify-center px-1.5 pt-2" style={{ minHeight: bh * MIN_TILE }} data-testid="tu-area">
         <div className="relative shrink-0" style={{ width: bw * u, height: bh * u }} role="group" aria-label={t.boardLabel} data-testid="tu-board" data-batch={snap.batch}>
-          {snap.tiles.map((tile) => (
+          {snap.tiles.filter(isVisible).map((tile) => (
             <button
               key={tile.id}
               type="button"
-              className="tu-tile"
+              className={popIn.includes(tile.id) ? "tu-tile tu-reveal" : "tu-tile"}
               data-free={tile.free ? "true" : "false"}
               data-tier={tile.tier}
               data-testid={`tu-tile-${tile.id}`}
