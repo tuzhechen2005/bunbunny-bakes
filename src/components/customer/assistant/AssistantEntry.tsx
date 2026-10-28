@@ -10,7 +10,7 @@ import { cart, setPreferredDate, useCart } from "@/lib/cart";
 import { flyToBag, getBagTargetRect } from "@/lib/flyToBag";
 import { AssistantSheet, type ChatRow } from "./AssistantSheet";
 import { IridescentOrb } from "./IridescentOrb";
-import { AssistantTeaser, turnTeasersOff } from "./AssistantTeaser";
+import { useTeaser } from "./AssistantTeaser";
 
 const t = copy.customer.assistant;
 
@@ -124,6 +124,8 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
   );
 
   const visible = onRoute && near && !suppressed && !open;
+  const teaser = useTeaser(visible, mode === "home" ? t.teasers : t.teasersCheckout);
+  const question = teaser.question;
 
   return (
     <>
@@ -136,26 +138,32 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
         inert={!visible}
         data-testid="assistant-entry-wrap"
       >
-        <AssistantTeaser
-          active={visible}
-          questions={mode === "home" ? t.teasers : t.teasersCheckout}
-          onAsk={(q) => {
-            setOpen(true);
-            void send(q);
-          }}
-        />
         <button
           ref={opener}
           type="button"
           onClick={() => {
-            turnTeasersOff();
+            teaser.stop();
             setOpen(true);
+            // A tap while a question shows asks that question (D120).
+            if (question) void send(question);
           }}
-          aria-label={t.entryAria}
-          className={`pointer-events-auto grid size-[72px] place-items-center rounded-full transition-transform duration-200 active:scale-95 motion-reduce:transition-none ${focusRing}`}
+          aria-label={question ?? t.entryAria}
+          className={`pointer-events-auto flex h-[72px] items-center rounded-full p-[3px] transition-[background-color,box-shadow] duration-300 active:scale-[0.97] motion-reduce:transition-none ${
+            question ? "bg-c-ink/90 shadow-[0_12px_30px_-12px_rgba(0,0,0,0.6)] ring-1 ring-white/15" : "bg-transparent"
+          } ${focusRing}`}
           data-testid="assistant-entry"
+          data-teasing={question ? "1" : "0"}
         >
-          <IridescentOrb />
+          <IridescentOrb size={66} />
+          <span
+            className={`overflow-hidden whitespace-nowrap transition-[max-width,padding] duration-500 ease-out motion-reduce:transition-none ${
+              question ? "max-w-[min(230px,calc(100vw-128px))] pr-5 pl-3 text-ellipsis" : "max-w-0"
+            }`}
+          >
+            <span key={question ?? ""} className="ao-shimmer block text-[15px] font-bold" data-testid="assistant-teaser">
+              {question ?? ""}
+            </span>
+          </span>
         </button>
       </div>
       {open ? (

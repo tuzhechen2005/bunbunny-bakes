@@ -54,8 +54,10 @@ const SUGGESTION = {
   remaining: 18,
 };
 
-async function openHome(page: Page) {
+async function openHome(page: Page, { teasers = false } = {}) {
   await mockShop(page);
+  // The orb's pop-up questions (D120) would turn a tap on the orb into a question; most tests want the plain orb.
+  if (!teasers) await page.addInitScript(() => sessionStorage.setItem("bb_ai_teaser_off", "1"));
   await page.goto("/");
   await expect(page.getByTestId("rack")).toBeVisible();
 }
@@ -130,12 +132,13 @@ test.describe("assistant", () => {
       await held;
       await route.fulfill({ json: { reply: "周四有奶酪角。", remaining: 19 } });
     });
-    await openHome(page);
+    await openHome(page, { teasers: true });
     await scrollToList(page);
-    const ask = page.getByTestId("assistant-teaser-ask");
-    await expect(ask).toHaveText("这周四能取什么？", { timeout: 6000 });
-    await expect(page.getByTestId("assistant-teaser")).toHaveCSS("opacity", "1");
-    await ask.click();
+    const entry = page.getByTestId("assistant-entry");
+    await expect(entry).toHaveAttribute("data-teasing", "1", { timeout: 6000 });
+    await expect(page.getByTestId("assistant-teaser")).toHaveText("这周四能取什么？");
+    await expect(entry).toHaveAccessibleName("这周四能取什么？");
+    await entry.click();
     await expect(page.getByRole("dialog", { name: "小小🐰" })).toBeVisible();
     await expect(page.getByTestId("assistant-sheet-orb")).toHaveAttribute("data-thinking", "1");
     await expect(page.getByTestId("assistant-typing")).toBeVisible();
@@ -143,22 +146,26 @@ test.describe("assistant", () => {
     release();
     await expect(page.getByTestId("assistant-reply")).toContainText("周四有奶酪角");
     await expect(page.getByTestId("assistant-sheet-orb")).toHaveAttribute("data-thinking", "0");
-    // Once the customer used it, no more bubbles this session.
+    // Once the customer used it, no more questions this session.
     await page.getByTestId("assistant-close").click();
-    await page.waitForTimeout(3500);
-    await expect(page.getByTestId("assistant-teaser")).toHaveCSS("opacity", "0");
+    await page.waitForTimeout(2500);
+    await expect(entry).toHaveAttribute("data-teasing", "0");
   });
 
-  test("closing a bubble stops them for the session", async ({ page }) => {
-    await openHome(page);
+  test("questions rotate; opening the orb stops them for the session", async ({ page }) => {
+    await openHome(page, { teasers: true });
     await scrollToList(page);
-    await expect(page.getByTestId("assistant-teaser")).toHaveCSS("opacity", "1", { timeout: 6000 });
-    await page.getByTestId("assistant-teaser-close").click();
-    await expect(page.getByTestId("assistant-teaser")).toHaveCSS("opacity", "0");
+    const entry = page.getByTestId("assistant-entry");
+    await expect(entry).toHaveAttribute("data-teasing", "1", { timeout: 6000 });
+    await expect(entry).toHaveAttribute("data-teasing", "0", { timeout: 7000 });
+    await expect(page.getByTestId("assistant-teaser")).toHaveText("");
+    await expect(page.getByTestId("assistant-teaser")).toHaveText("泡芙怎么订？", { timeout: 7000 });
+    await page.getByTestId("assistant-entry").click();
+    await page.getByTestId("assistant-close").click();
     await page.reload();
     await scrollToList(page);
-    await page.waitForTimeout(3500);
-    await expect(page.getByTestId("assistant-teaser")).toHaveCSS("opacity", "0");
+    await page.waitForTimeout(2500);
+    await expect(entry).toHaveAttribute("data-teasing", "0");
   });
 
   test("suggestion replaces the bag (after asking) and sets the preferred date", async ({ page }) => {

@@ -237,7 +237,6 @@ export const copy = {
       /** Bubbles that pop up beside the orb now and then (D120); a tap asks that question. */
       teasers: ["这周四能取什么？", "泡芙怎么订？", "可以配送吗？", "帮我配 4 个奶酪角"],
       teasersCheckout: ["哪天还能取？", "满多少免运费？", "泡芙只能周三吗？"],
-      teaserClose: "不用提示了",
       inputLabel: "想问什么",
       inputPlaceholder: "想问什么",
       send: "发送",
