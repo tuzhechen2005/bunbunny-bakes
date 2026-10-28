@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isVisible, revealedIds } from "@/components/tu/tuVisible";
 import type { TuEvent, TuTile } from "@/lib/tu";
 
-const tile = (extra: object = {}): TuTile => ({ id: 1, tier: 0, x: 0, y: 0, layer: 0, free: false, ...extra });
+const tile = (extra: object = {}): TuTile => ({ id: 1, tier: 0, x: 0, y: 0, layer: 0, free: false, visible: true, ...extra });
 
 describe("tu hidden tiles (C7)", () => {
   it("a missing visible counts as true; only false hides", () => {
