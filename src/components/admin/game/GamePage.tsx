@@ -10,6 +10,7 @@ const t = copy.admin.game;
 
 export function GamePage() {
   const [tab, setTab] = useState<"board" | "tiers">("board");
+  const [game, setGame] = useState<"big" | "tu">("big");
   const tabs = [
     { id: "board", label: t.tabBoard },
     { id: "tiers", label: t.tabTiers },
@@ -37,7 +38,30 @@ export function GamePage() {
         ))}
       </div>
       <div role="tabpanel" id="game-tabpanel" aria-labelledby={`game-tab-${tab}`}>
-        {tab === "board" ? <BoardPanel /> : <TiersPanel />}
+        {tab === "board" ? (
+          <>
+            <div role="radiogroup" aria-label={t.gameSwitch} className="mb-3 flex gap-2" data-testid="game-switch">
+              {([["big", t.gameBig], ["tu", t.gameTu]] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={game === id}
+                  className={`min-h-11 flex-1 rounded-full border px-3 text-base ${
+                    game === id ? "border-accent bg-accent text-accent-ink" : "border-line bg-card"
+                  }`}
+                  onClick={() => setGame(id)}
+                  data-testid={`game-switch-${id}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <BoardPanel key={game} game={game} />
+          </>
+        ) : (
+          <TiersPanel />
+        )}
       </div>
     </>
   );

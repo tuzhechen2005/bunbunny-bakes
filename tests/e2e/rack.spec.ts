@@ -7,6 +7,13 @@ import { expect, test, type CDPSession, type Page } from "@playwright/test";
 
 test.use({ browserName: "chromium" });
 
+test.beforeEach(async ({ page }) => {
+  // The orb is the one allowed continuous animation (D119); keep it still for rack rAF assertions.
+  await page.addInitScript(() => {
+    (window as unknown as { __noOrbMotion: boolean }).__noOrbMotion = true;
+  });
+});
+
 const PHOTO = readFileSync("tests/fixtures/bun.jpg");
 /** The photo files themselves and the /_next/image URLs that resize them (D91): both answer with the fixture. */
 const MOCK_PHOTO = /\/api\/images\/mock\/|%2Fapi%2Fimages%2Fmock%2F/;
