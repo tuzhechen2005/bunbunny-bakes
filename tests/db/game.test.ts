@@ -198,7 +198,11 @@ describe("finish", () => {
     await createDefaultProducts();
     const run = await start();
     const { drops, score } = play(run);
-    const later = new Date(T.getTime() + 5 * 60_000);
+    // The bot's 20 drops may leave a world that never comes to rest; the replay then runs to the
+    // step cap and counts as over there, so finish after the replay's own played time.
+    const r = replay(run.seed, run.tiers, drops);
+    const played = r.over ? r.steps : drops[drops.length - 1].at;
+    const later = new Date(T.getTime() + Math.max(5 * 60_000, (played / 120) * 1000 + 60_000));
     const res = await finishRun(db, { runId: run.runId, drops }, IP, later);
     expect(res).toEqual({
       score,
