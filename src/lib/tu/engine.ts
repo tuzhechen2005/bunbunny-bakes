@@ -3,7 +3,7 @@
 // so the client and the server's replay agree exactly.
 
 import { createRng, type Rng } from "../game/rng";
-import { BAG_SIZE, dealBatch, overlaps } from "./deal";
+import { BAG_SIZE, dealBatch, isHidden, overlaps } from "./deal";
 
 export interface TuTierInput {
   id: string;
@@ -21,6 +21,11 @@ export interface TuTile {
   layer: number;
   /** Nothing on a higher layer overlaps it: it can be tapped. */
   free: boolean;
+  /**
+   * Some part of its square shows: not entirely covered by the union of the tiles on higher
+   * layers (D128). A free tile is always visible. The UI must not show a hidden tile's tier.
+   */
+  visible: boolean;
 }
 
 export interface TuState {
@@ -41,6 +46,8 @@ export type TuEvent =
   | { type: "move"; tile: number; tier: number; slot: number }
   /** Three of `tier` at slots slot..slot+2 were packed (later slots shift left by three). `points` includes the order bonus. */
   | { type: "pack"; tier: number; slot: number; points: number; order: boolean }
+  /** Tiles that were hidden before this tap and are visible now (after move/pack, before order/batch). */
+  | { type: "reveal"; tiles: number[] }
   /** Order `index` now wants `tier`. */
   | { type: "order"; index: 0 | 1; tier: number }
   /** Batch `batch` was dealt after the previous one was cleared; `bonus` points for clearing it. */
@@ -102,6 +109,7 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
     board = dealBatch(seed, n, batch).tiles.map((t) => ({ id: nextId++, ...t }));
   };
   const isFree = (t: Live) => !board.some((o) => o.layer > t.layer && overlaps(t, o));
+  const isVisible = (t: Live) => !isHidden(t, board);
   const boardTiers = () => [...new Set(board.map((t) => t.tier))].sort((a, b) => a - b);
 
   /** A new tier for order `i`: on the board and not the other order's when possible. */
@@ -118,7 +126,7 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
 
   const state = (): TuState => ({
     batch,
-    tiles: board.map((t) => ({ id: t.id, tier: t.tier, x: t.x2 / 2, y: t.y2 / 2, layer: t.layer, free: isFree(t) })),
+    tiles: board.map((t) => ({ id: t.id, tier: t.tier, x: t.x2 / 2, y: t.y2 / 2, layer: t.layer, free: isFree(t), visible: isVisible(t) })),
     bag: [...bag],
     orders: [orders[0], orders[1]],
     score,
@@ -130,7 +138,10 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
     const idx = board.findIndex((t) => t.id === tileId);
     if (idx < 0 || !isFree(board[idx])) return null;
     const tile = board[idx];
+    // Only tiles under the taken one can become visible; board order keeps the ids in deal order.
+    const hiddenUnder = board.filter((o) => o.layer < tile.layer && overlaps(o, tile) && !isVisible(o));
     board.splice(idx, 1);
+    const revealed = hiddenUnder.filter(isVisible).map((o) => o.id);
     taps++;
     const events: TuEvent[] = [];
 
@@ -147,6 +158,7 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
       const points = PACK_POINTS * batch + (hit >= 0 ? ORDER_POINTS * batch : 0);
       score += points;
       events.push({ type: "pack", tier: tile.tier, slot: first, points, order: hit >= 0 });
+      if (revealed.length > 0) events.push({ type: "reveal", tiles: revealed });
       let dealt: { batch: number; bonus: number } | null = null;
       if (board.length === 0) {
         // The bag is always empty here: every tier comes in triples per batch.
@@ -170,8 +182,9 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
         }
         events.push({ type: "batch", ...dealt });
       }
-    } else if (bag.length >= BAG_SIZE) {
-      over = true;
+    } else {
+      if (revealed.length > 0) events.push({ type: "reveal", tiles: revealed });
+      if (bag.length >= BAG_SIZE) over = true;
     }
     if (!over && taps >= MAX_TAPS) over = true;
     if (over) events.push({ type: "over" });
@@ -215,6 +228,7 @@ export function hashTuState(s: TuState): string {
     mix(t.x * 2);
     mix(t.y * 2);
     mix(t.layer);
+    mix(t.visible ? 1 : 0);
   }
   return h.toString(16).padStart(8, "0");
 }

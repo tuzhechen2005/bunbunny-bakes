@@ -143,7 +143,7 @@ describe("finish", () => {
     const bot = play({ ...run, seed });
     bot.taps = bot.taps.map((tap, i) => ({ id: tap.id, at: (i + 1) * 500 }));
     expect(bot.over).toBe(true);
-    expect(bot.taps).toHaveLength(66);
+    expect(bot.taps).toHaveLength(114);
     const res = await finishTuRun(db, { runId: run.runId, taps: bot.taps, score: 999_999 }, IP, LATER);
     expect(res).toEqual({
       score: bot.score,

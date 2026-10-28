@@ -4,7 +4,7 @@ Pure TS, deterministic: integer maths and the seeded PRNG from `src/lib/game/rng
 `Date.now`, no `Math.random`, no floats that could round differently). The client plays it, the
 server re-plays the tap log with `replayTu`, and both get the same score. No DOM, no server code.
 
-Decisions: D121–D124 in `docs/DECISIONS.md`.
+Decisions: D121–D124 and D128 (hidden tiles, curve) in `docs/DECISIONS.md`.
 
 ## API
 
@@ -28,7 +28,7 @@ number of tiers matters to the engine; ids are for the UI. Every `tier` below is
 ```ts
 interface TuState {
   batch: number; // 1-based 炉
-  tiles: { id: number; tier: number; x: number; y: number; layer: number; free: boolean }[];
+  tiles: { id: number; tier: number; x: number; y: number; layer: number; free: boolean; visible: boolean }[];
   bag: number[]; // tier per slot, ≤ BAG_SIZE (6), equal tiers next to each other
   orders: [number, number]; // tier each customer wants (3 of it)
   score: number;
@@ -42,6 +42,13 @@ interface TuState {
   may use only part of the board (batch 1 is small), so the UI may fit to the tiles' bounding box.
 - `layer`: 0 = bottom. Draw in array order (bottom layers first). `free` = no tile on a higher
   layer overlaps it; covered tiles are dimmed and not tappable.
+- `visible` (C7, D128): false when the union of the tiles on higher layers covers the whole
+  square (all four half-unit quarters; exact integer test, `isHidden` in deal.ts), true otherwise.
+  A free tile is always visible; a partly covered tile is visible (dimmed face). The UI must not
+  render hidden tiles (their `tier` is in the state, the player must not see it). Layouts stack
+  tiles exactly on top of each other (layers 0/2/4 share the grid) and the half-shifted odd
+  layers hide tiles under the union of four neighbours, so taking a tile can reveal a bread the
+  player did not know about.
 - Tile ids are unique for the whole game (each batch continues the count), so an id from a cleared
   batch is simply unknown.
 
@@ -51,12 +58,14 @@ interface TuState {
 | --- | --- | --- |
 | `move` | `tile, tier, slot` | the tile left the board into bag slot `slot` (inserted after the last tile of the same tier, else at the end; later slots shift right) |
 | `pack` | `tier, slot, points, order` | the 3 tiles at `slot..slot+2` were packed (later slots shift left by 3); `points` includes the order bonus; `order` = it filled an order |
+| `reveal` | `tiles` | ids (deal order) of tiles that were hidden before this tap and are visible now; only when non-empty; never the tiles of a newly dealt batch |
 | `order` | `index, tier` | order `index` (0/1) now wants `tier` (0–2 per tap) |
 | `batch` | `batch, bonus` | the board was cleared: `bonus` points for it, batch `batch` (the new number) is dealt |
 | `over` | — | the game ended (bag full without a pack, or `MAX_TAPS` reached) |
 
 `tap` returns `null` (and changes nothing) for an unknown, already taken or covered tile, or when
-the game is over. A tap that ends the game still moves the tile: `[move, over]`.
+the game is over (hidden tiles are never free). A tap that ends the game still moves the tile:
+`[move, over]` (or `[move, reveal, over]`).
 
 ## Rules (D122)
 
@@ -74,15 +83,15 @@ the game is over. A tap that ends the game still moves the tile: `[move, over]`.
 
 ### Batches (`BATCHES` in deal.ts; batch n uses entry n, later batches repeat the last)
 
-| 炉 | breads | layers | tiles |
-| --- | --- | --- | --- |
-| 1 | 4 | 3 | 30 |
-| 2 | 4 | 4 | 42 |
-| 3 | 5 | 4 | 48 |
-| 4 | 6 | 4 | 54 |
-| 5 | 7 | 5 | 66 |
-| 6 | 8 | 5 | 78 |
-| 7+ | 8 | 6 | 90 |
+| 炉 | breads | layers | tiles | spread | hidden at deal |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 4 | 2 | 24 | 2 | ~8% |
+| 2 | 4 | 2 | 30 | 2 | ~12% |
+| 3 | 8 | 5 | 72 | 4 | ~41% |
+| 4 | 8 | 6 | 84 | 4 | ~47% |
+| 5+ | 8 | 6 | 90 | 4 | ~47% |
+
+Batches 1–2 are the warm-up, batch 3 is the wall (D128).
 
 Breads per batch are capped at the shop's tier count and are the first k of a per-batch seeded
 shuffle of all tiers.
@@ -93,7 +102,9 @@ shuffle of all tiers.
 which every position is free when its turn comes, then assigns tiers along that order in triples
 (up to `spread` = 3 triples open at once, never 6 in the bag without a pack; `spread` must stay ≤ 4, guarded at load). That order is
 returned as `solution` (the witness); `tests/unit/tuDeal.test.ts` plays it through the real engine
-for batches 1–7 over 500 seeds (and 150 seeds for every shop size 2–7).
+for every batch in `BATCHES` (+1) over 500 seeds (and 150 seeds for every shop size 2–7). Hidden
+tiles change nothing here: the witness exists regardless of what the player can see, and a tile
+is only taken in it when it is free (hence visible).
 
 ## Replay (server)
 
@@ -111,11 +122,20 @@ beyond the real elapsed time plus slack.
 
 ## Tuning
 
-`npx tsx scripts/tu-tune.mts [seeds] [tierCount]` runs the bots in `tests/support/tuBot.ts`
-(`randomTu` taps any free tile; `greedyTu` finishes what is in the bag, starts a bread only when 3
-are in reach, avoids filling the bag, prefers order breads). With 8 tiers over 1000 seeds: random
-is out in batch 1 (96%), greedy reaches batch 4 median (p10 2, p90 6, mode 5). `tuTuning.test.ts`
-pins these bounds. With 4 or fewer tiers the game is much easier (with 2 tiers the bag can never
-fill and the game always runs to `MAX_TAPS`).
+`npx tsx scripts/tu-tune.mts [seeds] [tierCount]` runs the bots in `tests/support/tuBot.ts`. All
+bots are information-limited: they choose from `playerView(state)`, which drops hidden tiles.
+`randomTu` taps any free tile; `greedyTu` (the tuning reference) finishes what is in the bag,
+starts a bread only when 3 are in reach, avoids filling the bag, counts partly covered visible
+tiles a little and prefers order breads; `diggerTu` is greedy plus a preference for tiles lying on
+many visible tiles (a stronger player). With 8 tiers over 1000 seeds (end batch):
+
+| bot | p10 / p50 / p90 | distribution |
+| --- | --- | --- |
+| random | 1 / 1 / 1 | 1: 93.5%, 2: 6.4% |
+| greedy | 3 / 3 / 4 | ≤2: 4.4%, 3: 63%, 4: 25%, ≥5: 7.3% |
+| digger | 3 / 5 / 13 | ≤2: 0%, long tail up to batch 24 (1.2%) |
+
+`tuTuning.test.ts` pins these bounds (200 seeds). With 4 or fewer tiers the game is much easier
+(with 2 tiers the bag can never fill and the game always runs to `MAX_TAPS`).
 
 `hashTuState(state)` (FNV-1a) is for pinned vectors and debugging.

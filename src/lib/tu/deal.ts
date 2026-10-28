@@ -25,15 +25,17 @@ export interface BatchSpec {
   spread: number;
 }
 
-/** Batch n uses BATCHES[n - 1]; every batch after the last repeats the last one. */
+/**
+ * Batch n uses BATCHES[n - 1]; every batch after the last repeats the last one. The curve (D128):
+ * batches 1-2 are a warm-up (few breads, shallow, little hidden), batch 3 is the wall (all 8
+ * breads, 5 layers, ~40% of the tiles hidden under others, triples spread wide).
+ */
 export const BATCHES: readonly BatchSpec[] = [
-  { tiers: 4, layers: 3, tiles: 30, spread: 3 },
-  { tiers: 4, layers: 4, tiles: 42, spread: 3 },
-  { tiers: 5, layers: 4, tiles: 48, spread: 3 },
-  { tiers: 6, layers: 4, tiles: 54, spread: 3 },
-  { tiers: 7, layers: 5, tiles: 66, spread: 3 },
-  { tiers: 8, layers: 5, tiles: 78, spread: 3 },
-  { tiers: 8, layers: 6, tiles: 90, spread: 3 },
+  { tiers: 4, layers: 2, tiles: 24, spread: 2 },
+  { tiers: 4, layers: 2, tiles: 30, spread: 2 },
+  { tiers: 8, layers: 5, tiles: 72, spread: 4 },
+  { tiers: 8, layers: 6, tiles: 84, spread: 4 },
+  { tiers: 8, layers: 6, tiles: 90, spread: 4 },
 ];
 
 // Tuning guard: `spread` must stay 1-4 (= BAG_SIZE - 2). With 5 open triples of one tile each the
@@ -64,6 +66,27 @@ export interface Batch {
 /** Two tiles overlap when their 1 x 1 squares share area (doubled coords: distance < 2 on both axes). */
 export function overlaps(a: { x2: number; y2: number }, b: { x2: number; y2: number }): boolean {
   return Math.abs(a.x2 - b.x2) < 2 && Math.abs(a.y2 - b.y2) < 2;
+}
+
+/**
+ * Hidden = every one of the tile's four half-unit quarters lies under some tile on a higher layer
+ * (all coordinates are half-units, so a tile covers whole quarters; integer test, D128).
+ */
+export function isHidden(
+  t: { x2: number; y2: number; layer: number },
+  board: readonly { x2: number; y2: number; layer: number }[],
+): boolean {
+  let covered = 0; // bit per quarter
+  for (const o of board) {
+    if (o.layer <= t.layer || !overlaps(t, o)) continue;
+    for (let q = 0; q < 4; q++) {
+      const cx = t.x2 + (q & 1);
+      const cy = t.y2 + (q >> 1);
+      if (o.x2 <= cx && cx < o.x2 + 2 && o.y2 <= cy && cy < o.y2 + 2) covered |= 1 << q;
+    }
+    if (covered === 15) return true;
+  }
+  return false;
 }
 
 function shuffle<T>(rng: Rng, a: T[]): T[] {
