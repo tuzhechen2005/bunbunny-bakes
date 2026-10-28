@@ -134,11 +134,16 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
   return (
     <>
       <div
-        className={`pointer-events-none fixed inset-x-0 bottom-0 z-[47] mx-auto flex max-w-[430px] justify-end px-4 safe-x transition-opacity duration-500 ${
+        className={`pointer-events-none fixed inset-x-0 bottom-0 z-[47] mx-auto flex max-w-[430px] justify-end px-4 safe-x ${
           mode === "home"
             ? "pb-[calc(14px+60px+8px+env(safe-area-inset-bottom))]"
             : "pb-[calc(16px+env(safe-area-inset-bottom))]"
-        } ${visible ? "opacity-100" : "invisible opacity-0"}`}
+        } ${
+          // Hiding: fade while the orb shrinks back to a point, and only then become invisible.
+          visible
+            ? "visible opacity-100 [transition:opacity_500ms,visibility_0s]"
+            : "invisible opacity-0 [transition:opacity_450ms_ease-in_150ms,visibility_0s_linear_600ms]"
+        }`}
         inert={!visible}
         data-testid="assistant-entry-wrap"
       >
@@ -152,8 +157,10 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
             if (question) void send(question);
           }}
           aria-label={question ?? t.entryAria}
-          className={`pointer-events-auto flex items-center rounded-full p-[3px] origin-[calc(100%-40px)_50%] transition-[background-color,box-shadow,scale,translate] duration-[300ms,300ms,900ms] ease-[ease,ease,cubic-bezier(0.22,1.2,0.36,1)] active:scale-[0.97] motion-reduce:transition-none ${
-            visible ? "scale-100" : "scale-0 motion-reduce:scale-100"
+          className={`pointer-events-auto flex items-center rounded-full p-[3px] origin-[calc(100%-40px)_50%] transition-[background-color,box-shadow,scale,translate] active:scale-[0.97] motion-reduce:transition-none ${
+            visible
+              ? "scale-100 duration-[300ms,300ms,900ms] ease-[ease,ease,cubic-bezier(0.22,1.2,0.36,1)]"
+              : "scale-0 duration-[300ms,300ms,550ms] ease-[ease,ease,cubic-bezier(0.55,0,0.85,0.35)] motion-reduce:scale-100"
           } ${
             question ? "bg-c-ink/90 shadow-[0_12px_30px_-12px_rgba(0,0,0,0.6)] ring-1 ring-white/15" : "bg-transparent"
           } ${focusRing}`}
