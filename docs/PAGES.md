@@ -148,6 +148,14 @@
 - 「记一笔」：日期、金额、说明（必填，≤ 100 字）、付款方式、商品和数量（选填，可加多行）；可以改、可以删（确认）；都写操作日志。
 - 计算口径：取货日在这一天、状态不是已取消/已拒绝的订单；已付款的计入营业额（含运费），未付款的计入「待收」；件数只算已付款订单和手动记录里填的商品。
 
+### `/game/tu` 兔了个兔（D121–D126）
+
+- 页面 `src/components/tu/**`；菜单、表单、退出询问、可关结果弹窗 + 底部条、👑、声音 / 震动都照搬 `/game`（文案复用 `copy.customer.game`，只有 `copy.customer.tu` 是新的）。排行榜复用 `LeaderboardView`（传入 `fetchTuLeaderboard`）。
+- 玩的界面：左上分数、右上「第 N 炉」，顶栏右侧「退出」和声音；两张订单卡（面包图 + ×3 + 三个小圆点表示纸袋里已有几个）；中间是棋盘（DOM 按钮，不用 canvas、没有持续运行的 rAF，飞进纸袋用 Web Animations）；底部是 6 格牛皮纸纸袋（`public/brand/kraft.jpg`）。被压住的牌变暗且不可点；牌至少 44 px（320 px 宽时 7 列刚好），棋盘按当前一炉的外框缩放。
+- 一次点击的事件（move、pack、order、batch、over）整体应用后再依次播放动画；换炉时短暂锁住点击（约 0.5 秒）。两次点击间隔小于 `MIN_TAP_GAP_MS` 的点击忽略。点击记录 `{ id, at }`，`at` = 开局以来的毫秒数；续玩时从上一次点击之后 120 ms 继续计时。
+- 自动保存 `bb_tu_save_v1`：`{ v: 1, runId, seed, tiers, taps, nickname, expiresAt, score }`，继续 = 重放 `taps`。
+- 接口 C6：`POST /api/game/tu/start`、`POST /api/game/tu/finish`（`{ runId, taps }`）、`GET /api/game/tu/leaderboard`，形状同 `/api/game/*`。
+
 ### `/admin/products` 商品
 
 - 列表：照片、名称、价格、方式、状态，拖动排序。
