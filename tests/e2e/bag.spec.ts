@@ -148,6 +148,10 @@ test("the pile is capped at 24 bodies while the count keeps going", async ({ pag
 });
 
 test("the frame loop sleeps when everything rests", async ({ page }) => {
+  // The 小小🐰 orb is the one allowed continuous animation (D119); keep it still here.
+  await page.addInitScript(() => {
+    (window as unknown as { __noOrbMotion: boolean }).__noOrbMotion = true;
+  });
   await page.addInitScript(() => {
     const w = window as unknown as { __raf: number };
     w.__raf = 0;
