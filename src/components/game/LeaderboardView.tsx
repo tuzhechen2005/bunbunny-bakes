@@ -18,20 +18,29 @@ function md(s: string): string {
 }
 
 /** Top 20 of the week, last week's winner and the player's own best. */
-export function LeaderboardView({ wechatId, version = 0 }: { wechatId: string; version?: number }) {
+export function LeaderboardView({
+  wechatId,
+  version = 0,
+  fetcher = fetchLeaderboard,
+}: {
+  wechatId: string;
+  version?: number;
+  /** Which game's board (the first game's by default). */
+  fetcher?: typeof fetchLeaderboard;
+}) {
   const [state, setState] = useState<State>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let alive = true;
-    fetchLeaderboard(wechatId || undefined).then((r) => {
+    fetcher(wechatId || undefined).then((r) => {
       if (!alive) return;
       setState(r.ok && r.data && Array.isArray(r.data.top) ? { status: "ready", data: r.data } : { status: "error" });
     });
     return () => {
       alive = false;
     };
-  }, [wechatId, attempt, version]);
+  }, [wechatId, attempt, version, fetcher]);
 
   if (state.status === "loading") {
     return (

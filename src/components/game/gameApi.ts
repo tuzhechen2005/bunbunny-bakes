@@ -6,7 +6,7 @@ import type { DropLog, FinishResult, Leaderboard, StartedRun } from "./types";
 /** A stalled phone connection must end in a retry button, not in a spinner that never stops. */
 export const REQUEST_TIMEOUT_MS = 15_000;
 
-async function call<T>(path: string, body?: unknown): Promise<ApiResult<T>> {
+export async function call<T>(path: string, body?: unknown): Promise<ApiResult<T>> {
   let response: Response;
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), REQUEST_TIMEOUT_MS);

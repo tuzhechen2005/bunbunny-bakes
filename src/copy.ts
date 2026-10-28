@@ -337,6 +337,20 @@ export const copy = {
       points: "{score} 分",
     },
 
+    /** 兔了个兔 (D121–D126): the `/game/tu` page. Shared lines (menu, exit, result, leaderboard) come from `game`. */
+    tu: {
+      title: "兔了个兔",
+      pageTitle: "兔了个兔",
+      startHint: "点面包放进纸袋，3 个一样的就打包",
+      batch: "第 {n} 炉",
+      /** Accessible names. */
+      tileLabel: "{name}",
+      tileCovered: "{name}，被压住了",
+      boardLabel: "面包牌",
+      bagLabel: "纸袋，装了 {n} 个，一共 6 格",
+      orderLabel: "订单：要 3 个{name}，已有 {n} 个",
+    },
+
     /** `/orders`: the orders opened on this phone (D84). */
     myOrders: {
       pageTitle: "我的订单",
