@@ -163,6 +163,32 @@
 
 服务端导出（给后台用）：`hasOrdered(db, wechatId)`（不区分大小写，存在状态不是 CANCELLED/REJECTED 的订单），`isBanned(db, wechatId)`，`maskWechat`，`weekKeyOf`、`weekRange`（`gameWeek.ts`）。
 
+**后台排行榜接口**（`/api/admin/game/*`，需要登录 + Origin 检查，写入都记 AuditLog）。都接受 `?game=tu`（兔了个兔）或 `?game=big` / 不带（消除大面包，默认）；其他值 `422 VALIDATION`。禁止名单两个游戏共用（`/bans` 不看 `game`）。
+
+- `GET /leaderboard?week=&game=` → `{ week, currentWeek, weeks, rows: [{ id, wechatId, nickname, score, finishedAt, verified, hidden, banned, ordered, dropCount, durationSec, suspicious, rank }], winner, bans }`，只含这个游戏的局和有局的周。兔了个兔：`dropCount` = 点击次数，`durationSec` = 最后一次点击的 `at` / 1000；`suspicious`（见下）。消除大面包的 `suspicious` 恒为 `false`。
+- `PATCH /runs/{id}?game=` `{ hidden }`：这一局必须属于这个游戏，否则 `404`。
+- `PATCH /award?game=` `{ week, contacted?, redeemed?, note? }`：每个游戏每周一条 `GameAward`；兔了个兔的审计 `entityId` 为 `TU:<week>`。
+
+### 兔了个兔（D121–D124，`/api/game/tu/**`，公开，C6）
+
+引擎在 `src/lib/tu/`（见该目录 README），服务端在 `src/server/tu.ts`，排行榜、历史最高、个人最高的查询和消除大面包共用（`src/server/game.ts`，按 `GameRun.game` 分开）。规则和上面消除大面包完全一样，以下只写不同的地方。三个接口都带 `Cache-Control: no-store`，请求体上限 start 4 KB、finish 96 KB。
+
+**`POST /api/game/tu/start`** `{ wechatId, nickname }` → `201 { runId, seed, tiers, expiresAt }`
+
+- `tiers` 是消除大面包的面包等级去掉大面包（D123，`TierView` 形状相同：`id, radius, points, imageUrl, color, name`；兔了个兔只用 `id`、图片、颜色、名字），2–8 个，按等级顺序。少于 2 个（例如店里只有 1 个在售商品、店主又没配置）→ `422 VALIDATION`「兔了个兔还没准备好，请稍后再来」，不建局。
+- 频率：同一 IP 每小时 60 次，key `tu_start_ip:<ipHash>`（和消除大面包分开计）。
+
+**`POST /api/game/tu/finish`** `{ runId, taps: [{ id, at }] }` → `200 { score, best, rank, week, personalBest, newRecord }`（同消除大面包）
+
+- `id` 是牌的 id，`at` 是从这一局开始（客户端）算起的整数毫秒，严格递增；最多 `MAX_TAPS`（2000）个。服务器用 `replayTu` 和开始时的等级快照重放；被压住/不存在/已拿走的牌、游戏结束后还在点、形状不对、超限 → `422 VALIDATION`，这一局保持未结束。
+- 真实性检查：相邻两次点击至少 `MIN_TAP_GAP_MS`（120 ms）；最后一次的 `at` 不能超过开始到提交的真实时间加 10 秒。否则 `422`（「这一局的成绩没能通过验证」）。
+- 没玩完（还没结束）的点击记录也可以提交，按已经得到的分数计。
+- 保存证据（D103）：`drops` = 点击记录，`dropCount` = 点击次数，`playMs` = 最后一次 `at`，`suspicious` = 点满 `MAX_TAPS` 或点击间隔的中位数 < 300 ms。可疑的局照常上榜，只在后台标出来，店主发奖前看一下（脚本可以在客户端算出解法，服务器无法区分）。
+- `消除大面包` 的 `runId` 交给这里 → `404 NOT_FOUND`（反过来也一样）。
+- 频率：`tu_finish_ip:<ipHash>`，每小时 60 次。
+
+**`GET /api/game/tu/leaderboard?wechatId=`** → 和 `/api/game/leaderboard` 同形状（`week, top, lastWinner, allTime, myBest?`），只算兔了个兔的局；`lastWinner` 看兔了个兔自己的 `GameAward`。
+
 ### POST /api/assistant（小小🐰，D117、D118）
 
 实现在 `src/server/assistant/`。需要 `Origin` 等于 `SITE_URL`（否则 `403 FORBIDDEN_ORIGIN`），JSON 内容类型，请求体最多 64 KB，`Cache-Control: no-store`。

@@ -2,15 +2,19 @@
 //
 // Raw SQL is used for the game tables so every comparison is lower()/text based (no ILIKE: wechat
 // ids may contain _ and %). Ids are DB-generated uuids; GameTier.imageUrl is NULL when unset.
+// The leaderboard and award functions take the game (D124: `?game=tu` = 兔了个兔, default the
+// first game); tiers are shared (D123) and so is the ban list.
 
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
+import { Prisma } from "@/generated/prisma/client";
 import { copy } from "@/copy";
 import { isLocalDate, weekdayOf } from "@/domain/dates";
 import { fieldFor } from "@/lib/fieldColor";
 import { writeAudit } from "./audit";
 import type { DbClient, Tx } from "./db";
 import { AppError } from "./errors";
+import type { GameKind } from "./game";
 import { MAX_PRODUCT_TIERS } from "./gameTiers";
 import { weekKeyOf } from "./gameWeek";
 import { imageUrlForKey, keyFromImageUrl } from "./imageFormat";
@@ -379,9 +383,15 @@ export interface RunRowDto {
   banned: boolean;
   /** Has a non-cancelled, non-rejected order (the prize eligibility, D104). */
   ordered: boolean;
-  /** Evidence for the manual check before paying: number of drops and the simulated length. */
+  /** Evidence for the manual check before paying: number of drops (兔了个兔: taps) and the played length. */
   dropCount: number | null;
   durationSec: number | null;
+  /**
+   * 兔了个兔 owner flag for the manual check before awarding (D103): the run reached MAX_TAPS or its
+   * median gap between taps is under 300 ms. The run still counts on the board. Always false for
+   * the first game.
+   */
+  suspicious: boolean;
   /** Rank among the runs that count (best per WeChat id, not hidden, not banned); null otherwise. */
   rank: number | null;
 }
@@ -423,9 +433,17 @@ interface RawRun {
   hidden: boolean;
   dropCount: number | null;
   simSteps: number | null;
+  playMs: number | null;
+  suspicious: boolean;
 }
 
 const lc = (s: string) => s.toLowerCase();
+
+/** 消除大面包: simulated steps of 1/120 s; 兔了个兔: the last tap's client time. */
+function durationSecOf(game: GameKind, r: RawRun): number | null {
+  if (game === "TU") return r.playMs === null ? null : Math.round(r.playMs / 1000);
+  return r.simSteps === null ? null : Math.round(r.simSteps / 120);
+}
 
 /** Which of these WeChat ids have ordered (L1's hasOrdered: not CANCELLED / REJECTED, case-insensitive). */
 export async function orderedSet(db: DbClient, wechatIds: string[]): Promise<Set<string>> {
@@ -442,29 +460,50 @@ export const weekQuerySchema = z
   .string()
   .refine((v) => isLocalDate(v) && weekdayOf(v) === 1, { message: "Invalid week" });
 
-export async function getBoard(db: DbClient, week: string | undefined, now: Date): Promise<BoardView> {
+/** `?game=` of the admin game endpoints: `tu` = 兔了个兔, `big` or absent = 消除大面包. */
+export const gameQuerySchema = z
+  .enum(["big", "tu"])
+  .optional()
+  .transform((g): GameKind => (g === "tu" ? "TU" : "BIG"));
+
+/** The game of an admin request's `?game=` (VALIDATION for anything but big / tu). */
+export function gameOfRequest(request: Request): GameKind {
+  const r = gameQuerySchema.safeParse(new URL(request.url).searchParams.get("game") ?? undefined);
+  if (!r.success) throw invalid(copy.errors.VALIDATION, "game");
+  return r.data;
+}
+
+const RUN_COLUMNS = Prisma.sql`"id"::text AS id, "wechatId", "nickname", "score", "finishedAt", "hidden", "dropCount", "simSteps", "playMs", "suspicious"`;
+
+export async function getBoard(
+  db: DbClient,
+  week: string | undefined,
+  now: Date,
+  game: GameKind = "BIG",
+): Promise<BoardView> {
   const currentWeek = weekKeyOf(now);
   const wk = week ?? currentWeek;
+  const g = Prisma.sql`${game}::"GameKind"`;
   const [runs, weekRows, bans, awardRows] = await Promise.all([
     db.$queryRaw<RawRun[]>`
-      SELECT "id"::text AS id, "wechatId", "nickname", "score", "finishedAt", "hidden", "dropCount", "simSteps"
+      SELECT ${RUN_COLUMNS}
       FROM "GameRun"
-      WHERE "weekKey" = ${wk} AND "finishedAt" IS NOT NULL AND "score" IS NOT NULL
+      WHERE "game" = ${g} AND "weekKey" = ${wk} AND "finishedAt" IS NOT NULL AND "score" IS NOT NULL
       ORDER BY "score" DESC, "finishedAt" ASC, "id" ASC LIMIT 300`,
     db.$queryRaw<{ weekKey: string }[]>`
-      SELECT DISTINCT "weekKey" FROM "GameRun" WHERE "weekKey" IS NOT NULL ORDER BY "weekKey" DESC LIMIT 26`,
+      SELECT DISTINCT "weekKey" FROM "GameRun" WHERE "game" = ${g} AND "weekKey" IS NOT NULL ORDER BY "weekKey" DESC LIMIT 26`,
     db.$queryRaw<{ wechatId: string; reason: string | null; createdAt: Date }[]>`
       SELECT "wechatId", "reason", "createdAt" FROM "GameBan" ORDER BY "createdAt" DESC`,
     db.$queryRaw<
       { weekKey: string; runId: string; contactedAt: Date | null; redeemedAt: Date | null; note: string | null }[]
-    >`SELECT "weekKey", "runId"::text AS "runId", "contactedAt", "redeemedAt", "note" FROM "GameAward" WHERE "weekKey" = ${wk}`,
+    >`SELECT "weekKey", "runId"::text AS "runId", "contactedAt", "redeemedAt", "note" FROM "GameAward" WHERE "game" = ${g} AND "weekKey" = ${wk}`,
   ]);
   const banned = new Set(bans.map((b) => lc(b.wechatId)));
   const award = awardRows[0] ?? null;
   const awardRun = award
     ? ((
         await db.$queryRaw<RawRun[]>`
-          SELECT "id"::text AS id, "wechatId", "nickname", "score", "finishedAt", "hidden", "dropCount", "simSteps"
+          SELECT ${RUN_COLUMNS}
           FROM "GameRun" WHERE "id"::text = ${award.runId}`
       )[0] ?? null)
     : null;
@@ -491,7 +530,8 @@ export async function getBoard(db: DbClient, week: string | undefined, now: Date
       banned: isBanned,
       ordered: ordered.has(key),
       dropCount: r.dropCount,
-      durationSec: r.simSteps === null ? null : Math.round(r.simSteps / 120),
+      durationSec: durationSecOf(game, r),
+      suspicious: r.suspicious,
       rank: rk,
     };
   });
@@ -542,12 +582,13 @@ export async function getBoard(db: DbClient, week: string | undefined, now: Date
 
 // ---- moderation ---------------------------------------------------------------------------
 
-export async function setRunHidden(db: DbClient, id: string, hidden: boolean, now: Date): Promise<void> {
+/** Hides / shows a run of `game` (a run of the other game is NOT_FOUND). */
+export async function setRunHidden(db: DbClient, id: string, hidden: boolean, now: Date, game: GameKind = "BIG"): Promise<void> {
   if (!uuid.safeParse(id).success) throw notFound();
   await db.$transaction(async (tx) => {
-    const rows = await tx.$queryRaw<{ hidden: boolean; wechatId: string; score: number | null }[]>`
-      SELECT "hidden", "wechatId", "score" FROM "GameRun" WHERE "id"::text = ${id} FOR UPDATE`;
-    if (rows.length === 0) throw notFound();
+    const rows = await tx.$queryRaw<{ hidden: boolean; wechatId: string; score: number | null; game: GameKind }[]>`
+      SELECT "hidden", "wechatId", "score", "game"::text AS game FROM "GameRun" WHERE "id"::text = ${id} FOR UPDATE`;
+    if (rows.length === 0 || rows[0].game !== game) throw notFound();
     if (rows[0].hidden === hidden) return;
     await tx.$executeRaw`UPDATE "GameRun" SET "hidden" = ${hidden} WHERE "id"::text = ${id}`;
     await writeAudit(tx, {
@@ -616,38 +657,47 @@ export const awardBodySchema = z.object({
 });
 
 /** Records 已联系 / 已兑奖 / note for a week; the row is created on first use for the week's current leader. */
-export async function updateAward(db: DbClient, input: z.output<typeof awardBodySchema>, now: Date): Promise<void> {
-  const board = await getBoard(db, input.week, now);
+export async function updateAward(
+  db: DbClient,
+  input: z.output<typeof awardBodySchema>,
+  now: Date,
+  game: GameKind = "BIG",
+): Promise<void> {
+  const board = await getBoard(db, input.week, now, game);
+  const g = Prisma.sql`${game}::"GameKind"`;
+  // The first game keeps its original lock key.
+  const lockKey = game === "BIG" ? `game-award:${input.week}` : `game-award:${game}:${input.week}`;
   await db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"game-award:" + input.week}))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
     const ts = now.toISOString();
     const existing = await tx.$queryRaw<{ contactedAt: Date | null; redeemedAt: Date | null; note: string | null }[]>`
-      SELECT "contactedAt", "redeemedAt", "note" FROM "GameAward" WHERE "weekKey" = ${input.week}`;
+      SELECT "contactedAt", "redeemedAt", "note" FROM "GameAward" WHERE "game" = ${g} AND "weekKey" = ${input.week}`;
     if (existing.length === 0) {
       const lead = board.rows.find((r) => r.rank === 1);
       if (!lead) throw invalid(t.winnerNone, "week");
       await tx.$executeRaw`
-        INSERT INTO "GameAward" ("weekKey","runId") VALUES (${input.week}, ${lead.id}::uuid)`;
+        INSERT INTO "GameAward" ("game","weekKey","runId") VALUES (${g}, ${input.week}, ${lead.id}::uuid)`;
     }
     const before = existing[0]
       ? { contacted: !!existing[0].contactedAt, redeemed: !!existing[0].redeemedAt, note: existing[0].note }
       : null;
     if (input.contacted !== undefined) {
-      await tx.$executeRaw`UPDATE "GameAward" SET "contactedAt" = ${input.contacted ? ts : null}::timestamptz WHERE "weekKey" = ${input.week}`;
+      await tx.$executeRaw`UPDATE "GameAward" SET "contactedAt" = ${input.contacted ? ts : null}::timestamptz WHERE "game" = ${g} AND "weekKey" = ${input.week}`;
     }
     if (input.redeemed !== undefined) {
-      await tx.$executeRaw`UPDATE "GameAward" SET "redeemedAt" = ${input.redeemed ? ts : null}::timestamptz WHERE "weekKey" = ${input.week}`;
+      await tx.$executeRaw`UPDATE "GameAward" SET "redeemedAt" = ${input.redeemed ? ts : null}::timestamptz WHERE "game" = ${g} AND "weekKey" = ${input.week}`;
     }
     if (input.note !== undefined) {
-      await tx.$executeRaw`UPDATE "GameAward" SET "note" = ${input.note || null} WHERE "weekKey" = ${input.week}`;
+      await tx.$executeRaw`UPDATE "GameAward" SET "note" = ${input.note || null} WHERE "game" = ${g} AND "weekKey" = ${input.week}`;
     }
     await writeAudit(tx, {
       actor: "ADMIN",
       action: "game.award",
       entityType: "GameAward",
-      entityId: input.week,
+      // The first game's audit rows keep their original entity id (the week).
+      entityId: game === "BIG" ? input.week : `${game}:${input.week}`,
       before,
-      after: { contacted: input.contacted, redeemed: input.redeemed, note: input.note },
+      after: { ...(game === "BIG" ? {} : { game }), contacted: input.contacted, redeemed: input.redeemed, note: input.note },
       at: now,
     });
   });

@@ -351,8 +351,15 @@ model GameTier {
 }
 
 /// One play. Created by /api/game/start, verified and scored by /api/game/finish.
+/// Which mini game a run / award belongs to: BIG = 消除大面包 (D100), TU = 兔了个兔 (D121).
+enum GameKind {
+  BIG
+  TU
+}
+
 model GameRun {
   id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  game          GameKind  @default(BIG)
   seed          String
   wechatId      String
   nickname      String
@@ -365,6 +372,12 @@ model GameRun {
   drops         Json?
   dropCount     Int?
   simSteps      Int?
+  /// TU only: the verified tap log is stored in `drops` (its length in `dropCount`); `playMs` is
+  /// the last tap's client time (ms since start). `suspicious` flags a run for the owner's manual
+  /// check before awarding (D103): it reached MAX_TAPS or its median tap gap is under 300 ms. It
+  /// still counts on the board.
+  playMs        Int?
+  suspicious    Boolean   @default(false)
   /// Monday (Chicago) of the week the run was finished in, "YYYY-MM-DD".
   weekKey       String?
   ipHash        String?
@@ -372,7 +385,7 @@ model GameRun {
 
   award GameAward[]
 
-  @@index([weekKey, score(sort: Desc)])
+  @@index([game, weekKey, score(sort: Desc)])
   @@index([wechatId])
   @@index([startedAt])
 }
@@ -388,7 +401,8 @@ model GameBan {
 /// The weekly winner's follow-up state (one per week).
 model GameAward {
   id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  weekKey     String    @unique
+  game        GameKind  @default(BIG)
+  weekKey     String
   runId       String    @db.Uuid
   contactedAt DateTime? @db.Timestamptz(3)
   redeemedAt  DateTime? @db.Timestamptz(3)
@@ -396,6 +410,7 @@ model GameAward {
 
   run GameRun @relation(fields: [runId], references: [id], onDelete: Restrict)
 
+  @@unique([game, weekKey])
   @@index([runId])
 }
 

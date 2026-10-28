@@ -226,22 +226,57 @@ function winnerLines(l: WinnerLine): string[] {
   ];
 }
 
-/** D114: last week's #1 (full WeChat id, score, ordered); ⚠️ + the best player who has ordered. */
-function renderGameWinner(n: NotificationToRender): RenderedEmail {
+/** One game's part of the winner email: header, #1, and the ⚠️ path. */
+function winnerSections(p: GameWinnerPayload, w: WinnerLine, runnerUp: WinnerLine | null): string[][] {
   const g = t.gameWinner;
-  const p = payloadObject(n) as unknown as GameWinnerPayload;
-  if (!p.winner || !p.week) throw new Error(`GAME_WINNER notification ${n.id}: payload has no winner`);
-  const w = p.winner;
   const sections: string[][] = [
     [fill(g.header, { start: dayLabel(p.week.start), end: dayLabel(p.week.end) }), ...winnerLines(w)],
   ];
   if (!w.ordered) {
     sections.push([g.warn]);
-    sections.push(p.runnerUp ? [fill(g.runnerUpHeader, { rank: p.runnerUp.rank }), ...winnerLines(p.runnerUp)] : [g.noRunnerUp]);
+    sections.push(runnerUp ? [fill(g.runnerUpHeader, { rank: runnerUp.rank }), ...winnerLines(runnerUp)] : [g.noRunnerUp]);
   }
-  sections.push([fill(g.openAdmin, { url: `${siteUrl(p.siteUrl)}/admin/game` })]);
+  return sections;
+}
+
+/**
+ * D114: last week's #1 (full WeChat id, score, ordered); ⚠️ + the best player who has ordered.
+ * D124: when 兔了个兔 had anyone on its board, one email with a titled section per game; otherwise
+ * exactly the first game's email.
+ */
+function renderGameWinner(n: NotificationToRender): RenderedEmail {
+  const g = t.gameWinner;
+  const p = payloadObject(n) as unknown as GameWinnerPayload;
+  if (!p.week || (!p.winner && !p.tu?.winner)) throw new Error(`GAME_WINNER notification ${n.id}: payload has no winner`);
+  const admin = [fill(g.openAdmin, { url: `${siteUrl(p.siteUrl)}/admin/game` })];
+  if (!p.tu?.winner) {
+    const w = p.winner as WinnerLine;
+    return {
+      subject: fill(w.ordered ? g.subject : g.subjectWarn, { nickname: w.nickname, score: w.score }),
+      text: [...winnerSections(p, w, p.runnerUp), admin].map((sec) => sec.join("\n")).join("\n\n"),
+    };
+  }
+  const games = [
+    { name: g.gameBig, winner: p.winner, runnerUp: p.runnerUp },
+    { name: g.gameTu, winner: p.tu.winner, runnerUp: p.tu.runnerUp },
+  ];
+  const sections: string[][] = [];
+  for (const x of games) {
+    const title = fill(g.sectionTitle, { game: x.name });
+    if (!x.winner) {
+      sections.push([title, g.emptyBoard]);
+      continue;
+    }
+    const [first, ...rest] = winnerSections(p, x.winner, x.runnerUp);
+    sections.push([title, ...first], ...rest);
+  }
+  sections.push(admin);
+  const present = games.filter((x) => x.winner);
+  const parts = present
+    .map((x) => fill(g.subjectPart, { game: x.name, nickname: x.winner!.nickname, score: x.winner!.score }))
+    .join(g.subjectJoin);
   return {
-    subject: fill(w.ordered ? g.subject : g.subjectWarn, { nickname: w.nickname, score: w.score }),
+    subject: fill(present.every((x) => x.winner!.ordered) ? g.twoSubject : g.twoSubjectWarn, { games: parts }),
     text: sections.map((sec) => sec.join("\n")).join("\n\n"),
   };
 }

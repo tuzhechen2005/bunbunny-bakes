@@ -1,6 +1,9 @@
 // 消除大面包 server side (D100-D105): start a run, verify and store a finished one, leaderboard.
 // The client score is never trusted: finish replays the drop log with the run's own seed and the
 // tier snapshot taken at start (src/lib/game/replay.ts).
+//
+// The board helpers (weekly ranking, all-time record, personal best, award lookup) take a `game`
+// so 兔了个兔 (src/server/tu.ts, D124) reuses them; the default is the first game.
 
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
@@ -24,6 +27,9 @@ export const NICKNAME_MAX = 10;
 export const LEADERBOARD_SIZE = 20;
 /** Largest finish body we read (600 drops are about 20 KB). */
 export const MAX_FINISH_BODY_BYTES = 64 * 1024;
+
+/** GameRun.game / GameAward.game (D124): BIG = 消除大面包, TU = 兔了个兔. */
+export type GameKind = "BIG" | "TU";
 
 const codePoints = (s: string) => [...s].length;
 // Control, format (zero-width, bidi marks and overrides) and line/paragraph separator characters:
@@ -83,7 +89,7 @@ export async function hasOrdered(db: DbClient, id: string): Promise<boolean> {
 }
 
 /** Counts a hit for the key inside a transaction and throws RATE_LIMITED past `limit` per hour. */
-async function rateLimit(db: DbClient, key: string, limit: number, now: Date): Promise<void> {
+export async function rateLimit(db: DbClient, key: string, limit: number, now: Date): Promise<void> {
   await db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
     const hits = await tx.rateLimitHit.count({ where: { key, at: { gt: new Date(now.getTime() - RATE_WINDOW_MS) } } });
@@ -134,12 +140,12 @@ const ELIGIBLE = Prisma.sql`r."finishedAt" IS NOT NULL AND r.score IS NOT NULL A
   AND NOT EXISTS (SELECT 1 FROM "GameBan" b WHERE lower(b."wechatId") = lower(r."wechatId"))`;
 
 /** One row per WeChat id (their best run), ranked by score then earliest finish; hidden runs and banned ids excluded. */
-function rankedSql(weekKey: string) {
+function rankedSql(weekKey: string, game: GameKind) {
   return Prisma.sql`
     WITH best AS (
       SELECT DISTINCT ON (lower(r."wechatId")) r.id, r."wechatId", r.nickname, r.score, r."finishedAt"
       FROM "GameRun" r
-      WHERE r."weekKey" = ${weekKey} AND ${ELIGIBLE}
+      WHERE r.game = ${game}::"GameKind" AND r."weekKey" = ${weekKey} AND ${ELIGIBLE}
       ORDER BY lower(r."wechatId"), r.score DESC, r."finishedAt" ASC, r.id ASC
     ), ranked AS (
       SELECT id, "wechatId", nickname, score, "finishedAt",
@@ -148,13 +154,13 @@ function rankedSql(weekKey: string) {
     )`;
 }
 
-async function topOfWeek(db: DbClient, weekKey: string, limit: number): Promise<BoardRow[]> {
-  return db.$queryRaw<BoardRow[]>`${rankedSql(weekKey)} SELECT * FROM ranked ORDER BY rank LIMIT ${limit}`;
+async function topOfWeek(db: DbClient, weekKey: string, limit: number, game: GameKind): Promise<BoardRow[]> {
+  return db.$queryRaw<BoardRow[]>`${rankedSql(weekKey, game)} SELECT * FROM ranked ORDER BY rank LIMIT ${limit}`;
 }
 
 /** The whole ranked board of a week (full WeChat ids: server and owner use only). */
-export async function rankedWeek(db: DbClient, weekKey: string): Promise<BoardRow[]> {
-  return db.$queryRaw<BoardRow[]>`${rankedSql(weekKey)} SELECT * FROM ranked ORDER BY rank`;
+export async function rankedWeek(db: DbClient, weekKey: string, game: GameKind = "BIG"): Promise<BoardRow[]> {
+  return db.$queryRaw<BoardRow[]>`${rankedSql(weekKey, game)} SELECT * FROM ranked ORDER BY rank`;
 }
 
 interface AllTimeRow {
@@ -165,24 +171,24 @@ interface AllTimeRow {
 }
 
 /** The all-time record (D113): highest eligible score ever, ties → earliest finish. */
-async function allTimeRecord(db: DbClient): Promise<AllTimeRow | null> {
+async function allTimeRecord(db: DbClient, game: GameKind): Promise<AllTimeRow | null> {
   const rows = await db.$queryRaw<AllTimeRow[]>`
     SELECT r.id::text AS id, r."wechatId", r.nickname, r.score FROM "GameRun" r
-    WHERE ${ELIGIBLE}
+    WHERE r.game = ${game}::"GameKind" AND ${ELIGIBLE}
     ORDER BY r.score DESC, r."finishedAt" ASC, r.id ASC LIMIT 1`;
   return rows[0] ?? null;
 }
 
 /** All-time best of a WeChat id (case-insensitive) over its finished, non-hidden runs. */
-async function personalBestOf(db: DbClient, id: string): Promise<number | null> {
+async function personalBestOf(db: DbClient, id: string, game: GameKind): Promise<number | null> {
   const rows = await db.$queryRaw<{ best: number | null }[]>`
     SELECT max(r.score)::int AS best FROM "GameRun" r
-    WHERE lower(r."wechatId") = lower(${id.trim()}) AND r."finishedAt" IS NOT NULL AND r.score IS NOT NULL AND NOT r.hidden`;
+    WHERE r.game = ${game}::"GameKind" AND lower(r."wechatId") = lower(${id.trim()}) AND r."finishedAt" IS NOT NULL AND r.score IS NOT NULL AND NOT r.hidden`;
   return rows[0]?.best ?? null;
 }
 
-async function rowOfPlayer(db: DbClient, weekKey: string, id: string): Promise<BoardRow | null> {
-  const rows = await db.$queryRaw<BoardRow[]>`${rankedSql(weekKey)} SELECT * FROM ranked WHERE lower("wechatId") = lower(${id}) LIMIT 1`;
+async function rowOfPlayer(db: DbClient, weekKey: string, id: string, game: GameKind): Promise<BoardRow | null> {
+  const rows = await db.$queryRaw<BoardRow[]>`${rankedSql(weekKey, game)} SELECT * FROM ranked WHERE lower("wechatId") = lower(${id}) LIMIT 1`;
   return rows[0] ?? null;
 }
 
@@ -201,15 +207,17 @@ export interface FinishResult {
   newRecord: boolean;
 }
 
-async function resultFor(
+/** The finish result of a stored (or just claimed) run of `game`. */
+export async function resultFor(
   db: DbClient,
   run: { id: string; wechatId: string; score: number | null; weekKey: string | null },
+  game: GameKind = "BIG",
 ): Promise<FinishResult> {
   const weekKey = run.weekKey ?? weekKeyOf(new Date());
   const [mine, best, record] = await Promise.all([
-    rowOfPlayer(db, weekKey, run.wechatId),
-    personalBestOf(db, run.wechatId),
-    allTimeRecord(db),
+    rowOfPlayer(db, weekKey, run.wechatId, game),
+    personalBestOf(db, run.wechatId, game),
+    allTimeRecord(db, game),
   ]);
   const score = run.score ?? 0;
   return {
@@ -226,7 +234,8 @@ export async function finishRun(db: DbClient, input: unknown, ipHash: string, no
   const data = parseGameInput(finishSchema, input);
   await rateLimit(db, `game_finish_ip:${ipHash}`, FINISH_LIMIT_PER_HOUR, now);
   const run = await db.gameRun.findUnique({ where: { id: data.runId } });
-  if (!run) throw new AppError("NOT_FOUND", { message: copy.gameApi.runNotFound });
+  // A 兔了个兔 run id is not a run of this game.
+  if (!run || run.game !== "BIG") throw new AppError("NOT_FOUND", { message: copy.gameApi.runNotFound });
   // Repeating a finish returns the stored result (the first drop log wins).
   if (run.finishedAt) return resultFor(db, run);
   // A run lives until the weekly reset after its start (D111): it always counts for its own week.
@@ -286,17 +295,22 @@ export interface Leaderboard {
   myBest?: number;
 }
 
-export async function getLeaderboard(db: DbClient, now: Date, myWechatId?: string | null): Promise<Leaderboard> {
+export async function getLeaderboard(
+  db: DbClient,
+  now: Date,
+  myWechatId?: string | null,
+  game: GameKind = "BIG",
+): Promise<Leaderboard> {
   const weekKey = weekKeyOf(now);
-  const [rows, record] = await Promise.all([topOfWeek(db, weekKey, LEADERBOARD_SIZE), allTimeRecord(db)]);
+  const [rows, record] = await Promise.all([topOfWeek(db, weekKey, LEADERBOARD_SIZE, game), allTimeRecord(db, game)]);
   const last = previousWeekKey(weekKey);
   // The owner's award (if any) names the winner; otherwise the top of last week.
-  const award = await db.gameAward.findUnique({ where: { weekKey: last }, include: { run: true } });
+  const award = await db.gameAward.findUnique({ where: { game_weekKey: { game, weekKey: last } }, include: { run: true } });
   let lastWinner: Leaderboard["lastWinner"] = null;
   if (award?.run && award.run.score !== null) {
     lastWinner = { nickname: award.run.nickname, wechatMasked: maskWechat(award.run.wechatId), score: award.run.score };
   } else {
-    const [w] = await topOfWeek(db, last, 1);
+    const [w] = await topOfWeek(db, last, 1, game);
     if (w) lastWinner = { nickname: w.nickname, wechatMasked: maskWechat(w.wechatId), score: w.score };
   }
   const out: Leaderboard = {
@@ -307,7 +321,7 @@ export async function getLeaderboard(db: DbClient, now: Date, myWechatId?: strin
   };
   const id = myWechatId?.trim();
   if (id && codePoints(id) <= WECHAT_MAX) {
-    const mine = await rowOfPlayer(db, weekKey, id);
+    const mine = await rowOfPlayer(db, weekKey, id, game);
     if (mine) out.myBest = mine.score;
   }
   return out;

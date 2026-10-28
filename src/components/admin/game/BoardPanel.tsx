@@ -23,6 +23,8 @@ interface Row {
   ordered: boolean;
   dropCount: number | null;
   durationSec: number | null;
+  /** 兔了个兔 only (D103 manual check); absent / false for the first game. */
+  suspicious?: boolean;
   rank: number | null;
 }
 interface Winner {
@@ -221,6 +223,7 @@ export function BoardPanel() {
                     </span>
                   ) : null}
                   <span className={chip} data-testid="run-ordered">{r.ordered ? t.ordered : t.notOrdered}</span>
+                  {r.suspicious ? <span className={`${chip} text-danger`} data-testid="run-suspicious">{t.suspicious}</span> : null}
                   {r.hidden ? <span className={chip}>{t.hidden}</span> : null}
                   {r.banned ? <span className={`${chip} text-danger`}>{t.banned}</span> : null}
                 </div>

@@ -84,6 +84,8 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
   const seed = String(opts.seed);
   const n = opts.tiers.length;
   if (!Number.isInteger(n) || n < MIN_TIERS || n > MAX_TIERS) throw new RangeError(`tu: needs ${MIN_TIERS}-${MAX_TIERS} tiers`);
+  // 消除大面包's 大面包 tier is never a 兔了个兔 bread (D123): a server passing it is a bug.
+  if (opts.tiers.some((t) => t.id === "big")) throw new RangeError("tu: the big tier is not a bread tier");
 
   const orderRng: Rng = createRng(`${seed}:tu:orders`);
   let batch = 0;
