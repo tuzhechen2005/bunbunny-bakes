@@ -95,6 +95,11 @@
 .game-entry-logo {
   animation: game-hop 1.8s cubic-bezier(0.3, 0, 0.3, 1) infinite;
 }
+/* D125: the right half beats half a beat later. */
+.game-entry-b,
+.game-entry.game-entry-b::after {
+  animation-delay: -0.9s;
+}
 .game-entry:active,
 .game-entry:active::after,
 .game-entry:active .game-entry-logo {

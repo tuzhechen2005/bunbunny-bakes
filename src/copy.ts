@@ -265,6 +265,9 @@ export const copy = {
       entryLabel: "玩消除大面包，周冠军有礼",
       /** D108: the prize is hinted on the card, the start screen and the leaderboard's first row. */
       entryPrize: "🎁 周冠军有礼",
+      /** D125: the home card's right half, 兔了个兔 (the second game). */
+      tuTitle: "兔了个兔",
+      entryTuLabel: "玩兔了个兔，周冠军有礼",
       prizeLine: "本周第一名可获得总共价值10💲的面包 🍞！",
       prizeMark: "🎁",
       prizeMarkLabel: "第一名有奖励",
@@ -467,6 +470,10 @@ export const copy = {
       title: "游戏",
       tabBoard: "排行榜",
       tabTiers: "面包",
+      /** Game switch above the leaderboard (D125). */
+      gameSwitch: "游戏",
+      gameBig: "消除大面包",
+      gameTu: "兔了个兔",
       loading: "加载中…",
       loadFailed: "加载失败，请刷新重试",
       retry: "重试",

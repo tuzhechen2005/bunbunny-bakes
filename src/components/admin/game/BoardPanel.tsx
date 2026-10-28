@@ -57,7 +57,10 @@ const timeLabel = (iso: string) => timeFmt.format(new Date(iso)).replace(",", ""
 
 const chip = "inline-flex items-center rounded-full border border-line px-2 py-0.5 text-sm";
 
-export function BoardPanel() {
+export function BoardPanel({ game = "big" }: { game?: "big" | "tu" }) {
+  // D125: `?game=tu` selects the second game; the default (no param) is the first game. Bans are shared.
+  const q = game === "tu" ? "game=tu" : "";
+  const withGame = (path: string) => (q ? `${path}${path.includes("?") ? "&" : "?"}${q}` : path);
   const [week, setWeek] = useState<string | undefined>(undefined);
   const [board, setBoard] = useState<Board | null>(null);
   const [error, setError] = useState("");
@@ -69,13 +72,14 @@ export function BoardPanel() {
   const [noteSaved, setNoteSaved] = useState(false);
 
   const load = useCallback(async (wk: string | undefined) => {
-    const r = await adminApi<Board>(`/api/admin/game/leaderboard${wk ? `?week=${wk}` : ""}`);
+    const r = await adminApi<Board>(withGame(`/api/admin/game/leaderboard${wk ? `?week=${wk}` : ""}`));
     if (r.ok) {
       setBoard(r.data);
       setNote(r.data.winner?.note ?? "");
       setError("");
     } else setError(r.message || t.loadFailed);
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game]);
   useEffect(() => {
     // Initial fetch: the state is set after the request resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -85,7 +89,7 @@ export function BoardPanel() {
   async function write(path: string, method: string, body?: unknown) {
     setBusy(true);
     setError("");
-    const r = await adminApi(path, { method, body });
+    const r = await adminApi(path.startsWith("/api/admin/game/bans") ? path : withGame(path), { method, body });
     setBusy(false);
     if (!r.ok) {
       if (r.error !== "UNAUTHORIZED") setError(r.message);
