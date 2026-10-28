@@ -1,10 +1,12 @@
 // Admin calendar e2e (dev server against the *_test database; see admin-shell.spec.ts).
 
+import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { Client } from "pg";
 import { copy } from "../../src/copy";
 import { testDatabaseUrl } from "../db/testDbUrl";
+import { screensDir } from "./support/screensDir";
 
 const t = copy.admin.calendar;
 
@@ -69,7 +71,7 @@ test("open a day, change the dough limit, hit a warning and confirm", async ({ p
   await page.getByRole("button", { name: t.nextMonth }).click();
   const cell = page.locator(`[data-date="${date}"]`);
   await expect(cell).toContainText("700 / 1600 g");
-  await page.screenshot({ path: "/Users/tuzhechen/Documents/bunbunny-bake/.orchestrator/screens/m5a-calendar.png", fullPage: true });
+  await page.screenshot({ path: path.join(screensDir(), "m5a-calendar.png"), fullPage: true });
 
   // Plain change: dough limit 1200, saved.
   await cell.click();

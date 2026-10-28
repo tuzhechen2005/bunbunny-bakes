@@ -1,14 +1,16 @@
 // Admin dashboard e2e. The dev server must run against the *_test database (the local
 // Playwright config sets DATABASE_URL); this spec resets and seeds that database.
 
+import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { expect, test, type BrowserContext } from "@playwright/test";
 import { Client } from "pg";
 import { copy } from "../../src/copy";
 import { testDatabaseUrl } from "../db/testDbUrl";
+import { screensDir } from "./support/screensDir";
 
 const t = copy.admin.dashboard;
-const SCREENSHOT = "/Users/tuzhechen/Documents/bunbunny-bake/.orchestrator/screens/m4b-dashboard.png";
+const SCREENSHOT = path.join(screensDir(), "m4b-dashboard.png");
 
 /** Chicago calendar day of now + offset days, "YYYY-MM-DD". */
 function chicagoDate(offsetDays: number): string {

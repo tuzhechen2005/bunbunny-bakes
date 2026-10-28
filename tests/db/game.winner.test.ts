@@ -221,6 +221,18 @@ describe("winner selection and the ⚠️ path", () => {
     expect(p?.runnerUp).toBeNull();
   });
 
+  it("concurrent jobs for the same week enqueue exactly one GAME_WINNER notification", async () => {
+    await run({ wechatId: "wx_top", score: 900 });
+    const results = await Promise.all([
+      enqueueGameWinner(db, NOW),
+      enqueueGameWinner(db, NOW),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual(["duplicate", "enqueued"]);
+    expect(await db.notification.count({ where: { kind: "GAME_WINNER" } })).toBe(1);
+    const n = await db.notification.findFirstOrThrow({ where: { kind: "GAME_WINNER" } });
+    expect(n.dedupeKey).toBe(`game_winner:${LAST}`);
+  });
+
   it("the job keys on the closed week whatever time on Monday (or later in the week) it runs", async () => {
     await run({ wechatId: "wx_top", score: 1 });
     // Monday 00:30 CDT and Wednesday both look back at the week of 10-19.

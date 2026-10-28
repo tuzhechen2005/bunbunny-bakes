@@ -1,6 +1,8 @@
 // N2: weekday tags, WEEKDAY date cards and the C1 date hints (REDUCE / SPLIT) against mocked APIs.
+import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { insertOrder, ITEM, resetAndSeed, withDb } from "./support/seed";
+import { screensDir } from "./support/screensDir";
 
 const CART_KEY = "bb_cart_v1";
 const DATE_KEY = "bb_cart_date_v1";
@@ -206,7 +208,7 @@ test.describe("checkout hints", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     const b = (await page.getByTestId("hint-apply").boundingBox())!;
     expect(b.height).toBeGreaterThanOrEqual(44);
-    await page.screenshot({ path: "/Users/tuzhechen/Documents/bunbunny-bake/.orchestrator/screens/n2_checkout-hint-320.png" });
+    await page.screenshot({ path: path.join(screensDir(), "n2_checkout-hint-320.png") });
   });
 });
 
