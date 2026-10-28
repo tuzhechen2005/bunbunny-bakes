@@ -247,8 +247,8 @@ export function TuPage() {
     <TopBar
       backHref="/"
       backLabel={g.backLabel}
-      title={phase === "playing" || phase === "over" ? undefined : t.pageTitle}
-      titleAs="h1"
+      title={phase === "board" ? t.pageTitle : undefined}
+      titleAs="p"
       right={
         <div className="flex items-center">
           {phase === "playing" ? (
@@ -300,7 +300,7 @@ export function TuPage() {
       <Shell>
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
-          <h2 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.title}</h2>
+          <h1 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.title}</h1>
           <p className="m-0 mt-2 text-sm leading-relaxed text-c-grey">{t.startHint}</p>
           <p className="font-display m-0 mt-6 text-center text-[15px] leading-snug text-c-ink" data-testid="tu-prize-line">
             {g.prizeLine}
@@ -395,7 +395,7 @@ export function TuPage() {
       <Shell>
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
-          <h2 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.title}</h2>
+          <h1 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.title}</h1>
           <form onSubmit={begin} noValidate className="mt-6 flex flex-col gap-4" data-testid="tu-form">
             <label className="block">
               <span className="mb-1.5 block text-[13px] font-bold">{g.wechatLabel}</span>

@@ -37,7 +37,8 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: color-mix(in srgb, var(--c-ink) 42%, transparent);
+  background: color-mix(in srgb, var(--c-ink) 24%, transparent);
+  backdrop-filter: saturate(0.7);
 }
 .tu-tile[data-free="true"]:active .tu-face {
   transform: scale(0.94);

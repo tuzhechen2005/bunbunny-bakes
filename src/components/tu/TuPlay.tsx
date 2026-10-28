@@ -138,6 +138,8 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
     setSnap(st);
     setView(fromState(st));
     /* eslint-enable react-hooks/set-state-in-effect */
+    // A saved run that is already over goes straight to the result flow.
+    if (g.over) cb.current.onOver({ taps: taps.current, score: g.score });
     const pending = timers.current;
     return () => {
       alive.current = false;
@@ -328,7 +330,7 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
         })}
       </div>
 
-      <div ref={areaRef} className="relative flex flex-1 items-center justify-center px-1.5" style={{ minHeight: bh * MIN_TILE }} data-testid="tu-area">
+      <div ref={areaRef} className="relative flex flex-1 items-start justify-center px-1.5 pt-2" style={{ minHeight: bh * MIN_TILE }} data-testid="tu-area">
         <div className="relative shrink-0" style={{ width: bw * u, height: bh * u }} role="group" aria-label={t.boardLabel} data-testid="tu-board" data-batch={snap.batch}>
           {snap.tiles.map((tile) => (
             <button

@@ -266,3 +266,21 @@ test("reduced motion: no animation classes on packs", async ({ page }) => {
   });
   expect(animated).toBe(false);
 });
+
+test("a saved run that is already over resumes into the result flow and is submitted", async ({ page }) => {
+  const api = await mockApi(page);
+  const bot = randomTu(SEED, TIERS);
+  const taps = bot.taps.map((x, i) => ({ id: x.id, at: (i + 1) * 200 }));
+  await page.goto("/game/tu");
+  await page.evaluate(
+    (save) => localStorage.setItem("bb_tu_save_v1", JSON.stringify(save)),
+    { v: 1, runId: "run-over", seed: SEED, tiers: TIERS, taps, nickname: "小面包", expiresAt: "2099-01-01T00:00:00Z", score: bot.score },
+  );
+  await page.reload();
+  await page.getByTestId("tu-resume").click();
+  await expect(page.getByTestId("tu-over-sheet")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("tu-confirmed")).toBeVisible();
+  expect(api.finishes).toHaveLength(1);
+  expect(api.finishes[0].runId).toBe("run-over");
+  expect(await page.evaluate(() => localStorage.getItem("bb_tu_save_v1"))).toBeNull();
+});
