@@ -1,8 +1,8 @@
-// 兔了个兔 tuning: plays the random and greedy bots over many seeds and prints how far they get.
+// 兔了个兔 tuning: plays the (information-limited) random, greedy and digger bots over many seeds and prints how far they get.
 // Usage: npx tsx scripts/tu-tune.mts [seeds=200] [tierCount=8]
 
-import { BATCHES } from "../src/lib/tu/deal";
-import { greedyTu, randomTu } from "../tests/support/tuBot";
+import { BATCHES, dealBatch, isHidden } from "../src/lib/tu/deal";
+import { diggerTu, greedyTu, randomTu } from "../tests/support/tuBot";
 
 const seeds = Number(process.argv[2] ?? 200);
 const tierCount = Number(process.argv[3] ?? 8);
@@ -20,9 +20,21 @@ const hist = (a: number[]) => {
 
 console.log(`seeds=${seeds} tiers=${tierCount}`);
 console.log(`batches=${JSON.stringify(BATCHES)}`);
+const hiddenShare = BATCHES.map((_, i) => {
+  let hidden = 0;
+  let all = 0;
+  for (let s = 0; s < 100; s++) {
+    const { tiles } = dealBatch(`hid${s}`, tierCount, i + 1);
+    all += tiles.length;
+    hidden += tiles.filter((t) => isHidden(t, tiles)).length;
+  }
+  return `${i + 1}:${Math.round((100 * hidden) / all)}%`;
+});
+console.log(`hidden at deal (per batch) ${hiddenShare.join(" ")}`);
 for (const [name, bot] of [
   ["random", randomTu],
   ["greedy", greedyTu],
+  ["digger", diggerTu],
 ] as const) {
   const runs = Array.from({ length: seeds }, (_, i) => bot(`tune${i}`, tiers));
   const batch = runs.map((r) => r.batch);

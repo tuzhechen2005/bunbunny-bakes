@@ -12,8 +12,8 @@ describe("dealBatch layout", () => {
     expect(dealBatch("s", 8, 3).tiles).not.toEqual(dealBatch("s", 8, 4).tiles);
   });
 
-  it("batch 1 is 4 breads, 3 layers, 30 tiles; later batches grow to 8 breads and 6 layers, then repeat", () => {
-    expect(batchSpec(1)).toMatchObject({ tiers: 4, layers: 3, tiles: 30 });
+  it("batch 1 is 4 breads, 2 layers, 24 tiles (D128 warm-up); later batches grow to 8 breads and 6 layers, then repeat", () => {
+    expect(batchSpec(1)).toMatchObject({ tiers: 4, layers: 2, tiles: 24 });
     for (let b = 2; b <= BATCHES.length; b++) {
       expect(batchSpec(b).tiers).toBeGreaterThanOrEqual(batchSpec(b - 1).tiers);
       expect(batchSpec(b).layers).toBeGreaterThanOrEqual(batchSpec(b - 1).layers);

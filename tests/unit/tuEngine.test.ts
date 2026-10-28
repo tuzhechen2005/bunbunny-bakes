@@ -46,16 +46,16 @@ describe("createTuGame", () => {
     expect(() => createTuGame({ seed: "x", tiers: [...tiersOf(3), { id: "big" }] })).toThrow(RangeError);
   });
 
-  it("starts at batch 1 with 30 tiles, an empty bag, two different orders from the board", () => {
+  it("starts at batch 1 with 24 tiles, an empty bag, two different orders from the board", () => {
     for (let i = 0; i < 50; i++) {
       const s = createTuGame({ seed: `i${i}`, tiers: TIERS }).state();
       expect(s).toMatchObject({ batch: 1, bag: [], score: 0, over: false });
-      expect(s.tiles).toHaveLength(30);
+      expect(s.tiles).toHaveLength(24);
       const onBoard = new Set(s.tiles.map((t) => t.tier));
       expect(onBoard.size).toBe(4);
       expect(onBoard.has(s.orders[0]) && onBoard.has(s.orders[1])).toBe(true);
       expect(s.orders[0]).not.toBe(s.orders[1]);
-      expect(new Set(s.tiles.map((t) => t.id)).size).toBe(30);
+      expect(new Set(s.tiles.map((t) => t.id)).size).toBe(24);
     }
   });
 
@@ -89,7 +89,7 @@ describe("createTuGame", () => {
     s.tiles.length = 0;
     s.bag.push(1);
     s.orders[0] = 99;
-    expect(g.state().tiles).toHaveLength(30);
+    expect(g.state().tiles).toHaveLength(24);
     expect(g.state().bag).toEqual([]);
     expect(g.state().orders[0]).not.toBe(99);
   });
@@ -220,14 +220,93 @@ describe("scoring and orders", () => {
     expect(hits).toBeGreaterThan(100);
   });
 
-  it("events come in the order move, pack, order*, batch, over", () => {
-    const rank = { move: 0, pack: 1, order: 2, batch: 3, over: 4 };
+  it("events come in the order move, pack, reveal, order*, batch, over", () => {
+    const rank = { move: 0, pack: 1, reveal: 2, order: 3, batch: 4, over: 5 };
     for (let seed = 0; seed < 20; seed++) {
       const g = createTuGame({ seed: `ev${seed}`, tiers: TIERS });
       for (const t of greedyTu(`ev${seed}`, TIERS).taps) {
         const r = g.tap(t.id)!.map((e) => rank[e.type]);
         expect(r[0]).toBe(0);
         expect([...r].sort((a, b) => a - b)).toEqual(r);
+      }
+    }
+  });
+});
+
+/** Independent check: hidden = each quarter's centre lies inside some tile on a higher layer. */
+const hiddenByPoints = (s: TuState, id: number) => {
+  const t = s.tiles.find((x) => x.id === id)!;
+  return [0.25, 0.75].every((dx) =>
+    [0.25, 0.75].every((dy) =>
+      s.tiles.some(
+        (o) => o.layer > t.layer && o.x <= t.x + dx && t.x + dx < o.x + 1 && o.y <= t.y + dy && t.y + dy < o.y + 1,
+      ),
+    ),
+  );
+};
+
+describe("hidden tiles (C7, D128)", () => {
+  it("visible = not entirely covered by higher tiles; free tiles are always visible", () => {
+    let hidden = 0;
+    let partly = 0;
+    for (let seed = 0; seed < 40; seed++) {
+      const g = createTuGame({ seed: `vis${seed}`, tiers: TIERS });
+      for (const tap of greedyTu(`vis${seed}`, TIERS, 250).taps) {
+        const s = g.state();
+        for (const t of s.tiles) {
+          expect(t.visible).toBe(!hiddenByPoints(s, t.id));
+          if (t.free) expect(t.visible).toBe(true);
+          if (!t.visible) hidden++;
+          if (t.visible && !t.free) partly++;
+        }
+        g.tap(tap.id);
+      }
+    }
+    expect(hidden).toBeGreaterThan(1000);
+    expect(partly).toBeGreaterThan(1000);
+  });
+
+  it("a hidden tile is never tappable", () => {
+    const g = createTuGame({ seed: "hid", tiers: TIERS });
+    // Go to batch 3, where many tiles are hidden.
+    playWitness(g, "hid");
+    playWitness(g, "hid");
+    const s = g.state();
+    const hidden = s.tiles.filter((t) => !t.visible);
+    expect(hidden.length).toBeGreaterThan(10);
+    for (const t of hidden) expect(g.tap(t.id)).toBeNull();
+  });
+
+  it("reveal lists exactly the tiles that were hidden before the tap and are visible after it", () => {
+    let reveals = 0;
+    for (let seed = 0; seed < 40; seed++) {
+      const g = createTuGame({ seed: `rev${seed}`, tiers: TIERS });
+      for (const tap of greedyTu(`rev${seed}`, TIERS).taps) {
+        const before = g.state();
+        const ev = g.tap(tap.id)!;
+        const after = g.state();
+        const dealt = ev.some((e) => e.type === "batch");
+        const wasHidden = new Set(before.tiles.filter((t) => !t.visible).map((t) => t.id));
+        // On a new batch the old board is empty: nothing of it can be revealed.
+        const want = dealt ? [] : after.tiles.filter((t) => t.visible && wasHidden.has(t.id)).map((t) => t.id);
+        const rev = ev.filter((e) => e.type === "reveal") as Extract<TuEvent, { type: "reveal" }>[];
+        expect(rev.length).toBeLessThanOrEqual(1);
+        expect(rev[0]?.tiles ?? []).toEqual(want);
+        if (rev.length) {
+          reveals++;
+          expect(rev[0].tiles.length).toBeGreaterThan(0);
+        }
+      }
+    }
+    expect(reveals).toBeGreaterThan(200);
+  });
+
+  it("every batch from 3 on hides tiles, including tiles stacked exactly under another one", () => {
+    for (let seed = 0; seed < 100; seed++) {
+      for (let b = 3; b <= 6; b++) {
+        const { tiles } = dealBatch(`stk${seed}`, 8, b);
+        const hidden = tiles.filter((t) => tiles.some((o) => o.layer > t.layer && o.x2 === t.x2 && o.y2 === t.y2));
+        expect(hidden.length).toBeGreaterThan(3);
       }
     }
   });
@@ -269,17 +348,19 @@ describe("determinism, replay and pinned vectors", () => {
   });
 
   it("pinned vector: dealt board and a greedy game never change", () => {
-    expect(hashTuState(createTuGame({ seed: "pinned", tiers: TIERS }).state())).toMatchInlineSnapshot(`"c626689f"`);
+    expect(hashTuState(createTuGame({ seed: "pinned", tiers: TIERS }).state())).toMatchInlineSnapshot(`"9c40bc97"`);
     const bot = greedyTu("pinned", TIERS);
     const g = createTuGame({ seed: "pinned", tiers: TIERS });
-    for (const t of bot.taps) g.tap(t.id);
-    expect({ score: bot.score, batch: bot.batch, over: bot.over, taps: bot.taps.length, hash: hashTuState(g.state()) }).toMatchInlineSnapshot(`
+    const revealed: number[] = [];
+    for (const t of bot.taps) for (const e of g.tap(t.id)!) if (e.type === "reveal") revealed.push(...e.tiles);
+    expect({ score: bot.score, batch: bot.batch, over: bot.over, taps: bot.taps.length, hash: hashTuState(g.state()), revealed: revealed.length }).toMatchInlineSnapshot(`
       {
-        "batch": 6,
-        "hash": "5251bb18",
+        "batch": 3,
+        "hash": "0298e30c",
         "over": true,
-        "score": 10540,
-        "taps": 297,
+        "revealed": 32,
+        "score": 2350,
+        "taps": 108,
       }
     `);
   });
