@@ -14,6 +14,10 @@ import { useTeaser } from "./AssistantTeaser";
 
 const t = copy.customer.assistant;
 
+/** Orb size (px), and while a question shows beside it (D120). */
+const ORB = 74;
+const TEASE_ORB = 38;
+
 export interface AssistantEntryProps {
   mode: "home" | "checkout";
   products: readonly MenuProduct[];
@@ -148,7 +152,7 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
             if (question) void send(question);
           }}
           aria-label={question ?? t.entryAria}
-          className={`pointer-events-auto flex h-[80px] items-center rounded-full p-[3px] origin-[calc(100%-40px)_50%] transition-[background-color,box-shadow,scale,translate] duration-[300ms,300ms,900ms] ease-[ease,ease,cubic-bezier(0.22,1.2,0.36,1)] active:scale-[0.97] motion-reduce:transition-none ${
+          className={`pointer-events-auto flex items-center rounded-full p-[3px] origin-[calc(100%-40px)_50%] transition-[background-color,box-shadow,scale,translate] duration-[300ms,300ms,900ms] ease-[ease,ease,cubic-bezier(0.22,1.2,0.36,1)] active:scale-[0.97] motion-reduce:transition-none ${
             visible ? "scale-100" : "scale-0 motion-reduce:scale-100"
           } ${
             question ? "bg-c-ink/90 shadow-[0_12px_30px_-12px_rgba(0,0,0,0.6)] ring-1 ring-white/15" : "bg-transparent"
@@ -156,10 +160,22 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
           data-testid="assistant-entry"
           data-teasing={question ? "1" : "0"}
         >
-          <IridescentOrb size={74} />
+          {/* While a question shows, the orb shrinks to about half so the pill stays small; the canvas
+              keeps its size and is scaled, so nothing is re-created. */}
+          <span
+            className="relative block shrink-0 overflow-visible transition-[width,height] duration-500 ease-out motion-reduce:transition-none"
+            style={{ width: question ? TEASE_ORB : ORB, height: question ? TEASE_ORB : ORB }}
+          >
+            <span
+              className="absolute top-0 left-0 block origin-top-left transition-transform duration-500 ease-out motion-reduce:transition-none"
+              style={{ transform: `scale(${question ? TEASE_ORB / ORB : 1})` }}
+            >
+              <IridescentOrb size={ORB} />
+            </span>
+          </span>
           <span
             className={`overflow-hidden whitespace-nowrap transition-[max-width,padding] duration-500 ease-out motion-reduce:transition-none ${
-              question ? "max-w-[min(230px,calc(100vw-136px))] pr-5 pl-3 text-ellipsis" : "max-w-0"
+              question ? "max-w-[min(250px,calc(100vw-100px))] pr-4 pl-2.5 text-ellipsis" : "max-w-0"
             }`}
           >
             <span key={question ?? ""} className="ao-shimmer block text-[15px] font-bold" data-testid="assistant-teaser">

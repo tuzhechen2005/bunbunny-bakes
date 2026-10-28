@@ -140,6 +140,8 @@ test.describe("assistant", () => {
     const entry = page.getByTestId("assistant-entry");
     await expect(entry).toHaveAttribute("data-teasing", "1", { timeout: 6000 });
     await expect(page.getByTestId("assistant-teaser")).toHaveText("这周四能取什么？");
+    // The orb shrinks to about half while a question shows.
+    await expect.poll(async () => (await entry.boundingBox())?.height ?? 99).toBeLessThan(50);
     await expect(entry).toHaveAccessibleName("这周四能取什么？");
     await entry.click();
     await expect(page.getByRole("dialog", { name: "小小🐰" })).toBeVisible();
@@ -171,6 +173,23 @@ test.describe("assistant", () => {
     await page.waitForTimeout(6000);
     await expect(entry).toHaveAttribute("data-teasing", "0");
     await expect(entry).toHaveAttribute("data-teasing", "1", { timeout: 20000 });
+  });
+
+  test("typing: compact header and the sheet pinned to the visible area; back to the big orb on blur", async ({ page }) => {
+    await openHome(page);
+    await scrollToList(page);
+    await page.getByTestId("assistant-entry").click();
+    const orb = page.getByTestId("assistant-sheet-orb");
+    await expect.poll(async () => (await orb.boundingBox())?.width ?? 0).toBeGreaterThan(100);
+    // Let the sheet finish opening (it moves focus to its close button), then tap the input like a person.
+    await page.waitForTimeout(600);
+    await page.getByTestId("assistant-input").click();
+    await expect.poll(async () => (await orb.boundingBox())?.width ?? 0).toBeLessThan(50);
+    const sheet = page.getByTestId("assistant-sheet");
+    await expect.poll(() => sheet.evaluate((el) => (el as HTMLElement).style.top)).not.toBe("");
+    await page.getByTestId("assistant-input").blur();
+    await expect.poll(async () => (await orb.boundingBox())?.width ?? 0).toBeGreaterThan(100);
+    await expect.poll(() => sheet.evaluate((el) => (el as HTMLElement).style.top)).toBe("");
   });
 
   test("suggestion replaces the bag (after asking) and sets the preferred date", async ({ page }) => {

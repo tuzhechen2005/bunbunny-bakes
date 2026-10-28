@@ -89,37 +89,44 @@ export function AssistantSheet({ rows, waiting, limited, hasCart, products, onSe
   const closeRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState("");
-  const [keyboard, setKeyboard] = useState(false);
+  const [typing, setTyping] = useState(false);
+  const keyboard = typing;
 
-  // iOS / WeChat: the on-screen keyboard shrinks the visual viewport but the sheet is fixed to the
-  // layout viewport, so the page scrolls and the sheet's top slides off. While the keyboard is up,
-  // pin the sheet to the visible area (above the keyboard) and use the compact header.
+  // iOS / WeChat: while the input has focus the on-screen keyboard covers the bottom of the page and
+  // the browser scrolls the page under the fixed sheet, so its top slides off. While typing, pin the
+  // sheet to the visible area (top = visual viewport bottom − height) and use the compact header.
   useEffect(() => {
+    const panel = sheetRef.current?.panel;
     const vv = window.visualViewport;
-    if (!vv) return;
+    if (!panel) return;
+    if (!typing || !vv) {
+      panel.style.top = "";
+      panel.style.bottom = "";
+      panel.style.height = "";
+      return;
+    }
     const fit = () => {
-      const panel = sheetRef.current?.panel;
-      if (!panel) return;
-      const below = window.innerHeight - vv.height - vv.offsetTop;
-      const up = window.innerHeight - vv.height > 120;
-      setKeyboard(up);
-      if (up) {
-        panel.style.bottom = `${Math.max(0, below)}px`;
-        panel.style.height = `${Math.min(600, Math.round(vv.height - 8))}px`;
-      } else {
-        panel.style.bottom = "";
-        panel.style.height = "";
-      }
+      const h = Math.min(600, Math.round(vv.height - 8));
+      panel.style.height = `${h}px`;
+      panel.style.bottom = "auto";
+      panel.style.top = `${Math.round(vv.offsetTop + vv.height - h)}px`;
       const el = listRef.current;
       if (el) el.scrollTop = el.scrollHeight;
     };
+    fit();
+    // The keyboard slides in after focus; follow it as the visual viewport changes.
     vv.addEventListener("resize", fit);
     vv.addEventListener("scroll", fit);
+    const late = setTimeout(fit, 350);
     return () => {
+      clearTimeout(late);
       vv.removeEventListener("resize", fit);
       vv.removeEventListener("scroll", fit);
+      panel.style.top = "";
+      panel.style.bottom = "";
+      panel.style.height = "";
     };
-  }, []);
+  }, [typing]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -222,6 +229,8 @@ export function AssistantSheet({ rows, waiting, limited, hasCart, products, onSe
       <form onSubmit={submit} className="shrink-0 px-5 pt-2 pb-[calc(14px+env(safe-area-inset-bottom))]">
         <div className="flex items-center gap-2">
           <input
+            onFocus={() => setTyping(true)}
+            onBlur={() => setTyping(false)}
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={ASSISTANT_MAX_CHARS}
