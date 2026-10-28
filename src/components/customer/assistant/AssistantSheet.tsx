@@ -55,7 +55,7 @@ function SuggestionCard({
         ))}
       </ul>
       {date ? <p className="mt-2 text-sm font-semibold">{fill(t.dateLine, { date })}</p> : null}
-      {s.note ? <p className="mt-1.5 text-[13.5px] leading-snug text-c-grey">{s.note}</p> : null}
+      {s.note ? <p className="mt-1.5 text-[13.5px] leading-snug break-words [overflow-wrap:anywhere] text-c-grey">{s.note}</p> : null}
       {asking ? (
         <div className="mt-3" data-testid="assistant-replace">
           <p className="text-sm font-bold">{t.replaceAsk}</p>
@@ -145,12 +145,12 @@ export function AssistantSheet({ rows, waiting, limited, hasCart, products, onSe
         <div className="mt-3 flex flex-col gap-2.5" aria-live="polite">
           {rows.map((r, k) =>
             r.role === "user" ? (
-              <p key={k} className="max-w-[85%] self-end rounded-2xl bg-c-ink px-4 py-2.5 text-[15px] leading-snug whitespace-pre-wrap text-c-paper" data-testid="assistant-user">
+              <p key={k} className="max-w-[85%] self-end rounded-2xl bg-c-ink px-4 py-2.5 text-[15px] leading-snug break-words [overflow-wrap:anywhere] whitespace-pre-wrap text-c-paper" data-testid="assistant-user">
                 {r.content}
               </p>
             ) : r.role === "assistant" ? (
               <div key={k} className="max-w-[92%] self-start" data-testid="assistant-reply">
-                <p className="rounded-2xl bg-c-wash px-4 py-2.5 text-[15px] leading-snug whitespace-pre-wrap">{r.content}</p>
+                <p className="rounded-2xl bg-c-wash px-4 py-2.5 text-[15px] leading-snug break-words [overflow-wrap:anywhere] whitespace-pre-wrap">{r.content}</p>
                 {r.suggestion ? (
                   <SuggestionCard
                     s={r.suggestion}

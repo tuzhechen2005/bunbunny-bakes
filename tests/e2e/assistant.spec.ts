@@ -181,6 +181,59 @@ test.describe("assistant", () => {
     await expect(page.getByTestId("assistant-input")).toBeEnabled();
   });
 
+  test("500 unbroken characters stay inside their bubbles", async ({ page }) => {
+    const long = "x".repeat(500);
+    await page.route("**/api/assistant", (route) =>
+      route.fulfill({ json: { reply: long, suggestion: { items: [{ productId: "nj", qty: 1 }], date: null, note: long }, remaining: 5 } }),
+    );
+    await openHome(page);
+    await scrollToList(page);
+    await page.getByTestId("assistant-entry").click();
+    await page.getByTestId("assistant-input").fill(long);
+    await page.getByTestId("assistant-send").click();
+    await expect(page.getByTestId("assistant-suggestion")).toBeVisible();
+    const overflowing = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-testid="assistant-sheet"] p')].filter((p) => p.scrollWidth > p.clientWidth).length,
+    );
+    expect(overflowing).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
+  test("a suggestion drops unknown items, merges duplicates and clamps to the per-item limit", async ({ page }) => {
+    await page.route("**/api/assistant", (route) =>
+      route.fulfill({
+        json: {
+          reply: "好",
+          suggestion: { items: [{ productId: "nj", qty: 15 }, { productId: "zzz", qty: 2 }, { productId: "nj", qty: 15 }, { productId: "hd", qty: 1 }], date: null, note: "" },
+          remaining: 5,
+        },
+      }),
+    );
+    await openHome(page);
+    await scrollToList(page);
+    await page.getByTestId("assistant-entry").click();
+    await page.getByRole("button", { name: "周四能取什么" }).click();
+    await page.getByTestId("assistant-apply").click();
+    await expect(page.getByTestId("assistant-sheet")).toHaveCount(0);
+    const cart = await page.evaluate(([k]) => localStorage.getItem(k), [CART_KEY]);
+    expect(JSON.parse(cart!)).toEqual([{ productId: "nj", qty: 20 }, { productId: "hd", qty: 1 }]);
+  });
+
+  test("no answer within 12 s shows the 暂时不在 line", async ({ page }) => {
+    await page.clock.install();
+    await page.route("**/api/assistant", () => {
+      // held: never answered
+    });
+    await openHome(page);
+    await scrollToList(page);
+    await page.getByTestId("assistant-entry").click();
+    await page.getByRole("button", { name: "周四能取什么" }).click();
+    await expect(page.getByTestId("assistant-typing")).toBeVisible();
+    await page.clock.fastForward(13000);
+    await expect(page.getByTestId("assistant-error")).toHaveText("小小🐰 暂时不在，可以直接下单哦");
+    await expect(page.getByTestId("assistant-typing")).toHaveCount(0);
+  });
+
   test("403 and a dropped connection use the 暂时不在 line", async ({ page }) => {
     let mode: "403" | "abort" = "403";
     await page.route("**/api/assistant", (route) =>

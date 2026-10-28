@@ -102,9 +102,13 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
   const apply = useCallback(
     (s: AssistantSuggestion, from: DOMRect | null) => {
       const known = new Map(products.map((p) => [p.id, p]));
-      const lines = s.items
-        .filter((i) => known.get(i.productId)?.status === "ACTIVE")
-        .map((i) => ({ productId: i.productId, qty: Math.max(1, Math.min(Math.floor(i.qty), maxQty)) }));
+      // Unknown / inactive products are dropped, duplicate lines merged, then each qty clamped to maxQty.
+      const merged = new Map<string, number>();
+      for (const i of s.items) {
+        if (known.get(i.productId)?.status !== "ACTIVE" || !Number.isFinite(i.qty)) continue;
+        merged.set(i.productId, (merged.get(i.productId) ?? 0) + Math.floor(i.qty));
+      }
+      const lines = [...merged].map(([productId, qty]) => ({ productId, qty: Math.max(1, Math.min(qty, maxQty)) }));
       if (lines.length === 0) return;
       // The date first: the checkout page reads it when the cart change makes it re-query.
       if (s.date) setPreferredDate(s.date);
