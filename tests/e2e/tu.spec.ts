@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { copy } from "../../src/copy";
-import { replayTu } from "../../src/lib/tu";
+import { createTuGame, replayTu } from "../../src/lib/tu";
 import { greedyTu, randomTu } from "../support/tuBot";
 import { screensDir } from "./support/screensDir";
 
@@ -96,7 +96,7 @@ test("menu: start and board, prize and rules lines; the title is not in the play
   await expect(page.getByTestId("tu-menu-start")).toBeVisible();
 });
 
-test("form validation, then batch 1: 30 tiles, covered ones are dimmed and cannot be tapped", async ({ page }) => {
+test("form validation, then batch 1: only the visible tiles render, covered ones are dimmed and cannot be tapped", async ({ page }) => {
   const api = await mockApi(page);
   await page.goto("/game/tu");
   await page.getByTestId("tu-menu-start").click();
@@ -108,7 +108,9 @@ test("form validation, then batch 1: 30 tiles, covered ones are dimmed and canno
   await page.getByTestId("tu-start").click();
   await expect(page.getByTestId("tu-board")).toBeVisible();
   expect(api.starts.at(-1)).toEqual({ wechatId: "bunbunny_fan", nickname: "小面包" });
-  await expect(page.locator('[data-testid^="tu-tile-"]')).toHaveCount(30);
+  // Hidden tiles (D128) are not rendered: compare with the engine's visible tiles for this seed.
+  const visible = createTuGame({ seed: SEED, tiers: TIERS }).state().tiles.filter((t) => t.visible).length;
+  await expect(page.locator('[data-testid^="tu-tile-"]')).toHaveCount(visible);
   await expect(page.getByTestId("tu-batch")).toHaveText("第 1 炉");
   await expect(page.getByTestId("tu-orders").locator('[data-testid^="tu-order-"]')).toHaveCount(2);
   const covered = page.locator('[data-testid^="tu-tile-"][data-free="false"]');
