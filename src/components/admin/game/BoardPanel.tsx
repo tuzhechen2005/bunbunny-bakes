@@ -78,6 +78,7 @@ export function BoardPanel({ game = "big" }: { game?: "big" | "tu" }) {
       setNote(r.data.winner?.note ?? "");
       setError("");
     } else setError(r.message || t.loadFailed);
+  // `withGame` is rebuilt every render but only depends on `game`, so `game` is the real dependency.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game]);
   useEffect(() => {

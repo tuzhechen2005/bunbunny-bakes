@@ -8,6 +8,8 @@ import { focusRing } from "@/components/ui/focus";
 import "@/components/game/game.css";
 
 const t = copy.customer.game;
+// Owner decision: the titles use bold 700 in the system sans stack; the dot of 「兔」 vanishes in the 900 display subset at this size.
+const TITLE_FONT = { fontFamily: '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif' };
 
 /**
  * Home entry to the two games (D125): one card, two halves split by a diagonal slash. Left 消除大面包
@@ -80,7 +82,7 @@ export function GameEntryCard() {
           <span className="game-entry-logo grid size-14 shrink-0 place-items-center rounded-full bg-c-paper shadow-[inset_0_0_0_1.5px_var(--c-line)]">
             <Logo className="h-10 w-auto" />
           </span>
-          <b className="font-display text-[22px] leading-[1.15] tracking-[-0.03em]">{t.title}</b>
+          <b className="text-[22px] leading-[1.15] font-bold tracking-[-0.02em]" style={TITLE_FONT}>{t.title}</b>
           {line(best, "game-entry-line")}
         </Link>
         <span aria-hidden="true" className="pointer-events-none absolute top-5 bottom-5 left-1/2 w-[1.5px] -translate-x-1/2 rotate-[14deg] rounded-full bg-c-line" />
@@ -93,7 +95,7 @@ export function GameEntryCard() {
               <img src="/brand/logo.webp" alt="" width={772} height={951} className="absolute top-[34%] left-[19%] w-[62%]" draggable={false} />
             </span>
           </span>
-          <b className="font-display text-[22px] leading-[1.15] tracking-[-0.03em]">{t.tuTitle}</b>
+          <b className="text-[22px] leading-[1.15] font-bold tracking-[-0.02em]" style={TITLE_FONT}>{t.tuTitle}</b>
           {line(bestTu, "game-entry-tu-line")}
         </Link>
       </div>
