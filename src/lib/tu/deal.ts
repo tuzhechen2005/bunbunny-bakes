@@ -36,6 +36,13 @@ export const BATCHES: readonly BatchSpec[] = [
   { tiers: 8, layers: 6, tiles: 90, spread: 3 },
 ];
 
+// Tuning guard: `spread` must stay 1-4 (= BAG_SIZE - 2). With 5 open triples of one tile each the
+// witness bag holds 5, and the next tile can neither open a triple (the bag would fill) nor complete
+// one, so assignTiers would have no legal tier and a batch would no longer be solvable by construction.
+for (const b of BATCHES) {
+  if (!(b.spread >= 1 && b.spread <= BAG_SIZE - 2) || b.tiles % 3 !== 0) throw new Error("tu: bad BATCHES entry");
+}
+
 export function batchSpec(batch: number): BatchSpec {
   return BATCHES[Math.min(batch, BATCHES.length) - 1];
 }

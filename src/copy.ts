@@ -418,6 +418,8 @@ export const copy = {
     runNotFound: "找不到这一局，请重新开始",
     runExpired: "这一局已经过期，请重新开始",
     badRun: "这一局的成绩没能通过验证",
+    /** 兔了个兔 needs at least 2 bread tiers (D123); shown when the shop has fewer. */
+    tuNotReady: "兔了个兔还没准备好，请稍后再来",
   },
 
   admin: {
@@ -535,6 +537,8 @@ export const copy = {
       drops: "{n} 次落子",
       duration: "{s} 秒",
       unverified: "未验证",
+      /** 兔了个兔 run flag (D103): too fast or MAX_TAPS reached; still on the board. */
+      suspicious: "⚠️ 可疑，发奖前看一下",
       ordered: "下过单",
       notOrdered: "没下过单",
       banned: "已封禁",
@@ -1272,6 +1276,15 @@ export const copy = {
         runnerUpHeader: "【下过单的最高者：第 {rank} 名】",
         noRunnerUp: "榜上没有下过单的人。",
         openAdmin: "[打开游戏后台] → {url}",
+        /** D124: when 兔了个兔 had anyone on last week's board, one email with a section per game. */
+        twoSubject: "👑 上周游戏冠军｜{games}",
+        twoSubjectWarn: "⚠️ 上周游戏冠军｜{games}｜有冠军没下过单",
+        subjectPart: "{game} {nickname} {score} 分",
+        subjectJoin: " · ",
+        sectionTitle: "===== {game} =====",
+        gameBig: "消除大面包",
+        gameTu: "兔了个兔",
+        emptyBoard: "上周没有人上榜。",
       },
     },
   },

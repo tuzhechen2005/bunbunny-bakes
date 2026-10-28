@@ -18,7 +18,7 @@ game.over; game.score; game.batch; game.taps; // read-only getters
 replayTu(seed, tiers, taps); // { score, over, batch, taps } or throws TuReplayError
 ```
 
-`createTuGame` throws `RangeError` for fewer than 2 or more than 8 tiers (a server configuration
+`createTuGame` throws `RangeError` for fewer than 2 or more than 8 tiers, or a tier with id `"big"` (a server configuration
 problem, so `replayTu` lets it through instead of turning it into a `TuReplayError`). Only the
 number of tiers matters to the engine; ids are for the UI. Every `tier` below is an index into
 `tiers`.
@@ -91,7 +91,7 @@ shuffle of all tiers.
 
 `dealBatch(seed, tierCount, batch)` builds the layout (positions only), then a random order in
 which every position is free when its turn comes, then assigns tiers along that order in triples
-(up to `spread` = 3 triples open at once, never 6 in the bag without a pack). That order is
+(up to `spread` = 3 triples open at once, never 6 in the bag without a pack; `spread` must stay ≤ 4, guarded at load). That order is
 returned as `solution` (the witness); `tests/unit/tuDeal.test.ts` plays it through the real engine
 for batches 1–7 over 500 seeds (and 150 seeds for every shop size 2–7).
 

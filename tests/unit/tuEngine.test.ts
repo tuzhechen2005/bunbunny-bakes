@@ -42,6 +42,10 @@ describe("createTuGame", () => {
     expect(() => createTuGame({ seed: "x", tiers: tiersOf(2) })).not.toThrow();
   });
 
+  it("rejects the first game's big tier (bread tiers only, D123)", () => {
+    expect(() => createTuGame({ seed: "x", tiers: [...tiersOf(3), { id: "big" }] })).toThrow(RangeError);
+  });
+
   it("starts at batch 1 with 30 tiles, an empty bag, two different orders from the board", () => {
     for (let i = 0; i < 50; i++) {
       const s = createTuGame({ seed: `i${i}`, tiers: TIERS }).state();

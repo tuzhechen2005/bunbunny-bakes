@@ -22,6 +22,8 @@ describe("dealBatch layout", () => {
     expect(batchSpec(BATCHES.length)).toMatchObject({ tiers: 8, layers: 6 });
     expect(batchSpec(50)).toEqual(batchSpec(BATCHES.length));
     for (const s of BATCHES) expect(s.tiles % 3).toBe(0);
+    // spread 5+ can dead-end the witness (5 singletons in the bag): see the guard in deal.ts.
+    for (const s of BATCHES) expect(s.spread).toBeLessThanOrEqual(4);
   });
 
   it.each([2, 4, 5, 8])("lays out every batch inside the board with %i shop tiers", (n) => {
