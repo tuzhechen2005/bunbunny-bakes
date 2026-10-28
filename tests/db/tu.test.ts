@@ -137,8 +137,13 @@ describe("finish", () => {
   it("replays the tap log and stores the verified score, taps, count, play time and flag", async () => {
     await createDefaultProducts();
     const run = await start();
-    const bot = play(run);
+    // D127: a completed game well below MAX_TAPS, with human-paced tap gaps.
+    const seed = "tu-finish";
+    await db.gameRun.update({ where: { id: run.runId }, data: { seed } });
+    const bot = play({ ...run, seed });
+    bot.taps = bot.taps.map((tap, i) => ({ id: tap.id, at: (i + 1) * 500 }));
     expect(bot.over).toBe(true);
+    expect(bot.taps).toHaveLength(66);
     const res = await finishTuRun(db, { runId: run.runId, taps: bot.taps, score: 999_999 }, IP, LATER);
     expect(res).toEqual({
       score: bot.score,
