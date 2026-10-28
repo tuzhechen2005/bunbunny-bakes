@@ -1,11 +1,13 @@
 // Admin order form e2e (new + edit). The order write APIs are mocked with page.route
 // (another task owns them); /api/admin/order-form is real against the *_test database.
 
+import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { expect, test, type BrowserContext, type Page, type Route } from "@playwright/test";
 import { Client } from "pg";
 import { copy } from "../../src/copy";
 import { testDatabaseUrl } from "../db/testDbUrl";
+import { screensDir } from "./support/screensDir";
 
 const t = copy.admin.orderForm;
 
@@ -151,7 +153,7 @@ test("new order: OVER_LIMIT lists violations, needs a reason, then resubmits wit
 
   await page.getByTestId("reason").fill("老顾客，我能多做");
   await dialog.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: "/Users/tuzhechen/Documents/bunbunny-bake/.orchestrator/screens/m4d-over-limit.png" });
+  await page.screenshot({ path: path.join(screensDir(), "m4d-over-limit.png") });
   await page.getByTestId("override-confirm").click();
   await expect(page.getByText(t.createdTitle)).toBeVisible();
   expect(bodies).toHaveLength(2);

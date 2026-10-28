@@ -1,15 +1,17 @@
 // Admin products e2e. The dev server must run against the *_test database (the local
 // Playwright config sets DATABASE_URL); this spec seeds an admin + session there.
 
+import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { Client } from "pg";
 import { copy } from "../../src/copy";
 import { testDatabaseUrl } from "../db/testDbUrl";
+import { screensDir } from "./support/screensDir";
 
 const t = copy.admin.products;
 const USERNAME = "e2e-products-owner";
-const SCREENSHOT = "/Users/tuzhechen/Documents/bunbunny-bake/.orchestrator/screens/m5b-products.png";
+const SCREENSHOT = path.join(screensDir(), "m5b-products.png");
 
 // Plain SQL: Playwright's CommonJS loader cannot import the generated Prisma client.
 async function withClient<T>(fn: (c: Client) => Promise<T>): Promise<T> {

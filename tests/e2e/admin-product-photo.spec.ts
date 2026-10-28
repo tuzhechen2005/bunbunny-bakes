@@ -4,9 +4,10 @@
 import { expect, test } from "@playwright/test";
 import { copy } from "../../src/copy";
 import { createAdminSession, resetAndSeed, type Seeded } from "./support/seed";
+import { screensDir } from "./support/screensDir";
 
 const t = copy.admin.products;
-const SHOTS = "/Users/tuzhechen/Documents/bunbunny-bake/.orchestrator/screens";
+const SHOTS = screensDir();
 
 test.use({ browserName: "chromium" }); // CDP touch input below
 
