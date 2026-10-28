@@ -398,3 +398,13 @@ model GameAward {
 
   @@index([runId])
 }
+
+/// 小小🐰 assistant message counts per Chicago day (D118). ipHash '*' = the global row.
+/// No message content is stored anywhere; rows of past days are deleted by the cleanup cron.
+model AssistantUsage {
+  day    DateTime @db.Date
+  ipHash String
+  count  Int      @default(0)
+
+  @@id([day, ipHash])
+}

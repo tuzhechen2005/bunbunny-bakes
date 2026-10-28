@@ -163,6 +163,45 @@
 
 服务端导出（给后台用）：`hasOrdered(db, wechatId)`（不区分大小写，存在状态不是 CANCELLED/REJECTED 的订单），`isBanned(db, wechatId)`，`maskWechat`，`weekKeyOf`、`weekRange`（`gameWeek.ts`）。
 
+### POST /api/assistant（小小🐰，D117、D118）
+
+实现在 `src/server/assistant/`。需要 `Origin` 等于 `SITE_URL`（否则 `403 FORBIDDEN_ORIGIN`），JSON 内容类型，请求体最多 64 KB，`Cache-Control: no-store`。
+
+请求：
+
+```ts
+{
+  messages: { role: "user" | "assistant"; content: string }[]; // 1–12 条，每条 1–500 字符（按 Unicode 字符数），最后一条是 user
+  cart: { productId: string; qty: number }[];                // 顾客纸袋，最多 50 行；只作为上下文
+  fulfillment?: "PICKUP" | "DELIVERY";                         // 不填按自提查
+}
+```
+
+返回：
+
+- `200 { reply, suggestion?, remaining }`：`reply` 纯文本（去掉 HTML/Markdown/链接/不可见字符，最多 400 字符）；`suggestion = { items: { productId, qty }[], date: "YYYY-MM-DD" | null, note }`（`note` 最多 100 字符），只有模型调用了 `propose_cart` 且通过校验才有；`remaining` = 这个访客今天还能问几句。
+- `429 { error: "ASSISTANT_LIMIT" }`：同一 IP 哈希每天（America/Chicago）20 句，或全站每天 500 句。先计访客、没超才计全站：访客自己超限不占全站额度；被全站上限拒绝的那一句仍算访客的一句。
+- `503 { error: "ASSISTANT_UNAVAILABLE" }`：没配 `DEEPSEEK_API_KEY`（不计次数）、缺 `IP_HASH_SECRET`（不计次数）、DeepSeek 返回错误（含 402 余额不足）、网络错误、超时（见下）。网站其他功能不受影响。
+- `400 { error: "VALIDATION", message, fields }`：请求体不对（注意：这里是 400，其他顾客接口是 422）。
+- `403 { error: "FORBIDDEN_ORIGIN" }`：`Origin` 不对。
+
+流程：校验 → 有 key → 计数（在调用 DeepSeek 之前，原子加一）→ 把所有消息里像微信号/电话/邮箱/地址的内容换成 `***` → 调用 `${DEEPSEEK_BASE_URL}/chat/completions`（`fetch`，非流式，`tools` + `tool_choice: "auto"`，`temperature 0.3`，`max_tokens 250`）→ 最多 3 次模型调用：最多 2 轮工具调用，第 3 次 `tool_choice: "none"` 必须直接回答。
+
+时间预算（Netlify 函数 10 秒就会被杀）：从请求到达开始整个请求 8.5 秒（数据库读取也算在内）；每次模型调用最多 `min(剩余, 4.5 秒)`；剩余不足 1.5 秒就不再发起调用。超时或 DeepSeek 出错时：如果已经有通过校验的建议卡片 → `200 { reply: copy.assistantApi.suggestionReply, suggestion, remaining }`；否则 `503 ASSISTANT_UNAVAILABLE`。
+
+系统提示（`prompt.ts`）：小小🐰 的身份和规则、今天日期、接单开关、截止时间、自提说明、运费和免运费门槛、每单每种上限、菜单（名字、价格、组合价、提前天数、可取货的星期、简介）、顾客纸袋和取货方式。没有店主微信号、克数、名额。
+
+工具（全部只读，只返回公开数据；没有任何读订单的工具；参数用 Zod 校验，错了返回 `{ error }` 让模型改）：
+
+| 工具 | 参数 | 返回 |
+|---|---|---|
+| `get_menu` | — | 商品（短 id `p1…`、名字、价格、组合价、状态、提前天数、可取货的日子、简介）、每种上限、是否接单 |
+| `check_date` | `items, date, fulfillment?` | 服务器算的小计（配送时含运费、合计）、这一天的状态（`planCart`；不开放的日子是 `NOT_OFFERED`）、可订时的截止时间、FULL/WEEKDAY 时的办法（REDUCE / SPLIT，只有商品名和件数） |
+| `find_dates` | `items, fulfillment?` | 最近 ≤ 5 个 AVAILABLE 的日子和截止时间 |
+| `propose_cart` | `items, date?, note` | 校验（商品存在且在售、每种 ≤ `maxQtyPerItem`、日期填了就必须 AVAILABLE）后成为响应里的 `suggestion`，并返回服务器算的小计（配送时含运费、合计） |
+
+`items` 里的 `product` 是 `get_menu` 的短 id（也接受商品 id 或完整商品名），同一商品会合并。
+
 ## 3. 店主接口（`/api/admin/**`，需要登录）
 
 **认证**：httpOnly、Secure、SameSite=Lax 的 session cookie。所有非 GET 请求检查 `Origin` 头必须是本站，防跨站请求伪造。
@@ -219,7 +258,7 @@
 
 | 路径 | 频率（America/Chicago） | 做什么 |
 |---|---|---|
-| POST `/api/cron/outbox` | 每 5 分钟 | 发送 `nextAttemptAt ≤ now` 的待发通知；清理过期的频率记录和登录会话；删除开始于本周一 0:00 之前、一直没完成的游戏局（已过期） |
+| POST `/api/cron/outbox` | 每 5 分钟 | 发送 `nextAttemptAt ≤ now` 的待发通知；清理过期的频率记录和登录会话、今天以前的小小🐰 计数（`AssistantUsage`）；删除开始于本周一 0:00 之前、一直没完成的游戏局（已过期） |
 | POST `/api/cron/game-winner` | 每周一 09:00 | 上周（刚结束的那一周）游戏排行榜第一名的邮件（D114，`NOTIFICATIONS.md` 第 6 节）入队，`dedupeKey = game_winner:<上周一>`，入队后立即发送（`send` 同 summary），重复调用只发一次；上周没有算数的局时返回 `{ status: "empty" }`，什么都不发 |
 | POST `/api/cron/summary` | 每天 20:05 | 生成生产汇总（`CAPACITY_RULES.md` 第 10 节）并入队，`dedupeKey = summary:<明天日期>`，入队后立即发送（响应里的 `send` 是发送结果，失败的由 outbox 重试），重复调用只发一次 |
 
@@ -238,5 +277,8 @@
 | `SITE_URL` | 例如 `https://bunbunnybakes.shop`，用于邮件链接和 Origin 检查 |
 | `CRON_SECRET` | |
 | `IP_HASH_SECRET` | |
+| `DEEPSEEK_API_KEY` | 小小🐰 用（D117）。不设 = `/api/assistant` 返回 503，其他不受影响。预充值余额就是花费上限 |
+| `DEEPSEEK_BASE_URL` | 可选，默认 `https://api.deepseek.com` |
+| `ASSISTANT_MODEL` | 可选，默认 `deepseek-chat` |
 
 `.env.example` 进仓库（只有名称，没有值）；`.env` 不进仓库。

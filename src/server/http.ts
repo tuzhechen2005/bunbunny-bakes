@@ -5,10 +5,14 @@ import { AppError } from "./errors";
 import { errorResponse } from "./session";
 
 /**
- * Client IP for rate limiting (D57): first x-forwarded-for entry, else x-real-ip, else the
- * literal "unknown" (a shared bucket, so the per-IP limit always applies). Warns on fallback.
+ * Client IP for rate limiting (D57): on Netlify the `x-nf-client-connection-ip` header (set by
+ * Netlify's edge from the connection, so a client cannot choose it); else the first
+ * x-forwarded-for entry, else x-real-ip, else the literal "unknown" (a shared bucket, so the
+ * per-IP limit always applies). Warns on fallback.
  */
 export function clientIp(request: Request): string {
+  const netlify = request.headers.get("x-nf-client-connection-ip")?.trim();
+  if (netlify) return netlify;
   const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   if (forwarded) return forwarded;
   const real = request.headers.get("x-real-ip")?.trim();
