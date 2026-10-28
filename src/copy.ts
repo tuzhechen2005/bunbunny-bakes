@@ -1265,7 +1265,7 @@ export const copy = {
       gameWinner: {
         subject: "👑 上周游戏冠军 {nickname}｜{score} 分",
         subjectWarn: "⚠️ 上周游戏冠军 {nickname}｜{score} 分｜没下过单",
-        header: "【{start} – {end} 的第一名】",
+        weekHeader: "【{start} – {end} 的第一名】",
         nicknameLine: "昵称：{nickname}",
         wechatLine: "微信号：{wechatId}",
         scoreLine: "分数：{score}",
