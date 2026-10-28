@@ -17,9 +17,9 @@ const THINK_RATE = 2.2;
 const THINK_EASE = 4;
 /** Start a little into the noise so the first still frame is not flat. */
 const TIME_OFFSET = 4.7;
-/** Pink-violet → cyan (the original's defaults), as 0..1 RGB. */
-const COLOR_FROM = [192 / 255, 132 / 255, 252 / 255];
-const COLOR_TO = [103 / 255, 232 / 255, 249 / 255];
+/** 焦糖奶油: caramel #C8742E → cream #FFE2A8 (D120, owner's pick), as 0..1 RGB. */
+const COLOR_FROM = [200 / 255, 116 / 255, 46 / 255];
+const COLOR_TO = [255 / 255, 226 / 255, 168 / 255];
 
 const VERT = `
 attribute vec2 aPos;

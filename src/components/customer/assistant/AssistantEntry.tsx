@@ -148,16 +148,16 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
             if (question) void send(question);
           }}
           aria-label={question ?? t.entryAria}
-          className={`pointer-events-auto flex h-[72px] items-center rounded-full p-[3px] transition-[background-color,box-shadow] duration-300 active:scale-[0.97] motion-reduce:transition-none ${
+          className={`pointer-events-auto flex h-[80px] items-center rounded-full p-[3px] transition-[background-color,box-shadow] duration-300 active:scale-[0.97] motion-reduce:transition-none ${
             question ? "bg-c-ink/90 shadow-[0_12px_30px_-12px_rgba(0,0,0,0.6)] ring-1 ring-white/15" : "bg-transparent"
           } ${focusRing}`}
           data-testid="assistant-entry"
           data-teasing={question ? "1" : "0"}
         >
-          <IridescentOrb size={66} />
+          <IridescentOrb size={74} />
           <span
             className={`overflow-hidden whitespace-nowrap transition-[max-width,padding] duration-500 ease-out motion-reduce:transition-none ${
-              question ? "max-w-[min(230px,calc(100vw-128px))] pr-5 pl-3 text-ellipsis" : "max-w-0"
+              question ? "max-w-[min(230px,calc(100vw-136px))] pr-5 pl-3 text-ellipsis" : "max-w-0"
             }`}
           >
             <span key={question ?? ""} className="ao-shimmer block text-[15px] font-bold" data-testid="assistant-teaser">

@@ -125,7 +125,7 @@ export function AssistantSheet({ rows, waiting, limited, hasCart, products, onSe
       </button>
       <div className="flex shrink-0 flex-col items-center gap-2 px-5 pt-5">
         <span className="shrink-0" data-testid="assistant-sheet-orb" data-thinking={waiting ? "1" : "0"}>
-          <IridescentOrb size={96} thinking={waiting} />
+          <IridescentOrb size={108} thinking={waiting} />
         </span>
         <h2 className="font-display m-0 text-[24px] leading-[1.1] tracking-[-0.04em] text-c-ink">{t.name}</h2>
       </div>
