@@ -6,8 +6,9 @@ import { expect, test, type BrowserContext } from "@playwright/test";
 import { Client } from "pg";
 import { copy } from "../../src/copy";
 import { testDatabaseUrl } from "../db/testDbUrl";
+import { screensDir } from "./support/screensDir";
 
-const SCREENS = "/Users/tuzhechen/Documents/bunbunny-bake/.orchestrator/screens";
+const SCREENS = screensDir();
 const t = copy.admin.products;
 
 function isoDay(offset: number): string {

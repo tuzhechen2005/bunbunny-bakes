@@ -7,11 +7,12 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { Client } from "pg";
 import { copy } from "../../src/copy";
 import { testDatabaseUrl } from "../db/testDbUrl";
+import { screensDir } from "./support/screensDir";
 
 const t = copy.admin.settings;
 const l = copy.admin.logs;
 const USERNAME = "e2e-settings-owner";
-const SCREENS = "/Users/tuzhechen/Documents/bunbunny-bake/.orchestrator/screens";
+const SCREENS = screensDir();
 
 // Plain SQL: Playwright's CommonJS loader cannot import the generated Prisma client.
 async function withDb<T>(fn: (client: Client) => Promise<T>): Promise<T> {

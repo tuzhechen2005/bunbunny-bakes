@@ -1,9 +1,11 @@
 // L2: the board with REAL uploaded product photos (no mocks): the tier pictures are served through the
 // image optimizer, arrive after the first frame, and must still show on the pieces; taps drop pieces and
 // the score rises.
+import path from "node:path";
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { createAdminSession, resetAndSeed } from "./support/seed";
+import { screensDir } from "./support/screensDir";
 
 test.use({ browserName: "chromium" });
 
@@ -69,7 +71,7 @@ test("real photos: pieces are drawn with their picture, taps drop them and the s
   }
   await expect(page.getByTestId("game-board")).toHaveAttribute("data-drops", "12");
   await page.waitForTimeout(2500);
-  await page.screenshot({ path: "/Users/tuzhechen/Documents/bunbunny-bake/.orchestrator/screens/l2_photos.png" });
+  await page.screenshot({ path: path.join(screensDir(), "l2_photos.png") });
   // Pieces are on the board (not an empty board).
   expect(await inkShare(page)).toBeGreaterThan(0.02);
   // Keep going until something merged: the score rises.
