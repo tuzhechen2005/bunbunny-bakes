@@ -89,6 +89,37 @@ export function AssistantSheet({ rows, waiting, limited, hasCart, products, onSe
   const closeRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState("");
+  const [keyboard, setKeyboard] = useState(false);
+
+  // iOS / WeChat: the on-screen keyboard shrinks the visual viewport but the sheet is fixed to the
+  // layout viewport, so the page scrolls and the sheet's top slides off. While the keyboard is up,
+  // pin the sheet to the visible area (above the keyboard) and use the compact header.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const fit = () => {
+      const panel = sheetRef.current?.panel;
+      if (!panel) return;
+      const below = window.innerHeight - vv.height - vv.offsetTop;
+      const up = window.innerHeight - vv.height > 120;
+      setKeyboard(up);
+      if (up) {
+        panel.style.bottom = `${Math.max(0, below)}px`;
+        panel.style.height = `${Math.min(600, Math.round(vv.height - 8))}px`;
+      } else {
+        panel.style.bottom = "";
+        panel.style.height = "";
+      }
+      const el = listRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    };
+    vv.addEventListener("resize", fit);
+    vv.addEventListener("scroll", fit);
+    return () => {
+      vv.removeEventListener("resize", fit);
+      vv.removeEventListener("scroll", fit);
+    };
+  }, []);
 
   useEffect(() => {
     const el = listRef.current;
@@ -123,9 +154,9 @@ export function AssistantSheet({ rows, waiting, limited, hasCart, products, onSe
       >
         <CloseIcon className="size-5" />
       </button>
-      <div className="flex shrink-0 flex-col items-center gap-2 px-5 pt-5">
+      <div className={`flex shrink-0 items-center px-5 ${keyboard ? "flex-row gap-3 pt-3.5 pr-16" : "flex-col gap-2 pt-5"}`}>
         <span className="shrink-0" data-testid="assistant-sheet-orb" data-thinking={waiting ? "1" : "0"}>
-          <IridescentOrb size={108} thinking={waiting} />
+          <IridescentOrb size={keyboard ? 44 : 108} thinking={waiting} />
         </span>
         <h2 className="font-display m-0 text-[24px] leading-[1.1] tracking-[-0.04em] text-c-ink">{t.name}</h2>
       </div>

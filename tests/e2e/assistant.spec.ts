@@ -56,8 +56,9 @@ const SUGGESTION = {
 
 async function openHome(page: Page, { teasers = false } = {}) {
   await mockShop(page);
-  // The orb's pop-up questions (D120) would turn a tap on the orb into a question; most tests want the plain orb.
-  if (!teasers) await page.addInitScript(() => sessionStorage.setItem("bb_ai_teaser_off", "1"));
+  // The orb's pop-up questions (D120) would turn a tap on the orb into a question; most tests want the
+  // plain orb, so they switch the questions off with the hook in AssistantTeaser.
+  if (!teasers) await page.addInitScript(() => ((window as unknown as { __noTeasers: boolean }).__noTeasers = true));
   await page.goto("/");
   await expect(page.getByTestId("rack")).toBeVisible();
 }
@@ -154,20 +155,22 @@ test.describe("assistant", () => {
     await expect(entry).toHaveAttribute("data-teasing", "0");
   });
 
-  test("questions rotate; opening the orb stops them for the session", async ({ page }) => {
+  test("questions rotate and keep coming after the orb was opened, just less often", async ({ page }) => {
+    test.setTimeout(70_000);
+    await page.route("**/api/assistant", (route) => route.fulfill({ json: { reply: "好的。", remaining: 19 } }));
     await openHome(page, { teasers: true });
     await scrollToList(page);
     const entry = page.getByTestId("assistant-entry");
     await expect(entry).toHaveAttribute("data-teasing", "1", { timeout: 6000 });
     await expect(entry).toHaveAttribute("data-teasing", "0", { timeout: 7000 });
-    await expect(page.getByTestId("assistant-teaser")).toHaveText("");
     await expect(page.getByTestId("assistant-teaser")).toHaveText("泡芙怎么订？", { timeout: 7000 });
-    await page.getByTestId("assistant-entry").click();
+    await expect(entry).toHaveAttribute("data-teasing", "0", { timeout: 7000 });
+    await entry.click();
     await page.getByTestId("assistant-close").click();
-    await page.reload();
-    await scrollToList(page);
-    await page.waitForTimeout(2500);
+    // After use: no question within the fast 4 s gap, but one comes back within the slower 15 s one.
+    await page.waitForTimeout(6000);
     await expect(entry).toHaveAttribute("data-teasing", "0");
+    await expect(entry).toHaveAttribute("data-teasing", "1", { timeout: 20000 });
   });
 
   test("suggestion replaces the bag (after asking) and sets the preferred date", async ({ page }) => {

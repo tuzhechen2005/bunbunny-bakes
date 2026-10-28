@@ -142,7 +142,7 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
           ref={opener}
           type="button"
           onClick={() => {
-            teaser.stop();
+            teaser.used();
             setOpen(true);
             // A tap while a question shows asks that question (D120).
             if (question) void send(question);
