@@ -4,6 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { copy } from "../../src/copy";
 import { createM3Game, legalM3Moves, replayM3, type M3Cell, type M3Move, type M3State, type M3Swap } from "../../src/lib/m3";
 import { M3_SAVE_KEY } from "../../src/components/m3/m3Save";
+import { animationQueue } from "../../src/components/m3/m3Animation";
 import { chooseM3Move } from "../support/m3Bot";
 import { drag, finger } from "./support/touch";
 
@@ -103,6 +104,19 @@ for (const width of [320, 390]) {
       await start(page);
       expect(api.starts).toEqual([{ wechatId: "m3_fan", nickname: "小面包" }]);
       await expect(page.locator("[data-cell]")).toHaveCount(64);
+      const targets = await page.locator("[data-cell]").evaluateAll(els => els.map(el => {
+        const { x, y, width, height } = el.getBoundingClientRect();
+        return { x, y, width, height };
+      }));
+      const minimum = width === 320 ? 39 : 44;
+      for (const box of targets) {
+        expect(box.width).toBeGreaterThanOrEqual(minimum);
+        expect(box.height).toBeGreaterThanOrEqual(minimum);
+      }
+      for (let i = 0; i < targets.length; i++) {
+        if (i % 8 < 7) expect(targets[i].x + targets[i].width).toBeLessThanOrEqual(targets[i + 1].x + .01);
+        if (i < 56) expect(targets[i].y + targets[i].height).toBeLessThanOrEqual(targets[i + 8].y + .01);
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await expect(page.getByTestId("m3-board").locator("canvas")).toHaveCount(0);
       const game = createM3Game({ seed: SEED, tiers: TIERS });
@@ -183,6 +197,110 @@ for (const width of [320, 390]) {
       await page.getByTestId("m3-over-close").click();
       await settled(page, game.state());
       expect(api.finishes).toHaveLength(1);
+    });
+
+    test("final cascade releases Exit; a failed finish survives reload and retries the same run", async ({ page }) => {
+      const api = await mockApi(page);
+      const requests: { runId: string; moves: M3Move[] }[] = [];
+      await page.route("**/api/game/m3/finish", async route => {
+        requests.push(route.request().postDataJSON());
+        if (requests.length === 1) await route.abort("failed");
+        else await route.fallback();
+      });
+      const game = createM3Game({ seed: SEED, tiers: TIERS });
+      const moves: M3Move[] = [];
+      while (game.state().movesLeft > 1) {
+        const m = legalM3Moves(game.state())[0];
+        game.swap(m.a, m.b); moves.push({ ...m, at: moves.length * 500 });
+      }
+      await page.goto("/game/m3");
+      await page.evaluate(({ key, save }) => localStorage.setItem(key, JSON.stringify(save)), { key: M3_SAVE_KEY, save: {
+        v: 1, runId: "pending-final", seed: SEED, tiers: TIERS, moves, score: game.score, nickname: "小面包", expiresAt: "2099-01-01T00:00:00Z",
+      } });
+      await page.reload(); await page.getByTestId("m3-resume").click();
+      await settled(page, game.state());
+      await page.evaluate(() => {
+        const w = window as unknown as { m3ModalOverlap: boolean };
+        w.m3ModalOverlap = false;
+        new MutationObserver(() => {
+          if (document.querySelector('[data-testid="m3-exit-sheet"]') && document.querySelector('[data-testid="m3-over-sheet"]')) w.m3ModalOverlap = true;
+        }).observe(document.body, { childList: true, subtree: true });
+      });
+      const last = legalM3Moves(game.state())[0];
+      await tapSwap(page, last); game.swap(last.a, last.b);
+      await expect(page.getByTestId("m3-board")).toHaveAttribute("aria-busy", "true");
+      await page.getByTestId("m3-exit").click();
+      await expect(page.getByTestId("m3-exit-sheet")).toBeVisible();
+      await expect(page.getByTestId("m3-over-sheet")).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId("m3-exit-sheet")).toHaveCount(0);
+      expect(await page.evaluate(() => (window as unknown as { m3ModalOverlap: boolean }).m3ModalOverlap)).toBe(false);
+      await expect(page.getByTestId("m3-retry")).toBeVisible();
+      const pending = await page.evaluate(key => localStorage.getItem(key), M3_SAVE_KEY);
+      expect(JSON.parse(pending!).moves).toHaveLength(30);
+      await page.keyboard.press("Tab");
+      expect(await page.getByTestId("m3-over-sheet").evaluate(el => el.contains(document.activeElement))).toBe(true);
+      await page.getByTestId("m3-over-close").click();
+      await expect(page.getByTestId("m3-over-sheet")).toHaveCount(0);
+      await expect.poll(() => page.evaluate(() => document.body.style.overflow)).not.toBe("hidden");
+      await page.reload(); await page.getByTestId("m3-resume").click();
+      await expect(page.getByTestId("m3-confirmed")).toBeVisible();
+      expect(requests).toHaveLength(2);
+      expect(requests[1]).toEqual(requests[0]);
+      expect(api.starts).toHaveLength(0);
+      expect(api.finishes).toHaveLength(1);
+      expect(await page.evaluate(key => localStorage.getItem(key), M3_SAVE_KEY)).toBeNull();
+    });
+
+    test("abandoned drags clear tap selection and genuine taps still swap", async ({ page }) => {
+      await mockApi(page); await page.goto("/game/m3"); await start(page);
+      const game = createM3Game({ seed: SEED, tiers: TIERS });
+      const move = legalM3Moves(game.state())[0];
+      for (const kind of ["edge", "short", "cancel"]) {
+        await cell(page, move.a).tap();
+        await expect(cell(page, move.a)).toHaveAttribute("aria-pressed", "true");
+        // Synthetic touches also cover movements below Chromium's native touch slop.
+        await cell(page, { r: 0, c: 0 }).evaluate((el, kind) => {
+          const box = el.getBoundingClientRect();
+          const touch = (dx: number) => new Touch({ identifier: 1, target: el, clientX: box.x + box.width / 2 + dx, clientY: box.y + box.height / 2 });
+          const emit = (type: string, touches: Touch[]) => el.dispatchEvent(new TouchEvent(type, { touches, changedTouches: touches, bubbles: true, cancelable: true }));
+          emit("touchstart", [touch(0)]);
+          if (kind !== "cancel") emit("touchmove", [touch(kind === "edge" ? -30 : -1)]);
+          emit(kind === "cancel" ? "touchcancel" : "touchend", []);
+        }, kind);
+        await expect(page.locator('[data-cell][aria-pressed="true"]')).toHaveCount(0);
+        await page.waitForTimeout(550); // Ignore only the drag's synthetic click, not the next tap.
+        await cell(page, move.b).tap();
+        await expect(cell(page, move.b)).toHaveAttribute("aria-pressed", "true");
+        await settled(page, game.state());
+        await cell(page, move.b).tap();
+      }
+      await cell(page, move.a).tap(); await cell(page, move.b).tap();
+      game.swap(move.a, move.b); await settled(page, game.state());
+    });
+
+    test("an unchanged tile keeps its failed-image fallback throughout a cascade", async ({ page }) => {
+      await mockApi(page); await page.goto("/game/m3"); await start(page);
+      const game = createM3Game({ seed: SEED, tiers: TIERS });
+      const before = game.state();
+      const move = legalM3Moves(before)[0];
+      const frames = animationQueue(before, game.swap(move.a, move.b)!);
+      const stable = before.board.flatMap((row, r) => row.map((code, c) => ({ r, c, code })))
+        .find(p => p.code > 0 && p.code < 6 && frames.every(f => f.before.board[p.r][p.c] === p.code && f.after.board[p.r][p.c] === p.code))!;
+      expect(stable).toBeDefined();
+      const tile = cell(page, stable).locator("..");
+      await tile.locator("img").dispatchEvent("error");
+      await expect(tile.locator("img")).toHaveCount(0);
+      await tile.evaluate(el => {
+        const w = window as unknown as { m3ImageRetries: number }; w.m3ImageRetries = 0;
+        new MutationObserver(records => {
+          for (const record of records) for (const node of record.addedNodes) {
+            if (node instanceof Element) w.m3ImageRetries += Number(node.matches("img")) + node.querySelectorAll("img").length;
+          }
+        }).observe(el, { childList: true, subtree: true });
+      });
+      await tapSwap(page, move); await settled(page, game.state());
+      await expect(tile.locator("img")).toHaveCount(0);
+      expect(await page.evaluate(() => (window as unknown as { m3ImageRetries: number }).m3ImageRetries)).toBe(0);
     });
 
     test("reduced motion uses fades, no hints or transforms; normal idle hint names a legal pair", async ({ page }) => {

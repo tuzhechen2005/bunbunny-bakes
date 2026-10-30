@@ -147,6 +147,8 @@ export function M3Page() {
     if (inflight.current === id) inflight.current = null;
     if (runId.current !== id) return;
     if (r.ok) {
+      // Keep completed logs retryable until the server acknowledges this exact run.
+      if (readM3Save()?.runId === id) clearM3Save();
       setFinish({ state: "ok", result: r.data });
       setBoardVersion((n) => n + 1);
     } else {
@@ -235,13 +237,20 @@ export function M3Page() {
   const onOver = useCallback(
     (p: M3Progress) => {
       if (submitted.current.has(runId.current)) return;
-      clearM3Save();
+      // Unmount Exit (releasing its focus trap/scroll lock) before showing results.
+      // Its closing animation may still resolve: discard any queued menu/discard action.
+      afterDialog.current = () => {};
+      setDialog(null);
+      phaseRef.current = "over";
       progress.current = p;
       setFinalScore(p.score);
       setRun(r => r ? { ...r, initialMoves: p.moves } : r);
       setPhase("over");
-      if (!submitted.current.has(runId.current)) void submit(runId.current, p.moves);
-      timers.current.push(setTimeout(() => setSheetOpen(true), reduced ? 0 : SHEET_DELAY_MS));
+      const id = runId.current;
+      void submit(id, p.moves);
+      timers.current.push(setTimeout(() => {
+        if (runId.current === id && phaseRef.current === "over") setSheetOpen(true);
+      }, reduced ? 0 : SHEET_DELAY_MS));
     },
     [reduced, submit],
   );
@@ -493,11 +502,12 @@ export function M3Page() {
         ) : null}
       </main>
 
-      {dialog === "exit" ? (
+      {phase === "playing" && dialog === "exit" ? (
         <Sheet
           ref={dialogRef}
           label={g.exitTitle}
           onClosed={() => {
+            if (phaseRef.current !== "playing") return;
             setDialog(null);
             const fn = afterDialog.current;
             afterDialog.current = () => {};
