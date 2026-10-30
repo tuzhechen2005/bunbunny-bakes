@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { copy } from "../../src/copy";
-import { BOARD_REFRESH_MS, PROGRESS_REPORT_MS } from "../../src/lib/liveScores";
+import { BOARD_REFRESH_MS, PROGRESS_MIN_GAP_MS, PROGRESS_REPORT_MS } from "../../src/lib/liveScores";
 
 test.use({ browserName: "chromium", reducedMotion: "reduce" });
 const tiers = Array.from({ length: 6 }, (_, i) => ({ id: `t${i}`, name: `面包${i}`, radius: .07 + i * .02,
@@ -38,7 +38,11 @@ for (const game of ["big", "tu", "m3"]) {
     await page.evaluate(() => {
       Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
       document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("pagehide"));
     });
+    expect(reports).toBe(1);
+    await page.clock.runFor(PROGRESS_MIN_GAP_MS);
+    await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
     await expect.poll(() => reports).toBe(2);
     await page.evaluate(() => {
       Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
@@ -47,7 +51,7 @@ for (const game of ["big", "tu", "m3"]) {
     await page.getByTestId(`${prefix}-exit`).click();
     await page.getByTestId(`${prefix}-exit-discard`).click();
     await expect(page.getByTestId(`${prefix}-menu-start`)).toBeVisible();
-    await expect.poll(() => reports).toBe(3);
+    expect(reports).toBe(2);
     await page.getByTestId(`${prefix}-open-board`).click();
     await expect(page.getByTestId("game-live")).toHaveText(`${copy.customer.game.liveDot} ${copy.customer.game.live}`);
     const initial = boards;
@@ -73,9 +77,9 @@ for (const game of ["big", "tu", "m3"]) {
     await page.getByTestId(`${prefix}-start`).click();
     await expect(page.getByTestId(`${prefix}-exit`)).toBeVisible();
     await page.clock.runFor(PROGRESS_REPORT_MS);
-    await expect.poll(() => reports).toBe(4);
+    await expect.poll(() => reports).toBe(3);
     await page.clock.runFor(PROGRESS_REPORT_MS * 3);
-    expect(reports).toBe(4);
+    expect(reports).toBe(3);
   });
 }
 

@@ -23,7 +23,8 @@ export async function cleanup(db: DbClient, now: Date): Promise<CleanupCounts> {
   const ordersIpHashCleared = await db.$executeRaw`
     UPDATE "Order" SET "ipHash" = NULL
     WHERE "createdAt" < ${dayAgo} AND "ipHash" IS NOT NULL`;
-  // D136: keep unfinished verified scores for historical boards and weekly prizes. Only
+  // D136: verified live runs have the same retention as finished runs, including their
+  // replay evidence, for historical boards and weekly prizes. Only
   // runs with no accepted progress report can be discarded at the weekly reset.
   await db.gameRun.deleteMany({ where: { finishedAt: null, updatedAt: null, startedAt: { lt: weekStartInstant(weekKeyOf(now)) } } });
   // Game runs keep their IP hash for 24 hours too (not part of the reported counts).

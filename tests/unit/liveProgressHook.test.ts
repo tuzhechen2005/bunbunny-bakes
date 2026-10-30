@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { PROGRESS_REPORT_MS } from "@/lib/liveScores";
+import { PROGRESS_MIN_GAP_MS, PROGRESS_REPORT_MS } from "@/lib/liveScores";
 
 const effects = vi.hoisted(() => ({ cleanups: [] as (() => void)[] }));
 vi.mock("react", () => ({ useEffect: (fn: () => (() => void) | undefined) => {
@@ -21,7 +21,7 @@ async function setup() {
   return { doc, win, fetch, useLiveProgress };
 }
 
-it("reports full logs on timer, hidden, pagehide and in-page exit; no requests after cleanup", async () => {
+it("skips recent hidden/pagehide flushes, sends at the gap boundary and cleans up", async () => {
   const { doc, win, fetch, useLiveProgress } = await setup();
   let log = [{ id: 1, at: 0 }];
   useLiveProgress("/api/game/tu/progress", true, () => ({ runId: "r", log }));
@@ -29,6 +29,14 @@ it("reports full logs on timer, hidden, pagehide and in-page exit; no requests a
   expect(fetch).toHaveBeenCalledTimes(1);
   log = [...log, { id: 2, at: 500 }];
   doc.visibilityState = "hidden"; doc.dispatchEvent(new Event("visibilitychange"));
+  win.dispatchEvent(new Event("pagehide"));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(fetch).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(PROGRESS_MIN_GAP_MS - 1);
+  win.dispatchEvent(new Event("pagehide"));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1);
+  doc.dispatchEvent(new Event("visibilitychange"));
   await vi.advanceTimersByTimeAsync(0);
   expect(JSON.parse(fetch.mock.calls[1][1].body).log).toEqual(log);
   expect(fetch.mock.calls[1][1].keepalive).toBe(true);
@@ -36,10 +44,10 @@ it("reports full logs on timer, hidden, pagehide and in-page exit; no requests a
   await vi.advanceTimersByTimeAsync(0);
   effects.cleanups.splice(0).forEach(fn => fn());
   await vi.advanceTimersByTimeAsync(0);
-  expect(fetch).toHaveBeenCalledTimes(4);
+  expect(fetch).toHaveBeenCalledTimes(2);
   win.dispatchEvent(new Event("pagehide")); doc.dispatchEvent(new Event("visibilitychange"));
   await vi.advanceTimersByTimeAsync(PROGRESS_REPORT_MS * 2);
-  expect(fetch).toHaveBeenCalledTimes(4);
+  expect(fetch).toHaveBeenCalledTimes(2);
 });
 
 it("a first 404 disables subsequent reporters across all games", async () => {

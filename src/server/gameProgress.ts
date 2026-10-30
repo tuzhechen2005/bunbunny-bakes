@@ -1,6 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
-import type { Prisma } from "@/generated/prisma/client";
 import type { GameKind } from "@/lib/gameCatalog";
 import { PROGRESS_MIN_GAP_MS } from "@/lib/liveScores";
 import { TU_ENGINE_VERSION, tuSeedVersion } from "@/lib/tu";
@@ -42,18 +41,24 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
   }
   if (await isBanned(db, run.wechatId)) throw new AppError("VALIDATION", { message: copy.gameApi.banned });
   const field = game === "BIG" ? "drops" : game === "TU" ? "taps" : "moves";
-  const body = { runId: run.id, [field]: data.log };
-  const verified = game === "BIG" ? verifyBigRun(run, parseGameInput(finishSchema, body), now)
-    : game === "TU" ? verifyTuRun(run, parseGameInput(tuFinishSchema, body), now)
-    : verifyM3Run(run, parseGameInput(m3FinishSchema, body), now);
-  // A stale shorter report must never roll back a previously accepted prefix.
-  if (Array.isArray(run.drops) && !samePrefix(run.drops, data.log)) {
+  const inputBody = { runId: run.id, [field]: data.log };
+  const body = game === "BIG" ? parseGameInput(finishSchema, inputBody)
+    : game === "TU" ? parseGameInput(tuFinishSchema, inputBody)
+    : parseGameInput(m3FinishSchema, inputBody);
+  const log = "drops" in body ? body.drops : "taps" in body ? body.taps : body.moves;
+  // Compare canonical evidence before paying for a replay of a stale/diverging report.
+  if (Array.isArray(run.drops) && !samePrefix(run.drops, log)) {
     throw new AppError("VALIDATION", { message: copy.gameApi.badRun });
   }
+  const verified = "drops" in body ? verifyBigRun(run, body, now)
+    : "taps" in body ? verifyTuRun(run, body, now)
+    : verifyM3Run(run, body, now);
+  // Initialize even a zero score, but idle reports must not move the tie-break time.
+  const updatedAt = run.updatedAt === null || run.score === null || verified.score > run.score ? now : run.updatedAt;
   const saved = await db.gameRun.updateMany({
     where: { id: run.id, finishedAt: null, progressAttemptAt: now },
-    data: { ...verified, updatedAt: now, weekKey: weekKeyOf(run.startedAt),
-      drops: data.log as Prisma.InputJsonValue, dropCount: (data.log as unknown[]).length },
+    data: { ...verified, updatedAt, weekKey: weekKeyOf(run.startedAt),
+      drops: log, dropCount: log.length },
   });
   return { score: verified.score, live: saved.count > 0 };
 }

@@ -11,6 +11,7 @@ import { overridePrizeGame } from "@/server/gamePrize";
 import { afterAll, beforeEach, expect, it, vi } from "vitest";
 import { progressRun } from "@/server/gameProgress";
 import { finishRun, getLeaderboard, rankedWeek, startRun } from "@/server/game";
+import * as bigGame from "@/server/game";
 import { cleanup } from "@/server/maintenance";
 import { runExpiresAt, weekKeyOf } from "@/server/gameWeek";
 import { botRun } from "../support/gameBot";
@@ -20,6 +21,77 @@ const start = new Date("2026-10-30T12:00:00Z");
 const now = new Date("2026-10-30T13:00:00Z");
 beforeEach(async () => { vi.unstubAllEnvs(); await resetDb(); await createDefaultProducts(); });
 afterAll(async () => { vi.unstubAllEnvs(); await db.$disconnect(); });
+it("stores and compares parsed BIG logs", async () => {
+  const run = await startRun(db, { wechatId: "alice", nickname: "Alice" }, "ip", start);
+  const log = [{ x: 0.5, at: 0 }];
+  await progressRun(db, "BIG", { runId: run.runId, log: log.map(drop => ({ ...drop, junk: "discard" })) }, now);
+  expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).drops).toEqual(log);
+  await progressRun(db, "BIG", { runId: run.runId, log: log.map(drop => ({ ...drop, junk: "different" })) }, new Date(+now + 8000));
+});
+
+it("rejects stale/diverging prefixes before replay", async () => {
+  const run = await startRun(db, { wechatId: "alice", nickname: "Alice" }, "ip", start);
+  await progressRun(db, "BIG", { runId: run.runId, log: [{ x: 0.5, at: 0 }] }, now);
+  const replay = vi.spyOn(bigGame, "verifyBigRun");
+  try {
+    for (const [i, stale] of [[], [{ x: 0.6, at: 0 }]].entries()) {
+      await expect(progressRun(db, "BIG", { runId: run.runId, log: stale }, new Date(+now + 16000 + i * 8000)))
+        .rejects.toMatchObject({ code: "VALIDATION" });
+    }
+    expect(replay).not.toHaveBeenCalled();
+  } finally { replay.mockRestore(); }
+});
+
+it("idle reports keep the earlier score's tie rank while renewing live status, including weekly awards", async () => {
+  const run = await startRun(db, { wechatId: "alice", nickname: "Alice" }, "ip", start);
+  const seed = "s5-idle-player";
+  await db.gameRun.update({ where: { id: run.runId }, data: { seed } });
+  const bot = botRun(seed, run.tiers, 20);
+  expect(bot.score).toBeGreaterThan(0);
+  await progressRun(db, "BIG", { runId: run.runId, log: [] }, now);
+  const scoredAt = new Date(+now + 8000);
+  const body = { runId: run.runId, log: bot.log };
+  await progressRun(db, "BIG", body, scoredAt);
+  const bob = await startRun(db, { wechatId: "bob", nickname: "Bob" }, "ip", start);
+  await db.gameRun.update({ where: { id: bob.runId }, data: { seed } });
+  await finishRun(db, { runId: bob.runId, drops: bot.log }, "ip", new Date(+now + 16000));
+  const idleAt = new Date(+now + 48000);
+  await progressRun(db, "BIG", body, idleAt);
+  expect(await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } }))
+    .toMatchObject({ updatedAt: scoredAt, progressAttemptAt: idleAt, score: bot.score });
+  expect((await getLeaderboard(db, idleAt)).top.map(r => ({ nickname: r.nickname, live: r.live })))
+    .toEqual([{ nickname: "Alice", live: true }, { nickname: "Bob", live: false }]);
+  expect((await getLeaderboard(db, new Date(+idleAt + 30000))).top[0].live).toBe(false);
+  expect((await getBoard(db, weekKeyOf(start), idleAt)).rows.map(r => r.id)).toEqual([run.runId, bob.runId]);
+  expect((await getGameHub(db, idleAt)).games[0]).toMatchObject({ live: true });
+  await overridePrizeGame(db, "BIG", now);
+  const cutoff = runExpiresAt(start);
+  await cleanup(db, cutoff);
+  expect((await rankedWeek(db, weekKeyOf(start)))[0].id).toBe(run.runId);
+  await enqueueGameWinner(db, cutoff);
+  expect((await db.notification.findFirstOrThrow({ where: { kind: "GAME_WINNER" } })).payload)
+    .toMatchObject({ winner: { wechatId: "alice", score: bot.score } });
+});
+
+it("retains old verified live and finished evidence equally, discarding only unverified runs", async () => {
+  const live = await startRun(db, { wechatId: "alice", nickname: "Alice" }, "ip", start);
+  const finished = await startRun(db, { wechatId: "bob", nickname: "Bob" }, "ip", start);
+  const empty = await startRun(db, { wechatId: "empty", nickname: "Empty" }, "ip", start);
+  const log = [{ x: 0.5, at: 0 }];
+  await progressRun(db, "BIG", { runId: live.runId, log }, now);
+  await finishRun(db, { runId: finished.runId, drops: log }, "ip", now);
+  await updateAward(db, { week: weekKeyOf(start), contacted: true }, now);
+  const later = new Date("2027-10-30T13:00:00Z");
+  await cleanup(db, later);
+  await cleanup(db, later);
+  for (const id of [live.runId, finished.runId]) {
+    expect(await db.gameRun.findUniqueOrThrow({ where: { id } })).toMatchObject({ drops: log, ipHash: null });
+  }
+  expect(await db.gameRun.findUnique({ where: { id: empty.runId } })).toBeNull();
+  expect(await rankedWeek(db, weekKeyOf(start))).toHaveLength(2);
+  expect(await db.gameAward.count()).toBe(1);
+});
+
 it("replays progress, rate limits before log validation, finishes and clears live", async () => {
   const run = await startRun(db, { wechatId: "alice", nickname: "Alice" }, "ip", start);
   const bot = botRun(run.seed, run.tiers, 12);
@@ -31,6 +103,15 @@ it("replays progress, rate limits before log validation, finishes and clears liv
   expect((await getLeaderboard(db, new Date(+now + 30000))).top[0].live).toBe(false);
   await finishRun(db, { runId: run.runId, drops: bot.log }, "ip", new Date(+now + 8000));
   expect((await getLeaderboard(db, new Date(+now + 8000))).top[0].live).toBe(false);
+});
+it("finish accepts the final log inside the progress throttle window", async () => {
+  const run = await startRun(db, { wechatId: "alice", nickname: "Alice" }, "ip", start);
+  const bot = botRun(run.seed, run.tiers, 12);
+  await progressRun(db, "BIG", { runId: run.runId, log: bot.log.slice(0, 1) }, now);
+  const finishedAt = new Date(+now + 1);
+  await finishRun(db, { runId: run.runId, drops: bot.log }, "ip", finishedAt);
+  expect(await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } }))
+    .toMatchObject({ drops: bot.log, score: bot.score, finishedAt, updatedAt: null });
 });
 it("retains unfinished verified scores across weekly cutoff and cleanup", async () => {
   const run = await startRun(db, { wechatId: "alice", nickname: "Alice" }, "ip", start);

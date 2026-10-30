@@ -13,7 +13,7 @@ const t = copy.customer.gameHub;
 const g = copy.customer.game;
 
 export function GameHubPage() {
-  const { data, error, reload } = useGameHub();
+  const { data, error, reload } = useGameHub(true, { refresh: true });
   // Links stay usable while scores load, or when the connection fails.
   const games = data?.games ?? GAME_CATALOG.map((game) => ({ ...game, weekBest: null, live: false }));
   return (

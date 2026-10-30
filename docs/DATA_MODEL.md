@@ -265,4 +265,4 @@ NEW ──▶ CONTACTED ──▶ CONFIRMED ──▶ BAKING ──▶ READY ─
 6. **跨日改单不死锁**：两个改单请求同时把 A→B、B→A 互换日期 → 都能完成或其中一个按超限拒绝，不会卡住。
 7. **seq 唯一**：并发下单后，同一天的 `seq` 连续且不重复。
 
-**S5 / D136 实时成绩**：增量迁移 `20261030210000_game_live_scores` 只为 `GameRun` 增加可空 `updatedAt`、`progressAttemptAt`（均 timestamptz(3)）。`score` 与 `drops/dropCount/simSteps/playMs/suspicious` 复用为最后一次从头验分的结果；`updatedAt` 为最后接受进度的时间，`finishedAt = null AND updatedAt != null` 表示已有未完成成绩。`progressAttemptAt` 原子限流，验证失败也计入 8 秒间隔。finish 保存最终成绩并清空 `updatedAt`，不影响原有结束幂等。`weekKey` 为开局周；旧局过周不可再改，清理仅删除没有任何验分进度的未完成局，保留已验分局供历史周榜、奖励和邮件引用。关停实时功能不删除这些记录。
+**S5 / D136 实时成绩**：增量迁移 `20261030210000_game_live_scores` 只为 `GameRun` 增加可空 `updatedAt`、`progressAttemptAt`（均 timestamptz(3)）。`score` 与 `drops/dropCount/simSteps/playMs/suspicious` 复用为最后一次从头验分的结果；`updatedAt` 为首次验分或已验证分数上升的时间（未完成局同分排序依据，分数不变时不推进），`finishedAt = null AND updatedAt != null` 表示已有未完成成绩。`progressAttemptAt` 原子限流，验证失败也计入 8 秒间隔；已有验分成绩的未完成局用此字段判断 30 秒内活动，不影响同分排序。finish 保存最终成绩并清空 `updatedAt`，不影响原有结束幂等。`weekKey` 为开局周；旧局过周不可再改，清理仅删除没有任何验分进度的未完成局，已验分未完成局及其操作证据与已完成局采用相同保留策略，供历史周榜、奖励和邮件引用。关停实时功能不删除这些记录。

@@ -138,6 +138,7 @@ export interface BoardRow {
   score: number;
   finishedAt: Date | null;
   updatedAt: Date | null;
+  progressAttemptAt: Date | null;
   rank: number;
 }
 
@@ -145,16 +146,16 @@ export interface BoardRow {
 const eligible = () => Prisma.sql`(r."finishedAt" IS NOT NULL OR (${liveScoresEnabled()} AND r."updatedAt" IS NOT NULL)) AND r.score IS NOT NULL AND NOT r.hidden
   AND NOT EXISTS (SELECT 1 FROM "GameBan" b WHERE lower(b."wechatId") = lower(r."wechatId"))`;
 
-/** One row per WeChat id (their best run), ranked by score then earliest finish/last verification; hidden runs and banned ids excluded. */
+/** One row per WeChat id (their best run), ranked by score then earliest finish/score increase; hidden runs and banned ids excluded. */
 function rankedSql(weekKey: string, game: GameKind) {
   return Prisma.sql`
     WITH best AS (
-      SELECT DISTINCT ON (lower(r."wechatId")) r.id, r."wechatId", r.nickname, r.score, r."finishedAt", r."updatedAt", COALESCE(r."finishedAt", r."updatedAt") AS "rankedAt"
+      SELECT DISTINCT ON (lower(r."wechatId")) r.id, r."wechatId", r.nickname, r.score, r."finishedAt", r."updatedAt", r."progressAttemptAt", COALESCE(r."finishedAt", r."updatedAt") AS "rankedAt"
       FROM "GameRun" r
       WHERE r.game = ${game}::"GameKind" AND r."weekKey" = ${weekKey} AND ${eligible()}
       ORDER BY lower(r."wechatId"), r.score DESC, COALESCE(r."finishedAt", r."updatedAt") ASC, r.id ASC
     ), ranked AS (
-      SELECT id, "wechatId", nickname, score, "finishedAt", "updatedAt",
+      SELECT id, "wechatId", nickname, score, "finishedAt", "updatedAt", "progressAttemptAt",
              (ROW_NUMBER() OVER (ORDER BY score DESC, "rankedAt" ASC, id ASC))::int AS rank
       FROM best
     )`;
@@ -348,9 +349,9 @@ export function verifyBigRun(run: GameRun, data: z.output<typeof finishSchema>, 
   return { score: outcome.score, simSteps: outcome.steps };
 }
 
-export function isLiveRow(row: Pick<BoardRow, "finishedAt" | "updatedAt">, now: Date): boolean {
-  return liveScoresEnabled() && !row.finishedAt && row.updatedAt !== null
-    && +row.updatedAt <= +now && +now - +row.updatedAt < LIVE_WINDOW_MS;
+export function isLiveRow(row: Pick<BoardRow, "finishedAt" | "updatedAt" | "progressAttemptAt">, now: Date): boolean {
+  return liveScoresEnabled() && !row.finishedAt && row.updatedAt !== null && row.progressAttemptAt !== null
+    && +row.progressAttemptAt <= +now && +now - +row.progressAttemptAt < LIVE_WINDOW_MS;
 }
 
 export async function weekLeader(db: DbClient, week: string, game: GameKind, now: Date) {

@@ -381,9 +381,9 @@ model GameRun {
   startedAt     DateTime  @default(now()) @db.Timestamptz(3)
   finishedAt    DateTime? @db.Timestamptz(3)
   score         Int?
-  /// Last accepted from-scratch progress replay; score/drops hold its verified result.
+  /// First verified score / latest score increase: tie-break time for unfinished runs.
   updatedAt     DateTime? @db.Timestamptz(3)
-  /// Atomic per-run throttle, including invalid attempts.
+  /// Atomic per-run throttle, including invalid attempts; also the live activity window.
   progressAttemptAt DateTime? @db.Timestamptz(3)
   /// Evidence for the owner's manual check before awarding a prize (D103): the verified drop log,
   /// its length and the simulated length (steps of 1/120 s; seconds = simSteps / 120).

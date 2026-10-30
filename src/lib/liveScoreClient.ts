@@ -1,4 +1,4 @@
-import { BOARD_REFRESH_MS, PROGRESS_REPORT_MS } from "./liveScores";
+import { BOARD_REFRESH_MS, PROGRESS_MIN_GAP_MS, PROGRESS_REPORT_MS } from "./liveScores";
 
 export interface ProgressSnapshot { runId: string; log: readonly unknown[] }
 type Send = (snapshot: ProgressSnapshot, exiting: boolean) => Promise<{ status: number }>;
@@ -6,9 +6,11 @@ type Send = (snapshot: ProgressSnapshot, exiting: boolean) => Promise<{ status: 
 /** One request in flight; failures retry on the next tick, a 404 disables this reporter. */
 export function createProgressReporter(read: () => ProgressSnapshot | null, send: Send) {
   let stopped = false, disabled = false, busy = false;
+  let lastSentAt = -Infinity;
   let pending: ProgressSnapshot | null = null;
   const deliver = (snapshot: ProgressSnapshot, exiting: boolean) => {
     busy = true;
+    lastSentAt = Date.now();
     void (async () => {
       try { if ((await send(snapshot, exiting)).status === 404) disabled = true; }
       catch { /* Reporting never interrupts play. */ }
@@ -21,7 +23,9 @@ export function createProgressReporter(read: () => ProgressSnapshot | null, send
     })();
   };
   const flush = (exiting = true) => {
-    if (stopped || disabled) return;
+    // Hidden/pagehide/unmount often arrive together, or just after a timer report.
+    // Also suppress a timer tick shortly after an exit flush; finish sends the final log separately.
+    if (stopped || disabled || Date.now() - lastSentAt < PROGRESS_MIN_GAP_MS) return;
     const snapshot = read();
     if (!snapshot) return;
     if (busy) {
