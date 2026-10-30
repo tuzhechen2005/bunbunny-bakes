@@ -41,8 +41,9 @@ async function setup(page: Page) {
         batch: 1,
         taps: 0,
         state() {
-          return { batch: 1, tiles: board.map((t) => ({ ...t })), bag: [...bag], orders: [0, 2], score: 0, over: false };
+          return { batch: 1, tiles: board.map((t) => ({ ...t })), bag: [...bag], orders: [0, 2], orderPoints: [30, 30], props: { peek: 0, bag: 0, swap: 0 }, bagSize: 6, score: 0, over: false };
         },
+        use() { return null; },
         tap(id: number) {
           const i = board.findIndex((t) => t.id === id);
           if (i < 0 || !board[i].free) return null;

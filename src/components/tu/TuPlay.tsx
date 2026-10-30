@@ -6,11 +6,11 @@ import { fill } from "@/components/customer/format";
 import { sound } from "@/components/game/sound";
 import type { TierView } from "@/components/game/types";
 import { copy } from "@/copy";
-import { BAG_SIZE, createTuGame, MIN_TAP_GAP_MS, type TuEvent, type TuGame, type TuState } from "@/lib/tu";
+import { createTuGame, MIN_TAP_GAP_MS, type TuEvent, type TuGame, type TuState } from "@/lib/tu";
 import { haptic } from "@/lib/motion/react";
 import { photoUrl } from "@/lib/photo";
 import type { TuTapLog } from "./tuApi";
-import { bagSizeOf, canUse, isPropEntry, propEvents, propsOf, PROP_KINDS, rewardsOf, type PropCounts, type PropKind } from "./tuProps";
+import { isPropEntry, propEvents, PROP_KINDS, type PropCounts, type PropKind } from "./tuProps";
 import { isVisible, revealedIds } from "./tuVisible";
 import "./tu.css";
 
@@ -80,10 +80,10 @@ interface View {
   banner: { k: number; n: number } | null;
   /** The slot a tile is flying into. */
   arrive: { k: number; slot: number } | null;
-  /** Props left, bag size (6 or 7) and the points each order pays (C8); null = the engine has none yet. */
-  props: PropCounts | null;
+  /** Props left, bag size (6 or 7) and the points each order pays (C8). */
+  props: PropCounts;
   bagSize: number;
-  rewards: [number, number] | null;
+  rewards: [number, number];
   /** The order and prop reward shown after an order is completed. */
   toast: { k: number; text: string } | null;
   /** The orders were swapped by a prop (a different animation from completing). */
@@ -100,9 +100,9 @@ const fromState = (s: TuState): View => ({
   flash: null,
   banner: null,
   arrive: null,
-  props: propsOf(s),
-  bagSize: bagSizeOf(s, BAG_SIZE),
-  rewards: rewardsOf(s),
+  props: s.props,
+  bagSize: s.bagSize,
+  rewards: s.orderPoints,
   toast: null,
   swapped: false,
 });
@@ -153,9 +153,8 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
   /** Tiles that were just revealed (they pop in once). */
   const [popIn, setPopIn] = useState<number[]>([]);
   const [pulse, setPulse] = useState(false);
-  /** The engine has props (C8): `use` exists. */
-  const [hasUse, setHasUse] = useState(false);
   const [peeking, setPeeking] = useState(false);
+  const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bonusRef = useRef(0);
   const view0 = useRef<View | null>(null);
   const [area, setArea] = useState({ w: 0, h: 0 });
@@ -183,10 +182,10 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
     // Test seam: e2e may inject a scripted engine (the server replays every tap with the real one anyway).
     const make = (globalThis as { __tuEngine?: typeof createTuGame }).__tuEngine ?? createTuGame;
     const g = make({ seed, tiers: tiers.map((x) => ({ id: x.id })) });
+    bonusRef.current = 0;
     for (const tp of initialTaps ?? []) {
-      if (isPropEntry(tp)) {
-        if (canUse(g)) g.use(tp.p);
-      } else g.tap(tp.id);
+      const events = isPropEntry(tp) ? g.use(tp.p) : g.tap(tp.id);
+      if (events) bonusRef.current += propEvents(events).bonus;
     }
     game.current = g;
     taps.current = [...(initialTaps ?? [])];
@@ -196,11 +195,10 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
     /* Building the engine state once on mount. */
     /* eslint-disable react-hooks/set-state-in-effect */
     setSnap(st);
-    setHasUse(canUse(g));
     setView(fromState(st));
     /* eslint-enable react-hooks/set-state-in-effect */
     // A saved run that is already over goes straight to the result flow.
-    if (g.over) cb.current.onOver({ taps: taps.current, score: g.score });
+    if (g.over) cb.current.onOver({ taps: taps.current, score: g.score, bonus: bonusRef.current });
     // The first game ever: the two order cards pulse once so the new player looks at them.
     try {
       if (!initialTaps?.length && !window.localStorage.getItem(SEEN_KEY)) {
@@ -247,7 +245,9 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
     [],
   );
   const later = useCallback((fn: () => void, ms: number) => {
-    timers.current.push(setTimeout(() => alive.current && fn(), ms));
+    const timer = setTimeout(() => alive.current && fn(), ms);
+    timers.current.push(timer);
+    return timer;
   }, []);
 
   /** Applies the events of one tap to the bag, orders and score, one visible step at a time. */
@@ -299,7 +299,7 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
               return { ...v, orders, swapped: true };
             });
           } else {
-            const pts = view0.current?.rewards?.[ev.index];
+            const pts = view0.current?.rewards[ev.index];
             if (pts != null) rewardText = fill(t.orderDone, { n: String(pts) });
             setView((v) => {
               if (!v) return v;
@@ -310,6 +310,9 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
             later(() => setView((v) => (v ? { ...v, doneOrder: null } : v)), 700);
           }
         } else if (ev.type === "batch") {
+          if (peekTimer.current !== null) clearTimeout(peekTimer.current);
+          peekTimer.current = null;
+          setPeeking(false);
           if (snd) sound.big();
           haptic(30);
           setSnap(after);
@@ -330,7 +333,7 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
       if (!alive.current) return;
       if (hasBatch) lock.current = false;
       const st = game.current ? game.current.state() : after;
-      setView((v) => (v ? { ...v, score: finalScore, arrive: null, props: propsOf(st), bagSize: bagSizeOf(st, BAG_SIZE), rewards: rewardsOf(st) ?? v.rewards } : v));
+      setView((v) => (v ? { ...v, score: finalScore, arrive: null, props: st.props, bagSize: st.bagSize, rewards: st.orderPoints } : v));
       if (events.some((e) => e.type === "over")) cb.current.onOver({ taps: taps.current, score: finalScore, bonus: bonusRef.current });
     },
     [sleep, later, setSnap],
@@ -339,7 +342,7 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
   /** Uses a prop: logged like a tap (C8), then its events are played. */
   const spendProp = (p: PropKind) => {
     const g = game.current;
-    if (!g || g.over || lock.current || !canUse(g)) return;
+    if (!g || g.over || lock.current) return;
     if (p === "peek" && peeking) return;
     const c = clock.current;
     const at = Math.round(c.base + (nowMs() - c.t0));
@@ -352,10 +355,13 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
     cb.current.onProgress({ taps: taps.current, score: g.score });
     const after = g.state();
     setSnap(after);
-    setView((v) => (v ? { ...v, props: propsOf(after), bagSize: bagSizeOf(after, v.bagSize), rewards: rewardsOf(after) ?? v.rewards } : v));
+    setView((v) => (v ? { ...v, props: after.props, bagSize: after.bagSize, rewards: after.orderPoints } : v));
     if (p === "peek") {
       setPeeking(true);
-      later(() => setPeeking(false), PEEK_MS);
+      peekTimer.current = later(() => {
+        peekTimer.current = null;
+        setPeeking(false);
+      }, PEEK_MS);
     }
     chain.current = chain.current.then(() => play(events, after, false, g.score));
   };
@@ -423,7 +429,6 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
 
   if (!snap || !view) return <div className="flex-1" />;
   const full = view.bag.length >= view.bagSize;
-  const hasProps = hasUse && view.props !== null;
   const propLabel = { peek: t.propPeek, bag: t.propBag, swap: t.propSwap };
   const hiddenIds = peeking ? snap.tiles.filter((x) => !isVisible(x)).map((x) => x.id) : [];
 
@@ -444,12 +449,12 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
       <div className="flex shrink-0 gap-2 px-3 pb-2" data-testid="tu-orders">
         {view.orders.map((tier, i) => {
           const n = counts(tier);
-          const pts = view.rewards?.[i];
+          const pts = view.rewards[i];
           return (
             <div
               key={i}
               role="img"
-              aria-label={pts != null ? fill(t.orderLabelReward, { name: names(tier), n: String(n), pts: String(pts) }) : fill(t.orderLabel, { name: names(tier), n: String(n) })}
+              aria-label={fill(t.orderLabelReward, { name: names(tier), n: String(n), pts: String(pts) })}
               className={`relative flex h-14 flex-1 items-center gap-2 rounded-2xl border border-c-line bg-c-paper px-2.5 ${view.doneOrder === i ? "tu-order-done" : ""} ${view.swapped ? "tu-order-swap" : ""} ${pulse ? "tu-order-pulse" : ""}`}
               data-testid={`tu-order-${i}`}
               data-tier={tier}
@@ -460,11 +465,9 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
               </span>
               <span className="font-num text-xl leading-none text-c-ink">×3</span>
               <span className="ml-auto flex flex-col items-end gap-1.5" aria-hidden="true">
-                {pts != null ? (
-                  <b className="font-num text-[15px] leading-none font-normal text-c-ink" data-testid={`tu-reward-${i}`}>
-                    +{pts}
-                  </b>
-                ) : null}
+                <b className="font-num text-[15px] leading-none font-normal text-c-ink" data-testid={`tu-reward-${i}`}>
+                  +{pts}
+                </b>
                 <span className="flex gap-1">
                   {[0, 1, 2].map((d) => (
                     <i key={d} className={`block size-2 rounded-full ${d < n ? "bg-c-ink" : "bg-c-line"}`} />
@@ -509,31 +512,29 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
             <span className="rounded-full bg-c-paper px-3 py-1 shadow-[0_0_0_1px_var(--c-line)]">{view.toast.text}</span>
           </p>
         ) : null}
-        {hasProps ? (
-          <div className="mb-2 flex justify-center gap-5" role="group" aria-label={t.propsLabel} data-testid="tu-props">
-            {PROP_KINDS.map((k) => {
-              const n = view.props?.[k] ?? 0;
-              const off = n <= 0 || snap.over || (k === "bag" && view.bagSize >= 7) || (k === "peek" && peeking);
-              return (
-                <button
-                  key={k}
-                  type="button"
-                  disabled={off}
-                  onClick={() => spendProp(k)}
-                  aria-label={fill(propLabel[k], { n: String(n) })}
-                  className="relative grid size-11 place-items-center rounded-full border border-c-line bg-c-paper text-c-ink disabled:opacity-35"
-                  data-testid={`tu-prop-${k}`}
-                  data-left={n}
-                >
-                  <PropIcon kind={k} />
-                  <b className="font-num absolute -top-1 -right-1 grid min-w-[18px] place-items-center rounded-full bg-c-ink px-1 text-[11px] leading-[18px] font-normal text-c-paper" data-testid={`tu-prop-count-${k}`} aria-hidden="true">
-                    {n}
-                  </b>
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
+        <div className="mb-2 flex justify-center gap-5" role="group" aria-label={t.propsLabel} data-testid="tu-props">
+          {PROP_KINDS.map((k) => {
+            const n = view.props[k];
+            const off = n <= 0 || snap.over || (k === "bag" && view.bagSize >= 7) || (k === "peek" && peeking);
+            return (
+              <button
+                key={k}
+                type="button"
+                disabled={off}
+                onClick={() => spendProp(k)}
+                aria-label={fill(propLabel[k], { n: String(n) })}
+                className="relative grid size-11 place-items-center rounded-full border border-c-line bg-c-paper text-c-ink disabled:opacity-35"
+                data-testid={`tu-prop-${k}`}
+                data-left={n}
+              >
+                <PropIcon kind={k} />
+                <b className="font-num absolute -top-1 -right-1 grid min-w-[18px] place-items-center rounded-full bg-c-ink px-1 text-[11px] leading-[18px] font-normal text-c-paper" data-testid={`tu-prop-count-${k}`} aria-hidden="true">
+                  {n}
+                </b>
+              </button>
+            );
+          })}
+        </div>
         {view.flash ? (
           <p key={view.flash.k} className="tu-float font-num pointer-events-none absolute left-1/2 top-0 z-40 m-0 text-2xl text-c-ink" data-testid="tu-flash">
             {view.flash.text}
@@ -543,7 +544,7 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
           ref={bagRef}
           className="tu-bag px-2.5 pt-5 pb-3"
           role="img"
-          aria-label={fill(t.bagLabel, { n: String(view.bag.length) })}
+          aria-label={fill(t.bagLabel, { n: String(view.bag.length), slots: String(view.bagSize) })}
           data-testid="tu-bag"
           data-full={full ? "1" : undefined}
         >

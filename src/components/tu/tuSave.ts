@@ -1,10 +1,10 @@
 // The autosave of the 兔了个兔 run in progress (D124 = D111): this phone only; resume replays the taps.
+import { TU_ENGINE_VERSION } from "@/lib/tu";
 import type { TierView } from "@/components/game/types";
 import type { TuTapLog } from "./tuApi";
 
-// v2: props and the harder curve (C8) changed the engine, so runs saved by the old engine are dropped.
-export const TU_SAVE_KEY = "bb_tu_save_v2";
-const OLD_SAVE_KEY = "bb_tu_save_v1";
+// Saves from another engine version cannot be replayed under the current rules.
+export const TU_SAVE_KEY = `bb_tu_save_v${TU_ENGINE_VERSION}`;
 
 export interface TuSave {
   v: 1;
@@ -35,7 +35,12 @@ export function parseTuSave(raw: string | null, now = Date.now()): TuSave | null
 
 export function readTuSave(now = Date.now()): TuSave | null {
   try {
-    window.localStorage.removeItem(OLD_SAVE_KEY);
+    const storage = window.localStorage;
+    // Walk backwards because removing a key shifts the remaining storage indices.
+    for (let i = storage.length - 1; i >= 0; i--) {
+      const key = storage.key(i);
+      if (key?.startsWith("bb_tu_save_v") && key !== TU_SAVE_KEY) storage.removeItem(key);
+    }
     const raw = window.localStorage.getItem(TU_SAVE_KEY);
     const s = parseTuSave(raw, now);
     if (!s && raw) clearTuSave();

@@ -1,5 +1,5 @@
 // T8 (D131, D132, contract C8): props bar, readable orders. The engine is scripted through the page's test seam
-// (globalThis.__tuEngine) so this runs before and after T7 lands.
+// (globalThis.__tuEngine) with the current engine contract.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
@@ -18,8 +18,8 @@ const TIERS = ["#DCC5BB", "#F0BF45", "#CFDDEA", "#B05219"].map((bg, i) => ({
 }));
 const shot = (page: Page, name: string) => page.screenshot({ path: path.join(screensDir(), `t8_${name}.png`) });
 
-async function setup(page: Page, opts: { withProps?: boolean } = {}) {
-  const withProps = opts.withProps ?? true;
+async function setup(page: Page, opts: { emptyProps?: boolean; dealOnTap?: boolean } = {}) {
+  const options = { emptyProps: false, dealOnTap: false, ...opts };
   await page.route("**/api/menu", (r) =>
     r.fulfill({ json: { orderingEnabled: true, products: [], pickupNote: "", deliveryFeeCents: 500, freeDeliveryMinCents: 2500, maxQtyPerItem: 8, ownerWechatId: "bunbunny_bakes" } }),
   );
@@ -28,7 +28,7 @@ async function setup(page: Page, opts: { withProps?: boolean } = {}) {
     r.fulfill({ json: { week: { start: "2026-10-26T05:00:00.000Z", end: "2026-11-02T06:00:00.000Z" }, top: [], lastWinner: null, allTime: null } }),
   );
   await page.route("**/api/game/tu/start", (r) => r.fulfill({ json: { runId: "r1", seed: "s", tiers: TIERS, expiresAt: "2099-01-01T00:00:00Z" } }));
-  await page.addInitScript((wp) => {
+  await page.addInitScript(({ emptyProps, dealOnTap }) => {
     const w = globalThis as unknown as { __tuEngine: unknown; __uses: string[] };
     w.__uses = [];
     // Tile 1 (tier 0) is hidden under tile 2. Tiles 3..10 are free singles (never pack). Tapping 9 completes order 0.
@@ -41,9 +41,10 @@ async function setup(page: Page, opts: { withProps?: boolean } = {}) {
       const bag: number[] = [];
       let orders: [number, number] = [0, 2];
       let bagSize = 6;
-      const props = { peek: 1, bag: 1, swap: 1 };
+      let batch = 1;
+      const props = emptyProps ? { peek: 0, bag: 0, swap: 0 } : { peek: 1, bag: 1, swap: 1 };
       const state = () => ({
-        batch: 1,
+        batch,
         tiles: board.map((t) => ({ ...t })),
         bag: [...bag],
         orders: [...orders],
@@ -51,12 +52,12 @@ async function setup(page: Page, opts: { withProps?: boolean } = {}) {
         over: false,
         props: { ...props },
         bagSize,
-        rewards: [90, 60],
+        orderPoints: [90, 60],
       });
       const g: Record<string, unknown> = {
         over: false,
         score: 0,
-        batch: 1,
+        batch,
         taps: 0,
         state,
         tap(id: number) {
@@ -69,28 +70,39 @@ async function setup(page: Page, opts: { withProps?: boolean } = {}) {
             props.swap += 1;
             ev.push({ type: "order", index: 0, tier: 3 }, { type: "gain", p: "swap" });
           }
+          if (dealOnTap) {
+            batch += 1;
+            board.splice(
+              0, board.length,
+              { id: 101, tier: 0, x: 1, y: 1, layer: 0, free: false, visible: false },
+              { id: 102, tier: 1, x: 1, y: 1, layer: 1, free: true, visible: true },
+            );
+            bag.length = 0;
+            bagSize = 6;
+            props.peek += 1;
+            ev.push({ type: "batch", batch, bonus: 100 });
+          }
           return ev;
         },
       };
-      if (wp)
-        g.use = (p: "peek" | "bag" | "swap") => {
-          if (props[p] <= 0 || (p === "bag" && bagSize === 7)) return null;
-          props[p] -= 1;
-          w.__uses.push(p);
-          const ev: unknown[] = [{ type: "prop", p, left: props[p] }];
-          if (p === "bag") {
-            bagSize = 7;
-            ev.push({ type: "bagSize", size: 7 });
-          }
-          if (p === "swap") {
-            orders = [3, 1];
-            ev.push({ type: "order", index: 0, tier: 3 }, { type: "order", index: 1, tier: 1 });
-          }
-          return ev;
-        };
+      g.use = (p: "peek" | "bag" | "swap") => {
+        if (props[p] <= 0 || (p === "bag" && bagSize === 7)) return null;
+        props[p] -= 1;
+        w.__uses.push(p);
+        const ev: unknown[] = [{ type: "prop", p, left: props[p] }];
+        if (p === "bag") {
+          bagSize = 7;
+          ev.push({ type: "bagSize", size: 7 });
+        }
+        if (p === "swap") {
+          orders = [3, 1];
+          ev.push({ type: "order", index: 0, tier: 3 }, { type: "order", index: 1, tier: 1 });
+        }
+        return ev;
+      };
       return g;
     };
-  }, withProps);
+  }, options);
   await page.goto("/game/tu");
   await page.getByTestId("tu-menu-start").click();
   await page.getByTestId("tu-wechat").fill("bunbunny_fan");
@@ -114,9 +126,9 @@ test("orders are labelled and show their reward; the props bar shows counts and 
   await shot(page, "order-labels");
 });
 
-test("no props in the engine: the bar is hidden and the game still works", async ({ page }) => {
-  await setup(page, { withProps: false });
-  await expect(page.getByTestId("tu-props")).toHaveCount(0);
+test("empty inventory disables props and the game still works", async ({ page }) => {
+  await setup(page, { emptyProps: true });
+  for (const kind of ["peek", "bag", "swap"]) await expect(page.getByTestId(`tu-prop-${kind}`)).toBeDisabled();
   await page.getByTestId("tu-tile-3").click();
   await expect(page.getByTestId("tu-slot-0")).toHaveAttribute("data-tier", "2");
 });
@@ -138,8 +150,10 @@ test("peek shows the hidden tile for 3 s, spends one, and logs nothing broken", 
 test("bag prop adds a 7th slot, once; swap changes both orders", async ({ page }) => {
   await setup(page);
   await expect(page.getByTestId("tu-slot-6")).toHaveCount(0);
+  await expect(page.getByTestId("tu-bag")).toHaveAttribute("aria-label", "纸袋，装了 0 个，一共 6 格");
   await page.getByTestId("tu-prop-bag").click();
   await expect(page.getByTestId("tu-slot-6")).toBeVisible();
+  await expect(page.getByTestId("tu-bag")).toHaveAttribute("aria-label", "纸袋，装了 0 个，一共 7 格");
   await expect(page.getByTestId("tu-prop-bag")).toBeDisabled();
   await page.waitForTimeout(200);
   for (const id of [3, 4, 5, 6, 7, 8, 10]) {
@@ -189,3 +203,25 @@ test("320 px: no sideways scroll with the props bar and a 7-slot bag", async ({ 
     expect(box.x + box.width).toBeLessThanOrEqual(320);
   }
 });
+
+for (const reducedMotion of ["reduce", "no-preference"] as const) {
+  test(`a new batch stops an active peek (${reducedMotion})`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion });
+    await setup(page, { dealOnTap: true });
+    await page.clock.install();
+    await page.getByTestId("tu-prop-peek").click();
+    await expect(page.getByTestId("tu-tile-1")).toHaveCount(1);
+    await page.clock.runFor(200);
+    await page.getByTestId("tu-tile-3").click();
+    await page.clock.runFor(1200);
+    await expect(page.getByTestId("tu-board")).toHaveAttribute("data-batch", "2");
+    await expect(page.getByTestId("tu-board")).not.toHaveAttribute("data-peek", "1");
+    await expect(page.getByTestId("tu-tile-101")).toHaveCount(0);
+    // The cancelled timer must not shorten a new peek in the next batch.
+    await page.getByTestId("tu-prop-peek").click();
+    await page.clock.runFor(1800);
+    await expect(page.getByTestId("tu-tile-101")).toHaveCount(1);
+    await page.clock.runFor(1200);
+    await expect(page.getByTestId("tu-tile-101")).toHaveCount(0);
+  });
+}
