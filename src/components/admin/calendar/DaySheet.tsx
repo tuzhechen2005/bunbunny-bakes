@@ -128,6 +128,33 @@ export function DaySheet({
           </button>
         </div>
 
+        <section className="rounded-xl border border-line bg-card p-3" aria-labelledby="day-production-title">
+          <h3 id="day-production-title" className="font-semibold text-accent">{t.productionTitle}</h3>
+          {day.production.orderCount === 0 ? (
+            <p className="mt-2 text-sm text-muted">{t.productionEmpty}</p>
+          ) : (
+            <>
+              <ul className="mt-2 space-y-2 text-base">
+                {day.production.bread.map((line) => (
+                  <li key={line.productId}>
+                    {fill(t.productionPieces, { name: line.name, n: line.qty })}
+                    {line.rounds && (
+                      <span className="block text-sm text-muted">{fill(t.productionRounds, { n: line.rounds.rounds })}</span>
+                    )}
+                  </li>
+                ))}
+                {day.production.independent.map((line) => (
+                  <li key={line.productId}>{fill(t.productionCups, { name: line.name, n: line.qty })}</li>
+                ))}
+              </ul>
+              <p className="mt-3 text-sm">{fill(t.productionOrders, { n: day.production.orderCount })}</p>
+              {day.production.unconfirmedCount > 0 && (
+                <p className="mt-1 text-xs text-muted">{fill(t.productionUnconfirmed, { n: day.production.unconfirmedCount })}</p>
+              )}
+            </>
+          )}
+        </section>
+
         {day.isOpen && (
           <ul className="space-y-0.5 text-sm text-muted" data-testid="day-usage">
             {usageLines(day, names).map((l) => (

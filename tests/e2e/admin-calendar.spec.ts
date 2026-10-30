@@ -71,11 +71,15 @@ test("open a day, change the dough limit, hit a warning and confirm", async ({ p
   await page.getByRole("button", { name: t.nextMonth }).click();
   const cell = page.locator(`[data-date="${date}"]`);
   await expect(cell).toContainText("700 / 1600 g");
+  await expect(cell.getByText(t.totalPieces.replace("{n}", "10"), { exact: true })).toBeVisible();
   await page.screenshot({ path: path.join(screensDir(), "m5a-calendar.png"), fullPage: true });
 
   // Plain change: dough limit 1200, saved.
   await cell.click();
   const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("heading", { name: t.productionTitle })).toBeVisible();
+  await expect(dialog.getByText(t.productionPieces.replace("{name}", "红豆包").replace("{n}", "10"))).toBeVisible();
+  await expect(dialog.getByText(t.productionUnconfirmed.replace("{n}", "1"))).toBeVisible();
   await dialog.getByLabel(t.doughLimit).fill("1200");
   await dialog.getByRole("button", { name: t.save, exact: true }).click();
   await expect(dialog).toBeHidden();

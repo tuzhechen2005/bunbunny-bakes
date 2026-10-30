@@ -81,6 +81,17 @@ test("list -> quick filter -> inline status -> detail -> reject -> payment", asy
 
   await page.goto("/admin/orders");
   await expect(page.getByTestId("order-row")).toHaveCount(3);
+  await page.getByRole("button", { name: t.filters, exact: true }).click();
+  await page.getByRole("button", { name: t.allDates, exact: true }).click();
+  await expect(page).toHaveURL(/date=all/);
+  await expect(page.getByTestId("order-row").first()).toContainText("wx_carol");
+  await page.reload();
+  await page.getByRole("button", { name: t.filters, exact: true }).click();
+  await expect(page.getByRole("button", { name: t.allDates, exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: t.upcomingDates, exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/orders$/);
+  await expect(page.getByTestId("order-row").first()).toContainText("wx_alice");
+  await page.getByRole("button", { name: t.filters, exact: true }).click();
   await page.screenshot({ path: `${SCREENS}/m4c-orders.png`, fullPage: true });
 
   // No horizontal scroll at 320px.

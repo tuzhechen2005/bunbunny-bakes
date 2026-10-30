@@ -115,9 +115,11 @@ export function OrdersListPage() {
 
   async function loadMore() {
     if (!cursor || loadingMore) return;
+    const id = reqId.current;
     setLoadingMore(true);
     const res = await adminApi<OrderList>(`/api/admin/orders?${toQuery(filters, cursor)}`);
     setLoadingMore(false);
+    if (id !== reqId.current) return;
     if (!res.ok) {
       setError(res.message);
       return;
@@ -195,22 +197,31 @@ export function OrdersListPage() {
 
       {showFilters && (
         <div className="mb-4 space-y-3 rounded-xl border border-line bg-card p-3">
-          <label className="block text-sm">
-            {t.dateLabel}
+          <div className="block text-sm">
+            <label htmlFor="orders-date">{t.dateLabel}</label>
+            <div className="mt-1 flex flex-wrap gap-2">
+              <button type="button" aria-pressed={!filters.date && !filters.from} className={chip(!filters.date && !filters.from)} onClick={() => setFilters({ ...filters, date: "", from: "" })}>
+                {t.upcomingDates}
+              </button>
+              <button type="button" aria-pressed={filters.date === "all"} className={chip(filters.date === "all")} onClick={() => setFilters({ ...filters, date: "all", from: "" })}>
+                {t.allDates}
+              </button>
+            </div>
             <div className="mt-1 flex gap-2">
               <input
+                id="orders-date"
                 type="date"
-                value={filters.date}
+                value={filters.date === "all" ? "" : filters.date}
                 onChange={(e) => setFilters({ ...filters, date: e.target.value, from: "" })}
                 className={inputClass}
               />
-              {filters.date && (
+              {filters.date && filters.date !== "all" && (
                 <button type="button" className={secondaryBtn} onClick={() => setFilters({ ...filters, date: "" })}>
                   {t.clearDate}
                 </button>
               )}
             </div>
-          </label>
+          </div>
           <div>
             <div className="mb-1 text-sm">{t.statusTitle}</div>
             <div className="flex flex-wrap gap-2">

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSummary,
+  buildDayProduction,
   type SummaryDay,
   type SummaryInput,
   type SummaryOrder,
@@ -96,6 +97,32 @@ function day(date: LocalDate, orders: SummaryOrder[], isOpen = true, l: DayLimit
 function input(days: SummaryDay[], p: Record<string, SummaryProduct> = products): SummaryInput {
   return { today: X, days: Object.fromEntries(days.map((d) => [d.date, d])), products: p };
 }
+
+describe("buildDayProduction", () => {
+  it("returns empty totals for missing days or only cancelled/rejected orders", () => {
+    const empty = { bread: [], independent: [], totalPieces: 0, orderCount: 0, unconfirmedCount: 0 };
+    expect(buildDayProduction(undefined, products)).toEqual(empty);
+    expect(buildDayProduction(day(X1, [
+      order("1", { wedge: 9 }, { status: "CANCELLED" }),
+      order("2", { brulee: 9 }, { status: "REJECTED" }),
+    ]), products)).toEqual(empty);
+  });
+
+  it("shares summary lines and counts ordered pieces, not rounded production yield", () => {
+    const d = day(X1, [
+      order("1", { wedge: 3, brulee: 2 }, { status: "NEW" }),
+      order("2", { wedge: 2, brulee: 2 }, { status: "CONTACTED" }),
+    ], false);
+    const summary = buildSummary(input([d]));
+    expect(buildDayProduction(d, products)).toEqual({
+      bread: summary.bread!.lines,
+      independent: summary.tonight.lines,
+      totalPieces: 9,
+      orderCount: 2,
+      unconfirmedCount: 1,
+    });
+  });
+});
 
 describe("buildSummary", () => {
   it("CAPACITY_RULES §10 example", () => {

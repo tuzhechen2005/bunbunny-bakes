@@ -4,7 +4,8 @@
 import { z } from "zod";
 import { usage as computeUsage } from "@/domain/capacity";
 import { addDays, compareLocalDate, isLocalDate } from "@/domain/dates";
-import { OCCUPYING_STATUSES, type DayOrder, type LocalDate, type Usage } from "@/domain/types";
+import { type DayOrder, type LocalDate, type Usage } from "@/domain/types";
+import { buildDayProduction, type DayProduction } from "@/domain/summary";
 import { copy } from "@/copy";
 import { writeAudit } from "./audit";
 import type { DbClient, Tx } from "./db";
@@ -37,6 +38,7 @@ export interface CalendarDay {
   usage: Usage;
   /** Occupying (NEW/CONTACTED/CONFIRMED/…) orders on that day. */
   orderCount: number;
+  production: DayProduction;
   over: { dough: boolean; products: string[]; delivery: boolean };
 }
 
@@ -174,6 +176,7 @@ export async function loadCalendar(
       if ((u.products[p.id] ?? 0) > limit) overProducts.push(p.id);
     }
 
+    const production = buildDayProduction({ date, isOpen: row?.isOpen ?? false, limits, orders: dayOrders }, products);
     return {
       date,
       isOpen: row?.isOpen ?? false,
@@ -182,7 +185,8 @@ export async function loadCalendar(
       limits,
       overrides,
       usage: u,
-      orderCount: dayOrders.filter((o) => OCCUPYING_STATUSES.includes(o.status)).length,
+      orderCount: production.orderCount,
+      production,
       over: {
         dough: u.doughG > limits.doughLimitG,
         products: overProducts,
