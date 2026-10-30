@@ -1,8 +1,8 @@
-// Game feel is part of the contract (D128, numbers tuned with scripts/tu-tune.mts). With the
-// owner's 8 tiers and information-limited bots (they only see visible tiles): a random tapper is
-// out in batch 1; a simple greedy player almost always clears batches 1-2, hits the wall in
-// batch 3 (median end batch 3) and rarely gets past batch 4. Changing BATCHES, BAG_SIZE or the
-// generator moves these numbers.
+// Game feel is part of the contract (D130, numbers tuned with scripts/tu-tune.mts). With the
+// owner's 8 tiers and information-limited bots (they only see visible tiles, plus everything for
+// one decision right after a peek): a random tapper is out in batch 1; a simple greedy player
+// gets stuck in batch 2-3 (median 3 with props, 2-3 without) and rarely gets past batch 4.
+// Changing BATCHES, BAG_SIZE, the props or the generator moves these numbers.
 
 import { describe, expect, it } from "vitest";
 import { createTuGame, MAX_TAPS } from "@/lib/tu";
@@ -20,12 +20,20 @@ describe("game length with 8 tiers", () => {
     expect(runs.filter((r) => r.batch <= 2).length).toBeGreaterThanOrEqual(0.98 * seeds.length);
   });
 
-  it("greedy play clears batches 1-2, stops in batch 3 (median), rarely passes batch 4, never hits the tap cap", () => {
+  it("greedy play with props stops in batch 3 (median), rarely before or past batch 4, never hits the cap", () => {
     const runs = seeds.map((s) => greedyTu(s, TIERS));
     expect(median(runs.map((r) => r.batch))).toBe(3);
-    expect(runs.filter((r) => r.batch <= 2).length).toBeLessThanOrEqual(0.1 * seeds.length);
-    expect(runs.filter((r) => r.batch >= 5).length).toBeLessThanOrEqual(0.15 * seeds.length);
+    expect(runs.filter((r) => r.batch <= 2).length).toBeLessThanOrEqual(0.15 * seeds.length);
+    expect(runs.filter((r) => r.batch >= 5).length).toBeLessThanOrEqual(0.2 * seeds.length);
     expect(runs.filter((r) => r.taps.length >= MAX_TAPS)).toEqual([]);
+    expect(runs.every((r) => r.taps.some((t) => "p" in t))).toBe(true);
+  });
+
+  it("greedy play without props stops in batch 2-3", () => {
+    const runs = seeds.map((s) => greedyTu(s, TIERS, { props: false }));
+    const m = median(runs.map((r) => r.batch));
+    expect(m >= 2 && m <= 3).toBe(true);
+    expect(runs.filter((r) => r.batch >= 4).length).toBeLessThanOrEqual(0.12 * seeds.length);
   });
 });
 

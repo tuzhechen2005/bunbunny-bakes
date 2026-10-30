@@ -1,7 +1,7 @@
 // 兔了个兔 batch generator: layout rules and solvability (D122: every batch is generated solvable).
 
 import { describe, expect, it } from "vitest";
-import { BAG_SIZE, BATCHES, batchSpec, BOARD_H, BOARD_W, createTuGame, dealBatch, overlaps, type TuEvent } from "@/lib/tu";
+import { BAG_SIZE, BATCHES, batchSpec, BOARD_H, BOARD_W, createTuGame, dealBatch, isHidden, overlaps, type TuEvent } from "@/lib/tu";
 
 const tiersOf = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `t${i}` }));
 
@@ -12,18 +12,41 @@ describe("dealBatch layout", () => {
     expect(dealBatch("s", 8, 3).tiles).not.toEqual(dealBatch("s", 8, 4).tiles);
   });
 
-  it("batch 1 is 4 breads, 2 layers, 24 tiles (D128 warm-up); later batches grow to 8 breads and 6 layers, then repeat", () => {
+  it("batch 1 is 4 breads, 2 layers, 24 tiles (D128 warm-up); later batches grow to 8 breads and 8 layers, then repeat", () => {
     expect(batchSpec(1)).toMatchObject({ tiers: 4, layers: 2, tiles: 24 });
     for (let b = 2; b <= BATCHES.length; b++) {
       expect(batchSpec(b).tiers).toBeGreaterThanOrEqual(batchSpec(b - 1).tiers);
       expect(batchSpec(b).layers).toBeGreaterThanOrEqual(batchSpec(b - 1).layers);
       expect(batchSpec(b).tiles).toBeGreaterThan(batchSpec(b - 1).tiles);
     }
-    expect(batchSpec(BATCHES.length)).toMatchObject({ tiers: 8, layers: 6 });
+    expect(batchSpec(BATCHES.length)).toMatchObject({ tiers: 8, layers: 8 });
     expect(batchSpec(50)).toEqual(batchSpec(BATCHES.length));
     for (const s of BATCHES) expect(s.tiles % 3).toBe(0);
     // spread 5+ can dead-end the witness (5 singletons in the bag): see the guard in deal.ts.
     for (const s of BATCHES) expect(s.spread).toBeLessThanOrEqual(4);
+  });
+
+  it("the D130 curve: batch 2 has 4 layers and ~25% hidden, batch 3 on 6-8 layers and ~55% hidden", () => {
+    const hiddenShare = (b: number) => {
+      let hidden = 0;
+      let all = 0;
+      for (let s = 0; s < 100; s++) {
+        const { tiles } = dealBatch(`hid${s}`, 8, b);
+        all += tiles.length;
+        hidden += tiles.filter((t) => isHidden(t, tiles)).length;
+      }
+      return hidden / all;
+    };
+    expect(batchSpec(2).layers).toBe(4);
+    expect(hiddenShare(1)).toBeLessThan(0.12);
+    expect(hiddenShare(2)).toBeGreaterThan(0.2);
+    expect(hiddenShare(2)).toBeLessThan(0.32);
+    for (let b = 3; b <= BATCHES.length + 1; b++) {
+      expect(batchSpec(b).layers).toBeGreaterThanOrEqual(6);
+      expect(batchSpec(b).layers).toBeLessThanOrEqual(8);
+      expect(hiddenShare(b)).toBeGreaterThan(0.5);
+      expect(hiddenShare(b)).toBeLessThan(0.6);
+    }
   });
 
   it.each([2, 4, 5, 8])("lays out every batch inside the board with %i shop tiers", (n) => {

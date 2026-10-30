@@ -7,7 +7,21 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { copy } from "@/copy";
 import { Prisma } from "@/generated/prisma/client";
-import { MAX_TAPS, MAX_TIERS, MIN_TAP_GAP_MS, MIN_TIERS, replayTu, TuReplayError, type TuTap, type TuTierInput } from "@/lib/tu";
+import {
+  MAX_TAPS,
+  MAX_TIERS,
+  MIN_TAP_GAP_MS,
+  MIN_TIERS,
+  replayTu,
+  TU_ENGINE_VERSION,
+  TU_PROPS,
+  TuReplayError,
+  tuSeed,
+  tuSeedVersion,
+  type TuLogEntry,
+  type TuProp,
+  type TuTierInput,
+} from "@/lib/tu";
 import type { DbClient } from "./db";
 import { AppError } from "./errors";
 import {
@@ -27,18 +41,26 @@ import {
 import { loadTierConfigs, type GameTierConfig } from "./gameTiers";
 import { runExpiresAt, weekKeyOf } from "./gameWeek";
 
-/** Largest finish body we read: MAX_TAPS taps of about 25 bytes each, with room to spare. */
+/**
+ * Largest finish body we read: MAX_TAPS log entries of at most ~30 bytes each (a tap
+ * `{"id":123,"at":604800000}` or a prop use `{"p":"swap","at":604800000}`), with room to spare.
+ */
 export const TU_MAX_FINISH_BODY_BYTES = 96 * 1024;
 /** Owner flag (D103 manual check): a median gap between taps under this (ms) looks scripted. */
 export const SUSPICIOUS_MEDIAN_GAP_MS = 300;
 
 export const tuStartSchema = startSchema;
 
+const at = z.number().int().min(0);
+/** One log entry (C8): a tile tap `{ id, at }` or a prop use `{ p, at }`, nothing else. */
+const tuLogEntry = z.union([
+  z.strictObject({ id: z.number().int().min(0), at }),
+  z.strictObject({ p: z.enum(TU_PROPS as [TuProp, ...TuProp[]]), at }),
+]);
+
 export const tuFinishSchema = z.object({
   runId: z.uuid(),
-  taps: z
-    .array(z.object({ id: z.number().int().min(0), at: z.number().int().min(0) }))
-    .max(MAX_TAPS),
+  taps: z.array(tuLogEntry).max(MAX_TAPS),
 });
 
 /** The bread tiers of the first game (D123): its configured tiers without the 大面包. */
@@ -59,7 +81,7 @@ export function tuTiersFromSnapshot(snapshot: unknown): TuTierInput[] {
 }
 
 /** D103 owner flag: the run hit MAX_TAPS, or half its taps came less than 300 ms after the previous one. */
-export function isSuspicious(taps: readonly TuTap[]): boolean {
+export function isSuspicious(taps: readonly TuLogEntry[]): boolean {
   if (taps.length >= MAX_TAPS) return true;
   if (taps.length < 2) return false;
   const gaps = taps
@@ -82,7 +104,8 @@ export async function startTuRun(db: DbClient, input: unknown, ipHash: string, n
   if (tiers.length < MIN_TIERS) {
     throw new AppError("VALIDATION", { message: copy.gameApi.tuNotReady, extra: { fields: {} } });
   }
-  const seed = randomBytes(16).toString("hex");
+  // The seed carries the engine version (C8): finish refuses runs dealt under another version.
+  const seed = tuSeed(randomBytes(16).toString("hex"));
   const run = await db.gameRun.create({
     data: {
       game: "TU",
@@ -105,7 +128,10 @@ export async function finishTuRun(db: DbClient, input: unknown, ipHash: string, 
   if (!run || run.game !== "TU") throw new AppError("NOT_FOUND", { message: copy.gameApi.runNotFound });
   // Repeating a finish returns the stored result (the first tap log wins).
   if (run.finishedAt) return resultFor(db, run, "TU");
-  if (now.getTime() >= runExpiresAt(run.startedAt).getTime()) {
+  // A run dealt under another engine version (e.g. started before a rules change was deployed)
+  // would replay under different rules: it can no longer be finished, like an expired run. Such
+  // runs expire with the week anyway and are cleaned up as unfinished runs.
+  if (now.getTime() >= runExpiresAt(run.startedAt).getTime() || tuSeedVersion(run.seed) !== TU_ENGINE_VERSION) {
     throw new AppError("VALIDATION", { message: copy.gameApi.runExpired });
   }
   if (await isBanned(db, run.wechatId)) {

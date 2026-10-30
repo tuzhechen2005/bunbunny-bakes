@@ -136,7 +136,7 @@ test("tiles are at least 44 px and nothing scrolls sideways at 320 px", async ({
 test("a tap moves the tile into the bag; a greedy bot packs, fills an order and reaches the next 炉", async ({ page }) => {
   test.setTimeout(240_000);
   await mockApi(page);
-  const bot = greedyTu(SEED, TIERS);
+  const bot = greedyTu(SEED, TIERS, { props: false }); // tile taps only
   await page.goto("/game/tu");
   await startGame(page);
   await expect(page.getByTestId("tu-bag")).toHaveAttribute("aria-label", /装了 0 个/);
@@ -171,7 +171,7 @@ test("a tap moves the tile into the bag; a greedy bot packs, fills an order and 
 
 test("save and resume: reload, 继续上一局 shows the last score and the same board", async ({ page }) => {
   await mockApi(page);
-  const bot = greedyTu(SEED, TIERS);
+  const bot = greedyTu(SEED, TIERS, { props: false }); // tile taps only
   await page.goto("/game/tu");
   await startGame(page);
   await tapAll(page, bot.taps.slice(0, 8).map((x) => x.id));
@@ -194,7 +194,7 @@ test("save and resume: reload, 继续上一局 shows the last score and the same
 
 test("exit asks: 保存进度再走 keeps the run, 不保存 deletes it; 重新开始 asks first", async ({ page }) => {
   await mockApi(page);
-  const bot = greedyTu(SEED, TIERS);
+  const bot = greedyTu(SEED, TIERS, { props: false }); // tile taps only
   await page.goto("/game/tu");
   await startGame(page);
   await tapAll(page, bot.taps.slice(0, 3).map((x) => x.id));
@@ -258,7 +258,7 @@ test("a random player runs out of bag: result sheet with the server score, close
 test("reduced motion: no animation classes on packs", async ({ page }) => {
   await mockApi(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const bot = greedyTu(SEED, TIERS);
+  const bot = greedyTu(SEED, TIERS, { props: false }); // tile taps only
   await page.goto("/game/tu");
   await startGame(page);
   let animated = false;
