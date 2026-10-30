@@ -352,6 +352,19 @@ export const copy = {
       boardLabel: "面包牌",
       bagLabel: "纸袋，装了 {n} 个，一共 6 格",
       orderLabel: "订单：要 3 个{name}，已有 {n} 个",
+      orderLabelReward: "订单：要 3 个{name}，已有 {n} 个，奖励 {pts} 分",
+      /** Small label above the two order cards (D132). */
+      orders: "订单",
+      /** Props (D131): accessible names; the buttons show only an icon and a count. */
+      propsLabel: "道具",
+      propPeek: "偷看，还有 {n} 个",
+      propBag: "加个纸袋，还有 {n} 个",
+      propSwap: "换订单，还有 {n} 个",
+      propNames: { peek: "偷看", bag: "加个纸袋", swap: "换订单" },
+      orderDone: "订单完成 +{n}",
+      gainProp: "得到 {name}",
+      /** Result sheet: points for props left unused. */
+      bonus: "没用的道具 +{n}",
     },
 
     /** `/orders`: the orders opened on this phone (D84). */

@@ -2,11 +2,8 @@
 import { call } from "@/components/game/gameApi";
 import type { FinishResult, Leaderboard, StartedRun } from "@/components/game/types";
 
-export interface TuTapLog {
-  id: number;
-  /** Integer ms since the run started. */
-  at: number;
-}
+/** One log entry (C8): a tile tap `{ id, at }` or a prop use `{ p, at }`; `at` is integer ms since the run started. */
+export type TuTapLog = { id: number; at: number } | { p: "peek" | "bag" | "swap"; at: number };
 
 export const startTu = (wechatId: string, nickname: string) => call<StartedRun>("/api/game/tu/start", { wechatId, nickname });
 
