@@ -12,17 +12,18 @@ export function BreadFace({ tier }: { tier: TierView }) {
   </span>;
 }
 
-/** Flat, token-coloured badges, independent of match orientation. */
+/** Bold, token-coloured marks that read at a glance on a 40px piece. */
 export function SpecialMark({ kind }: { kind: "roll" | "big" }) {
   return <svg className={`m3-special m3-special-${kind}`} viewBox="0 0 48 48" aria-hidden="true">
-    {kind === "roll" ? <g stroke="var(--c-ink)" strokeWidth="1.8" fill="var(--c-paper)">
-      <path d="M4 30h6m28 0h6" strokeWidth="4" strokeLinecap="round" />
-      <rect x="10" y="24" width="28" height="12" rx="4" />
-      <path d="M15 26v8m18-8v8" opacity=".35" />
-    </g> : <>
-      <circle cx="24" cy="24" r="21" fill="none" stroke="var(--c-paper)" strokeWidth="5" opacity=".65" />
-      <path d="M25 34c0-6 5-10 10-10s10 4 10 10v6H25z" fill="var(--c-paper)" stroke="var(--c-ink)" strokeWidth="1.8" />
-      <path d="m30 29 2 4m5-5 2 4" stroke="var(--c-ink)" strokeWidth="1.8" strokeLinecap="round" />
+    {kind === "roll" ? <>
+      <rect x="1.5" y="1.5" width="45" height="45" rx="10" fill="none" stroke="var(--c-ink)" strokeWidth="3" />
+      <path d="M3 32h42" stroke="var(--c-ink)" strokeWidth="6" strokeLinecap="round" />
+      <rect x="10" y="26" width="28" height="12" rx="6" fill="var(--c-paper)" stroke="var(--c-ink)" strokeWidth="3" />
+    </> : <>
+      <rect x="2" y="2" width="44" height="44" rx="10" fill="none" stroke="var(--c-ink)" strokeWidth="4" />
+      <rect x="5.5" y="5.5" width="37" height="37" rx="7" fill="none" stroke="var(--c-paper)" strokeWidth="2.5" />
+      <circle cx="37" cy="11" r="10" fill="var(--c-ink)" />
+      <path d="M37 4.5l1.9 4.6 4.6 1.9-4.6 1.9-1.9 4.6-1.9-4.6-4.6-1.9 4.6-1.9z" fill="var(--c-paper)" />
     </>}
   </svg>;
 }

@@ -209,6 +209,5 @@ export function M3Board({ tiers, seed, initialMoves = [], soundOn, reduced, onPr
         </div>;
       }))}
     </div>
-    <p className="m3-rules">{t.rules}</p>
   </div>;
 }

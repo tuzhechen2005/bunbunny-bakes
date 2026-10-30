@@ -1,4 +1,4 @@
-.m3-play { padding: 0 12px calc(84px + env(safe-area-inset-bottom)); }
+.m3-play { padding: 0 8px calc(84px + env(safe-area-inset-bottom)); }
 /* At 320px, 3px gutters + 1px board borders leave eight distinct 39px targets. */
 @media (max-width:360px) { .m3-play { padding-inline:3px; } }
 .m3-hud { display:flex; justify-content:space-between; padding:0 6px 14px; }
@@ -11,7 +11,7 @@
 .m3-order > div { display:flex; align-items:center; justify-content:space-between; gap:4px; }
 .m3-order > div + div { margin-top:5px; }
 .m3-order b { font-size:17px; font-weight:400; }
-.m3-order-photo { display:block; width:30px; height:30px; }
+.m3-order-photo { display:block; width:40px; height:40px; }
 .m3-order progress { display:block; width:100%; height:3px; margin-top:7px; appearance:none; border:0; background:var(--c-wash); color:var(--c-ink); border-radius:2px; overflow:hidden; }
 .m3-order progress::-webkit-progress-bar { background:var(--c-wash); }
 .m3-order progress::-webkit-progress-value { background:var(--c-ink); }
@@ -19,14 +19,13 @@
 .m3-board { position:relative; isolation:isolate; width:100%; aspect-ratio:1; border:1px solid var(--c-line); border-radius:12px; overflow:hidden; touch-action:pan-y; user-select:none; -webkit-user-select:none; }
 .m3-paper { position:absolute; inset:0; width:100%; height:100%; }
 .m3-cell { position:absolute; width:12.5%; height:12.5%; }
-.m3-piece { position:absolute; inset:0; padding:3px; pointer-events:none; }
-.m3-face { position:relative; display:grid; place-items:center; width:100%; height:100%; border-radius:50%; overflow:hidden; font-size:17px; }
+.m3-piece { position:absolute; inset:0; padding:1.5px; pointer-events:none; }
+.m3-face { position:relative; display:grid; place-items:center; width:100%; height:100%; border-radius:22%; overflow:hidden; font-size:20px; }
 .m3-face img { width:100%; height:100%; object-fit:cover; }
-.m3-special { position:absolute; inset:0; width:100%; height:100%; }
+.m3-special { position:absolute; inset:1.5px; width:calc(100% - 3px); height:calc(100% - 3px); overflow:visible; }
 .m3-target { position:absolute; inset:0; border:0; border-radius:8px; background:transparent; z-index:2; cursor:pointer; -webkit-tap-highlight-color:transparent; }
 .m3-target[aria-pressed="true"], .m3-target:focus-visible { outline:2px solid var(--c-ink); outline-offset:-2px; }
 .m3-target:disabled { cursor:default; }
-.m3-rules { margin:16px 5px 0; color:var(--c-grey-text); font-size:12px; line-height:1.7; }
 .m3-travel { z-index:1; animation:m3-travel var(--duration) ease-in-out both; }
 .m3-invalid { z-index:1; animation:m3-invalid var(--duration) ease-in-out both; }
 .m3-refill { animation:m3-refill var(--duration) ease-out both; }
