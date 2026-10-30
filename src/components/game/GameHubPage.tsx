@@ -22,7 +22,7 @@ export function GameHubPage() {
         <main className="px-5 pt-5 pb-[calc(24px+env(safe-area-inset-bottom))]" data-testid="game-hub">
           <div className="grid grid-cols-2 gap-3">
             {games.map((game) => (
-              <Link key={game.kind} href={game.href} className={`relative flex min-w-0 flex-col items-start rounded-3xl bg-c-wash px-4 pt-11 pb-5 ${focusRing}`} data-testid={`hub-game-${game.kind.toLowerCase()}`}>
+              <Link key={game.kind} href={game.href} className={`${game.kind === "M3" ? "col-span-2" : ""} relative flex min-w-0 flex-col items-start rounded-3xl bg-c-wash px-4 pt-11 pb-5 ${focusRing}`} data-testid={`hub-game-${game.kind.toLowerCase()}`}>
                 {data?.prizeGame === game.kind ? (
                   <span className="absolute top-3 left-4 text-[11px] font-bold text-c-grey" data-testid="hub-prize">{t.prizeBadge}</span>
                 ) : null}
