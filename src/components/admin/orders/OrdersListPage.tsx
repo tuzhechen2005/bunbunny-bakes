@@ -76,7 +76,7 @@ export function OrdersListPage() {
 
   const [data, setData] = useState<OrderList | null>(null);
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<{ queryKey: string; value: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +88,8 @@ export function OrdersListPage() {
   async function load() {
     const id = ++reqId.current;
     setLoading(true);
+    setLoadingMore(false);
+    setCursor(null);
     setError(null);
     const res = await adminApi<OrderList>(`/api/admin/orders?${queryKey}`);
     if (id !== reqId.current) return;
@@ -98,34 +100,42 @@ export function OrdersListPage() {
     }
     setData(res.data);
     setOrders(res.data.orders);
-    setCursor(res.data.nextCursor);
+    setCursor(res.data.nextCursor ? { queryKey, value: res.data.nextCursor } : null);
   }
 
   useEffect(() => {
     // Fetching on filter change is the point of this effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
+    return () => { reqId.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryKey]);
 
   function setFilters(next: Filters) {
     const qs = toQuery(next);
+    if (qs !== queryKey) {
+      // Invalidate immediately, including while router.replace is still pending.
+      ++reqId.current;
+      setCursor(null);
+      setLoading(true);
+      setLoadingMore(false);
+    }
     router.replace(qs ? `${pathname}?${qs}` : pathname);
   }
 
   async function loadMore() {
-    if (!cursor || loadingMore) return;
+    if (!cursor || cursor.queryKey !== queryKey || loading || loadingMore) return;
     const id = reqId.current;
     setLoadingMore(true);
-    const res = await adminApi<OrderList>(`/api/admin/orders?${toQuery(filters, cursor)}`);
-    setLoadingMore(false);
+    const res = await adminApi<OrderList>(`/api/admin/orders?${toQuery(filters, cursor.value)}`);
     if (id !== reqId.current) return;
+    setLoadingMore(false);
     if (!res.ok) {
       setError(res.message);
       return;
     }
     setOrders((prev) => [...prev, ...res.data.orders]);
-    setCursor(res.data.nextCursor);
+    setCursor(res.data.nextCursor ? { queryKey, value: res.data.nextCursor } : null);
   }
 
   async function advance(order: OrderRow, to: OrderStatus) {
@@ -355,8 +365,8 @@ export function OrdersListPage() {
         })}
       </ul>
 
-      {cursor && (
-        <button type="button" disabled={loadingMore} className={`${secondaryBtn} mt-4 w-full`} onClick={() => void loadMore()}>
+      {(cursor || (loading && orders.length > 0)) && (
+        <button type="button" disabled={!cursor || cursor.queryKey !== queryKey || loading || loadingMore} className={`${secondaryBtn} mt-4 w-full`} onClick={() => void loadMore()}>
           {loadingMore ? t.loadingMore : t.loadMore}
         </button>
       )}

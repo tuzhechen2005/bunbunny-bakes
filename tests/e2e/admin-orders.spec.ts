@@ -5,6 +5,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { expect, test, type BrowserContext } from "@playwright/test";
 import { Client } from "pg";
 import { copy } from "../../src/copy";
+import type { OrderList, OrderRow } from "../../src/server/orderQueries";
 import { testDatabaseUrl } from "../db/testDbUrl";
 import { screensDir } from "./support/screensDir";
 
@@ -155,3 +156,78 @@ test("a stale inline status change shows the refresh message", async ({ page, co
   await alice.getByRole("button", { name: t.moveTo.CONTACTED }).click();
   await expect(alice.getByRole("alert")).toHaveText(copy.errors.STALE);
 });
+
+
+for (const oldPageInFlight of [false, true]) {
+  test(`filter change waits for its first page before paging (old page in flight: ${oldPageInFlight})`, async ({ page, context, baseURL }) => {
+    const { token } = await seed();
+    await login(context, baseURL!, token);
+    const row = (id: string): OrderRow => ({
+      id, orderNo: id, wechatId: `wx-${id}`, itemsSummary: "红豆包 × 1",
+      totalCents: 249, fulfillment: "PICKUP", pickupDate: "2026-10-31",
+      pickupDateLabel: "10/31", status: "NEW", paid: false,
+      updatedAt: "2026-10-30T12:00:00Z", nextStatuses: [],
+    });
+    const result = (ids: string[], nextCursor: string | null): OrderList => ({
+      orders: ids.map(row), nextCursor, today: "2026-10-30", products: [],
+    });
+    let releaseFirst!: () => void;
+    const firstPageGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    let releaseOld!: () => void;
+    const oldPageGate = new Promise<void>((resolve) => { releaseOld = resolve; });
+    const requests: { filtered: boolean; cursor: string | null }[] = [];
+    await page.route("**/api/admin/orders?*", async (route) => {
+      const sp = new URL(route.request().url()).searchParams;
+      const filtered = sp.has("status");
+      const cursor = sp.get("cursor");
+      requests.push({ filtered, cursor });
+      if (!filtered) {
+        if (cursor) await oldPageGate;
+        await route.fulfill({ json: cursor ? result(["old-3"], null) : result(["old-1", "old-2"], "old-cursor") });
+      } else if (!cursor) {
+        await firstPageGate;
+        await route.fulfill({ json: result(["new-1", "new-2"], "new-cursor-2") });
+      } else {
+        // A stale cursor would skip the first four rows, as a mismatched date/seq can.
+        await route.fulfill({ json: cursor === "new-cursor-2"
+          ? result(["new-3", "new-4"], "new-cursor-4")
+          : result(["new-5"], null) });
+      }
+    });
+
+    await page.goto("/admin/orders?date=all");
+    const rows = page.getByTestId("order-row");
+    const more = page.getByRole("button", { name: t.loadMore, exact: true });
+    await expect(rows).toHaveCount(2);
+    await expect(more).toBeEnabled();
+    if (oldPageInFlight) {
+      await more.click();
+      await expect.poll(() => requests.some((r) => !r.filtered && r.cursor === "old-cursor")).toBe(true);
+    }
+    await page.getByRole("button", { name: t.quickUnconfirmed, exact: true }).click();
+    await expect.poll(() => requests.some((r) => r.filtered && r.cursor === null)).toBe(true);
+    // Keep the first response blocked while exercising the button. A disabled native
+    // click must not send the old cursor with the new filters.
+    await expect(more).toBeDisabled();
+    await more.evaluate((button) => (button as HTMLButtonElement).click());
+    expect(requests.filter((r) => r.filtered)).toEqual([{ filtered: true, cursor: null }]);
+
+    releaseFirst();
+    await expect(rows.first()).toContainText("new-1");
+    await expect(more).toBeEnabled();
+    if (oldPageInFlight) {
+      const oldResponse = page.waitForResponse((r) => new URL(r.url()).searchParams.get("cursor") === "old-cursor");
+      releaseOld();
+      await oldResponse;
+    }
+    await more.click();
+    await expect(rows).toHaveCount(4);
+    await more.click();
+    await expect(rows).toHaveCount(5);
+    await expect(more).toBeHidden();
+    // Exact order and cardinality prove that all filtered rows occur once, with no
+    // stale rows appended and no skipped page while the first response was delayed.
+    await expect(rows.locator("a > span:first-child")).toHaveText(["new-1", "new-2", "new-3", "new-4", "new-5"]);
+    expect(requests.filter((r) => r.filtered).map((r) => r.cursor)).toEqual([null, "new-cursor-2", "new-cursor-4"]);
+  });
+}

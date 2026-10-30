@@ -119,7 +119,7 @@ describe("buildDayProduction", () => {
       independent: summary.tonight.lines,
       totalPieces: 9,
       orderCount: 2,
-      unconfirmedCount: 1,
+      unconfirmedCount: 2,
     });
   });
 });

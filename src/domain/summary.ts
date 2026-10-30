@@ -86,7 +86,7 @@ export interface DayProduction {
   /** Ordered pieces, excluding extra pieces from rounding up rounds/batches. */
   totalPieces: number;
   orderCount: number;
-  /** Calendar D138: only NEW, unlike the nightly NEW + CONTACTED reminder. */
+  /** D38: NEW + CONTACTED, consistent with the daily email reminder. */
   unconfirmedCount: number;
 }
 
@@ -196,7 +196,7 @@ export function buildDayProduction(day: ProductionDay | undefined, products: Pro
     independent,
     totalPieces: [...bread, ...independent].reduce((total, line) => total + line.qty, 0),
     orderCount: orders.length,
-    unconfirmedCount: orders.filter((o) => o.status === "NEW").length,
+    unconfirmedCount: orders.filter((o) => o.status === "NEW" || o.status === "CONTACTED").length,
   };
 }
 

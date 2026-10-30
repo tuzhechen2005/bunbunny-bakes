@@ -279,7 +279,7 @@ production: {
 }
 ```
 
-`bread/independent` 复用每日汇总的商品排序、当前商品参数和整天合计后的大圆包／批次取整（包含已有订单引用的暂停、下架商品）。`totalPieces` 为订单件数之和，不含取整多出的余量；`orderCount` 与 day 原有订单数相同，排除 `CANCELLED/REJECTED`；`unconfirmedCount` 仅计 `NEW`，与邮件的 `NEW + CONTACTED` 提醒不同。关闭日期上已有订单照算；无有效订单返回空行数组、三个计数均为 0。`PUT /api/admin/dates/{date}` 成功也返回此 day 形状。
+`bread/independent` 复用每日汇总的商品排序、当前商品参数和整天合计后的大圆包／批次取整（包含已有订单引用的暂停、下架商品）。`totalPieces` 为订单件数之和，不含取整多出的余量；`orderCount` 与 day 原有订单数相同，排除 `CANCELLED/REJECTED`；`unconfirmedCount` 统计 `NEW + CONTACTED`（D38），与每日汇总邮件一致。关闭日期上已有订单照算；无有效订单返回空行数组、三个计数均为 0。`PUT /api/admin/dates/{date}` 成功也返回此 day 形状。
 
 **`expectedUpdatedAt`**：店主在两个页面里同时改同一笔订单时，后提交的那个返回 `STALE`，提示刷新，不会悄悄覆盖。
 

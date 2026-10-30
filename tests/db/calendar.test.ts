@@ -55,7 +55,7 @@ async function expectError(p: Promise<unknown>) {
 }
 
 describe("GET calendar", () => {
-  it("matches the daily summary, rounds across orders, and counts only NEW as unconfirmed", async () => {
+  it("matches the daily summary, rounds across orders, and counts NEW + CONTACTED as unconfirmed", async () => {
     await createOpenDate(D1, { isOpen: false });
     for (const status of ["NEW", "CONTACTED", "CONFIRMED", "BAKING", "READY", "COMPLETED", "CANCELLED", "REJECTED"] as const) {
       await createOrder({ date: D1, status, items: [
@@ -72,7 +72,8 @@ describe("GET calendar", () => {
     expect(day.production.independent).toEqual(summary.tonight.lines);
     expect(day.production.bread.find((p) => p.productId === P.cheeseHorn)).toMatchObject({ qty: 6, rounds: { rounds: 2, leftover: 2 } });
     expect(day.production.independent[0]).toMatchObject({ qty: 12, batches: 3, leftover: 3 });
-    expect(day.production).toMatchObject({ totalPieces: 24, orderCount: 6, unconfirmedCount: 1 });
+    expect(day.production).toMatchObject({ totalPieces: 24, orderCount: 6, unconfirmedCount: 2 });
+    expect(day.production.unconfirmedCount).toBe(summary.unconfirmed.length);
     expect(day.orderCount).toBe(summary.deliveries.pickup + summary.deliveries.delivery);
     expect((await get("2026-10-31", "2026-10-31")).days[0].production.totalPieces).toBe(0);
   });
