@@ -7,6 +7,7 @@ import { Sheet, type SheetHandle } from "@/components/ui/Sheet";
 import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import { useGameHub } from "@/components/game/useGameHub";
+import { useLiveProgress } from "@/components/game/useLiveProgress";
 import { copy } from "@/copy";
 import { fetchMenu } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
@@ -157,6 +158,10 @@ export function GamePage() {
     const m = meta.current;
     writeSave({ v: 1, runId: runId.current, seed: m.seed, tiers: s.tiers, drops: s.drops, nickname: m.nickname, expiresAt: m.expiresAt, score: s.score });
   }, []);
+
+  const readProgress = useCallback(() => session && !session.over && !submitted.current.has(runId.current)
+    ? { runId: runId.current, log: session.drops } : null, [session]);
+  useLiveProgress("/api/game/progress", phase === "playing", readProgress);
 
   const toMenu = () => {
     sessionRef.current = null;

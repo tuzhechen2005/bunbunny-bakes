@@ -38,6 +38,7 @@ export interface FinishResult {
 }
 
 export interface LeaderboardRow {
+  live: boolean;
   rank: number;
   nickname: string;
   wechatMasked: string;
@@ -45,6 +46,7 @@ export interface LeaderboardRow {
 }
 
 export interface Leaderboard {
+  liveScores?: boolean;
   week: { start: string; end: string };
   top: LeaderboardRow[];
   lastWinner: { nickname: string; wechatMasked: string; score: number } | null;

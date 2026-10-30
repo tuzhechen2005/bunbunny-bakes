@@ -3,6 +3,8 @@
 // lives until the weekly reset after its start, the tap log is replayed with the run's own seed
 // and tier snapshot (src/lib/tu/replay.ts), weekly board = best per WeChat id, shared ban list.
 
+import type { GameRun } from "@/generated/prisma/client";
+
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { copy } from "@/copy";
@@ -137,6 +139,34 @@ export async function finishTuRun(db: DbClient, input: unknown, ipHash: string, 
   if (await isBanned(db, run.wechatId)) {
     throw new AppError("VALIDATION", { message: copy.gameApi.banned });
   }
+  const verified = verifyTuRun(run, data, now);
+  const weekKey = weekKeyOf(now);
+  const claimed = await db.gameRun.updateMany({
+    where: { id: run.id, finishedAt: null },
+    data: {
+      finishedAt: now,
+      updatedAt: null,
+      score: verified.score,
+      weekKey,
+      drops: data.taps as unknown as Prisma.InputJsonValue,
+      dropCount: data.taps.length,
+      playMs: verified.playMs,
+      suspicious: verified.suspicious,
+    },
+  });
+  if (claimed.count === 0) {
+    const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
+    return resultFor(db, stored, "TU");
+  }
+  return resultFor(db, { id: run.id, wechatId: run.wechatId, score: verified.score, weekKey }, "TU");
+}
+
+export function getTuLeaderboard(db: DbClient, now: Date, myWechatId?: string | null): Promise<Leaderboard> {
+  return getLeaderboard(db, now, myWechatId, "TU");
+}
+
+/** Shared finish/progress replay and wall-clock validation. */
+export function verifyTuRun(run: GameRun, data: z.output<typeof tuFinishSchema>, now: Date) {
   const badRun = () => new AppError("VALIDATION", { message: copy.gameApi.badRun });
   let outcome;
   try {
@@ -151,26 +181,5 @@ export async function finishTuRun(db: DbClient, input: unknown, ipHash: string, 
   }
   const playMs = data.taps[data.taps.length - 1]?.at ?? 0;
   if (playMs > now.getTime() - run.startedAt.getTime() + PLAUSIBILITY_SLACK_MS) throw badRun();
-  const weekKey = weekKeyOf(now);
-  const claimed = await db.gameRun.updateMany({
-    where: { id: run.id, finishedAt: null },
-    data: {
-      finishedAt: now,
-      score: outcome.score,
-      weekKey,
-      drops: data.taps as unknown as Prisma.InputJsonValue,
-      dropCount: data.taps.length,
-      playMs,
-      suspicious: isSuspicious(data.taps),
-    },
-  });
-  if (claimed.count === 0) {
-    const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
-    return resultFor(db, stored, "TU");
-  }
-  return resultFor(db, { id: run.id, wechatId: run.wechatId, score: outcome.score, weekKey }, "TU");
-}
-
-export function getTuLeaderboard(db: DbClient, now: Date, myWechatId?: string | null): Promise<Leaderboard> {
-  return getLeaderboard(db, now, myWechatId, "TU");
+  return { score: outcome.score, playMs, suspicious: isSuspicious(data.taps) };
 }

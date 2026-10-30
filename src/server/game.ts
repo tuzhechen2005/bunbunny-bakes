@@ -5,6 +5,10 @@
 // The board helpers (weekly ranking, all-time record, personal best, award lookup) take a `game`
 // so 兔了个兔 (src/server/tu.ts, D124) reuses them; the default is the first game.
 
+import { LIVE_WINDOW_MS } from "@/lib/liveScores";
+import { liveScoresEnabled } from "./liveScores";
+import type { GameRun } from "@/generated/prisma/client";
+
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { copy } from "@/copy";
@@ -132,25 +136,27 @@ export interface BoardRow {
   wechatId: string;
   nickname: string;
   score: number;
-  finishedAt: Date;
+  finishedAt: Date | null;
+  updatedAt: Date | null;
+  progressAttemptAt: Date | null;
   rank: number;
 }
 
-/** Finished, non-hidden runs of ids that are not banned: what the boards count. */
-const ELIGIBLE = Prisma.sql`r."finishedAt" IS NOT NULL AND r.score IS NOT NULL AND NOT r.hidden
+/** Verified scores (including unfinished reports), excluding hidden runs and banned ids. */
+const eligible = () => Prisma.sql`(r."finishedAt" IS NOT NULL OR (${liveScoresEnabled()} AND r."updatedAt" IS NOT NULL)) AND r.score IS NOT NULL AND NOT r.hidden
   AND NOT EXISTS (SELECT 1 FROM "GameBan" b WHERE lower(b."wechatId") = lower(r."wechatId"))`;
 
-/** One row per WeChat id (their best run), ranked by score then earliest finish; hidden runs and banned ids excluded. */
+/** One row per WeChat id (their best run), ranked by score then earliest finish/score increase; hidden runs and banned ids excluded. */
 function rankedSql(weekKey: string, game: GameKind) {
   return Prisma.sql`
     WITH best AS (
-      SELECT DISTINCT ON (lower(r."wechatId")) r.id, r."wechatId", r.nickname, r.score, r."finishedAt"
+      SELECT DISTINCT ON (lower(r."wechatId")) r.id, r."wechatId", r.nickname, r.score, r."finishedAt", r."updatedAt", r."progressAttemptAt", COALESCE(r."finishedAt", r."updatedAt") AS "rankedAt"
       FROM "GameRun" r
-      WHERE r.game = ${game}::"GameKind" AND r."weekKey" = ${weekKey} AND ${ELIGIBLE}
-      ORDER BY lower(r."wechatId"), r.score DESC, r."finishedAt" ASC, r.id ASC
+      WHERE r.game = ${game}::"GameKind" AND r."weekKey" = ${weekKey} AND ${eligible()}
+      ORDER BY lower(r."wechatId"), r.score DESC, COALESCE(r."finishedAt", r."updatedAt") ASC, r.id ASC
     ), ranked AS (
-      SELECT id, "wechatId", nickname, score, "finishedAt",
-             (ROW_NUMBER() OVER (ORDER BY score DESC, "finishedAt" ASC, id ASC))::int AS rank
+      SELECT id, "wechatId", nickname, score, "finishedAt", "updatedAt", "progressAttemptAt",
+             (ROW_NUMBER() OVER (ORDER BY score DESC, "rankedAt" ASC, id ASC))::int AS rank
       FROM best
     )`;
 }
@@ -180,8 +186,8 @@ interface AllTimeRow {
 async function allTimeRecord(db: DbClient, game: GameKind): Promise<AllTimeRow | null> {
   const rows = await db.$queryRaw<AllTimeRow[]>`
     SELECT r.id::text AS id, r."wechatId", r.nickname, r.score FROM "GameRun" r
-    WHERE r.game = ${game}::"GameKind" AND ${ELIGIBLE}
-    ORDER BY r.score DESC, r."finishedAt" ASC, r.id ASC LIMIT 1`;
+    WHERE r.game = ${game}::"GameKind" AND ${eligible()}
+    ORDER BY r.score DESC, COALESCE(r."finishedAt", r."updatedAt") ASC, r.id ASC LIMIT 1`;
   return rows[0] ?? null;
 }
 
@@ -251,19 +257,7 @@ export async function finishRun(db: DbClient, input: unknown, ipHash: string, no
   if (await isBanned(db, run.wechatId)) {
     throw new AppError("VALIDATION", { message: copy.gameApi.banned });
   }
-  let outcome;
-  try {
-    outcome = replay(run.seed, tierDefsFromSnapshot(run.tiersSnapshot), data.drops);
-  } catch (e) {
-    if (e instanceof ReplayError) throw new AppError("VALIDATION", { message: copy.gameApi.badRun });
-    throw e;
-  }
-  // A real client cannot simulate faster than real time: reject "computed offline, submitted at once".
-  const playedSteps = outcome.over ? outcome.steps : (data.drops[data.drops.length - 1]?.at ?? 0);
-  const elapsedMs = now.getTime() - run.startedAt.getTime();
-  if ((playedSteps / STEPS_PER_SECOND) * 1000 > elapsedMs + PLAUSIBILITY_SLACK_MS) {
-    throw new AppError("VALIDATION", { message: copy.gameApi.badRun });
-  }
+  const verified = verifyBigRun(run, data, now);
   // Same as the start's week, since a run cannot be finished after the reset.
   const weekKey = weekKeyOf(now);
   // Only one finisher wins the run; a concurrent duplicate reads the stored result.
@@ -271,21 +265,23 @@ export async function finishRun(db: DbClient, input: unknown, ipHash: string, no
     where: { id: run.id, finishedAt: null },
     data: {
       finishedAt: now,
-      score: outcome.score,
+      updatedAt: null,
+      score: verified.score,
       weekKey,
       drops: data.drops as unknown as Prisma.InputJsonValue,
       dropCount: data.drops.length,
-      simSteps: outcome.steps,
+      simSteps: verified.simSteps,
     },
   });
   if (claimed.count === 0) {
     const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
     return resultFor(db, stored);
   }
-  return resultFor(db, { id: run.id, wechatId: run.wechatId, score: outcome.score, weekKey });
+  return resultFor(db, { id: run.id, wechatId: run.wechatId, score: verified.score, weekKey });
 }
 
 export interface LeaderboardEntry {
+  live: boolean;
   rank: number;
   nickname: string;
   wechatMasked: string;
@@ -293,6 +289,7 @@ export interface LeaderboardEntry {
 }
 
 export interface Leaderboard {
+  liveScores: boolean;
   week: { start: LocalDate; end: LocalDate };
   top: LeaderboardEntry[];
   lastWinner: { nickname: string; wechatMasked: string; score: number } | null;
@@ -313,15 +310,16 @@ export async function getLeaderboard(
   // The owner's award (if any) names the winner; otherwise the top of last week.
   const award = await db.gameAward.findUnique({ where: { game_weekKey: { game, weekKey: last } }, include: { run: true } });
   let lastWinner: Leaderboard["lastWinner"] = null;
-  if (award?.run && award.run.score !== null) {
+  if (award?.run && award.run.score !== null && (award.run.finishedAt || liveScoresEnabled())) {
     lastWinner = { nickname: award.run.nickname, wechatMasked: maskWechat(award.run.wechatId), score: award.run.score };
   } else {
     const [w] = await topOfWeek(db, last, 1, game);
     if (w) lastWinner = { nickname: w.nickname, wechatMasked: maskWechat(w.wechatId), score: w.score };
   }
   const out: Leaderboard = {
+    liveScores: liveScoresEnabled(),
     week: weekRange(weekKey),
-    top: rows.map((r) => ({ rank: r.rank, nickname: r.nickname, wechatMasked: maskWechat(r.wechatId), score: r.score })),
+    top: rows.map((r) => ({ rank: r.rank, nickname: r.nickname, wechatMasked: maskWechat(r.wechatId), score: r.score, live: isLiveRow(r, now) })),
     lastWinner,
     allTime: record ? { nickname: record.nickname, wechatMasked: maskWechat(record.wechatId), score: record.score } : null,
   };
@@ -331,4 +329,32 @@ export async function getLeaderboard(
     if (mine) out.myBest = mine.score;
   }
   return out;
+}
+
+/** Shared finish/progress replay and wall-clock validation. */
+export function verifyBigRun(run: GameRun, data: z.output<typeof finishSchema>, now: Date) {
+  let outcome;
+  try {
+    outcome = replay(run.seed, tierDefsFromSnapshot(run.tiersSnapshot), data.drops);
+  } catch (e) {
+    if (e instanceof ReplayError) throw new AppError("VALIDATION", { message: copy.gameApi.badRun });
+    throw e;
+  }
+  // A real client cannot simulate faster than real time: reject "computed offline, submitted at once".
+  const playedSteps = outcome.over ? outcome.steps : (data.drops[data.drops.length - 1]?.at ?? 0);
+  const elapsedMs = now.getTime() - run.startedAt.getTime();
+  if ((playedSteps / STEPS_PER_SECOND) * 1000 > elapsedMs + PLAUSIBILITY_SLACK_MS) {
+    throw new AppError("VALIDATION", { message: copy.gameApi.badRun });
+  }
+  return { score: outcome.score, simSteps: outcome.steps };
+}
+
+export function isLiveRow(row: Pick<BoardRow, "finishedAt" | "updatedAt" | "progressAttemptAt">, now: Date): boolean {
+  return liveScoresEnabled() && !row.finishedAt && row.updatedAt !== null && row.progressAttemptAt !== null
+    && +row.progressAttemptAt <= +now && +now - +row.progressAttemptAt < LIVE_WINDOW_MS;
+}
+
+export async function weekLeader(db: DbClient, week: string, game: GameKind, now: Date) {
+  const row = (await topOfWeek(db, week, 1, game))[0];
+  return { weekBest: row?.score ?? null, live: !!row && isLiveRow(row, now) };
 }

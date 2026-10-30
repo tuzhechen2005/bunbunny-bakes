@@ -16,7 +16,8 @@ interface Row {
   wechatId: string;
   nickname: string;
   score: number;
-  finishedAt: string;
+  finishedAt: string | null;
+  updatedAt?: string | null;
   verified: boolean;
   hidden: boolean;
   banned: boolean;
@@ -220,7 +221,7 @@ export function BoardPanel({ game = "big" }: { game?: "big" | "tu" | "m3" }) {
                   <span className="text-lg font-semibold" data-testid="run-score">{r.score}</span>
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted">
-                  <span>{timeLabel(r.finishedAt)}</span>
+                  <span>{timeLabel(r.finishedAt ?? r.updatedAt ?? "")}</span>
                   <span className={chip}>{r.verified ? t.verified : t.unverified}</span>
                   {r.dropCount !== null && r.durationSec !== null ? (
                     <span data-testid="run-evidence">

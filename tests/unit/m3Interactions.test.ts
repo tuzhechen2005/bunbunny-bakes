@@ -50,6 +50,7 @@ vi.mock("react", async importOriginal => ({
   useCallback: (fn: unknown) => fn,
 }));
 vi.mock("@/lib/motion/react", () => ({ useMotionPrefs: () => ({ reduced: true, degraded: false }), haptic: vi.fn() }));
+vi.mock("@/components/game/useLiveProgress", () => ({ useLiveProgress: vi.fn() }));
 vi.mock("@/components/game/useGameHub", () => ({ useGameHub: () => ({ data: null }) }));
 vi.mock("@/lib/api", () => ({ fetchMenu: async () => ({ ok: false }) }));
 vi.mock("@/components/m3/m3Api", () => ({ finishM3: vi.fn(), startM3: vi.fn(), fetchM3Leaderboard: vi.fn() }));

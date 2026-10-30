@@ -10,6 +10,7 @@ import { Sheet, type SheetHandle } from "@/components/ui/Sheet";
 import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import { useGameHub } from "@/components/game/useGameHub";
+import { useLiveProgress } from "@/components/game/useLiveProgress";
 import { copy } from "@/copy";
 import { MAX_TAPS } from "@/lib/tu";
 import { fetchMenu } from "@/lib/api";
@@ -169,6 +170,10 @@ export function TuPage() {
     },
     [persist],
   );
+
+  const readProgress = useCallback(() => runId.current && !submitted.current.has(runId.current)
+    ? { runId: runId.current, log: progress.current.taps } : null, []);
+  useLiveProgress("/api/game/tu/progress", phase === "playing", readProgress);
 
   const toMenu = () => {
     setRun(null);

@@ -15,7 +15,7 @@ const scratchName = `${databaseName(baseUrl.toString())}_wd_test`;
 const scratchUrl = new URL(baseUrl);
 scratchUrl.pathname = `/${scratchName}`;
 const maintenanceUrl = new URL(baseUrl);
-maintenanceUrl.pathname = "/postgres";
+// Use the validated *_test database for scratch-database administration too.
 
 const sqlOf = (name: string) => readFileSync(`${dir}/${name}/migration.sql`, "utf8");
 let client: Client;

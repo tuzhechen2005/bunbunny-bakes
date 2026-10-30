@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { canReportLiveScores, startVisibleRefresh } from "@/lib/liveScoreClient";
 import { localDateOf } from "@/domain/dates";
 import type { GameHub } from "@/lib/gameCatalog";
 import { call } from "./gameApi";
 
 /** Refresh on return; keep a confirmed prize through failures only within its own week. */
-export function useGameHub(enabled = true) {
+export function useGameHub(enabled = true, { refresh = false }: { refresh?: boolean } = {}) {
   const [data, setData] = useState<GameHub | null>(null);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -16,11 +17,13 @@ export function useGameHub(enabled = true) {
     if (!enabled) return;
     let alive = true;
     let request = 0;
+    let liveScores = false;
     const load = async () => {
       if (document.visibilityState === "hidden") return;
       const id = ++request;
       const result = await call<GameHub>("/api/game/hub");
       if (!alive || id !== request) return;
+      if (result.ok) liveScores = result.data.liveScores === true;
       setData((previous) => {
         if (result.ok) return result.data;
         const today = localDateOf(new Date());
@@ -29,13 +32,17 @@ export function useGameHub(enabled = true) {
       setError(!result.ok);
     };
     void load();
+    const stop = refresh
+      ? startVisibleRefresh(() => void load(), () => document.visibilityState !== "hidden", () => liveScores && canReportLiveScores())
+      : undefined;
     window.addEventListener("focus", load);
     document.addEventListener("visibilitychange", load);
     return () => {
       alive = false;
+      stop?.();
       window.removeEventListener("focus", load);
       document.removeEventListener("visibilitychange", load);
     };
-  }, [enabled, attempt]);
+  }, [enabled, attempt, refresh]);
   return { data, error, reload };
 }

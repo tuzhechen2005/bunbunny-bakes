@@ -5,6 +5,8 @@
 // The leaderboard and award functions take the game (D124: `?game=tu` = 兔了个兔, default the
 // first game); tiers are shared (D123) and so is the ban list.
 
+import { liveScoresEnabled } from "./liveScores";
+
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
@@ -377,7 +379,8 @@ export interface RunRowDto {
   wechatId: string;
   nickname: string;
   score: number;
-  finishedAt: string;
+  finishedAt: string | null;
+  updatedAt: string | null;
   verified: boolean;
   hidden: boolean;
   banned: boolean;
@@ -430,6 +433,7 @@ interface RawRun {
   nickname: string;
   score: number | null;
   finishedAt: Date | null;
+  updatedAt: Date | null;
   hidden: boolean;
   dropCount: number | null;
   simSteps: number | null;
@@ -473,7 +477,7 @@ export function gameOfRequest(request: Request): GameKind {
   return r.data;
 }
 
-const RUN_COLUMNS = Prisma.sql`"id"::text AS id, "wechatId", "nickname", "score", "finishedAt", "hidden", "dropCount", "simSteps", "playMs", "suspicious"`;
+const RUN_COLUMNS = Prisma.sql`"id"::text AS id, "wechatId", "nickname", "score", "finishedAt", "updatedAt", "hidden", "dropCount", "simSteps", "playMs", "suspicious"`;
 
 export async function getBoard(
   db: DbClient,
@@ -488,8 +492,8 @@ export async function getBoard(
     db.$queryRaw<RawRun[]>`
       SELECT ${RUN_COLUMNS}
       FROM "GameRun"
-      WHERE "game" = ${g} AND "weekKey" = ${wk} AND "finishedAt" IS NOT NULL AND "score" IS NOT NULL
-      ORDER BY "score" DESC, "finishedAt" ASC, "id" ASC LIMIT 300`,
+      WHERE "game" = ${g} AND "weekKey" = ${wk} AND ("finishedAt" IS NOT NULL OR (${liveScoresEnabled()} AND "updatedAt" IS NOT NULL)) AND "score" IS NOT NULL
+      ORDER BY "score" DESC, COALESCE("finishedAt", "updatedAt") ASC, "id" ASC LIMIT 300`,
     db.$queryRaw<{ weekKey: string }[]>`
       SELECT DISTINCT "weekKey" FROM "GameRun" WHERE "game" = ${g} AND "weekKey" IS NOT NULL ORDER BY "weekKey" DESC LIMIT 26`,
     db.$queryRaw<{ wechatId: string; reason: string | null; createdAt: Date }[]>`
@@ -524,7 +528,8 @@ export async function getBoard(
       wechatId: r.wechatId,
       nickname: r.nickname,
       score: r.score ?? 0,
-      finishedAt: (r.finishedAt as Date).toISOString(),
+      finishedAt: r.finishedAt?.toISOString() ?? null,
+      updatedAt: r.updatedAt?.toISOString() ?? null,
       verified: true,
       hidden: r.hidden,
       banned: isBanned,

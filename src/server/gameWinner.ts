@@ -1,6 +1,7 @@
 // Weekly game winner email (D114, docs/NOTIFICATIONS.md): on Monday morning the owner gets last
 // week's #1 with the full WeChat id and whether they have ordered (the prize condition). If #1 has
 // not ordered, the email also names the highest-ranked player who has; the owner decides.
+// D136: rankedWeek also includes unfinished runs at their last verified score.
 // One GAME_WINNER notification per week, only for that closed week's prize game (D133).
 
 import type { LocalDate } from "@/domain/types";

@@ -100,10 +100,10 @@ describe("hub and admin API", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     const body = await response.json();
-    expect(body).toEqual({ week: { start: WEEK, end: "2026-11-01" }, prizeGame: "TU", games: [
-      { kind: "BIG", name: "消除大面包", href: "/game", weekBest: 0 },
-      { kind: "TU", name: "兔了个兔", href: "/game/tu", weekBest: null },
-      { kind: "M3", name: "兔兔三连烤", href: "/game/m3", weekBest: null },
+    expect(body).toEqual({ liveScores: true, week: { start: WEEK, end: "2026-11-01" }, prizeGame: "TU", games: [
+      { kind: "BIG", name: "消除大面包", href: "/game", weekBest: 0, live: false },
+      { kind: "TU", name: "兔了个兔", href: "/game/tu", weekBest: null, live: false },
+      { kind: "M3", name: "兔兔三连烤", href: "/game/m3", weekBest: null, live: false },
     ] });
     expect(JSON.stringify(body)).not.toContain("private_");
     expect((await getGameHub(db, new Date("2026-11-02T06:00:00Z"))).games.every((g) => g.weekBest === null)).toBe(true);
