@@ -31,8 +31,10 @@ for (const width of [320, 390]) {
     await tu.focus();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/game\/tu$/);
-    await expect(page.getByTestId("top-bar-back")).toHaveAttribute("href", "/game/hub");
-    await page.getByTestId("top-bar-back").click();
+    // The previous route stays mounted but hidden, so match the visible bar only.
+    const back = page.getByTestId("top-bar-back").filter({ visible: true });
+    await expect(back).toHaveAttribute("href", "/game/hub");
+    await back.click();
     await big.click();
     await expect(page).toHaveURL(/\/game$/);
   });
