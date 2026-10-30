@@ -78,6 +78,17 @@ export interface DailySummary {
 }
 
 type ProductMap = Record<string, SummaryProduct>;
+type ProductionDay = Omit<SummaryDay, "orders"> & { orders: DayOrder[] };
+
+export interface DayProduction {
+  bread: BreadLine[];
+  independent: BatchLine[];
+  /** Ordered pieces, excluding extra pieces from rounding up rounds/batches. */
+  totalPieces: number;
+  orderCount: number;
+  /** D38: NEW + CONTACTED, consistent with the daily email reminder. */
+  unconfirmedCount: number;
+}
 
 function isPositiveInt(n: number | null): n is number {
   return n !== null && Number.isInteger(n) && n > 0;
@@ -99,12 +110,12 @@ function getDay(input: SummaryInput, date: LocalDate): SummaryDay | undefined {
   return d;
 }
 
-function occupyingOrders(day: SummaryDay | undefined): SummaryOrder[] {
+function occupyingOrders(day: ProductionDay | undefined): DayOrder[] {
   return day ? day.orders.filter((o) => OCCUPYING_STATUSES.includes(o.status)) : [];
 }
 
 /** Day totals per product over the given (already filtered) orders, qty > 0 only. */
-function totalsOf(orders: SummaryOrder[], products: ProductMap): Map<string, number> {
+function totalsOf(orders: DayOrder[], products: ProductMap): Map<string, number> {
   const totals = new Map<string, number>();
   for (const order of orders) {
     for (const line of order.items) {
@@ -137,7 +148,7 @@ const isDoughMode = (p: SummaryProduct) =>
   p.capacityMode === "DOUGH_PER_UNIT" || p.capacityMode === "DOUGH_PER_ROUND";
 const isIndependent = (p: SummaryProduct) => p.capacityMode === "INDEPENDENT";
 
-function breadSection(day: SummaryDay | undefined, products: ProductMap): DailySummary["bread"] {
+function breadSection(day: ProductionDay | undefined, products: ProductMap): DailySummary["bread"] {
   const orders = occupyingOrders(day);
   if (!day || (!day.isOpen && orders.length === 0)) return null;
 
@@ -163,7 +174,7 @@ function breadSection(day: SummaryDay | undefined, products: ProductMap): DailyS
   };
 }
 
-function batchLines(day: SummaryDay | undefined, products: ProductMap): BatchLine[] {
+function batchLines(day: ProductionDay | undefined, products: ProductMap): BatchLine[] {
   const totals = totalsOf(occupyingOrders(day), products);
   return sortedEntries(totals, products, isIndependent).map(({ product, qty }) => {
     const y = product.batchYield;
@@ -173,6 +184,20 @@ function batchLines(day: SummaryDay | undefined, products: ProductMap): BatchLin
     const batches = Math.ceil(qty / y);
     return { productId: product.id, name: product.name, qty, batches, leftover: batches * y - qty };
   });
+}
+
+/** Calendar production uses exactly the same lines and rounding as the daily email. */
+export function buildDayProduction(day: ProductionDay | undefined, products: ProductMap): DayProduction {
+  const orders = occupyingOrders(day);
+  const bread = breadSection(day, products)?.lines ?? [];
+  const independent = batchLines(day, products);
+  return {
+    bread,
+    independent,
+    totalPieces: [...bread, ...independent].reduce((total, line) => total + line.qty, 0),
+    orderCount: orders.length,
+    unconfirmedCount: orders.filter((o) => o.status === "NEW" || o.status === "CONTACTED").length,
+  };
 }
 
 function unconfirmedOf(day: SummaryDay | undefined, date: LocalDate): UnconfirmedOrder[] {

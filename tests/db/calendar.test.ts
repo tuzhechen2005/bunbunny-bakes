@@ -3,6 +3,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { loadCalendar, updateOpenDate, type CalendarDay } from "@/server/calendar";
 import { toDbDate } from "@/server/dbDates";
+import { loadDailySummary } from "@/server/summaryJob";
 import { isAppError } from "@/server/errors";
 import {
   createDefaultProducts,
@@ -54,6 +55,29 @@ async function expectError(p: Promise<unknown>) {
 }
 
 describe("GET calendar", () => {
+  it("matches the daily summary, rounds across orders, and counts NEW + CONTACTED as unconfirmed", async () => {
+    await createOpenDate(D1, { isOpen: false });
+    for (const status of ["NEW", "CONTACTED", "CONFIRMED", "BAKING", "READY", "COMPLETED", "CANCELLED", "REJECTED"] as const) {
+      await createOrder({ date: D1, status, items: [
+        { productId: P.redBean, qty: 1 },
+        { productId: P.cheeseHorn, qty: 1 },
+        { productId: P.brulee, qty: 2 },
+      ] });
+    }
+    // Current settings and archived products still apply to existing orders.
+    await db.product.update({ where: { id: P.brulee }, data: { status: "ARCHIVED", batchYield: 5 } });
+    const day = (await get(D1, "2026-10-31")).days[0];
+    const summary = await loadDailySummary(db, new Date("2026-10-29T17:00:00Z"));
+    expect(day.production.bread).toEqual(summary.bread?.lines);
+    expect(day.production.independent).toEqual(summary.tonight.lines);
+    expect(day.production.bread.find((p) => p.productId === P.cheeseHorn)).toMatchObject({ qty: 6, rounds: { rounds: 2, leftover: 2 } });
+    expect(day.production.independent[0]).toMatchObject({ qty: 12, batches: 3, leftover: 3 });
+    expect(day.production).toMatchObject({ totalPieces: 24, orderCount: 6, unconfirmedCount: 2 });
+    expect(day.production.unconfirmedCount).toBe(summary.unconfirmed.length);
+    expect(day.orderCount).toBe(summary.deliveries.pickup + summary.deliveries.delivery);
+    expect((await get("2026-10-31", "2026-10-31")).days[0].production.totalPieces).toBe(0);
+  });
+
   it("returns every date with defaults for days without a row", async () => {
     const res = await get("2026-10-29", "2026-11-01");
     expect(res.days.map((d) => d.date)).toEqual(["2026-10-29", "2026-10-30", "2026-10-31", "2026-11-01"]);
@@ -67,6 +91,7 @@ describe("GET calendar", () => {
       overrides: { doughLimitG: null, deliveryLimit: null, productLimits: { [P.brulee]: null } },
       usage: { doughG: 0, products: { [P.brulee]: 0 }, deliveries: 0 },
       orderCount: 0,
+      production: { bread: [], independent: [], totalPieces: 0, orderCount: 0, unconfirmedCount: 0 },
       over: { dough: false, products: [], delivery: false },
     });
   });
@@ -243,7 +268,7 @@ describe("PUT dates/{date}", () => {
   it("returns the day in the GET shape", async () => {
     const day: CalendarDay = await updateOpenDate(db, D1, body(), NOW);
     expect(Object.keys(day).sort()).toEqual(
-      ["date", "hasRow", "isOpen", "limits", "note", "orderCount", "over", "overrides", "usage"],
+      ["date", "hasRow", "isOpen", "limits", "note", "orderCount", "over", "overrides", "production", "usage"],
     );
   });
 });

@@ -87,6 +87,31 @@ async function list(query = "") {
 }
 
 describe("GET /api/admin/orders", () => {
+  it("date=all includes all history and pages by pickup date DESC, seq DESC", async () => {
+    const past = "2019-01-01";
+    await createOpenDate(past);
+    const expected: string[] = [];
+    for (const [date, count] of [[past, 4], [D1, 52], [D2, 48]] as const) {
+      for (let i = 0; i < count; i++) {
+        const o = await createOrder({ date, items: [{ productId: P.redBean, qty: 1 }] });
+        expected.unshift(o.id);
+      }
+    }
+    const actual: string[] = [];
+    let cursor: string | null = null;
+    for (const count of [50, 50, 4]) {
+      const page = await list(`?date=all${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+      expect(page.orders).toHaveLength(count);
+      actual.push(...page.orders.map((o) => o.id));
+      cursor = page.nextCursor;
+      if (count === 50) expect(cursor).toBeTruthy();
+    }
+    expect(cursor).toBeNull();
+    expect(actual).toEqual(expected);
+    expect((await list(`?date=all&status=COMPLETED`)).orders).toEqual([]);
+    expect((await list(`?date=all&productId=${P.redBean}&paid=false&q=wx_`)).orders.map((o) => o.id)).toEqual(expected.slice(0, 50));
+  });
+
   it("defaults to today and later, sorted by date then seq, skipping the past", async () => {
     const past = addDays(TODAY, -1);
     await createOpenDate(past);

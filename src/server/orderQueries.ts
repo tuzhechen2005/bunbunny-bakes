@@ -44,7 +44,7 @@ const localDate = z.string().refine(isLocalDate, { message: "Invalid date (YYYY-
 const statusEnum = z.enum(ORDER_STATUSES);
 
 export const listOrdersQuerySchema = z.object({
-  date: localDate.optional(),
+  date: z.union([z.literal("all"), localDate]).optional(),
   from: localDate.optional(),
   to: localDate.optional(),
   status: z
@@ -113,8 +113,12 @@ export function escapeLike(q: string): string {
 export async function listOrders(db: DbClient, query: ListOrdersQuery, now: Date): Promise<OrderList> {
   const today = localDateOf(now);
   const and: Prisma.OrderWhereInput[] = [];
+  const allDates = query.date === "all";
+  const direction = allDates ? "desc" : "asc";
 
-  if (query.date) {
+  if (allDates) {
+    // Explicit all-history mode has no pickup-date bounds (D137).
+  } else if (query.date) {
     and.push({ pickupDate: toDbDate(query.date) });
   } else if (query.from || query.to) {
     and.push({
@@ -143,8 +147,8 @@ export async function listOrders(db: DbClient, query: ListOrdersQuery, now: Date
     const c = parseCursor(query.cursor);
     and.push({
       OR: [
-        { pickupDate: { gt: toDbDate(c.date) } },
-        { pickupDate: toDbDate(c.date), seq: { gt: c.seq } },
+        { pickupDate: { [allDates ? "lt" : "gt"]: toDbDate(c.date) } },
+        { pickupDate: toDbDate(c.date), seq: { [allDates ? "lt" : "gt"]: c.seq } },
       ],
     });
   }
@@ -152,7 +156,7 @@ export async function listOrders(db: DbClient, query: ListOrdersQuery, now: Date
   const [rows, products] = await Promise.all([
     db.order.findMany({
       where: { AND: and },
-      orderBy: [{ pickupDate: "asc" }, { seq: "asc" }],
+      orderBy: [{ pickupDate: direction }, { seq: direction }],
       take: ORDERS_PAGE_SIZE + 1,
       include: { items: { orderBy: itemOrder } },
     }),

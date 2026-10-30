@@ -1,4 +1,4 @@
-// GET  /api/admin/orders  list with filters (API_SPEC §3)
+// GET  /api/admin/orders  list with filters; date=all opts into descending history (D137)
 // POST /api/admin/orders  phone order entered by the owner; starts CONFIRMED
 
 import { adminHandler, parseQuery } from "@/server/adminRoute";

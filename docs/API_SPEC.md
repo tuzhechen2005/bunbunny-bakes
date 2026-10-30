@@ -241,14 +241,14 @@
 | POST | `/api/admin/password-reset/confirm` | `{ token, newPassword }`（至少 10 位）；成功后其他所有登录失效 |
 | GET | `/api/admin/dashboard` | 接单开关、今天和明天各状态的订单数、未确认提醒、未来 14 天的名额概况 |
 | POST | `/api/admin/ordering` | `{ enabled }` |
-| GET | `/api/admin/orders` | 筛选：`date`、`status`（可多选）、`fulfillment`、`paid`、`productId`、`q`（订单号或微信号） |
+| GET | `/api/admin/orders` | 筛选：`date`（日期或 `all`）、`from`、`to`、`status`（可多选）、`fulfillment`、`paid`、`productId`、`q`（订单号或微信号）；`cursor` 翻页，见下 |
 | GET | `/api/admin/orders/{id}` | 完整信息 + 专属链接 + 操作日志 |
 | POST | `/api/admin/orders` | 代客下单：`{ items, pickupDate, fulfillment, wechatId, note, override?, reason? }`，从 `CONFIRMED` 开始 |
 | PATCH | `/api/admin/orders/{id}` | 改单：上面任意字段 + `expectedUpdatedAt`；超限时返回 `OVER_LIMIT` |
 | POST | `/api/admin/orders/{id}/status` | `{ to, reason?, expectedUpdatedAt }`；只能往前走；`REJECTED`、`CANCELLED` 必须写原因 |
 | POST | `/api/admin/orders/{id}/correct-status` | `{ to, reason }`：点错时往回改，必须写原因 |
 | POST | `/api/admin/orders/{id}/payment` | `{ paid, method? }` |
-| GET | `/api/admin/calendar?from=&to=` | 每天：是否开放、各项上限、已用量、超限标记 |
+| GET | `/api/admin/calendar?from=&to=` | 每天：是否开放、各项上限、已用量、超限标记、订单数和生产汇总 `production`（D138，见下） |
 | PUT | `/api/admin/dates/{date}` | `{ isOpen, doughLimitG, deliveryEnabled, deliveryLimit, productLimits: { productId: n }, note }`；把上限调到低于已用量时返回警告，要店主确认 |
 | PATCH | `/api/admin/products/{id}` | 修改；改了名额相关字段时，返回因此超限的开放日期。`pickupWeekdays`（D115）：0–6 的整数数组、不能重复，存成从小到大，选满 7 天存成 `[]`（= 每天），格式不对 `VALIDATION`；改动写 `product.update` 日志 |
 | GET/POST | `/api/admin/products` | 列表 / 新增；每个商品带 `images: [{id, url, sortOrder}]`（封面在前）和 `fieldColor`（`#RRGGBB` 或 null，大小写不限、存成大写，格式不对 `VALIDATION`） |
@@ -264,6 +264,22 @@
 | POST | `/api/admin/ledger/manual` | 记一笔。`{ date, amountCents（整数 > 0）, note（1–100 字）, paidMethod（WECHAT/ZELLE/VENMO/CASH/OTHER）, items?: [{ productId 或 name（自由填写，≤ 60 字）, qty 1–999 }]（最多 30 行） }`；返回 201 `{ entry }`；写 `manual_income.create` 日志（entity `manual_income`） |
 | PATCH | `/api/admin/ledger/manual/{id}` | 修改（字段同上，整条替换，商品行整体替换）；返回 `{ entry }`；日志 `manual_income.update`，记录修改前后的值；找不到 `NOT_FOUND` |
 | DELETE | `/api/admin/ledger/manual/{id}` | 删除（连同商品行）；返回 `{ ok: true }`；日志 `manual_income.delete`，记录删除前的值；找不到 `NOT_FOUND` |
+
+**订单列表日期与分页（D137）**：未指定 `date/from/to` 时仍只显示芝加哥当天及以后，按 `pickupDate ASC, seq ASC`。`date=YYYY-MM-DD` 只看该天；`from/to` 是含首尾的日期范围。`date=all` 不设日期上下界（优先于 `from/to`），按 `pickupDate DESC, seq DESC`，其他筛选仍有效。返回 `{ orders, nextCursor, today, products }`；每页最多 50 笔，`nextCursor` 为末笔的 `YYYY-MM-DD:seq`，无下一页时为 `null`。下一页须保留相同筛选；升序取游标之后的较大日期／同日较大序号，全部日期模式取较小日期／同日较小序号。
+
+**日历生产汇总（D138）**：仅店主会话可访问，未登录返回 401；不加到任何顾客接口。返回 `{ independentProducts, days }`，日期范围含首尾，最多 92 天。每个 day 保留 `date/isOpen/hasRow/note/limits/overrides/usage/orderCount/over`，新增：
+
+```ts
+production: {
+  bread: { productId, name, qty, rounds: { rounds, leftover } | null }[],
+  independent: { productId, name, qty, batches: number | null, leftover: number | null }[],
+  totalPieces: number,
+  orderCount: number,
+  unconfirmedCount: number
+}
+```
+
+`bread/independent` 复用每日汇总的商品排序、当前商品参数和整天合计后的大圆包／批次取整（包含已有订单引用的暂停、下架商品）。`totalPieces` 为订单件数之和，不含取整多出的余量；`orderCount` 与 day 原有订单数相同，排除 `CANCELLED/REJECTED`；`unconfirmedCount` 统计 `NEW + CONTACTED`（D38），与每日汇总邮件一致。关闭日期上已有订单照算；无有效订单返回空行数组、三个计数均为 0。`PUT /api/admin/dates/{date}` 成功也返回此 day 形状。
 
 **`expectedUpdatedAt`**：店主在两个页面里同时改同一笔订单时，后提交的那个返回 `STALE`，提示刷新，不会悄悄覆盖。
 
