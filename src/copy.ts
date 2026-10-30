@@ -350,7 +350,7 @@ export const copy = {
       tileLabel: "{name}",
       tileCovered: "{name}，被压住了",
       boardLabel: "面包牌",
-      bagLabel: "纸袋，装了 {n} 个，一共 6 格",
+      bagLabel: "纸袋，装了 {n} 个，一共 {slots} 格",
       orderLabel: "订单：要 3 个{name}，已有 {n} 个",
       orderLabelReward: "订单：要 3 个{name}，已有 {n} 个，奖励 {pts} 分",
       /** Small label above the two order cards (D132). */
