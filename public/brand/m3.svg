@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56" fill="#fdf4e2" stroke="#64321f" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Cream and brown sampled from logo.webp. -->
+  <g transform="translate(2 19)">
+    <path d="M2 13C-1 11 0 5 3 2C6-1 10-1 13 2C16 5 17 11 14 13V23Q14 26 11 26H5Q2 26 2 23Z"/>
+    <path d="m5 6 2 4m3-5 2 4" fill="none" stroke-width="2"/>
+  </g>
+  <g transform="translate(20 12)">
+    <path d="M2 13C-1 11 0 5 3 2C6-1 10-1 13 2C16 5 17 11 14 13V23Q14 26 11 26H5Q2 26 2 23Z"/>
+    <path d="m5 6 2 4m3-5 2 4" fill="none" stroke-width="2"/>
+  </g>
+  <g transform="translate(38 19)">
+    <path d="M2 13C-1 11 0 5 3 2C6-1 10-1 13 2C16 5 17 11 14 13V23Q14 26 11 26H5Q2 26 2 23Z"/>
+    <path d="m5 6 2 4m3-5 2 4" fill="none" stroke-width="2"/>
+  </g>
+</svg>
