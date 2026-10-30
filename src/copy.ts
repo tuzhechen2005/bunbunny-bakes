@@ -254,7 +254,17 @@ export const copy = {
       unavailable: "小小🐰 暂时不在，可以直接下单哦",
     },
 
-    /** 消除大面包 (D100–D105): the home entry card and the `/game` page. */
+    gameHub: {
+      title: "小游戏",
+      backLabel: "返回游戏大厅",
+      entryPrize: "🎁 本周：{game}",
+      prizeBadge: "🎁 本周有奖",
+      emptyBest: "本周还没人上榜",
+      loading: "正在看本周成绩…",
+      loadFailed: "暂时看不到成绩，稍后再试",
+      rules: "每周一 0:00 重新开始，每个微信号只计本周最高分。",
+    },
+    /** 消除大面包 (D100–D105): the `/game` page. */
     game: {
       title: "消除大面包",
       pageTitle: "消除大面包",
@@ -305,7 +315,7 @@ export const copy = {
       personalBest: "我的历史最高",
       newRecord: "👑 新纪录！",
       /** D104 rule line; {contact} is the owner line when the menu has it. */
-      rules: "每周一 0:00 重新开始，上周第一名可领总共价值 $10 以内的面包（需在本店下过单）。",
+      rules: "每周一 0:00 重新开始，本周第一名可领总共价值 $10 以内的面包（需在本店下过单）。",
       rulesContact: "领奖请联系店主微信 {id}。",
       /** Playing. */
       score: "得分",
@@ -497,6 +507,10 @@ export const copy = {
     /** /admin/game (L3). */
     game: {
       title: "游戏",
+      prizeTitle: "本周发奖游戏",
+      prizeRandom: "本周随机抽取",
+      prizeOwner: "已由店主指定",
+      prizeSaved: "已保存",
       tabBoard: "排行榜",
       tabTiers: "面包",
       /** Game switch above the leaderboard (D125). */

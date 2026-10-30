@@ -73,6 +73,7 @@ beforeEach(async () => {
   process.env.SITE_URL = `${SITE}/`;
   process.env.CRON_SECRET = SECRET;
   await resetDb();
+  await db.gamePrizeWeek.create({ data: { weekKey: LAST, game: "BIG", chosenBy: "RANDOM" } });
   await createSettings({ orderingEnabled: true });
   redBean = (await createDefaultProducts()).redBean;
   await createOpenDate("2026-10-28");
@@ -109,9 +110,11 @@ describe("POST /api/cron/game-winner", () => {
     expect(h.sent).toEqual([
       {
         idempotencyKey: `game_winner:${LAST}`,
-        subject: "👑 上周游戏冠军 冠军｜900 分",
+        subject: "👑 上周游戏冠军｜消除大面包 冠军 900 分",
         text: [
           "【10/19 周一 – 10/25 周日 的第一名】",
+          "",
+          "===== 消除大面包 =====",
           "昵称：冠军",
           "微信号：wx_top",
           "分数：900",
@@ -172,6 +175,7 @@ describe("winner selection and the ⚠️ path", () => {
     const p = await loadGameWinner(db, NOW);
     expect(p).toEqual({
       weekKey: LAST,
+      game: "BIG",
       week: { start: LAST, end: "2026-10-25" },
       winner: { rank: 1, nickname: "First", wechatId: "wx_first", score: 1000, ordered: false },
       runnerUp: { rank: 3, nickname: "Third", wechatId: "wx_third", score: 700, ordered: true },
@@ -180,10 +184,12 @@ describe("winner selection and the ⚠️ path", () => {
 
     await winnerPOST(req());
     expect(h.sent).toHaveLength(1);
-    expect(h.sent[0].subject).toBe("⚠️ 上周游戏冠军 First｜1000 分｜没下过单");
+    expect(h.sent[0].subject).toBe("⚠️ 上周游戏冠军｜消除大面包 First 1000 分｜有冠军没下过单");
     expect(h.sent[0].text).toBe(
       [
         "【10/19 周一 – 10/25 周日 的第一名】",
+          "",
+          "===== 消除大面包 =====",
         "昵称：First",
         "微信号：wx_first",
         "分数：1000",

@@ -6,6 +6,8 @@ import { copy } from "../../src/copy";
 
 test.use({ browserName: "chromium" });
 
+import { hubFixture, mockGameHub } from "./support/gameHub";
+
 const g = copy.customer.game;
 const PHOTO = readFileSync("tests/fixtures/bun.jpg");
 const MOCK_PHOTO = /\/api\/images\/mock\/|%2Fapi%2Fimages%2Fmock%2F/;
@@ -43,6 +45,7 @@ interface Api {
 }
 
 async function mockApi(page: Page, board: object | number = BOARD): Promise<Api> {
+  await mockGameHub(page);
   const api: Api = { starts: [], finishes: [], failFinishOnce: false, stallFinishOnce: false, result: { score: 123, best: 456, rank: 3 }, startError: null };
   await page.route("**/api/menu", (route) =>
     route.fulfill({
@@ -99,29 +102,31 @@ async function playUntilOver(page: Page) {
   await expect(page.getByTestId("game-over-sheet")).toBeVisible({ timeout: 15_000 });
 }
 
-test("home entry card: neutral line without scores, best score with them, opens /game", async ({ page }) => {
+test("home entry card: neutral line on network failure, opens /game/hub", async ({ page }) => {
   await mockApi(page, 404);
+  await page.route("**/api/game/hub", (r) => r.fulfill({ status: 500, json: {} }));
   // The card breathes, which Playwright reads as "not stable": click it the way a reduced-motion user sees it.
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   const card = page.getByTestId("game-entry");
   await card.scrollIntoViewIfNeeded();
-  await expect(card).toContainText(g.title);
+  await expect(card).toContainText(copy.customer.gameHub.title);
   await expect(page.getByTestId("game-entry-line")).toHaveText(g.entryNeutral);
   // Below the product list.
   const listBottom = await page.locator(".hm-grid").evaluate((e) => e.getBoundingClientRect().bottom);
   const cardTop = await card.evaluate((e) => e.getBoundingClientRect().top);
   expect(cardTop).toBeGreaterThan(listBottom);
   await card.click();
-  await expect(page).toHaveURL(/\/game$/);
+  await expect(page).toHaveURL(/\/game\/hub$/);
 });
 
-test("home entry card shows the week's best and breathes unless motion is reduced", async ({ page }) => {
+test("home entry card names the prize game and breathes unless motion is reduced", async ({ page }) => {
   await mockApi(page);
   await page.goto("/");
-  await expect(page.getByTestId("game-entry-line")).toContainText(`${g.entryBest} 1280`);
+  await page.getByTestId("game-entry").scrollIntoViewIfNeeded();
+  await expect(page.getByTestId("game-entry-line")).toContainText(g.title);
   // D108: the prize is hinted on the card, on the start screen and on the leaderboard's first row.
-  await expect(page.getByTestId("game-entry-prize")).toHaveText(g.entryPrize);
+  await expect(page.getByTestId("game-entry-prize")).toHaveText(copy.customer.gameHub.entryPrize.replace("{game}", g.title));
   const anim = await page.getByTestId("game-entry").evaluate((e) => getComputedStyle(e).animationName);
   expect(anim).toBe("game-breathe");
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -129,7 +134,7 @@ test("home entry card shows the week's best and breathes unless motion is reduce
   expect(still).toBe("none");
 });
 
-test("the leaderboard is not fetched before the card is near the screen", async ({ page }) => {
+test("the hub is not fetched before the card is near the screen", async ({ page }) => {
   await mockApi(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   const many = Array.from({ length: 10 }, (_, i) => ({ ...PRODUCTS[i % 2], id: `p${i}`, name: `面包${i}` }));
@@ -137,9 +142,9 @@ test("the leaderboard is not fetched before the card is near the screen", async 
     route.fulfill({ json: { orderingEnabled: true, products: many, pickupNote: "", deliveryFeeCents: 500, freeDeliveryMinCents: 2500, maxQtyPerItem: 8 } }),
   );
   let asked = 0;
-  await page.route("**/api/game/leaderboard**", (route) => {
+  await page.route("**/api/game/hub", (route) => {
     asked++;
-    return route.fulfill({ json: BOARD });
+    return route.fulfill({ json: hubFixture() });
   });
   await page.goto("/");
   await page.waitForTimeout(1500);

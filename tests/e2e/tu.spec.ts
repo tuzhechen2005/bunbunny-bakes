@@ -10,6 +10,8 @@ import { screensDir } from "./support/screensDir";
 
 test.use({ browserName: "chromium" });
 
+import { mockGameHub } from "./support/gameHub";
+
 const g = copy.customer.game;
 const PHOTO = readFileSync("tests/fixtures/bun.jpg");
 const MOCK_PHOTO = /\/api\/images\/mock\/|%2Fapi%2Fimages%2Fmock%2F/;
@@ -42,6 +44,7 @@ interface Api {
 }
 
 async function mockApi(page: Page): Promise<Api> {
+  await mockGameHub(page, "TU");
   const api: Api = { starts: [], finishes: [], result: { score: 0, best: 456, rank: 3, personalBest: 900, newRecord: false } };
   await page.route("**/api/menu", (route) =>
     route.fulfill({

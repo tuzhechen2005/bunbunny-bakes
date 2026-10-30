@@ -152,79 +152,40 @@ describe("admin board ?game=tu", () => {
   });
 });
 
-describe("weekly winner email with 兔了个兔 (one email, two sections)", () => {
-  // Monday 2026-10-26 09:00 CDT: last week = Mon 10/19 – Sun 10/25.
+describe("weekly winner email selects only the closed week's prize game", () => {
   const NOW = new Date("2026-10-26T14:00:00Z");
   const LAST = "2026-10-19";
   const at = new Date("2026-10-21T17:00:00Z");
-  const render = async () => {
-    const p = await loadGameWinner(db, NOW);
-    return renderNotification(db, { id: "n", kind: "GAME_WINNER", dedupeKey: "k", payload: p }, NOW);
-  };
 
-  it("both games: a titled section each, ⚠️ per game, one subject naming both", async () => {
+  it("TU prize: ignores BIG, preserves the warning and eligible runner-up, even if this week is BIG", async () => {
+    await db.gamePrizeWeek.createMany({ data: [
+      { weekKey: LAST, game: "TU", chosenBy: "OWNER" },
+      { weekKey: "2026-10-26", game: "BIG", chosenBy: "RANDOM" },
+    ] });
     await createOpenDate("2026-10-28");
-    await createOrder({ date: "2026-10-28", wechatId: "big_one", items: [{ productId: P.redBean, qty: 1 }] });
     await createOrder({ date: "2026-10-28", wechatId: "tu_two", items: [{ productId: P.redBean, qty: 1 }] });
     await run("BIG", "big_one", 900, { week: LAST, finishedAt: at });
     await run("TU", "tu_one", 300, { week: LAST, finishedAt: at });
     await run("TU", "tu_two", 200, { week: LAST, finishedAt: at });
     const p = await loadGameWinner(db, NOW);
-    expect(p).toMatchObject({
-      weekKey: LAST,
-      winner: { wechatId: "big_one", ordered: true },
-      runnerUp: null,
-      tu: { winner: { rank: 1, wechatId: "tu_one", score: 300, ordered: false }, runnerUp: { rank: 2, wechatId: "tu_two" } },
+    expect(p).toMatchObject({ game: "TU", weekKey: LAST,
+      winner: { rank: 1, wechatId: "tu_one", score: 300, ordered: false },
+      runnerUp: { rank: 2, wechatId: "tu_two", ordered: true },
     });
-    const email = await render();
-    expect(email.subject).toBe("⚠️ 上周游戏冠军｜消除大面包 big_one 900 分 · 兔了个兔 tu_one 300 分｜有冠军没下过单");
-    expect(email.text).toBe(
-      [
-        "【10/19 周一 – 10/25 周日 的第一名】",
-        "",
-        "===== 消除大面包 =====",
-        "昵称：big_one",
-        "微信号：big_one",
-        "分数：900",
-        "下过单：是",
-        "",
-        "===== 兔了个兔 =====",
-        "昵称：tu_one",
-        "微信号：tu_one",
-        "分数：300",
-        "下过单：否",
-        "",
-        "⚠️ 第一名还没下过单，要不要发奖由你决定。",
-        "",
-        "【下过单的最高者：第 2 名】",
-        "昵称：tu_two",
-        "微信号：tu_two",
-        "分数：200",
-        "下过单：是",
-        "",
-        `[打开游戏后台] → ${SITE}/admin/game`,
-      ].join("\n"),
-    );
+    const email = await renderNotification(db, { id: "n", kind: "GAME_WINNER", dedupeKey: "k", payload: p }, NOW);
+    expect(email.subject).toBe("⚠️ 上周游戏冠军｜兔了个兔 tu_one 300 分｜有冠军没下过单");
+    expect(email.text).toContain("===== 兔了个兔 =====");
+    expect(email.text).toContain("【下过单的最高者：第 2 名】");
+    expect(email.text).toContain("微信号：tu_two");
+    expect(email.text).toContain(`${SITE}/admin/game`);
+    expect(email.text).not.toContain("消除大面包");
+    expect(JSON.stringify(p)).not.toContain("big_one");
   });
 
-  it("only 兔了个兔 had runs: the first game's section says nobody", async () => {
-    await createOpenDate("2026-10-28");
-    await createOrder({ date: "2026-10-28", wechatId: "tu_one", items: [{ productId: P.redBean, qty: 1 }] });
-    await run("TU", "tu_one", 300, { week: LAST, finishedAt: at });
-    const p = await loadGameWinner(db, NOW);
-    expect(p).toMatchObject({ winner: null, runnerUp: null, tu: { winner: { wechatId: "tu_one" } } });
-    const email = await render();
-    expect(email.subject).toBe("👑 上周游戏冠军｜兔了个兔 tu_one 300 分");
-    expect(email.text.startsWith("【10/19 周一 – 10/25 周日 的第一名】\n\n===== 消除大面包 =====\n上周没有人上榜。\n\n===== 兔了个兔 =====\n昵称：tu_one\n")).toBe(true);
-  });
-
-  it("only the first game had runs: no tu key, the email is exactly game 1's", async () => {
+  it("an empty prize board sends nothing even when the other board has a winner", async () => {
+    await db.gamePrizeWeek.create({ data: { weekKey: LAST, game: "TU", chosenBy: "RANDOM" } });
     await run("BIG", "big_one", 900, { week: LAST, finishedAt: at });
     await run("TU", "tu_hidden", 300, { week: LAST, finishedAt: at, hidden: true });
-    const p = await loadGameWinner(db, NOW);
-    expect(p && "tu" in p).toBe(false);
-    const email = await render();
-    expect(email.subject).toBe("⚠️ 上周游戏冠军 big_one｜900 分｜没下过单");
-    expect(email.text).not.toContain("兔了个兔");
+    expect(await loadGameWinner(db, NOW)).toBeNull();
   });
 });

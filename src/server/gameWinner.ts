@@ -1,9 +1,7 @@
 // Weekly game winner email (D114, docs/NOTIFICATIONS.md): on Monday morning the owner gets last
 // week's #1 with the full WeChat id and whether they have ordered (the prize condition). If #1 has
 // not ordered, the email also names the highest-ranked player who has; the owner decides.
-// One GAME_WINNER notification per week (dedupeKey game_winner:<weekKey>), covering both games
-// (D124): the top-level winner / runnerUp are 消除大面包's (unchanged shape), `tu` is 兔了个兔's
-// section, present only when that board had anyone on it.
+// One GAME_WINNER notification per week, only for that closed week's prize game (D133).
 
 import type { LocalDate } from "@/domain/types";
 import type { Prisma } from "@/generated/prisma/client";
@@ -11,6 +9,7 @@ import type { DbClient } from "./db";
 import { rankedWeek, type GameKind } from "./game";
 import { orderedSet } from "./gameAdmin";
 import { previousWeekKey, weekKeyOf, weekRange } from "./gameWeek";
+import { getPrizeWeek } from "./gamePrize";
 import { enqueueNotification } from "./outbox";
 
 export interface WinnerLine {
@@ -29,14 +28,12 @@ export interface WinnerSection {
 }
 
 export interface GameWinnerPayload {
+  game: GameKind;
   weekKey: LocalDate;
   week: { start: LocalDate; end: LocalDate };
-  /** 消除大面包's #1; null when only 兔了个兔 had anyone on last week's board. */
-  winner: WinnerLine | null;
+  winner: WinnerLine;
   /** Only when the winner has not ordered: the highest-ranked player who has (null if nobody). */
   runnerUp: WinnerLine | null;
-  /** 兔了个兔's section (D124); absent when its board was empty. */
-  tu?: WinnerSection;
   siteUrl: string;
 }
 
@@ -64,18 +61,18 @@ async function sectionOf(db: DbClient, weekKey: LocalDate, game: GameKind): Prom
   return { winner, runnerUp };
 }
 
-/** Last week's (just closed) boards of both games as the email payload; null when nobody counts on either. */
+/** Only the closed week's selected board; an empty board does not fall back to another game. */
 export async function loadGameWinner(db: DbClient, now: Date): Promise<GameWinnerPayload | null> {
   const weekKey = previousWeekKey(weekKeyOf(now));
-  const [big, tu] = await Promise.all([sectionOf(db, weekKey, "BIG"), sectionOf(db, weekKey, "TU")]);
-  if (!big && !tu) return null;
+  const prize = await getPrizeWeek(db, now, weekKey);
+  const section = await sectionOf(db, weekKey, prize.game);
+  if (!section) return null;
   const siteUrl = (process.env.SITE_URL ?? "").replace(/\/+$/, "");
   return {
     weekKey,
+    game: prize.game,
     week: weekRange(weekKey),
-    winner: big?.winner ?? null,
-    runnerUp: big?.runnerUp ?? null,
-    ...(tu ? { tu } : {}),
+    ...section,
     siteUrl,
   };
 }
@@ -83,6 +80,8 @@ export async function loadGameWinner(db: DbClient, now: Date): Promise<GameWinne
 /** Enqueues last week's winner email unless the week had no runs or it was already enqueued. */
 export async function enqueueGameWinner(db: DbClient, now: Date): Promise<GameWinnerJobResult> {
   const payload = await loadGameWinner(db, now);
+  // The Monday cron also draws the new week, after resolving the closed week.
+  await getPrizeWeek(db, now);
   if (!payload) return { status: "empty" };
   const result = await db.$transaction((tx) =>
     enqueueNotification(tx, {

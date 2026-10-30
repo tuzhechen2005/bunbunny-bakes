@@ -186,6 +186,10 @@
 
 **GameBan**：被禁的微信号，`wechatId`、`reason`、`createdAt`。唯一性不区分大小写（数据库里 `lower("wechatId")` 的唯一索引，Prisma 里写不出来，只在迁移 SQL 里）；查询用 `mode: "insensitive"`。
 
+**GamePrizeWeek**（D133）：`weekKey` 主键（America/Chicago 周一，`YYYY-MM-DD`）、`game`（`GameKind`）、`chosenBy`（`GamePrizeChosenBy` 枚举：`RANDOM` / `OWNER`）、`createdAt`（timestamptz，覆盖时保留）。首次请求该周时用 crypto 均匀选择已启用游戏，排除上周；全局事务 advisory lock 串行化周抽取与店主覆盖，主键保证每周只有一行。部署后补取缺失的已结束周时，也排除已经选好的下一周；如果两侧 OWNER 选择冲突，优先排除上一周。店主可以明确重复上周游戏，之后的自动抽取仍排除这个最终选择。
+
+后台覆盖只改当前周，`chosenBy = OWNER`，同一事务写 `game.prize` AuditLog（actor `ADMIN`，entityType `GamePrizeWeek`，entityId 为周一；before / after 含 game、chosenBy）。历史周选择不随新周抽取变化；邮件只使用已结束周的记录。`GameAward` 仍保留各游戏历史联系 / 兑奖记录。
+
 **GameAward**：每个游戏每周一条，`game`（同上，默认 `BIG`）、`weekKey`（`(game, weekKey)` 唯一）、`runId`（→ GameRun，Restrict）、`contactedAt`、`redeemedAt`、`note`。
 
 后台对这些表的写入都写 AuditLog（后台页面任务负责）。游戏接口使用 `RateLimitHit`，key 为 `game_start_ip:<ipHash>`、`game_finish_ip:<ipHash>`（兔了个兔：`tu_start_ip:`、`tu_finish_ip:`），窗口 1 小时。迁移 `20261028120000_game_kind` 只加列：已有的局和奖励都是 `BIG`；`GameBan` 两个游戏共用。

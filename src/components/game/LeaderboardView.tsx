@@ -21,10 +21,12 @@ function md(s: string): string {
 export function LeaderboardView({
   wechatId,
   version = 0,
+  hasPrize = false,
   fetcher = fetchLeaderboard,
 }: {
   wechatId: string;
   version?: number;
+  hasPrize?: boolean;
   /** Which game's board (the first game's by default). */
   fetcher?: typeof fetchLeaderboard;
 }) {
@@ -102,7 +104,7 @@ export function LeaderboardView({
                 <b className="font-display block truncate text-[15px] text-c-ink">{row.nickname}</b>
                 <span className="font-num block text-xs text-c-grey">{row.wechatMasked}</span>
               </span>
-              {row.rank === 1 ? (
+              {hasPrize && row.rank === 1 ? (
                 <span role="img" aria-label={t.prizeMarkLabel} className="text-lg leading-none" data-testid="game-prize-mark">
                   {t.prizeMark}
                 </span>

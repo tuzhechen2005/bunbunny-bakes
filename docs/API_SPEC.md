@@ -119,6 +119,17 @@
 
 商品照片（公开，不需要登录）。`key` 形如 `<商品id>/<32位随机十六进制>.<jpg|png|webp>`，格式不对或不存在返回 404（`..` 等路径一律 404）。返回文件本身，带 `Cache-Control: public, max-age=31536000, immutable`（key 是随机的，换照片就换 key）和 `X-Content-Type-Options: nosniff`。文件存在 Netlify Blobs（store `product-images`），在 Netlify 上不需要任何密钥；本地开发和测试用内存存储。
 
+### 游戏大厅与本周发奖游戏（D133、D134）
+
+`GET /api/game/hub`（公开，`Cache-Control: no-store`）→
+`{ week: { start, end }, prizeGame: "BIG" | "TU", games: [{ kind, name, href, weekBest: number | null }] }`。
+周日期是 America/Chicago 的周一到周日（`YYYY-MM-DD`）。只返回已启用游戏的名字、链接和有效周榜最高分；无人上榜为 `null`，0 分保留为 0，不返回昵称、微信号或内部局记录。现有启用列表在 `src/lib/gameCatalog.ts`，第三个游戏接入时再加入。
+
+首次读取该周时持久化随机发奖游戏，排除上周选择；并发读取不会重复抽取。周一冠军 cron 也会初始化新一周。
+
+- `GET /api/admin/game/prize` → `{ weekKey, game, chosenBy: "RANDOM" | "OWNER", createdAt }`。
+- `PATCH /api/admin/game/prize` `{ game: "BIG" | "TU" }` → 同上。仅可改当前周，不接受 `week` 或其他字段。需要后台登录、同源 Origin；非法或未启用游戏为 `422 VALIDATION`。写入 `chosenBy = OWNER`，同一事务写 `game.prize` AuditLog（before / after）；重复相同 OWNER 选择不重复记日志。读取不覆盖手动选择。
+
 ### 消除大面包（D100–D105，`/api/game/**`，公开）
 
 引擎在 `src/lib/game/`（纯 TS，固定步长 1/120 秒，只用 + − × ÷ 和 `Math.sqrt/min/max/abs/floor`，V8 和 JavaScriptCore 结果逐位一致）。服务端实现在 `src/server/game.ts`、`gameTiers.ts`、`gameWeek.ts`。三个接口都带 `Cache-Control: no-store`；JSON 内容类型必填，请求体有大小上限（start 4 KB，finish 64 KB）。
@@ -302,7 +313,7 @@ production: {
 | 路径 | 频率（America/Chicago） | 做什么 |
 |---|---|---|
 | POST `/api/cron/outbox` | 每 5 分钟 | 发送 `nextAttemptAt ≤ now` 的待发通知；清理过期的频率记录和登录会话、今天以前的小小🐰 计数（`AssistantUsage`）；删除开始于本周一 0:00 之前、一直没完成的游戏局（已过期） |
-| POST `/api/cron/game-winner` | 每周一 09:00 | 上周（刚结束的那一周）游戏排行榜第一名的邮件（D114，`NOTIFICATIONS.md` 第 6 节）入队，`dedupeKey = game_winner:<上周一>`，入队后立即发送（`send` 同 summary），重复调用只发一次；上周没有算数的局时返回 `{ status: "empty" }`，什么都不发 |
+| POST `/api/cron/game-winner` | 每周一 09:00 | 上周（刚结束的那一周）选中的发奖游戏排行榜第一名的邮件（D114，`NOTIFICATIONS.md` 第 6 节）入队，`dedupeKey = game_winner:<上周一>`，入队后立即发送（`send` 同 summary），重复调用只发一次；上周发奖游戏没有算数的局时返回 `{ status: "empty" }`，什么都不发 |
 | POST `/api/cron/summary` | 每天 20:05 | 生成生产汇总（`CAPACITY_RULES.md` 第 10 节）并入队，`dedupeKey = summary:<明天日期>`，入队后立即发送（响应里的 `send` 是发送结果，失败的由 outbox 重试），重复调用只发一次 |
 
 三个接口都必须可以安全地重复调用。
