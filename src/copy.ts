@@ -375,6 +375,7 @@ export const copy = {
       gainProp: "得到 {name}",
       /** Result sheet: points for props left unused. */
       bonus: "没用的道具 +{n}",
+      capReached: "点击次数已到上限，本局结束",
     },
 
     /** `/orders`: the orders opened on this phone (D84). */

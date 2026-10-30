@@ -16,7 +16,7 @@ import { createTuGame, MAX_TAPS, MIN_TAP_GAP_MS, tuSeed, type TuTap } from "@/li
 import { prisma } from "@/server/db";
 import { finishRun, getLeaderboard, PLAUSIBILITY_SLACK_MS, START_LIMIT_PER_HOUR, startRun } from "@/server/game";
 import { cleanup } from "@/server/maintenance";
-import { finishTuRun, getTuLeaderboard, isSuspicious, startTuRun } from "@/server/tu";
+import { finishTuRun, getTuLeaderboard, isSuspicious, startTuRun, TU_MAX_FINISH_BODY_BYTES } from "@/server/tu";
 import { greedyTu, randomTu } from "../support/tuBot";
 import { getRequest, jsonRequest, NOW } from "./api.helpers";
 import { createDefaultProducts, db, resetDb } from "./helpers";
@@ -26,7 +26,8 @@ process.env.IP_HASH_SECRET = "test-secret";
 const IP = "iphash-a";
 const T = NOW; // Tue 2026-10-20, week of Monday 2026-10-19 (Chicago)
 const WEEK = "2026-10-19";
-const LATER = new Date(T.getTime() + 60 * 60_000);
+// Allow a full log at the bot's maximum 1050 ms gap.
+const LATER = new Date(T.getTime() + MAX_TAPS * 1050 + 1000);
 
 beforeEach(async () => {
   await resetDb();
@@ -76,7 +77,7 @@ describe("start", () => {
     const ids = await createDefaultProducts();
     const r = await start();
     expect(Object.keys(r).sort()).toEqual(["expiresAt", "runId", "seed", "tiers"]);
-    expect(r.seed).toMatch(/^v2\.[0-9a-f]{32}$/);
+    expect(r.seed).toMatch(/^v3\.[0-9a-f]{32}$/);
     expect(r.expiresAt).toBe("2026-10-26T05:00:00.000Z");
     expect(r.tiers.map((t) => t.id)).toEqual([ids.redBean, ids.rockCheese, ids.cheeseHorn, ids.brulee]);
     for (const t of r.tiers) expect(Object.keys(t).sort()).toEqual(["color", "id", "imageUrl", "name", "points", "radius"]);
@@ -138,14 +139,14 @@ describe("finish", () => {
     await createDefaultProducts();
     const run = await start();
     // D127: a completed game well below MAX_TAPS, with human-paced tap gaps.
-    const seed = tuSeed("7e57f1a5");
+    const seed = tuSeed("6");
     await db.gameRun.update({ where: { id: run.runId }, data: { seed } });
     const bot = play({ ...run, seed });
     bot.taps = bot.taps.map((tap, i) => ({ ...tap, at: (i + 1) * 500 }));
     expect(bot.over).toBe(true);
     // C8: the log mixes tile taps and prop uses.
     expect(bot.taps.filter((t) => "p" in t).length).toBeGreaterThan(0);
-    expect(bot.taps).toHaveLength(59);
+    expect(bot.taps).toHaveLength(267);
     const res = await finishTuRun(db, { runId: run.runId, taps: bot.taps, score: 999_999 }, IP, LATER);
     expect(res).toEqual({
       score: bot.score,
@@ -267,6 +268,11 @@ describe("finish", () => {
       message: "这一局已经过期，请重新开始",
     });
     expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).finishedAt).toBeNull();
+    // The previous 2000-entry cap paid an end bonus at a different point.
+    await db.gameRun.update({ where: { id: run.runId }, data: { seed: `v2.${oldSeed}` } });
+    await expect(finishTuRun(db, { runId: run.runId, taps: [] }, IP, LATER)).rejects.toMatchObject({
+      code: "VALIDATION", message: "这一局已经过期，请重新开始",
+    });
     // A future version is refused the same way.
     await db.gameRun.update({ where: { id: run.runId }, data: { seed: `v99.${oldSeed}` } });
     await expect(finishTuRun(db, { runId: run.runId, taps }, IP, LATER)).rejects.toMatchObject({ code: "VALIDATION" });
@@ -460,11 +466,33 @@ describe("routes", () => {
     expect((await bigFinishPOST(jsonRequest("/api/game/finish", { runId: run.runId, drops: [] }))).status).toBe(404);
   });
 
+  it("accepts and stores 20000 entries through finish; rejects 20001 without finishing", async () => {
+    const seed = tuSeed("ca9");
+    const tiers = [{ id: "t0" }, { id: "t1" }];
+    const bot = randomTu(seed, tiers, 20_000);
+    expect(bot.taps).toHaveLength(20_000);
+    const run = await db.gameRun.create({ data: {
+      game: "TU", seed, tiersSnapshot: tiers, startedAt: T, wechatId: "wx_cap", nickname: "Cap",
+    } });
+    vi.setSystemTime(new Date(T.getTime() + bot.taps.at(-1)!.at + 1000));
+    const tooMany = [...bot.taps, { id: 0, at: bot.taps.at(-1)!.at + 500 }];
+    const headers = { "x-forwarded-for": "1.2.3.4" };
+    const rejected = await finishPOST(jsonRequest("/api/game/tu/finish", { runId: run.id, taps: tooMany }, headers));
+    expect(rejected.status).toBe(422);
+    expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.id } })).finishedAt).toBeNull();
+    const accepted = await finishPOST(jsonRequest("/api/game/tu/finish", { runId: run.id, taps: bot.taps }, headers));
+    const result = await accepted.json();
+    expect(accepted.status, JSON.stringify(result)).toBe(200);
+    expect(result).toMatchObject({ score: bot.score });
+    const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
+    expect(stored).toMatchObject({ dropCount: 20_000, suspicious: true, drops: bot.taps });
+  });
+
   it("a full-length tap log fits the body limit; JSON content type and object shape are required", async () => {
-    const full = Array.from({ length: MAX_TAPS }, (_, i) => ({ id: 1000 + i, at: 100_000 + i * 1000 }));
+    const full = Array.from({ length: 20_000 }, (_, i) => ({ id: 1000 + i, at: 100_000 + i * 1000 }));
     const res = await finishPOST(jsonRequest("/api/game/tu/finish", { runId: crypto.randomUUID(), taps: full }));
     expect(res.status).toBe(404); // read and parsed; the run does not exist
-    const huge = jsonRequest("/api/game/tu/finish", { runId: crypto.randomUUID(), taps: [], pad: "x".repeat(100_000) });
+    const huge = jsonRequest("/api/game/tu/finish", { runId: crypto.randomUUID(), taps: [], pad: "x".repeat(TU_MAX_FINISH_BODY_BYTES) });
     expect((await finishPOST(huge)).status).toBe(422);
     expect((await startPOST(jsonRequest("/api/game/tu/start", "[]"))).status).toBe(422);
     const plain = new Request("http://localhost:3111/api/game/tu/start", {

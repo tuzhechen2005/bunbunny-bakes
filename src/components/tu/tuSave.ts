@@ -1,5 +1,5 @@
 // The autosave of the 兔了个兔 run in progress (D124 = D111): this phone only; resume replays the taps.
-import { TU_ENGINE_VERSION } from "@/lib/tu";
+import { MAX_TAPS, TU_ENGINE_VERSION } from "@/lib/tu";
 import type { TierView } from "@/components/game/types";
 import type { TuTapLog } from "./tuApi";
 
@@ -24,7 +24,7 @@ export function parseTuSave(raw: string | null, now = Date.now()): TuSave | null
     const s = JSON.parse(raw) as Partial<TuSave>;
     if (!s || s.v !== 1) return null;
     if (typeof s.runId !== "string" || !s.runId || typeof s.seed !== "string") return null;
-    if (!Array.isArray(s.tiers) || s.tiers.length < 2 || !Array.isArray(s.taps) || s.taps.length < 1) return null;
+    if (!Array.isArray(s.tiers) || s.tiers.length < 2 || !Array.isArray(s.taps) || s.taps.length < 1 || s.taps.length > MAX_TAPS) return null;
     if (typeof s.expiresAt !== "string" || !(Date.parse(s.expiresAt) > now)) return null;
     if (typeof s.score !== "number" || typeof s.nickname !== "string") return null;
     return s as TuSave;

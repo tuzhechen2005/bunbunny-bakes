@@ -3,6 +3,7 @@
 // Skipped while the server (T2, /api/game/tu/*) is not part of this build.
 import { expect, test } from "@playwright/test";
 import { copy } from "../../src/copy";
+import { createTuGame, MIN_TAP_GAP_MS } from "../../src/lib/tu";
 import { randomTu } from "../support/tuBot";
 import { resetAndSeed } from "./support/seed";
 
@@ -24,12 +25,22 @@ test("real tu: play to game over, the server confirms the score and the board li
   const { seed, tiers } = await (await started).json();
   await expect(page.getByTestId("tu-board")).toBeVisible();
 
-  // A random player is out in batch 1; the bot's tile ids are the engine's, the page plays the same engine.
+  // A random player usually loses in batch 1; the bot's tile ids are the engine's, the page plays the same engine.
   const bot = randomTu(seed, tiers);
   expect(bot.over).toBe(true);
+  const engine = createTuGame({ seed, tiers });
   for (const tp of bot.taps) {
+    const events = engine.tap(tp.id)!;
     await page.getByTestId(`tu-tile-${tp.id}`).click();
-    await page.waitForTimeout(170);
+    if (events.some((event) => event.type === "batch")) {
+      // New tiles appear before the batch animation unlocks input. A fixed 170 ms
+      // pause could click one while locked and silently lose the next bot tap.
+      await expect(page.getByTestId("tu-board")).toHaveAttribute("data-batch", String(engine.batch));
+      await expect(page.getByTestId("tu-banner")).toHaveCount(0);
+    } else {
+      // This is deliberate human input pacing, not a wait for rendering.
+      await page.waitForTimeout(MIN_TAP_GAP_MS + 50);
+    }
   }
   const sheet = page.getByTestId("tu-over-sheet");
   await expect(sheet).toBeVisible({ timeout: 20_000 });

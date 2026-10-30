@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { copy } from "../../src/copy";
-import { createTuGame, PROP_BONUS_POINTS, replayTu, TU_ENGINE_VERSION } from "../../src/lib/tu";
+import { createTuGame, MAX_TAPS, PROP_BONUS_POINTS, replayTu, TU_ENGINE_VERSION } from "../../src/lib/tu";
 import { greedyTu, randomTu } from "../support/tuBot";
 import { screensDir } from "./support/screensDir";
 
@@ -43,7 +43,7 @@ interface Api {
   result: { score: number; best: number; rank: number | null; personalBest?: number; newRecord?: boolean };
 }
 
-async function mockApi(page: Page): Promise<Api> {
+async function mockApi(page: Page, tiers = TIERS): Promise<Api> {
   await mockGameHub(page, "TU");
   const api: Api = { starts: [], finishes: [], result: { score: 0, best: 456, rank: 3, personalBest: 900, newRecord: false } };
   await page.route("**/api/menu", (route) =>
@@ -55,12 +55,12 @@ async function mockApi(page: Page): Promise<Api> {
   await page.route("**/api/game/tu/leaderboard**", (route) => route.fulfill({ json: BOARD }));
   await page.route("**/api/game/tu/start", (route: Route) => {
     api.starts.push(route.request().postDataJSON());
-    return route.fulfill({ json: { runId: `run-${api.starts.length}`, seed: SEED, tiers: TIERS, expiresAt: "2099-01-01T00:00:00Z" } });
+    return route.fulfill({ json: { runId: `run-${api.starts.length}`, seed: SEED, tiers, expiresAt: "2099-01-01T00:00:00Z" } });
   });
   await page.route("**/api/game/tu/finish", (route: Route) => {
     const body = route.request().postDataJSON();
     api.finishes.push(body);
-    const score = replayTu(SEED, TIERS, body.taps).score;
+    const score = replayTu(SEED, tiers, body.taps).score;
     return route.fulfill({ json: { ...api.result, score, week: "2026-10-26" } });
   });
   return api;
@@ -246,11 +246,23 @@ test("a random player runs out of bag: result sheet with the server score, close
   await expect(page.getByTestId("tu-new-record")).toContainText("新纪录");
   await expect(page.getByTestId("tu-personal-best")).toHaveText("900");
   await expect(page.getByTestId("tu-best")).toHaveText("456");
+  await expect(page.getByTestId("tu-cap-reason")).toHaveCount(0);
   await shot(page, "result");
   await page.getByTestId("tu-over-close").click();
   await expect(sheet).toHaveCount(0);
   await expect(page.getByTestId("tu-bar")).toBeVisible();
   await expect(page.getByTestId("tu-bag")).toHaveAttribute("data-full", "1");
+  // The board overlay covers disabled tiles and empty space alike.
+  await page.getByTestId("tu-board").click({ position: { x: 2, y: 2 } });
+  await expect(sheet).toBeVisible();
+  await expect(page.getByTestId("tu-final-score")).toHaveText(String(shown));
+  expect(api.finishes).toHaveLength(1);
+  await page.getByTestId("tu-over-close").click();
+  await expect(sheet).toHaveCount(0);
+  await page.getByTestId("tu-board-result").click();
+  await expect(sheet).toBeVisible();
+  await page.getByTestId("tu-over-close").click();
+  await expect(sheet).toHaveCount(0);
   await page.getByTestId("tu-bar-score").click();
   await expect(sheet).toBeVisible();
   await page.getByTestId("tu-to-board").click();
@@ -295,4 +307,34 @@ test("a saved run that is already over resumes into the result flow and is submi
   const bonus = PROP_BONUS_POINTS * state.batch * Object.values(state.props).reduce((sum, n) => sum + n, 0);
   await expect(page.getByTestId("tu-bonus")).toHaveText(`没用的道具 +${bonus}`);
   expect(await page.evaluate((key) => localStorage.getItem(key), TU_SAVE_KEY)).toBeNull();
+});
+
+test("the 20000th tap shows the cap reason; tapping the ended board reopens the result", async ({ page }) => {
+  const tiers = TIERS.slice(0, 2);
+  const api = await mockApi(page, tiers);
+  const bot = randomTu(SEED, tiers);
+  expect(bot.taps).toHaveLength(20_000);
+  const taps = bot.taps.slice(0, MAX_TAPS - 1);
+  await page.goto("/game/tu");
+  await page.evaluate(({ key, save }) => localStorage.setItem(key, JSON.stringify(save)), {
+    key: TU_SAVE_KEY,
+    save: { v: 1, runId: "run-cap", seed: SEED, tiers, taps, nickname: "小面包", expiresAt: "2099-01-01T00:00:00Z", score: replayTu(SEED, tiers, taps).score },
+  });
+  await page.reload();
+  await page.getByTestId("tu-resume").click();
+  await page.getByTestId(`tu-tile-${bot.taps.at(-1)!.id}`).click();
+  const sheet = page.getByTestId("tu-over-sheet");
+  await expect(sheet).toBeVisible();
+  await expect(page.getByTestId("tu-cap-reason")).toHaveText("点击次数已到上限，本局结束");
+  await expect(page.getByTestId("tu-confirmed")).toBeVisible();
+  expect(api.finishes).toHaveLength(1);
+  expect(api.finishes[0].taps).toHaveLength(20_000);
+  await expect(page.getByTestId("tu-final-score")).toHaveText(String(bot.score));
+  await page.getByTestId("tu-over-close").click();
+  await expect(sheet).toHaveCount(0);
+  await page.getByTestId("tu-board-result").click();
+  await expect(sheet).toBeVisible();
+  await expect(page.getByTestId("tu-cap-reason")).toHaveText(copy.customer.tu.capReached);
+  await expect(page.getByTestId("tu-final-score")).toHaveText(String(bot.score));
+  expect(api.finishes).toHaveLength(1);
 });

@@ -125,9 +125,11 @@ export interface TuPlayProps {
   onProgress: (p: TuProgress) => void;
   /** Once, after the last animation of the game-ending tap. */
   onOver: (p: TuProgress) => void;
+  /** Reopen the existing result without submitting or replaying the run again. */
+  onShowResult?: () => void;
 }
 
-export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress, onOver }: TuPlayProps) {
+export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress, onOver, onShowResult }: TuPlayProps) {
   const game = useRef<TuGame | null>(null);
   const taps = useRef<TuTapLog[]>([]);
   const clock = useRef({ base: 0, t0: 0 });
@@ -498,6 +500,15 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
               <TileFace tier={tiers[tile.tier]} />
             </button>
           ))}
+          {snap.over && onShowResult ? (
+            <button
+              type="button"
+              className="absolute inset-0 z-40"
+              aria-label={copy.customer.game.barScore}
+              data-testid="tu-board-result"
+              onClick={onShowResult}
+            />
+          ) : null}
         </div>
         {view.banner ? (
           <p key={view.banner.k} className="tu-banner font-display pointer-events-none absolute inset-x-0 top-1/3 m-0 text-center text-[40px] text-c-ink" role="status" data-testid="tu-banner">

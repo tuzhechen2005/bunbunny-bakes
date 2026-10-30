@@ -43,9 +43,9 @@ import { runExpiresAt, weekKeyOf } from "./gameWeek";
 
 /**
  * Largest finish body we read: MAX_TAPS log entries of at most ~30 bytes each (a tap
- * `{"id":123,"at":604800000}` or a prop use `{"p":"swap","at":604800000}`), with room to spare.
+ * `{"id":123,"at":604800000}` or a prop use `{"p":"swap","at":604800000}`), plus 25% headroom and 4 KiB for the envelope.
  */
-export const TU_MAX_FINISH_BODY_BYTES = 96 * 1024;
+export const TU_MAX_FINISH_BODY_BYTES = Math.ceil(MAX_TAPS * 30 * 1.25) + 4 * 1024;
 /** Owner flag (D103 manual check): a median gap between taps under this (ms) looks scripted. */
 export const SUSPICIOUS_MEDIAN_GAP_MS = 300;
 
