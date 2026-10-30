@@ -458,6 +458,8 @@ export const copy = {
     badRun: "这一局的成绩没能通过验证",
     /** 兔了个兔 needs at least 2 bread tiers (D123); shown when the shop has fewer. */
     tuNotReady: "兔了个兔还没准备好，请稍后再来",
+    /** Ranked M3 needs all six bread tiers (D135). */
+    m3NotReady: "兔兔三连烤还没准备好，请稍后再来",
   },
 
   admin: {
@@ -518,6 +520,7 @@ export const copy = {
       gameSwitch: "游戏",
       gameBig: "消除大面包",
       gameTu: "兔了个兔",
+      gameM3: "兔兔三连烤",
       loading: "加载中…",
       loadFailed: "加载失败，请刷新重试",
       retry: "重试",
@@ -577,6 +580,7 @@ export const copy = {
       colTime: "时间",
       verified: "已验证",
       drops: "{n} 次落子",
+      moves: "{n} 步交换",
       duration: "{s} 秒",
       unverified: "未验证",
       /** 兔了个兔 run flag (D103): too fast or MAX_TAPS reached; still on the board. */
@@ -1336,6 +1340,7 @@ export const copy = {
         sectionTitle: "===== {game} =====",
         gameBig: "消除大面包",
         gameTu: "兔了个兔",
+        gameM3: "兔兔三连烤",
         emptyBoard: "上周没有人上榜。",
       },
     },

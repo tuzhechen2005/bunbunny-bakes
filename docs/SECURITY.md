@@ -75,6 +75,20 @@ IP（`src/server/http.ts` 的 `clientIp`，下单、游戏、后台登录、小�
 | 频率 | `tu_start_ip`、`tu_finish_ip` 各自每小时 60 次，和消除大面包分开计 |
 | 请求体 | start 4 KB，finish 上限由 `MAX_TAPS × 30 bytes × 1.25 + 4 KiB` 推导（当前 754096 bytes；20000 条记录留 25% 余量和 4 KiB 外层字段空间） |
 
+## 兔兔三连烤的防护（D135，S2，`/api/game/m3/**`）
+
+沿用 TU 的昵称/微信校验、IP 哈希、共用封禁、周一过期、隐藏、幂等提交及脱敏排名；S2 不启用大厅入口或随机奖品抽取。
+
+| 防护 | 规则 |
+|---|---|
+| 可比性与版本 | 至少六种面包才开局，截取前六种并存有序快照；finish 只用该快照。种子携带 `M3_ENGINE_VERSION`，无版本或版本不符的未完成局直接拒绝 |
+| 分数 | 从头 `replayM3`，不信客户端分数；Zod 限制最多 `MAX_MOVES = 30`，坐标 0–7、时间为非负安全整数；非法交换、无消除、时间不递增、超限及多余 move/坐标字段均 `422`，不结束该局 |
+| 真实时间 | 相邻步至少 `MIN_MOVE_GAP_MS = 150` ms；末步 `at` 不超过服务端经过时间 + 10000 ms |
+| 可疑标记 | 间隔中位数 < `M3_SUSPICIOUS_MEDIAN_GAP_MS = 400` ms 标记 `suspicious`，仍上榜；不足两步为 false，完成 30 步不自动标记。仍需店主人工核查脚本成绩 |
+| 频率 | `m3_start_ip` / `m3_finish_ip` 各每小时 60 次，独立于 BIG/TU |
+| 请求体 | JSON；start 4096 bytes，finish `ceil(MAX_MOVES × 60 × 1.25) + 4096 = 6346 bytes`；沿用 TU 检查 Content-Length 和解析前文本长度，另有数组长度上限 |
+| 证据 | `drops` 存完整 moves，`dropCount` 存步数，`playMs` 存末步毫秒；后台显示步数、秒数和可疑标记，修改奖励、隐藏和封禁都记 AuditLog |
+
 ## 小小🐰 下单助手（D117、D118，`POST /api/assistant`）
 
 | 防护 | 规则 |

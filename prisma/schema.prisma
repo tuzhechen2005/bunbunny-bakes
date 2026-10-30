@@ -351,10 +351,11 @@ model GameTier {
 }
 
 /// One play. Created by /api/game/start, verified and scored by /api/game/finish.
-/// Which mini game a run / award belongs to: BIG = 消除大面包 (D100), TU = 兔了个兔 (D121).
+/// Which mini game a run / award belongs to: BIG = 消除大面包 (D100), TU = 兔了个兔 (D121), M3 = 兔兔三连烤 (D135).
 enum GameKind {
   BIG
   TU
+  M3
 }
 
 enum GamePrizeChosenBy {
@@ -385,10 +386,10 @@ model GameRun {
   drops         Json?
   dropCount     Int?
   simSteps      Int?
-  /// TU only: the verified tap log is stored in `drops` (its length in `dropCount`); `playMs` is
-  /// the last tap's client time (ms since start). `suspicious` flags a run for the owner's manual
+  /// TU/M3: the verified tap/move log is stored in `drops` (its length in `dropCount`); `playMs` is
+  /// the last tap/move's client time (ms since start). `suspicious` flags a run for the owner's manual
   /// check before awarding (D103): it reached MAX_TAPS or its median tap gap is under 300 ms. It
-  /// still counts on the board.
+  /// still counts on the board. M3 flags only a median move gap under 400 ms.
   playMs        Int?
   suspicious    Boolean   @default(false)
   /// Monday (Chicago) of the week the run was finished in, "YYYY-MM-DD".

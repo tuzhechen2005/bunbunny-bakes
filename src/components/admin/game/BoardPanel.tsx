@@ -59,9 +59,9 @@ const timeLabel = (iso: string) => timeFmt.format(new Date(iso)).replace(",", ""
 
 const chip = "inline-flex items-center rounded-full border border-line px-2 py-0.5 text-sm";
 
-export function BoardPanel({ game = "big" }: { game?: "big" | "tu" }) {
-  // D125: `?game=tu` selects the second game; the default (no param) is the first game. Bans are shared.
-  const q = game === "tu" ? "game=tu" : "";
+export function BoardPanel({ game = "big" }: { game?: "big" | "tu" | "m3" }) {
+  // The query selects a game; absent means BIG. Bans are shared across all three.
+  const q = game === "big" ? "" : `game=${game}`;
   const withGame = (path: string) => (q ? `${path}${path.includes("?") ? "&" : "?"}${q}` : path);
   const [week, setWeek] = useState<string | undefined>(undefined);
   const [board, setBoard] = useState<Board | null>(null);
@@ -224,7 +224,7 @@ export function BoardPanel({ game = "big" }: { game?: "big" | "tu" }) {
                   <span className={chip}>{r.verified ? t.verified : t.unverified}</span>
                   {r.dropCount !== null && r.durationSec !== null ? (
                     <span data-testid="run-evidence">
-                      {fill(t.drops, { n: r.dropCount })} · {fill(t.duration, { s: r.durationSec })}
+                      {fill(game === "m3" ? t.moves : t.drops, { n: r.dropCount })} · {fill(t.duration, { s: r.durationSec })}
                     </span>
                   ) : null}
                   <span className={chip} data-testid="run-ordered">{r.ordered ? t.ordered : t.notOrdered}</span>

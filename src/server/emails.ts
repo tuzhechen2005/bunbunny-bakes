@@ -1,7 +1,6 @@
 // Email rendering for outbox notifications (docs/NOTIFICATIONS.md §2–§5).
 // Contract between the outbox (sends) and the templates (render).
 import { copy } from "@/copy";
-import { GAME_CATALOG } from "@/lib/gameCatalog";
 import { dayLabel, monthDay } from "@/domain/dates";
 import { formatCents } from "@/domain/pricing";
 import type { DailySummary } from "@/domain/summary";
@@ -243,7 +242,8 @@ function renderGameWinner(n: NotificationToRender): RenderedEmail {
   const g = t.gameWinner;
   const p = payloadObject(n) as unknown as GameWinnerPayload;
   if (!p.week || !p.winner) throw new Error(`GAME_WINNER notification ${n.id}: payload has no winner`);
-  const name = GAME_CATALOG.find((game) => game.kind === p.game)?.name;
+  const names: Record<GameWinnerPayload["game"], string> = { BIG: g.gameBig, TU: g.gameTu, M3: g.gameM3 };
+  const name = names[p.game];
   if (!name) throw new Error(`GAME_WINNER notification ${n.id}: unknown game`);
   const weekHeader = fill(g.weekHeader, { start: dayLabel(p.week.start), end: dayLabel(p.week.end) });
   const [first, ...rest] = winnerSections(p.winner, p.runnerUp);
