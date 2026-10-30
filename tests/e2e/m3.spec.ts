@@ -7,6 +7,8 @@ import { M3_SAVE_KEY } from "../../src/components/m3/m3Save";
 import { chooseM3Move } from "../support/m3Bot";
 import { drag, finger } from "./support/touch";
 
+test.use({ browserName: "chromium" });
+
 const SEED = "m3-tune87";
 const PHOTO = readFileSync("tests/fixtures/bun.jpg");
 const TIERS = Array.from({ length: 6 }, (_, i) => ({ id: `t${i}`, name: `面包${i}`, radius: .1, points: 10, imageUrl: i ? `/api/images/mock/m3-${i}.jpg` : null, color: { bg: "#EFE7DA", ink: "#4A2723" } }));
@@ -69,7 +71,7 @@ async function swipe(page: Page, m: M3Swap) {
 
 for (const width of [320, 390]) {
   test.describe(`M3 ${width}px`, () => {
-    test.use({ browserName: "chromium", viewport: { width, height: 800 }, hasTouch: true });
+    test.use({ viewport: { width, height: 800 }, hasTouch: true });
 
     test("menu, leaderboard, hub third row and prize gating", async ({ page }) => {
       await mockApi(page);
@@ -140,6 +142,17 @@ for (const width of [320, 390]) {
       await page.goto("/game/m3");
       await start(page);
       const game = createM3Game({ seed: SEED, tiers: TIERS });
+      // The order pop lasts 320 ms, shorter than Playwright's later polling gaps: count it in the page.
+      await page.evaluate(() => {
+        const w = window as unknown as { m3Done: number };
+        w.m3Done = 0;
+        new MutationObserver((records) => {
+          for (const r of records) {
+            const el = r.target as Element;
+            if (el.classList.contains("m3-order-done") && !(r.oldValue ?? "").includes("m3-order-done")) w.m3Done++;
+          }
+        }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"], attributeOldValue: true });
+      });
       let completed = 0;
       while (!game.over) {
         const move = chooseM3Move(game.state(), true, () => 0);
@@ -147,11 +160,9 @@ for (const width of [320, 390]) {
         await tapSwap(page, move);
         await expect(page.getByTestId("m3-board")).toHaveAttribute("aria-busy", "true");
         await expect(cell(page, move.a)).toBeDisabled();
-        if (events.some(e => e.type === "order" && e.action === "complete")) {
-          completed++;
-          await expect(page.locator(".m3-order-done").first()).toBeVisible({ timeout: 15_000 });
-        }
+        completed += events.filter(e => e.type === "order" && e.action === "complete").length;
         await settled(page, game.state());
+        await expect.poll(() => page.evaluate(() => (window as unknown as { m3Done: number }).m3Done)).toBe(completed);
       }
       expect(completed).toBeGreaterThan(0);
       await expect(page.getByTestId("m3-over-sheet")).toBeVisible();
