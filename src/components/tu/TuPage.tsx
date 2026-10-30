@@ -11,6 +11,7 @@ import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import { useGameHub } from "@/components/game/useGameHub";
 import { copy } from "@/copy";
+import { MAX_TAPS } from "@/lib/tu";
 import { fetchMenu } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { TuPlay, type TuProgress } from "./TuPlay";
@@ -89,6 +90,7 @@ export function TuPage() {
   const [finish, setFinish] = useState<Finish>({ state: "submitting" });
   const [finalScore, setFinalScore] = useState(0);
   const [bonus, setBonus] = useState(0);
+  const [capReached, setCapReached] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [boardVersion, setBoardVersion] = useState(0);
   const [boardFrom, setBoardFrom] = useState<"menu" | "over">("menu");
@@ -236,6 +238,7 @@ export function TuPage() {
       progress.current = p;
       setFinalScore(p.score);
       setBonus(p.bonus ?? 0);
+      setCapReached(p.taps.length >= MAX_TAPS);
       setPhase("over");
       if (!submitted.current.has(runId.current)) void submit(runId.current, p.taps);
       timers.current.push(setTimeout(() => setSheetOpen(true), reduced ? 0 : SHEET_DELAY_MS));
@@ -470,7 +473,7 @@ export function TuPage() {
     <Shell>
       {top}
       <main className="relative flex flex-1 flex-col" style={{ minHeight: "calc(100svh - 56px)" }}>
-        <TuPlay key={run.key} tiers={run.tiers} seed={run.seed} initialTaps={run.initialTaps} soundOn={soundOn} reduced={reduced} onProgress={onProgress} onOver={onOver} />
+        <TuPlay key={run.key} tiers={run.tiers} seed={run.seed} initialTaps={run.initialTaps} soundOn={soundOn} reduced={reduced} onProgress={onProgress} onOver={onOver} onShowResult={phase === "over" ? () => setSheetOpen(true) : undefined} />
         {phase === "over" && !sheetOpen ? (
           <div
             className="absolute inset-x-2 bottom-[calc(12px+env(safe-area-inset-bottom))] z-50 flex h-12 items-stretch overflow-hidden rounded-full border border-c-line bg-c-paper/90 text-c-ink backdrop-blur-sm"
@@ -559,6 +562,9 @@ export function TuPage() {
             </svg>
           </button>
           <h2 className="font-display m-0 text-center text-[28px] leading-none tracking-[-0.03em]">{g.overTitle}</h2>
+          {capReached ? (
+            <p className="m-0 mt-3 text-center text-sm text-c-grey" data-testid="tu-cap-reason">{t.capReached}</p>
+          ) : null}
           <p className="m-0 mt-5 text-center text-xs font-bold text-c-grey">{g.finalScore}</p>
           <p className="font-num m-0 text-center text-[56px] leading-[1.1]" data-testid="tu-final-score">
             {shownScore}

@@ -102,7 +102,7 @@ use this batch.
     is dealt).
   - `swap`: both orders get new breads from the board, different from both old ones and from each
     other when the board allows it.
-- `MAX_TAPS` (2000): the engine ends the game after that many log entries (taps and prop uses), so
+- `MAX_TAPS` (20000): the engine ends the game after that many log entries (taps and prop uses), so
   client and server agree.
 - Props are never needed to clear a batch: the witness below works with any bag size, and
   `tuProps.test.ts` clears batches after using every prop.
@@ -151,9 +151,9 @@ entries and a last `at` beyond the real elapsed time plus slack.
 
 ### Engine version (C8)
 
-`TU_ENGINE_VERSION` (2) changes whenever a rules change would make an old log score differently
-(this one: props, the new curve). The server starts every run with `tuSeed(hex)` =
-`v2.<hex>`, and `finishTuRun` refuses (422 「这一局已经过期，请重新开始」) a run whose
+`TU_ENGINE_VERSION` (3) changes whenever a rules change would make an old log score differently
+(this one: the higher tap cap changes when the unused-prop end bonus is paid). The server starts every run with `tuSeed(hex)` =
+`v3.<hex>`, and `finishTuRun` refuses (422 「这一局已经过期，请重新开始」) a run whose
 `tuSeedVersion(seed)` is not the current one; seeds from before versioning are plain hex =
 version 1. So a run started before a deploy can simply not be finished (it would expire at the
 weekly reset anyway and is cleaned up as an unfinished run) instead of being replayed under new

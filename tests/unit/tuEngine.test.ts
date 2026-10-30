@@ -150,7 +150,8 @@ describe("bag", () => {
 
   it("with only 2 tiers the bag can never fill: the game ends at MAX_TAPS", () => {
     const bot = randomTu("two", tiersOf(2));
-    expect(bot.taps).toHaveLength(MAX_TAPS);
+    expect(bot.taps).toHaveLength(20_000);
+    expect(replayTu("two", tiersOf(2), bot.taps.slice(0, -1)).over).toBe(false);
     expect(bot.over).toBe(true);
     expect(replayTu("two", tiersOf(2), bot.taps)).toMatchObject({ over: true, taps: MAX_TAPS, score: bot.score });
   });
@@ -377,7 +378,7 @@ describe("determinism, replay and pinned vectors", () => {
   });
 
   it("exports the server limits", () => {
-    expect(MAX_TAPS).toBe(2000);
+    expect(MAX_TAPS).toBe(20_000);
     expect(MIN_TAP_GAP_MS).toBe(120);
   });
 });

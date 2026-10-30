@@ -295,10 +295,10 @@ describe("replay of mixed logs (C8)", () => {
 
 describe("engine version (C8)", () => {
   it(`is ${TU_ENGINE_VERSION}, and new seeds carry it; plain hex seeds are version 1`, () => {
-    expect(TU_ENGINE_VERSION).toBe(2);
+    expect(TU_ENGINE_VERSION).toBe(3);
     const s = tuSeed("0123456789abcdef0123456789abcdef");
-    expect(s).toBe("v2.0123456789abcdef0123456789abcdef");
-    expect(tuSeedVersion(s)).toBe(2);
+    expect(s).toBe("v3.0123456789abcdef0123456789abcdef");
+    expect(tuSeedVersion(s)).toBe(3);
     expect(tuSeedVersion("0123456789abcdef0123456789abcdef")).toBe(1);
     expect(tuSeedVersion("v3.abc")).toBe(3);
     expect(tuSeedVersion("v2.")).toBe(1);

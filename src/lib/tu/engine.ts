@@ -94,9 +94,9 @@ export const MAX_TIERS = 8;
  * new run's seed (tuSeed), so the server refuses to finish a run dealt under another version, and
  * part of the client's save key, so old saves are dropped.
  */
-export const TU_ENGINE_VERSION = 2;
+export const TU_ENGINE_VERSION = 3;
 /** The engine ends the game after this many log entries (taps + prop uses), so client and server agree. */
-export const MAX_TAPS = 2000;
+export const MAX_TAPS = 20_000;
 /** Plausibility for the server: two log entries closer than this (ms) are not a human. */
 export const MIN_TAP_GAP_MS = 120;
 

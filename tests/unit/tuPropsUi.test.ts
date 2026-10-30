@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isPropEntry, propEvents } from "@/components/tu/tuProps";
-import { parseTuSave, readTuSave, TU_SAVE_KEY } from "@/components/tu/tuSave";
+import { parseTuSave, readTuSave, writeTuSave, TU_SAVE_KEY } from "@/components/tu/tuSave";
 import { TU_ENGINE_VERSION, type TuEvent } from "@/lib/tu";
 
 const raw = JSON.stringify({ v: 1, runId: "r", seed: "s", tiers: [{}, {}], taps: [{ p: "peek", at: 200 }], nickname: "n", expiresAt: "2099-01-01T00:00:00Z", score: 0 });
@@ -29,6 +29,7 @@ describe("tu props (C8)", () => {
     const entries = new Map([
       ["bb_tu_save_v0", "old"],
       ["bb_tu_save_v1", "old"],
+      ["bb_tu_save_v2", "old"],
       [TU_SAVE_KEY, raw],
       [`bb_tu_save_v${TU_ENGINE_VERSION + 1}`, "future"],
       ["bb_tu_orders_seen_v1", "1"],
@@ -44,6 +45,23 @@ describe("tu props (C8)", () => {
     });
     expect(readTuSave()).toEqual(JSON.parse(raw));
     expect([...entries.keys()]).toEqual([TU_SAVE_KEY, "bb_tu_orders_seen_v1", "bb_game_save_v1"]);
+  });
+  it("round-trips a 20000-entry local save within a 2 MiB storage budget; rejects 20001", () => {
+    const save = { ...JSON.parse(raw), taps: Array.from({ length: 20_000 }, (_, i) => ({ id: i + 1, at: 604_800_000 - 20_000 * 500 + i * 500 })) };
+    let stored: string | null = null;
+    vi.stubGlobal("window", { localStorage: {
+      length: 1,
+      key: () => TU_SAVE_KEY,
+      setItem: (_key: string, value: string) => {
+        // Count UTF-16 storage conservatively, including the key.
+        expect((value.length + TU_SAVE_KEY.length) * 2).toBeLessThan(2 * 1024 * 1024);
+        stored = value;
+      },
+      getItem: () => stored,
+    } });
+    writeTuSave(save);
+    expect(readTuSave()).toEqual(save);
+    expect(parseTuSave(JSON.stringify({ ...save, taps: [...save.taps, { id: 0, at: 604_800_000 }] }))).toBeNull();
   });
   it("tolerates unavailable storage", () => {
     vi.stubGlobal("window", { get localStorage() { throw new Error("unavailable"); } });

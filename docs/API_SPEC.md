@@ -182,7 +182,7 @@
 
 ### 兔了个兔（D121–D124，`/api/game/tu/**`，公开，C6）
 
-引擎在 `src/lib/tu/`（见该目录 README），服务端在 `src/server/tu.ts`，排行榜、历史最高、个人最高的查询和消除大面包共用（`src/server/game.ts`，按 `GameRun.game` 分开）。规则和上面消除大面包完全一样，以下只写不同的地方。三个接口都带 `Cache-Control: no-store`，请求体上限 start 4 KB、finish 96 KB。
+引擎在 `src/lib/tu/`（见该目录 README），服务端在 `src/server/tu.ts`，排行榜、历史最高、个人最高的查询和消除大面包共用（`src/server/game.ts`，按 `GameRun.game` 分开）。规则和上面消除大面包完全一样，以下只写不同的地方。三个接口都带 `Cache-Control: no-store`，请求体上限 start 4 KB；finish 按 `MAX_TAPS × 30 bytes × 1.25 + 4 KiB` 推导（当前 754096 bytes）。
 
 **`POST /api/game/tu/start`** `{ wechatId, nickname }` → `201 { runId, seed, tiers, expiresAt }`
 
@@ -191,7 +191,7 @@
 
 **`POST /api/game/tu/finish`** `{ runId, taps: [{ id, at } | { p, at }] }` → `200 { score, best, rank, week, personalBest, newRecord }`（同消除大面包）
 
-- `{ id, at }` 是点了一张牌（`id` 是牌的 id），`{ p, at }` 是用了一个道具（`p` 为 `"peek" | "bag" | "swap"`，D131）；两种写在同一个记录里，`at` 是从这一局开始（客户端）算起的整数毫秒，整体严格递增；合计最多 `MAX_TAPS`（2000）条。服务器用 `replayTu` 和开始时的等级快照重放（含道具、得道具和结束时的道具奖励）；被压住/不存在/已拿走的牌、没有或不能用的道具、游戏结束后还在点、形状不对（多余的键也算）、超限 → `422 VALIDATION`，这一局保持未结束。
+- `{ id, at }` 是点了一张牌（`id` 是牌的 id），`{ p, at }` 是用了一个道具（`p` 为 `"peek" | "bag" | "swap"`，D131）；两种写在同一个记录里，`at` 是从这一局开始（客户端）算起的整数毫秒，整体严格递增；合计最多 `MAX_TAPS`（20000）条。服务器用 `replayTu` 和开始时的等级快照重放（含道具、得道具和结束时的道具奖励）；被压住/不存在/已拿走的牌、没有或不能用的道具、游戏结束后还在点、形状不对（多余的键也算）、超限 → `422 VALIDATION`，这一局保持未结束。
 - 引擎版本（C8）：`seed` 形如 `v2.<32 位十六进制>`，前缀是开局时的 `TU_ENGINE_VERSION`。版本和当前引擎不同的局（例如规则改动上线前开的局，旧种子是纯十六进制 = 版本 1）不能再提交，`422`「这一局已经过期，请重新开始」，不会按新规则错误重放；这些局本来也会在周一重置时过期，并像其他没结束的局一样被清理。客户端的自动保存键也带版本号，旧存档直接丢弃。
 - 真实性检查：相邻两次点击至少 `MIN_TAP_GAP_MS`（120 ms）；最后一次的 `at` 不能超过开始到提交的真实时间加 10 秒。否则 `422`（「这一局的成绩没能通过验证」）。
 - 没玩完（还没结束）的点击记录也可以提交，按已经得到的分数计。
