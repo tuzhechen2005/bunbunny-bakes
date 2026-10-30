@@ -103,6 +103,7 @@ describe("hub and admin API", () => {
     expect(body).toEqual({ week: { start: WEEK, end: "2026-11-01" }, prizeGame: "TU", games: [
       { kind: "BIG", name: "消除大面包", href: "/game", weekBest: 0 },
       { kind: "TU", name: "兔了个兔", href: "/game/tu", weekBest: null },
+      { kind: "M3", name: "兔兔三连烤", href: "/game/m3", weekBest: null },
     ] });
     expect(JSON.stringify(body)).not.toContain("private_");
     expect((await getGameHub(db, new Date("2026-11-02T06:00:00Z"))).games.every((g) => g.weekBest === null)).toBe(true);

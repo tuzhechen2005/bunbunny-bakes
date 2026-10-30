@@ -355,6 +355,7 @@ model GameTier {
 enum GameKind {
   BIG
   TU
+  M3
 }
 
 enum GamePrizeChosenBy {

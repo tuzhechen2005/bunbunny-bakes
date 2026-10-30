@@ -1,0 +1,28 @@
+# M3 client (S3 / D135, D142)
+
+`/game/m3` uses the S1 pure engine and the S2 API contract. `m3Api.ts` shares the game's
+HTTP helper and response types; there is no client dependency on the TU engine or Canvas.
+Six bread tiers are required by both the start response guard and save parser. Saves are
+versioned by `M3_ENGINE_VERSION`, expire at the server's `expiresAt`, and are replay-validated.
+Accepted moves are saved before animation, including the final move, so reloading mid-cascade
+resumes/retries the same run. Events play in engine order; only active transitions run a frame
+monitor. Reduced motion and automatic degraded mode use fades, without hints or haptics.
+
+## Integration / release
+
+- S2 supplies the three `/api/game/m3/*` routes, the `M3` GameKind migration, and admin support.
+  S3 includes the matching Prisma enum member for type generation; it adds no migration.
+  Merge the S2 migration before deploying this route/catalog/prize pool.
+- `src/lib/gamePrizePool.ts` contains `M3_PRIZE_FROM_WEEK = "2026-11-02"`, the Chicago Monday
+  after the planned first appearance in the week of October 26. **If first production
+  appearance slips, move this date to the Monday after its actual first appearance.**
+  The current/start week stays ineligible. Every new draw also requires six configured bread
+  tiers (the same `loadTierConfigs` source as other games, excluding the synthetic big tier).
+  Owner overrides obey the same eligibility gate. Already persisted weekly draws stay stable
+  (including historical weeks used by the winner cron), preserving D133.
+- All M3 art is inline flat SVG in `M3Art.tsx`; the hub loaf icon is in `GameIcon.tsx`.
+- `tests/e2e/m3.spec.ts` mocks all API requests and exercises the real engine at 320/390 px.
+  Browser execution is intentionally left to Claude; add the real-server spec after S2 merges.
+
+Verification: `npm run test:unit -- --configLoader runner`, `npx tsc --noEmit`, `npm run lint`,
+`npm run fonts`. No production database is needed for these checks.

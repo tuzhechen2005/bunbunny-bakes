@@ -378,6 +378,24 @@ export const copy = {
       capReached: "点击次数已到上限，本局结束",
     },
 
+    m3: {
+      title: "兔兔三连烤",
+      pageTitle: "兔兔三连烤",
+      startHint: "交换相邻面包，连成 3 个就消掉",
+      rules: "滑动或点两个相邻面包。30 步比分，完成订单加分；连 4 得擀面杖，连 5 得大面包。没路可走会自动洗牌。",
+      unavailable: "面包还没备齐，稍后再来",
+      boardLabel: "三连烤棋盘",
+      tileLabel: "第 {r} 行第 {c} 格，{name}{special}",
+      roll: "，擀面杖",
+      big: "，大面包",
+      movesLeft: "剩余步数",
+      score: "得分",
+      orders: "订单",
+      orderNeed: "消掉 {n} 个",
+      reward: "+{n}",
+      progress: "{have}/{need}",
+    },
+
     /** `/orders`: the orders opened on this phone (D84). */
     myOrders: {
       pageTitle: "我的订单",
