@@ -26,16 +26,17 @@ export interface BatchSpec {
 }
 
 /**
- * Batch n uses BATCHES[n - 1]; every batch after the last repeats the last one. The curve (D128):
- * batches 1-2 are a warm-up (few breads, shallow, little hidden), batch 3 is the wall (all 8
- * breads, 5 layers, ~40% of the tiles hidden under others, triples spread wide).
+ * Batch n uses BATCHES[n - 1]; every batch after the last repeats the last one. The curve (D130):
+ * batch 1 is a warm-up (few breads, 2 layers, ~8% hidden), batch 2 has 4 layers and ~25% hidden,
+ * batch 3 on is the wall (all 8 breads, 8 layers, ~55% of the tiles hidden, triples spread wide).
+ * Changing it changes every board: bump TU_ENGINE_VERSION (engine.ts).
  */
 export const BATCHES: readonly BatchSpec[] = [
   { tiers: 4, layers: 2, tiles: 24, spread: 2 },
-  { tiers: 4, layers: 2, tiles: 30, spread: 2 },
-  { tiers: 8, layers: 5, tiles: 72, spread: 4 },
-  { tiers: 8, layers: 6, tiles: 84, spread: 4 },
-  { tiers: 8, layers: 6, tiles: 90, spread: 4 },
+  { tiers: 5, layers: 4, tiles: 36, spread: 3 },
+  { tiers: 8, layers: 8, tiles: 96, spread: 4 },
+  { tiers: 8, layers: 8, tiles: 108, spread: 4 },
+  { tiers: 8, layers: 8, tiles: 120, spread: 4 },
 ];
 
 // Tuning guard: `spread` must stay 1-4 (= BAG_SIZE - 2). With 5 open triples of one tile each the

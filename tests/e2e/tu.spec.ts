@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { copy } from "../../src/copy";
-import { createTuGame, replayTu } from "../../src/lib/tu";
+import { createTuGame, PROP_BONUS_POINTS, replayTu, TU_ENGINE_VERSION } from "../../src/lib/tu";
 import { greedyTu, randomTu } from "../support/tuBot";
 import { screensDir } from "./support/screensDir";
 
@@ -15,6 +15,7 @@ import { mockGameHub } from "./support/gameHub";
 const g = copy.customer.game;
 const PHOTO = readFileSync("tests/fixtures/bun.jpg");
 const MOCK_PHOTO = /\/api\/images\/mock\/|%2Fapi%2Fimages%2Fmock%2F/;
+const TU_SAVE_KEY = `bb_tu_save_v${TU_ENGINE_VERSION}`;
 const SEED = "seed-tu-e2e";
 
 const COLORS = ["#DCC5BB", "#F0BF45", "#CFDDEA", "#B05219", "#C9D8B6", "#E8B4B8", "#D9C7E8", "#F2E3B3"];
@@ -139,7 +140,7 @@ test("tiles are at least 44 px and nothing scrolls sideways at 320 px", async ({
 test("a tap moves the tile into the bag; a greedy bot packs, fills an order and reaches the next 炉", async ({ page }) => {
   test.setTimeout(240_000);
   await mockApi(page);
-  const bot = greedyTu(SEED, TIERS);
+  const bot = greedyTu(SEED, TIERS, { props: false }); // tile taps only
   await page.goto("/game/tu");
   await startGame(page);
   await expect(page.getByTestId("tu-bag")).toHaveAttribute("aria-label", /装了 0 个/);
@@ -174,7 +175,7 @@ test("a tap moves the tile into the bag; a greedy bot packs, fills an order and 
 
 test("save and resume: reload, 继续上一局 shows the last score and the same board", async ({ page }) => {
   await mockApi(page);
-  const bot = greedyTu(SEED, TIERS);
+  const bot = greedyTu(SEED, TIERS, { props: false }); // tile taps only
   await page.goto("/game/tu");
   await startGame(page);
   await tapAll(page, bot.taps.slice(0, 8).map((x) => x.id));
@@ -192,12 +193,12 @@ test("save and resume: reload, 继续上一局 shows the last score and the same
   await expect.poll(flat).toBe(score);
   // Play on after the resume.
   await tapAll(page, bot.taps.slice(8, 10).map((x) => x.id));
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("bb_tu_save_v1")!).taps.length)).toBe(10);
+  expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).taps.length, TU_SAVE_KEY)).toBe(10);
 });
 
 test("exit asks: 保存进度再走 keeps the run, 不保存 deletes it; 重新开始 asks first", async ({ page }) => {
   await mockApi(page);
-  const bot = greedyTu(SEED, TIERS);
+  const bot = greedyTu(SEED, TIERS, { props: false }); // tile taps only
   await page.goto("/game/tu");
   await startGame(page);
   await tapAll(page, bot.taps.slice(0, 3).map((x) => x.id));
@@ -211,14 +212,15 @@ test("exit asks: 保存进度再走 keeps the run, 不保存 deletes it; 重新�
   await page.getByTestId("tu-exit").click();
   await page.getByTestId("tu-exit-discard").click();
   await expect(page.getByTestId("tu-menu-start")).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem("bb_tu_save_v1"))).toBeNull();
+  expect(await page.evaluate((key) => localStorage.getItem(key), TU_SAVE_KEY)).toBeNull();
 });
 
 test("an expired save is not offered", async ({ page }) => {
   await mockApi(page);
   await page.goto("/game/tu");
-  await page.evaluate(() =>
-    localStorage.setItem("bb_tu_save_v1", JSON.stringify({ v: 1, runId: "x", seed: "s", tiers: new Array(4).fill({}), taps: [{ id: 1, at: 200 }], nickname: "a", expiresAt: "2020-01-01T00:00:00Z", score: 10 })),
+  await page.evaluate(
+    (key) => localStorage.setItem(key, JSON.stringify({ v: 1, runId: "x", seed: "s", tiers: new Array(4).fill({}), taps: [{ id: 1, at: 200 }], nickname: "a", expiresAt: "2020-01-01T00:00:00Z", score: 10 })),
+    TU_SAVE_KEY,
   );
   await page.reload();
   await expect(page.getByTestId("tu-menu-start")).toBeVisible();
@@ -255,13 +257,13 @@ test("a random player runs out of bag: result sheet with the server score, close
   await expect(page.getByTestId("game-all-time")).toBeVisible();
   await page.getByTestId("tu-board-close").click();
   await expect(sheet).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem("bb_tu_save_v1"))).toBeNull();
+  expect(await page.evaluate((key) => localStorage.getItem(key), TU_SAVE_KEY)).toBeNull();
 });
 
 test("reduced motion: no animation classes on packs", async ({ page }) => {
   await mockApi(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const bot = greedyTu(SEED, TIERS);
+  const bot = greedyTu(SEED, TIERS, { props: false }); // tile taps only
   await page.goto("/game/tu");
   await startGame(page);
   let animated = false;
@@ -278,8 +280,8 @@ test("a saved run that is already over resumes into the result flow and is submi
   const taps = bot.taps.map((x, i) => ({ id: x.id, at: (i + 1) * 200 }));
   await page.goto("/game/tu");
   await page.evaluate(
-    (save) => localStorage.setItem("bb_tu_save_v1", JSON.stringify(save)),
-    { v: 1, runId: "run-over", seed: SEED, tiers: TIERS, taps, nickname: "小面包", expiresAt: "2099-01-01T00:00:00Z", score: bot.score },
+    ({ key, save }) => localStorage.setItem(key, JSON.stringify(save)),
+    { key: TU_SAVE_KEY, save: { v: 1, runId: "run-over", seed: SEED, tiers: TIERS, taps, nickname: "小面包", expiresAt: "2099-01-01T00:00:00Z", score: bot.score } },
   );
   await page.reload();
   await page.getByTestId("tu-resume").click();
@@ -287,5 +289,10 @@ test("a saved run that is already over resumes into the result flow and is submi
   await expect(page.getByTestId("tu-confirmed")).toBeVisible();
   expect(api.finishes).toHaveLength(1);
   expect(api.finishes[0].runId).toBe("run-over");
-  expect(await page.evaluate(() => localStorage.getItem("bb_tu_save_v1"))).toBeNull();
+  const resumed = createTuGame({ seed: SEED, tiers: TIERS });
+  for (const tap of taps) resumed.tap(tap.id);
+  const state = resumed.state();
+  const bonus = PROP_BONUS_POINTS * state.batch * Object.values(state.props).reduce((sum, n) => sum + n, 0);
+  await expect(page.getByTestId("tu-bonus")).toHaveText(`没用的道具 +${bonus}`);
+  expect(await page.evaluate((key) => localStorage.getItem(key), TU_SAVE_KEY)).toBeNull();
 });

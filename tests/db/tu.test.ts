@@ -12,7 +12,7 @@ import { POST as bigFinishPOST } from "@/app/api/game/finish/route";
 import { GET as leaderboardGET } from "@/app/api/game/tu/leaderboard/route";
 import { POST as finishPOST } from "@/app/api/game/tu/finish/route";
 import { POST as startPOST } from "@/app/api/game/tu/start/route";
-import { createTuGame, MAX_TAPS, MIN_TAP_GAP_MS, type TuTap } from "@/lib/tu";
+import { createTuGame, MAX_TAPS, MIN_TAP_GAP_MS, tuSeed, type TuTap } from "@/lib/tu";
 import { prisma } from "@/server/db";
 import { finishRun, getLeaderboard, PLAUSIBILITY_SLACK_MS, START_LIMIT_PER_HOUR, startRun } from "@/server/game";
 import { cleanup } from "@/server/maintenance";
@@ -76,7 +76,7 @@ describe("start", () => {
     const ids = await createDefaultProducts();
     const r = await start();
     expect(Object.keys(r).sort()).toEqual(["expiresAt", "runId", "seed", "tiers"]);
-    expect(r.seed).toMatch(/^[0-9a-f]{32}$/);
+    expect(r.seed).toMatch(/^v2\.[0-9a-f]{32}$/);
     expect(r.expiresAt).toBe("2026-10-26T05:00:00.000Z");
     expect(r.tiers.map((t) => t.id)).toEqual([ids.redBean, ids.rockCheese, ids.cheeseHorn, ids.brulee]);
     for (const t of r.tiers) expect(Object.keys(t).sort()).toEqual(["color", "id", "imageUrl", "name", "points", "radius"]);
@@ -138,12 +138,14 @@ describe("finish", () => {
     await createDefaultProducts();
     const run = await start();
     // D127: a completed game well below MAX_TAPS, with human-paced tap gaps.
-    const seed = "tu-finish";
+    const seed = tuSeed("7e57f1a5");
     await db.gameRun.update({ where: { id: run.runId }, data: { seed } });
     const bot = play({ ...run, seed });
-    bot.taps = bot.taps.map((tap, i) => ({ id: tap.id, at: (i + 1) * 500 }));
+    bot.taps = bot.taps.map((tap, i) => ({ ...tap, at: (i + 1) * 500 }));
     expect(bot.over).toBe(true);
-    expect(bot.taps).toHaveLength(114);
+    // C8: the log mixes tile taps and prop uses.
+    expect(bot.taps.filter((t) => "p" in t).length).toBeGreaterThan(0);
+    expect(bot.taps).toHaveLength(59);
     const res = await finishTuRun(db, { runId: run.runId, taps: bot.taps, score: 999_999 }, IP, LATER);
     expect(res).toEqual({
       score: bot.score,
@@ -225,11 +227,56 @@ describe("finish", () => {
     await expect(finishTuRun(db, { runId: run.runId, taps }, IP, LATER)).resolves.toBeDefined();
   });
 
+  it("rejects malformed or unusable prop entries (C8) with VALIDATION and leaves the run open", async () => {
+    await createDefaultProducts();
+    const run = await start();
+    const free = createTuGame({ seed: run.seed, tiers: run.tiers }).state().tiles.find((t) => t.free)!.id;
+    const bad: unknown[] = [
+      [{ p: "shuffle", at: 500 }], // not one of our props
+      [{ p: "peek", id: free, at: 500 }], // both kinds at once
+      [{ p: "peek", at: 500, extra: 1 }], // unknown key
+      [{ p: "peek" }], // no time
+      [{ p: "peek", at: 500 }, { p: "peek", at: 1000 }], // only one peek at the start
+      [{ p: "bag", at: 500 }, { p: "bag", at: 1000 }], // the extra slot once per batch
+      [{ id: free, at: 500 }, { p: "swap", at: 500 }], // not increasing across kinds
+      [{ p: "peek", at: 500 }, { id: free, at: 550 }], // gap under MIN_TAP_GAP_MS across kinds
+    ];
+    for (const b of bad) {
+      await expect(finishTuRun(db, { runId: run.runId, taps: b }, IP, LATER), JSON.stringify(b)).rejects.toMatchObject({ code: "VALIDATION" });
+    }
+    expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).finishedAt).toBeNull();
+    const ok = [{ p: "peek", at: 500 }, { id: free, at: 1000 }, { p: "bag", at: 1500 }, { p: "swap", at: 2000 }];
+    const want = createTuGame({ seed: run.seed, tiers: run.tiers });
+    want.use("peek");
+    want.tap(free);
+    expect((await finishTuRun(db, { runId: run.runId, taps: ok }, IP, LATER)).score).toBe(want.score);
+    const row = await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } });
+    expect(row).toMatchObject({ drops: ok, dropCount: 4, playMs: 2000 });
+  });
+
+  it("a run dealt by an older engine version (plain hex seed from before C8) can no longer be finished", async () => {
+    await createDefaultProducts();
+    const run = await start();
+    // What a run started before the deploy looks like: a 32-hex seed without the version prefix.
+    const oldSeed = "0123456789abcdef0123456789abcdef";
+    await db.gameRun.update({ where: { id: run.runId }, data: { seed: oldSeed } });
+    // Even a log that is valid for that seed under today's engine is refused, so nothing replays wrongly.
+    const { taps } = greedyTu(oldSeed, run.tiers, 20);
+    await expect(finishTuRun(db, { runId: run.runId, taps }, IP, LATER)).rejects.toMatchObject({
+      code: "VALIDATION",
+      message: "这一局已经过期，请重新开始",
+    });
+    expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).finishedAt).toBeNull();
+    // A future version is refused the same way.
+    await db.gameRun.update({ where: { id: run.runId }, data: { seed: `v99.${oldSeed}` } });
+    await expect(finishTuRun(db, { runId: run.runId, taps }, IP, LATER)).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+
   it(`rejects two taps closer than ${MIN_TAP_GAP_MS} ms; exactly ${MIN_TAP_GAP_MS} is fine`, async () => {
     await createDefaultProducts();
     const run = await start();
     const { taps } = play(run, 10);
-    const spaced = (gap: number) => taps.map((t, i) => ({ id: t.id, at: 1000 + i * gap }));
+    const spaced = (gap: number) => taps.map((t, i) => ({ ...t, at: 1000 + i * gap }));
     const tooFast = spaced(MIN_TAP_GAP_MS).map((t, i) => (i === 5 ? { ...t, at: t.at - 1 } : t));
     await expect(finishTuRun(db, { runId: run.runId, taps: tooFast }, IP, LATER)).rejects.toMatchObject({
       code: "VALIDATION",
@@ -297,7 +344,7 @@ describe("suspicious flag (D103 manual check)", () => {
   it("a fast (but plausible) run is stored with suspicious = true and still counts on the board", async () => {
     await createDefaultProducts();
     const run = await start("wx_fast", "Fast");
-    const fast = play(run).taps.map((t, i) => ({ id: t.id, at: i * 200 }));
+    const fast = play(run).taps.map((t, i) => ({ ...t, at: i * 200 }));
     const res = await finishTuRun(db, { runId: run.runId, taps: fast }, IP, LATER);
     expect(res.rank).toBe(1);
     expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).suspicious).toBe(true);

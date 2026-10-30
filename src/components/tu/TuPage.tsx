@@ -88,6 +88,7 @@ export function TuPage() {
   const progress = useRef<TuProgress>({ taps: [], score: 0 });
   const [finish, setFinish] = useState<Finish>({ state: "submitting" });
   const [finalScore, setFinalScore] = useState(0);
+  const [bonus, setBonus] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [boardVersion, setBoardVersion] = useState(0);
   const [boardFrom, setBoardFrom] = useState<"menu" | "over">("menu");
@@ -234,6 +235,7 @@ export function TuPage() {
       clearTuSave();
       progress.current = p;
       setFinalScore(p.score);
+      setBonus(p.bonus ?? 0);
       setPhase("over");
       if (!submitted.current.has(runId.current)) void submit(runId.current, p.taps);
       timers.current.push(setTimeout(() => setSheetOpen(true), reduced ? 0 : SHEET_DELAY_MS));
@@ -556,6 +558,11 @@ export function TuPage() {
           <p className="font-num m-0 text-center text-[56px] leading-[1.1]" data-testid="tu-final-score">
             {shownScore}
           </p>
+          {bonus > 0 ? (
+            <p className="m-0 text-center text-sm text-c-grey" data-testid="tu-bonus">
+              {fill(t.bonus, { n: String(bonus) })}
+            </p>
+          ) : null}
           <div className="mt-2 min-h-[72px] text-center" aria-live="polite" data-testid="tu-finish">
             {finish.state === "submitting" ? (
               <p className="m-0 text-sm text-c-grey">{g.submitting}</p>

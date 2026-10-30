@@ -1,8 +1,9 @@
-// 兔了个兔 tuning: plays the (information-limited) random, greedy and digger bots over many seeds and prints how far they get.
+// 兔了个兔 tuning: plays the (information-limited) bots over many seeds and prints how far they get.
 // Usage: npx tsx scripts/tu-tune.mts [seeds=200] [tierCount=8]
 
 import { BATCHES, dealBatch, isHidden } from "../src/lib/tu/deal";
-import { diggerTu, greedyTu, randomTu } from "../tests/support/tuBot";
+import { diggerTu, greedyTu, randomTu, type TuBotResult } from "../tests/support/tuBot";
+import type { TuTierInput } from "../src/lib/tu";
 
 const seeds = Number(process.argv[2] ?? 200);
 const tierCount = Number(process.argv[3] ?? 8);
@@ -20,7 +21,7 @@ const hist = (a: number[]) => {
 
 console.log(`seeds=${seeds} tiers=${tierCount}`);
 console.log(`batches=${JSON.stringify(BATCHES)}`);
-const hiddenShare = BATCHES.map((_, i) => {
+const hiddenShare = [...BATCHES, BATCHES[BATCHES.length - 1]].map((_, i) => {
   let hidden = 0;
   let all = 0;
   for (let s = 0; s < 100; s++) {
@@ -31,18 +32,21 @@ const hiddenShare = BATCHES.map((_, i) => {
   return `${i + 1}:${Math.round((100 * hidden) / all)}%`;
 });
 console.log(`hidden at deal (per batch) ${hiddenShare.join(" ")}`);
-for (const [name, bot] of [
-  ["random", randomTu],
-  ["greedy", greedyTu],
-  ["digger", diggerTu],
-] as const) {
+const bots: [string, (seed: string, tiers: readonly TuTierInput[]) => TuBotResult][] = [
+  ["random", (s, t) => randomTu(s, t)],
+  ["greedy-noprops", (s, t) => greedyTu(s, t, { props: false })],
+  ["greedy", (s, t) => greedyTu(s, t)],
+  ["digger", (s, t) => diggerTu(s, t)],
+];
+for (const [name, bot] of bots) {
   const runs = Array.from({ length: seeds }, (_, i) => bot(`tune${i}`, tiers));
   const batch = runs.map((r) => r.batch);
   const score = runs.map((r) => r.score);
   const taps = runs.map((r) => r.taps.length);
+  const props = runs.map((r) => r.taps.filter((e) => "p" in e).length);
   console.log(
-    `${name.padEnd(6)} batch reached p10/p50/p90 ${pct(batch, 0.1)}/${pct(batch, 0.5)}/${pct(batch, 0.9)} [${hist(batch)}]` +
+    `${name.padEnd(14)} batch p10/p50/p90 ${pct(batch, 0.1)}/${pct(batch, 0.5)}/${pct(batch, 0.9)} [${hist(batch)}]` +
       ` | score p10/p50/p90 ${pct(score, 0.1)}/${pct(score, 0.5)}/${pct(score, 0.9)} max ${Math.max(...score)}` +
-      ` | taps p50 ${pct(taps, 0.5)}`,
+      ` | taps p50 ${pct(taps, 0.5)} | props used p50 ${pct(props, 0.5)}`,
   );
 }
