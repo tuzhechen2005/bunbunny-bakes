@@ -1,5 +1,7 @@
 // C8 (D131, D132): typed prop events and the shared tap/prop log.
 import { TU_PROPS, type TuEvent, type TuProp, type TuState } from "@/lib/tu";
+import { copy } from "@/copy";
+import { fill } from "@/components/customer/format";
 
 export type PropKind = TuProp;
 export const PROP_KINDS = TU_PROPS;
@@ -24,4 +26,13 @@ export function propEvents(events: readonly TuEvent[]): PropEvents {
     else if (e.type === "bonus") out.bonus += e.points;
   }
   return out;
+}
+
+/** Only actual gain events add a prop to the order-complete popup (D141). */
+export function orderCompleteText(points: number | null, events: readonly TuEvent[]): string {
+  const t = copy.customer.tu;
+  const reward = points === null ? "" : fill(t.orderDone, { n: String(points) });
+  const gained = propEvents(events).gained;
+  const names = gained.map((p) => t.propNames[p]).join("、");
+  return [reward, names ? fill(t.gainProp, { name: names }) : ""].filter(Boolean).join("　");
 }
