@@ -7,9 +7,9 @@ const st = (extra: object = {}) => ({ batch: 1, tiles: [], bag: [], orders: [0, 
 
 describe("tu props (C8) feature detection", () => {
   it("an engine without use / props means no props bar", () => {
-    const g = createTuGame({ seed: "s", tiers: [{ id: "a" }, { id: "b" }, { id: "c" }] });
-    expect(propsOf(g.state())).toBeNull();
-    expect(canUse(g) && "use" in g).toBe(canUse(g));
+    expect(propsOf(st())).toBeNull();
+    expect(canUse({ ...createTuGame({ seed: "s", tiers: [{ id: "a" }, { id: "b" }, { id: "c" }] }), use: undefined } as never)).toBe(false);
+    expect(canUse(null)).toBe(false);
     expect(bagSizeOf(st(), 6)).toBe(6);
     expect(rewardsOf(st())).toBeNull();
   });
