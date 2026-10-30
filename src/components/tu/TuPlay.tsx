@@ -10,7 +10,7 @@ import { createTuGame, MIN_TAP_GAP_MS, type TuEvent, type TuGame, type TuState }
 import { haptic } from "@/lib/motion/react";
 import { photoUrl } from "@/lib/photo";
 import type { TuTapLog } from "./tuApi";
-import { isPropEntry, propEvents, PROP_KINDS, type PropCounts, type PropKind } from "./tuProps";
+import { isPropEntry, orderCompleteText, propEvents, PROP_KINDS, type PropCounts, type PropKind } from "./tuProps";
 import { isVisible, revealedIds } from "./tuVisible";
 import "./tu.css";
 
@@ -266,7 +266,7 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
         setView((v) => (v ? { ...v, toast: { k, text } } : v));
         later(() => setView((v) => (v && v.toast?.k === k ? { ...v, toast: null } : v)), 2200);
       };
-      let rewardText = "";
+      let rewardPoints: number | null = null;
       for (const ev of events) {
         if (!alive.current) return;
         if (ev.type === "move") {
@@ -302,7 +302,7 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
             });
           } else {
             const pts = view0.current?.rewards[ev.index];
-            if (pts != null) rewardText = fill(t.orderDone, { n: String(pts) });
+            if (pts != null) rewardPoints = pts;
             setView((v) => {
               if (!v) return v;
               const orders: [number, number] = [...v.orders];
@@ -327,10 +327,7 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
         }
       }
       if (swapping) later(() => setView((v) => (v ? { ...v, swapped: false } : v)), 700);
-      if (pe.gained.length) {
-        const names = pe.gained.map((k) => t.propNames[k]).join("、");
-        rewardText = [rewardText, fill(t.gainProp, { name: names })].filter(Boolean).join("　");
-      }
+      const rewardText = orderCompleteText(rewardPoints, events);
       if (rewardText) toast(rewardText);
       if (!alive.current) return;
       if (hasBatch) lock.current = false;

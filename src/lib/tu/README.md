@@ -4,7 +4,7 @@ Pure TS, deterministic: integer maths and the seeded PRNG from `src/lib/game/rng
 `Date.now`, no `Math.random`, no floats that could round differently). The client plays it, the
 server re-plays the log with `replayTu`, and both get the same score. No DOM, no server code.
 
-Decisions: D121–D124, D128 (hidden tiles), D130 (curve), D131 (props), D132 (order rewards) in
+Decisions: D121–D124, D128 (hidden tiles), D130 (curve), D131 (props), D132 (order rewards), D141 (prop cap) in
 `docs/DECISIONS.md`.
 
 ## API
@@ -34,7 +34,7 @@ interface TuState {
   bag: number[]; // tier per slot, ≤ bagSize, equal tiers next to each other
   orders: [number, number]; // tier each customer wants (3 of it)
   orderPoints: [number, number]; // bonus each order pays when filled = ORDER_POINTS × batch (the card's 「+N」, D132)
-  props: { peek: number; bag: number; swap: number }; // props left
+  props: { peek: number; bag: number; swap: number }; // props left, 0..MAX_PROPS_PER_TYPE (2) per type
   bagSize: 6 | 7; // 7 after the "bag" prop, until the next batch is dealt
   score: number;
   over: boolean;
@@ -67,7 +67,7 @@ A tap returns, in this order:
 | `pack` | `tier, slot, points, order` | the 3 tiles at `slot..slot+2` were packed (later slots shift left by 3); `points` includes the order bonus; `order` = it filled an order |
 | `reveal` | `tiles` | ids (deal order) of tiles that were hidden before this tap and are visible now; only when non-empty; never the tiles of a newly dealt batch |
 | `order` | `index, tier` | order `index` (0/1) now wants `tier`: first the filled order, then (after a deal) orders whose bread is not on the new board |
-| `gain` | `p` | right after the filled order's `order` event: every `PROP_EVERY_ORDERS`-th (3rd) filled order grants one prop, chosen by the seeded RNG |
+| `gain` | `p` | right after the filled order's `order` event: every `PROP_EVERY_ORDERS`-th (3rd) filled order draws one prop with the seeded RNG; emitted only if that type is below `MAX_PROPS_PER_TYPE` (2) |
 | `batch` | `batch, bonus` | the board was cleared: `bonus` points for it, batch `batch` (the new number) is dealt |
 | `bagSize` | `size` | after `batch`, only when the extra slot was in use: the bag is back to 6 |
 | `bonus` | `points` | the game ended: `PROP_BONUS_POINTS × batch` (50) per unused prop; always sent (may be 0), right before `over` |
@@ -82,7 +82,7 @@ the game is over (hidden tiles are never free). A tap that ends the game still m
 nothing) for an unknown prop, none left, game over, or "bag" while the extra slot is already in
 use this batch.
 
-## Rules (D122, D131)
+## Rules (D122, D131, D141)
 
 - Bag of 6. When a move makes 3 of a tier, they pack at once. A move that leaves `bagSize` in
   the bag without a pack ends the game.
@@ -96,7 +96,10 @@ use this batch.
   (+30), clearing a batch `BATCH_POINTS × batch` (+100, the cleared batch's number), at the end
   `PROP_BONUS_POINTS × batch` (+50) per unused prop.
 - Props (D131, our own; no shuffle, undo or taking tiles out of the bag): 1 of each at the start
-  (`START_PROPS`), +1 random one every 3rd filled order.
+  (`START_PROPS`), one seeded random draw every 3rd filled order. D141 caps each type at
+  `MAX_PROPS_PER_TYPE` (2): a full type grants nothing, consumes the RNG draw, and is never
+  rerolled. No `gain` event is emitted, so the order-complete popup shows only the order points.
+  Spending a prop makes room for future draws of that type.
   - `peek`: the engine only spends it; the UI shows all hidden tiles for 3 s.
   - `bag`: `bagSize` 7 for the rest of this batch (once per batch; back to 6 when the next batch
     is dealt).
@@ -151,9 +154,9 @@ entries and a last `at` beyond the real elapsed time plus slack.
 
 ### Engine version (C8)
 
-`TU_ENGINE_VERSION` (3) changes whenever a rules change would make an old log score differently
-(this one: the higher tap cap changes when the unused-prop end bonus is paid). The server starts every run with `tuSeed(hex)` =
-`v3.<hex>`, and `finishTuRun` refuses (422 「这一局已经过期，请重新开始」) a run whose
+`TU_ENGINE_VERSION` (4) changes whenever a rules change would make an old log score differently
+(this one: D141 caps prop inventory, changing later uses and the unused-prop end bonus). The server starts every run with `tuSeed(hex)` =
+`v4.<hex>`, and `finishTuRun` refuses (422 「这一局已经过期，请重新开始」) a run whose
 `tuSeedVersion(seed)` is not the current one; seeds from before versioning are plain hex =
 version 1. So a run started before a deploy can simply not be finished (it would expire at the
 weekly reset anyway and is cleaned up as an unfinished run) instead of being replayed under new
@@ -170,7 +173,9 @@ starts a bread only when 3 are in reach, avoids filling the bag, counts partly c
 tiles a little and prefers order breads; with props (default) it takes the extra slot when every
 move would end the game, peeks before a risky move (no pack available, bag 2 short of full) and
 swaps when neither order's bread can be seen. `diggerTu` is greedy plus a preference for tiles
-lying on many visible tiles (a stronger player). With 8 tiers over 1000 seeds (end batch):
+lying on many visible tiles (a stronger player). Bots read the current engine inventory before
+using a prop, so they respect D141 without keeping their own grant counters. The following
+historical D131 baseline predates the D141 cap (8 tiers, 1000 seeds, end batch):
 
 | bot | p10 / p50 / p90 | distribution |
 | --- | --- | --- |
@@ -179,7 +184,7 @@ lying on many visible tiles (a stronger player). With 8 tiers over 1000 seeds (e
 | greedy, props | 3 / 3 / 5 | ≤2: 8.7%, 3: 62.2%, 4: 17.5%, ≥5: 11.6% (props used p50: 4) |
 | digger, props | 3 / 6 / 18 | long tail, 9% reach batch 19+ |
 
-`tuTuning.test.ts` pins these bounds (200 seeds). With 4 or fewer tiers the game is much easier
+`tuTuning.test.ts` checks the broad game-length bounds with the current rules (200 seeds). With 4 or fewer tiers the game is much easier
 (with 2 tiers the bag can never fill and the game always runs to `MAX_TAPS`).
 
 `hashTuState(state)` (FNV-1a) is for pinned vectors and debugging.

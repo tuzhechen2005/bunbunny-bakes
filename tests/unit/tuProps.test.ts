@@ -6,6 +6,7 @@ import {
   dealBatch,
   hashTuState,
   MAX_TAPS,
+  MAX_PROPS_PER_TYPE,
   ORDER_POINTS,
   PROP_BONUS_POINTS,
   PROP_EVERY_ORDERS,
@@ -21,6 +22,7 @@ import {
   type TuProp,
 } from "@/lib/tu";
 import { greedyTu, randomTu } from "../support/tuBot";
+import { createRng } from "@/lib/game/rng";
 
 const tiersOf = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `t${i}` }));
 const TIERS = tiersOf(8);
@@ -157,11 +159,55 @@ describe("use()", () => {
 });
 
 describe("earning props and the end bonus", () => {
-  it(`every ${PROP_EVERY_ORDERS}rd filled order grants one prop (seeded), right after that order's event`, () => {
+  it.each(["capped0", "capped1", "capped2"])("caps each type at 2, skips full draws without rerolling, refills spent props and replays: %s", (seed) => {
+    expect(MAX_PROPS_PER_TYPE).toBe(2);
+    const tiers = tiersOf(2); // The bag cannot fill: reach many grants without spending props.
+    const g = createTuGame({ seed, tiers });
+    const rng = createRng(`${seed}:tu:props`);
+    const log: TuLogEntry[] = [];
+    let filled = 0;
+    let skipped = 0;
+    let skippedWithRoom = 0;
+    let refilled = 0;
+    for (let i = 0; i < 600; i++) {
+      if (i === 300) {
+        expect(g.state().props).toEqual({ peek: 2, bag: 2, swap: 2 });
+        for (let j = 0; j < 2; j++) {
+          expect(g.use("peek")).not.toBeNull();
+          log.push({ p: "peek", at: log.length * 500 });
+        }
+      }
+      const before = g.state().props;
+      const id = firstFree(g);
+      const ev = g.tap(id)!;
+      log.push({ id, at: log.length * 500 });
+      if (ev.some((e) => e.type === "pack" && e.order)) filled++;
+      const due = ev.some((e) => e.type === "pack" && e.order) && filled % PROP_EVERY_ORDERS === 0;
+      const picked = due ? TU_PROPS[rng.int(TU_PROPS.length)] : null;
+      const granted = picked !== null && before[picked] < 2 ? picked : null;
+      expect(ev.filter((e) => e.type === "gain")).toEqual(granted ? [{ type: "gain", p: granted }] : []);
+      for (const p of TU_PROPS) {
+        expect(g.state().props[p]).toBe(before[p] + (granted === p ? 1 : 0));
+        expect(g.state().props[p]).toBeLessThanOrEqual(2);
+      }
+      if (picked && !granted) {
+        skipped++;
+        if (Object.values(before).some((n) => n < 2)) skippedWithRoom++;
+      }
+      if (i >= 300 && granted === "peek") refilled++;
+    }
+    expect(skipped).toBeGreaterThan(0);
+    expect(skippedWithRoom).toBeGreaterThan(0);
+    expect(refilled).toBe(2);
+    expect(replayTu(seed, tiers, log)).toEqual({ score: g.score, batch: g.batch, over: g.over, taps: g.taps });
+  });
+
+  it(`every ${PROP_EVERY_ORDERS}rd filled order draws one prop (seeded), granted only below the cap`, () => {
     const kinds = new Set<TuProp>();
     let gains = 0;
     for (let seed = 0; seed < 60; seed++) {
       const g = createTuGame({ seed: `gain${seed}`, tiers: TIERS });
+      const rng = createRng(`gain${seed}:tu:props`);
       let filled = 0;
       for (const t of greedyTu(`gain${seed}`, TIERS).taps) {
         const before = g.state().props;
@@ -170,8 +216,14 @@ describe("earning props and the end bonus", () => {
         const pack = ev.find((e) => e.type === "pack");
         if (pack?.type === "pack" && pack.order) filled++;
         const gain = ev.filter((e) => e.type === "gain") as Extract<TuEvent, { type: "gain" }>[];
-        const wantGain = pack?.type === "pack" && pack.order && filled % PROP_EVERY_ORDERS === 0;
+        const due = pack?.type === "pack" && pack.order && filled % PROP_EVERY_ORDERS === 0;
+        const picked = due ? TU_PROPS[rng.int(TU_PROPS.length)] : null;
+        const wantGain = picked !== null && before[picked] < 2;
         expect(gain).toHaveLength(wantGain ? 1 : 0);
+        if (wantGain) {
+          expect(gain[0].p).toBe(picked);
+          expect(ev[ev.indexOf(gain[0]) - 1].type).toBe("order");
+        }
         const used = "p" in t ? t.p : null;
         for (const p of TU_PROPS) {
           const delta = (gain[0]?.p === p ? 1 : 0) - (used === p ? 1 : 0);
@@ -279,15 +331,14 @@ describe("replay of mixed logs (C8)", () => {
     }).toMatchInlineSnapshot(`
       {
         "batch": 3,
-        "hash": "fd258f9a",
+        "hash": "bc4188e5",
         "props": [
           "peek",
           "bag",
           "peek",
-          "peek",
         ],
-        "score": 2540,
-        "taps": 107,
+        "score": 2390,
+        "taps": 106,
       }
     `);
   });
@@ -295,10 +346,10 @@ describe("replay of mixed logs (C8)", () => {
 
 describe("engine version (C8)", () => {
   it(`is ${TU_ENGINE_VERSION}, and new seeds carry it; plain hex seeds are version 1`, () => {
-    expect(TU_ENGINE_VERSION).toBe(3);
+    expect(TU_ENGINE_VERSION).toBe(4);
     const s = tuSeed("0123456789abcdef0123456789abcdef");
-    expect(s).toBe("v3.0123456789abcdef0123456789abcdef");
-    expect(tuSeedVersion(s)).toBe(3);
+    expect(s).toBe("v4.0123456789abcdef0123456789abcdef");
+    expect(tuSeedVersion(s)).toBe(4);
     expect(tuSeedVersion("0123456789abcdef0123456789abcdef")).toBe(1);
     expect(tuSeedVersion("v3.abc")).toBe(3);
     expect(tuSeedVersion("v2.")).toBe(1);
