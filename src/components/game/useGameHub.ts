@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { localDateOf } from "@/domain/dates";
 import type { GameHub } from "@/lib/gameCatalog";
 import { call } from "./gameApi";
 
-/** Refresh on return to the page; failed requests never advertise an unconfirmed prize. */
+/** Refresh on return; keep a confirmed prize through failures only within its own week. */
 export function useGameHub(enabled = true) {
   const [data, setData] = useState<GameHub | null>(null);
   const [error, setError] = useState(false);
@@ -20,7 +21,11 @@ export function useGameHub(enabled = true) {
       const id = ++request;
       const result = await call<GameHub>("/api/game/hub");
       if (!alive || id !== request) return;
-      setData(result.ok ? result.data : null);
+      setData((previous) => {
+        if (result.ok) return result.data;
+        const today = localDateOf(new Date());
+        return previous && previous.week.start <= today && today <= previous.week.end ? previous : null;
+      });
       setError(!result.ok);
     };
     void load();

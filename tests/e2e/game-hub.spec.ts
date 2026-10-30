@@ -76,6 +76,61 @@ for (const prizeGame of ["BIG", "TU"] as const) {
   });
 }
 
+for (const width of [320, 390]) {
+  for (const [kind, href, id] of [["BIG", "/game", "game"], ["TU", "/game/tu", "tu"]] as const) {
+    test(`${kind} at ${width}px: delayed and failed hub requests keep the menu stable`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.clock.setFixedTime(new Date("2026-10-30T12:00:00Z"));
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.route("**/api/menu", (r) => r.fulfill({ json: { products: [] } }));
+      let release!: () => void;
+      const pending = new Promise<void>((resolve) => { release = resolve; });
+      let requests = 0;
+      await page.route("**/api/game/hub", async (r) => {
+        requests++;
+        if (requests === 1) {
+          await pending;
+          await r.fulfill({ json: hubFixture(kind) });
+        } else {
+          await r.fulfill({ status: 500, json: {} });
+        }
+      });
+      await page.goto(href);
+      await expect.poll(() => requests).toBe(1);
+      await page.evaluate(() => document.fonts.ready);
+      const start = page.getByTestId(`${id}-menu-start`);
+      const before = await start.boundingBox();
+      await expect(page.getByTestId(`${id}-prize-line`)).toHaveCount(0);
+      release();
+      await expect(page.getByTestId(`${id}-prize-line`)).toBeVisible();
+      expect(await start.boundingBox()).toEqual(before);
+
+      const failed = page.waitForResponse("**/api/game/hub");
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await failed;
+      await expect(page.getByTestId(`${id}-prize-line`)).toBeVisible();
+      expect(await start.boundingBox()).toEqual(before);
+
+      // A failed refresh in a new week must not keep advertising last week's prize.
+      await page.clock.setFixedTime(new Date("2026-11-02T12:00:00Z"));
+      const nextWeekFailure = page.waitForResponse("**/api/game/hub");
+      await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+      await nextWeekFailure;
+      await expect(page.getByTestId(`${id}-prize-line`)).toHaveCount(0);
+      expect(await start.boundingBox()).toEqual(before);
+
+      // A fresh visit with no confirmed prize still leaves a usable, stable menu.
+      const freshFailure = page.waitForResponse("**/api/game/hub");
+      await page.reload();
+      await freshFailure;
+      await expect(page.getByTestId(`${id}-prize-line`)).toHaveCount(0);
+      expect(await start.boundingBox()).toEqual(before);
+      await start.click();
+      await expect(start).toHaveCount(0);
+    });
+  }
+}
+
 test("owner override updates the hub and persists after reload", async ({ page, context, baseURL }) => {
   await resetAndSeed();
   const token = await createAdminSession("e2e-s4");

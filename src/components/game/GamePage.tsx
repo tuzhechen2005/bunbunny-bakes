@@ -304,9 +304,14 @@ export function GamePage() {
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
           <h2 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.startTitle}</h2>
           <p className="m-0 mt-2 text-sm leading-relaxed text-c-grey">{t.startHint}</p>
-          {hasPrize ? <p className="font-display m-0 mt-6 text-center text-[15px] leading-snug text-c-ink" data-testid="game-prize-line">
+          {/* Keep the full line's space, including wrapping, while the hub loads or fails. */}
+          <p
+            className={`font-display m-0 mt-6 text-center text-[15px] leading-snug text-c-ink ${hasPrize ? "" : "invisible"}`}
+            aria-hidden={!hasPrize}
+            data-testid={hasPrize ? "game-prize-line" : undefined}
+          >
             {t.prizeLine}
-          </p> : null}
+          </p>
           <div className="mt-4 flex flex-col gap-3">
             {save ? (
               <>

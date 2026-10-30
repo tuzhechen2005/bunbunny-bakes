@@ -10,11 +10,9 @@ export function databaseName(url: string): string {
 
 function checkTestDb(url: string, envName: string): string {
   const name = databaseName(url);
-  const host = new URL(url).hostname;
-  const assignedLocalDb = name === "bunbunny_codex_s4" && ["localhost", "127.0.0.1", "[::1]"].includes(host);
-  if (!/^[A-Za-z0-9_]+_test$/.test(name) && !assignedLocalDb) {
+  if (!/^[A-Za-z0-9_]+_test$/.test(name)) {
     throw new Error(
-      `Refusing to run db tests against "${name}" (${envName}): use a *_test database or the assigned local S4 database.`,
+      `Refusing to run db tests against "${name}" (${envName}): the test database name must end in "_test".`,
     );
   }
   return url;
