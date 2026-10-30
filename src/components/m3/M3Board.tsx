@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { fill } from "@/components/customer/format";
 import { sound } from "@/components/game/sound";
 import type { TierView } from "@/components/game/types";
@@ -40,6 +40,14 @@ export function M3Board({ tiers, seed, initialMoves = [], soundOn, reduced, onPr
   const board = useRef<HTMLDivElement>(null);
   const reported = useRef(false);
   const quiet = reduced || degraded;
+
+  // Consecutive frames can reuse an animation name. Restart the CSS animation while
+  // keeping BreadFace mounted, including its failed-image fallback state.
+  useLayoutEffect(() => {
+    board.current?.querySelectorAll<HTMLElement>(".m3-piece").forEach(piece => {
+      piece.getAnimations().forEach(animation => { animation.currentTime = 0; });
+    });
+  }, [frame, invalid]);
 
   useEffect(() => {
     clock.current = { base: moves.current.at(-1)?.at ?? 0, start: Date.now() };
@@ -104,8 +112,14 @@ export function M3Board({ tiers, seed, initialMoves = [], soundOn, reduced, onPr
     if (!el) return;
     let gesture: { a: M3Cell; x: number; y: number; direction: SwipeDirection | null; dragged: boolean; dx: number; dy: number } | null = null;
     let suppressClickUntil = 0;
+    const cancel = () => {
+      gesture = null;
+      setSelected(null);
+      suppressClickUntil = Date.now() + 500;
+    };
     const start = (e: TouchEvent) => {
-      if (e.touches.length !== 1 || locked.current || game.over) { gesture = null; return; }
+      if (e.touches.length !== 1) { cancel(); return; }
+      if (locked.current || game.over) { gesture = null; return; }
       const target = (e.target as Element).closest<HTMLElement>("[data-cell]");
       if (!target) return;
       const [r, c] = target.dataset.cell!.split(",").map(Number);
@@ -114,10 +128,14 @@ export function M3Board({ tiers, seed, initialMoves = [], soundOn, reduced, onPr
     };
     const move = (e: TouchEvent) => {
       if (!gesture) return;
-      if (e.touches.length !== 1) { gesture = null; return; }
+      if (e.touches.length !== 1) { cancel(); return; }
       gesture.dx = e.touches[0].clientX - gesture.x; gesture.dy = e.touches[0].clientY - gesture.y;
       gesture.direction ??= swipeDirection(gesture.dx, gesture.dy);
-      if (gesture.direction) { e.preventDefault(); gesture.dragged = true; }
+      if (gesture.direction) {
+        e.preventDefault();
+        if (!gesture.dragged) setSelected(null);
+        gesture.dragged = true;
+      }
     };
     const end = () => {
       if (gesture?.dragged && gesture.direction) {
@@ -129,7 +147,6 @@ export function M3Board({ tiers, seed, initialMoves = [], soundOn, reduced, onPr
       }
       gesture = null;
     };
-    const cancel = () => { gesture = null; suppressClickUntil = Date.now() + 500; };
     const click = (e: MouseEvent) => { if (Date.now() < suppressClickUntil) { e.preventDefault(); e.stopPropagation(); } };
     el.addEventListener("touchstart", start, { passive: true });
     el.addEventListener("touchmove", move, { passive: false });
@@ -176,7 +193,7 @@ export function M3Board({ tiers, seed, initialMoves = [], soundOn, reduced, onPr
         if (event?.type === "special" && sameCell(event.cell, p)) effect = "m3-flash";
         const tier = tiers[tierOf(code)];
         return <div key={`${r}-${c}`} className="m3-cell" style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%` }}>
-          {code >= 0 && <span key={frame ? `${frame.before.movesLeft}-${frame.index}` : "idle"} className={`m3-piece ${effect} ${!quiet && hint && (sameCell(hint.a, p) || sameCell(hint.b, p)) ? "m3-hint" : ""}`} style={{ "--dx": `${dx}%`, "--dy": `${dy}%`, "--duration": `${invalid ? 360 : frame?.ms ?? 180}ms` } as CSSProperties}>
+          {code >= 0 && <span className={`m3-piece ${effect} ${!quiet && hint && (sameCell(hint.a, p) || sameCell(hint.b, p)) ? "m3-hint" : ""}`} style={{ "--dx": `${dx}%`, "--dy": `${dy}%`, "--duration": `${invalid ? 360 : frame?.ms ?? 180}ms` } as CSSProperties}>
             <BreadFace key={tier.id} tier={tier} />
             {code >= ROLL_BASE ? <SpecialMark kind={code >= BIG_BASE ? "big" : "roll"} /> : null}
           </span>}
