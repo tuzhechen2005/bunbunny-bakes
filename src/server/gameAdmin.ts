@@ -439,9 +439,9 @@ interface RawRun {
 
 const lc = (s: string) => s.toLowerCase();
 
-/** 消除大面包: simulated steps of 1/120 s; 兔了个兔: the last tap's client time. */
+/** 消除大面包: simulated steps of 1/120 s; TU/M3: the last tap/move's client time. */
 function durationSecOf(game: GameKind, r: RawRun): number | null {
-  if (game === "TU") return r.playMs === null ? null : Math.round(r.playMs / 1000);
+  if (game === "TU" || game === "M3") return r.playMs === null ? null : Math.round(r.playMs / 1000);
   return r.simSteps === null ? null : Math.round(r.simSteps / 120);
 }
 
@@ -460,13 +460,13 @@ export const weekQuerySchema = z
   .string()
   .refine((v) => isLocalDate(v) && weekdayOf(v) === 1, { message: "Invalid week" });
 
-/** `?game=` of the admin game endpoints: `tu` = 兔了个兔, `big` or absent = 消除大面包. */
+/** `?game=` of the admin game endpoints: `tu` = 兔了个兔, `m3` = 兔兔三连烤, `big` or absent = 消除大面包. */
 export const gameQuerySchema = z
-  .enum(["big", "tu"])
+  .enum(["big", "tu", "m3"])
   .optional()
-  .transform((g): GameKind => (g === "tu" ? "TU" : "BIG"));
+  .transform((g): GameKind => (g === "m3" ? "M3" : g === "tu" ? "TU" : "BIG"));
 
-/** The game of an admin request's `?game=` (VALIDATION for anything but big / tu). */
+/** The game of an admin request's `?game=` (VALIDATION for anything but big / tu / m3). */
 export function gameOfRequest(request: Request): GameKind {
   const r = gameQuerySchema.safeParse(new URL(request.url).searchParams.get("game") ?? undefined);
   if (!r.success) throw invalid(copy.errors.VALIDATION, "game");

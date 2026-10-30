@@ -174,11 +174,11 @@
 
 服务端导出（给后台用）：`hasOrdered(db, wechatId)`（不区分大小写，存在状态不是 CANCELLED/REJECTED 的订单），`isBanned(db, wechatId)`，`maskWechat`，`weekKeyOf`、`weekRange`（`gameWeek.ts`）。
 
-**后台排行榜接口**（`/api/admin/game/*`，需要登录 + Origin 检查，写入都记 AuditLog）。都接受 `?game=tu`（兔了个兔）或 `?game=big` / 不带（消除大面包，默认）；其他值 `422 VALIDATION`。禁止名单两个游戏共用（`/bans` 不看 `game`）。
+**后台排行榜接口**（`/api/admin/game/*`，需要登录 + Origin 检查，写入都记 AuditLog）。都接受 `?game=m3`（兔兔三连烤）、`?game=tu`（兔了个兔）或 `?game=big` / 不带（消除大面包，默认）；其他值 `422 VALIDATION`。禁止名单三个游戏共用（`/bans` 不看 `game`）。
 
-- `GET /leaderboard?week=&game=` → `{ week, currentWeek, weeks, rows: [{ id, wechatId, nickname, score, finishedAt, verified, hidden, banned, ordered, dropCount, durationSec, suspicious, rank }], winner, bans }`，只含这个游戏的局和有局的周。兔了个兔：`dropCount` = 点击次数，`durationSec` = 最后一次点击的 `at` / 1000；`suspicious`（见下）。消除大面包的 `suspicious` 恒为 `false`。
+- `GET /leaderboard?week=&game=` → `{ week, currentWeek, weeks, rows: [{ id, wechatId, nickname, score, finishedAt, verified, hidden, banned, ordered, dropCount, durationSec, suspicious, rank }], winner, bans }`，只含这个游戏的局和有局的周。兔了个兔：`dropCount` = 点击次数，`durationSec` = 最后一次点击的 `at` / 1000；`suspicious`（见下）。兔兔三连烤：`dropCount` = 交换步数，`durationSec` = 最后一步 `at` / 1000 四舍五入到秒。消除大面包的 `suspicious` 恒为 `false`。
 - `PATCH /runs/{id}?game=` `{ hidden }`：这一局必须属于这个游戏，否则 `404`。
-- `PATCH /award?game=` `{ week, contacted?, redeemed?, note? }`：每个游戏每周一条 `GameAward`；兔了个兔的审计 `entityId` 为 `TU:<week>`。
+- `PATCH /award?game=` `{ week, contacted?, redeemed?, note? }`：每个游戏每周一条 `GameAward`；兔了个兔的审计 `entityId` 为 `TU:<week>`，兔兔三连烤为 `M3:<week>`。
 
 ### 兔了个兔（D121–D124，`/api/game/tu/**`，公开，C6）
 
@@ -200,6 +200,27 @@
 - 频率：`tu_finish_ip:<ipHash>`，每小时 60 次。
 
 **`GET /api/game/tu/leaderboard?wechatId=`** → 和 `/api/game/leaderboard` 同形状（`week, top, lastWinner, allTime, myBest?`），只算兔了个兔的局；`lastWinner` 看兔了个兔自己的 `GameAward`。
+
+### 兔兔三连烤（D135，S2，`/api/game/m3/**`，公开）
+
+服务端 `src/server/m3.ts`，引擎 `src/lib/m3/`。昵称/微信校验、共用封禁名单、周一 Chicago 00:00 过期、隐藏成绩、幂等提交、脱敏周榜、👑 历史最高和奖励资格沿用 TU。三个成功响应均为 `Cache-Control: no-store`。S2 仅开放服务端和后台，**不加入大厅和随机奖品池**，公开页面与启用由 S3 完成。
+
+**`POST /api/game/m3/start`** `{ wechatId, nickname }` → `201 { runId, seed, tiers, expiresAt }`
+
+- `tiers` 与 BIG 的 `TierView` 相同，按配置 `sortOrder` 取非大面包的前 6 种；沿用 BIG 的默认商品配置回退。少于 `M3_MIN_TIERS = 6` → `422 VALIDATION`「兔兔三连烤还没准备好，请稍后再来」，不建局；不使用引擎支持的 4/5 种模式参与排名。
+- 将这六种的完整有序配置保存为 `tiersSnapshot`；重放严格使用其中的六个 id，不重读、重排或重新截取当前配置。
+- `m3Seed` 生成 `v<M3_ENGINE_VERSION>.<32 位随机十六进制>`（当前版本 1）。未完成局缺少版本或版本不匹配 → finish `422 VALIDATION`「这一局已经过期，请重新开始」。
+- start 请求体 ≤ 4096 bytes；`m3_start_ip:<ipHash>` 每小时 60 次。
+
+**`POST /api/game/m3/finish`** `{ runId, moves: [{ a: { r, c }, b: { r, c }, at }] }` → `200 { score, best, rank, week, personalBest, newRecord }`
+
+- 最多 `MAX_MOVES = 30` 步；`r,c` 为 0–7 整数，`at` 为非负安全整数毫秒（从开局算起），首步可为 0。每个 move 和坐标对象禁止额外字段。服务端从头 `replayM3`，忽略客户端分数；非法交换、无消除的交换、超限、非递增时间等 → `422 VALIDATION`，保持未完成。空记录、未玩完的记录也可计分。
+- 相邻步至少 `MIN_MOVE_GAP_MS = 150` ms，末步 `at` ≤ 真实经过时间 + 10000 ms。保存 `drops = moves`、`dropCount = moves.length`、`playMs = 末步 at`（空记录为 0），`simSteps` 留空。
+- `suspicious` 仅当相邻步间隔中位数 < `M3_SUSPICIOUS_MEDIAN_GAP_MS = 400` ms；不足两步为 false，正常完成 30 步不自动标记。可疑局仍上榜，由店主发奖前核查。
+- 已完成局返回第一次保存的结果；并发 finish 只有一次写入。BIG/TU 的 runId → `404 NOT_FOUND`，反向同理。
+- `m3_finish_ip:<ipHash>` 每小时 60 次；JSON 请求体上限 `ceil(MAX_MOVES × 60 bytes × 1.25) + 4096`，当前 **6346 bytes**；沿用 TU 的 `readGameJson` 检查 Content-Length 和解析前文本长度。
+
+**`GET /api/game/m3/leaderboard?wechatId=`** → `{ week, top, lastWinner, allTime, myBest? }`，与 TU 同形状；也支持 `x-game-wechat`。只查询 M3 成绩与奖励，每个微信号取最高，大小写不敏感，同分先完成优先；隐藏/封禁排除，公开微信号脱敏。
 
 ### POST /api/assistant（小小🐰，D117、D118）
 

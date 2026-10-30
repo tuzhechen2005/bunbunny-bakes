@@ -20,6 +20,12 @@ Use the first six bread tiers, or all when there are four/five. Fewer than four 
 `RangeError` (including through replay: configuration error). IDs are presentation metadata;
 only the selected tier count affects simulation. Supply bread tiers in configured order.
 
+The S2 ranked server requires exactly six (`M3_MIN_TIERS = 6`), snapshots their ids in
+that order, and replays that exact snapshot even after configuration changes. Fewer than six
+returns unavailable; the four/five-tier engine modes above are for local simulations only.
+`m3Seed(hex)` embeds `M3_ENGINE_VERSION`; `m3SeedVersion(seed)` returns null for
+unversioned/malformed seeds, which the server refuses to finish.
+
 `state()` returns a fresh, fully detached snapshot:
 
 - `board`: 8×8 row-major numbers; top-left is `{ r: 0, c: 0 }`.
@@ -118,7 +124,7 @@ move may be at zero. Empty logs and unfinished prefixes are valid. `M3ReplayErro
 nonarrays, more than 30 moves (necessarily also a move after over), malformed entries or
 coordinates, invalid times, non-increasing times, short gaps, and illegal swaps. Because the
 only ending condition is move 30, every move-after-over log is caught by the length check.
-Server wall-clock plausibility, run ownership, and persistence belong to the later server task.
+Server wall-clock plausibility, run ownership, and persistence live in `src/server/m3.ts` (S2).
 
 `legalM3Moves(state)` lists legal swaps in row-major order, right before down, once per pair;
 returns none after over. `immediateM3Score(state, a, b)` computes only the first wave's visible
