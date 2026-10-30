@@ -77,7 +77,7 @@ describe("start", () => {
     const ids = await createDefaultProducts();
     const r = await start();
     expect(Object.keys(r).sort()).toEqual(["expiresAt", "runId", "seed", "tiers"]);
-    expect(r.seed).toMatch(/^v3\.[0-9a-f]{32}$/);
+    expect(r.seed).toMatch(/^v4\.[0-9a-f]{32}$/);
     expect(r.expiresAt).toBe("2026-10-26T05:00:00.000Z");
     expect(r.tiers.map((t) => t.id)).toEqual([ids.redBean, ids.rockCheese, ids.cheeseHorn, ids.brulee]);
     for (const t of r.tiers) expect(Object.keys(t).sort()).toEqual(["color", "id", "imageUrl", "name", "points", "radius"]);
@@ -146,7 +146,7 @@ describe("finish", () => {
     expect(bot.over).toBe(true);
     // C8: the log mixes tile taps and prop uses.
     expect(bot.taps.filter((t) => "p" in t).length).toBeGreaterThan(0);
-    expect(bot.taps).toHaveLength(267);
+    expect(bot.taps).toHaveLength(58);
     const res = await finishTuRun(db, { runId: run.runId, taps: bot.taps, score: 999_999 }, IP, LATER);
     expect(res).toEqual({
       score: bot.score,
@@ -268,8 +268,8 @@ describe("finish", () => {
       message: "这一局已经过期，请重新开始",
     });
     expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).finishedAt).toBeNull();
-    // The previous 2000-entry cap paid an end bonus at a different point.
-    await db.gameRun.update({ where: { id: run.runId }, data: { seed: `v2.${oldSeed}` } });
+    // Version 3 allowed uncapped props, so later uses and the end bonus may differ.
+    await db.gameRun.update({ where: { id: run.runId }, data: { seed: `v3.${oldSeed}` } });
     await expect(finishTuRun(db, { runId: run.runId, taps: [] }, IP, LATER)).rejects.toMatchObject({
       code: "VALIDATION", message: "这一局已经过期，请重新开始",
     });

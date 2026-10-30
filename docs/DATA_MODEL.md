@@ -182,9 +182,11 @@
 
 **GameTier**：店主配置的等级（最多 8 档面包 + 大面包，D107）。`id`、`productId`（→ Product，商品被删时置空）、`sortOrder`（从小到大）、`imageUrl`（去掉白底的图，可空，空则用商品封面）、`name`（可空，1–12 字符：游戏专用面包的名字，或覆盖商品名）、`fieldColor`（可空，`#RRGGBB`，有 CHECK：游戏专用面包的底色，或覆盖商品颜色；空 = 商品颜色，再空 = 预设色轮换）、`isBig`（大面包那一行，logo 图）、`createdAt`、`updatedAt`。非大面包且 `productId` 为空 = 游戏专用面包（商品被删后留下的等级也一样，名字可能为空，后台提示要先起名字）。没有任何配置时用在售商品作默认。
 
-**GameRun**：一局。`id`、`seed`、`wechatId`、`nickname`、`tiersSnapshot`（开始时的等级配置，JSON）、`startedAt`、`finishedAt`（可空；有值说明已验证并保存）、`score`（服务器重放得到）、`drops`（通过验证的投放记录，JSON）、`dropCount`、`simSteps`（模拟步数，时长 = simSteps / 120 秒，后台给店主看）、`weekKey`（完成时所在周的周一，America/Chicago，`YYYY-MM-DD`；一局只能在开始后的下一个周一 0:00 之前完成，所以也是开始的那一周，D111）、`ipHash`（24 小时后由定时清理置空）、`hidden`（店主隐藏，默认 false）、`game`（`GameKind`：`BIG` 消除大面包，默认；`TU` 兔了个兔，D124）、`playMs`（仅兔了个兔：最后一次点击的客户端毫秒）、`suspicious`（仅兔了个兔：点满 20000 次或点击间隔中位数 < 300 ms，后台标出给店主人工确认，照常上榜，D103）。兔了个兔的局 `drops` 存点击记录 `[{ id, at }]`、`dropCount` 为点击次数、`simSteps` 为空；`tiersSnapshot` 只有面包等级（没有大面包）。索引：`(game, weekKey, score desc)`、`wechatId`、`lower(wechatId)`、`startedAt`。
+**GameRun**：一局。`id`、`seed`、`wechatId`、`nickname`、`tiersSnapshot`（开始时的等级配置，JSON）、`startedAt`、`finishedAt`（可空；有值说明已验证并保存）、`score`（服务器重放得到）、`drops`（通过验证的投放记录，JSON）、`dropCount`、`simSteps`（模拟步数，时长 = simSteps / 120 秒，后台给店主看）、`weekKey`（完成时所在周的周一，America/Chicago，`YYYY-MM-DD`；一局只能在开始后的下一个周一 0:00 之前完成，所以也是开始的那一周，D111）、`ipHash`（24 小时后由定时清理置空）、`hidden`（店主隐藏，默认 false）、`game`（`GameKind`：`BIG` 消除大面包，默认；`TU` 兔了个兔，D124；`M3` 兔兔三连烤，D135）、`playMs`（仅兔了个兔：最后一次点击的客户端毫秒）、`suspicious`（仅兔了个兔：点满 20000 次或点击间隔中位数 < 300 ms，后台标出给店主人工确认，照常上榜，D103）。兔了个兔的局 `drops` 存点击记录 `[{ id, at }]`、`dropCount` 为点击次数、`simSteps` 为空；`tiersSnapshot` 只有面包等级（没有大面包）。索引：`(game, weekKey, score desc)`、`wechatId`、`lower(wechatId)`、`startedAt`。
 
 **GameBan**：被禁的微信号，`wechatId`、`reason`、`createdAt`。唯一性不区分大小写（数据库里 `lower("wechatId")` 的唯一索引，Prisma 里写不出来，只在迁移 SQL 里）；查询用 `mode: "insensitive"`。
+
+**M3（S2 / D135）**：迁移 `20261030200000_game_kind_m3` 只执行 `ALTER TYPE "GameKind" ADD VALUE 'M3'`，不重写已有局、奖励或奖品周。M3 复用 `GameRun` / `GameAward`：`seed` 带 `M3_ENGINE_VERSION`；`tiersSnapshot` 存开局时 BIG 非大面包的前六种配置，保留精确 id 顺序，少于六种不建局。`drops` 存 `[{ a: { r, c }, b: { r, c }, at }]`，`dropCount` 为交换步数（0–30），`playMs` 为末步客户端毫秒（空记录 0），`simSteps` 为空。`suspicious` 仅表示间隔中位数 < 400 ms，照常上榜。`weekKey`、隐藏、封禁、并发幂等和每游戏每周奖励规则同 TU。限流 key 为 `m3_start_ip:<ipHash>` / `m3_finish_ip:<ipHash>`，各每小时 60 次。S2 的大厅和随机奖品池仍只有 BIG/TU。
 
 **GamePrizeWeek**（D133）：`weekKey` 主键（America/Chicago 周一，`YYYY-MM-DD`）、`game`（`GameKind`）、`chosenBy`（`GamePrizeChosenBy` 枚举：`RANDOM` / `OWNER`）、`createdAt`（timestamptz，覆盖时保留）。首次请求该周时用 crypto 均匀选择已启用游戏，排除上周；全局事务 advisory lock 串行化周抽取与店主覆盖，主键保证每周只有一行。部署后补取缺失的已结束周时，也排除已经选好的下一周；如果两侧 OWNER 选择冲突，优先排除上一周。店主可以明确重复上周游戏，之后的自动抽取仍排除这个最终选择。
 
@@ -192,7 +194,7 @@
 
 **GameAward**：每个游戏每周一条，`game`（同上，默认 `BIG`）、`weekKey`（`(game, weekKey)` 唯一）、`runId`（→ GameRun，Restrict）、`contactedAt`、`redeemedAt`、`note`。
 
-后台对这些表的写入都写 AuditLog（后台页面任务负责）。游戏接口使用 `RateLimitHit`，key 为 `game_start_ip:<ipHash>`、`game_finish_ip:<ipHash>`（兔了个兔：`tu_start_ip:`、`tu_finish_ip:`），窗口 1 小时。迁移 `20261028120000_game_kind` 只加列：已有的局和奖励都是 `BIG`；`GameBan` 两个游戏共用。
+后台对这些表的写入都写 AuditLog（后台页面任务负责）。游戏接口使用 `RateLimitHit`，key 为 `game_start_ip:<ipHash>`、`game_finish_ip:<ipHash>`（兔了个兔：`tu_start_ip:`、`tu_finish_ip:`），窗口 1 小时。迁移 `20261028120000_game_kind` 只加列：已有的局和奖励都是 `BIG`；`GameBan` 三个游戏共用。
 
 ## 2. 订单状态机
 

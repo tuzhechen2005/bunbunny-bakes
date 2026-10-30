@@ -45,7 +45,7 @@ export interface TuState {
   orders: [number, number];
   /** Bonus points each order pays when filled, on top of the pack's points (D132: 「+N」). */
   orderPoints: [number, number];
-  /** Props left (D131). */
+  /** Props left, at most MAX_PROPS_PER_TYPE of each (D131, D141). */
   props: Record<TuProp, number>;
   /** Bag slots: BAG_SIZE (6), or 7 after the "bag" prop until the next batch is dealt. */
   bagSize: 6 | 7;
@@ -62,7 +62,7 @@ export type TuEvent =
   | { type: "reveal"; tiles: number[] }
   /** Order `index` now wants `tier`. */
   | { type: "order"; index: 0 | 1; tier: number }
-  /** Every PROP_EVERY_ORDERS-th filled order grants one prop (seeded choice). */
+  /** A seeded prop draw was granted; full types are skipped without a gain event (D141). */
   | { type: "gain"; p: TuProp }
   /** Batch `batch` was dealt after the previous one was cleared; `bonus` points for clearing it. */
   | { type: "batch"; batch: number; bonus: number }
@@ -94,7 +94,7 @@ export const MAX_TIERS = 8;
  * new run's seed (tuSeed), so the server refuses to finish a run dealt under another version, and
  * part of the client's save key, so old saves are dropped.
  */
-export const TU_ENGINE_VERSION = 3;
+export const TU_ENGINE_VERSION = 4;
 /** The engine ends the game after this many log entries (taps + prop uses), so client and server agree. */
 export const MAX_TAPS = 20_000;
 /** Plausibility for the server: two log entries closer than this (ms) are not a human. */
@@ -108,8 +108,10 @@ export const ORDER_POINTS = 30;
 export const BATCH_POINTS = 100;
 /** End bonus per unused prop, x the batch the game ended in (D131). */
 export const PROP_BONUS_POINTS = 50;
-/** Every this many filled orders grant one prop (D131). */
+/** Every this many filled orders draw one prop; full types are skipped (D131, D141). */
 export const PROP_EVERY_ORDERS = 3;
+/** Maximum inventory of each prop type (D141). */
+export const MAX_PROPS_PER_TYPE = 2;
 /** Props of each kind at the start (D131). */
 export const START_PROPS = 1;
 
@@ -239,9 +241,12 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
         events.push({ type: "order", index: i, tier: orders[i] });
         filled++;
         if (filled % PROP_EVERY_ORDERS === 0) {
+          // Always consume the draw, even at cap; never reroll a full type (D141).
           const p = TU_PROPS[propRng.int(TU_PROPS.length)];
-          props[p]++;
-          events.push({ type: "gain", p });
+          if (props[p] < MAX_PROPS_PER_TYPE) {
+            props[p]++;
+            events.push({ type: "gain", p });
+          }
         }
       }
       if (dealt) {

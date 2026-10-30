@@ -368,11 +368,11 @@ describe("determinism, replay and pinned vectors", () => {
     expect({ score: bot.score, batch: bot.batch, over: bot.over, taps: bot.taps.length, hash: hashTuState(g.state()), revealed: revealed.length }).toMatchInlineSnapshot(`
       {
         "batch": 3,
-        "hash": "fd258f9a",
+        "hash": "bc4188e5",
         "over": true,
         "revealed": 53,
-        "score": 2540,
-        "taps": 107,
+        "score": 2390,
+        "taps": 106,
       }
     `);
   });
