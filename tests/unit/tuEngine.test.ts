@@ -13,6 +13,7 @@ import {
   TuReplayError,
   type TuEvent,
   type TuGame,
+  type TuLogEntry,
   type TuState,
   type TuTap,
 } from "@/lib/tu";
@@ -20,6 +21,10 @@ import { greedyTu, randomTu } from "../support/tuBot";
 
 const tiersOf = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `t${i}` }));
 const TIERS = tiersOf(8);
+/** Applies one log entry (tap or prop use) to a live game. */
+const step = (g: TuGame, e: TuLogEntry) => ("p" in e ? g.use(e.p) : g.tap(e.id));
+/** Greedy without props: every log entry is a tile tap. */
+const greedyTaps = (seed: string, maxTaps?: number) => greedyTu(seed, TIERS, { props: false, maxTaps }).taps as TuTap[];
 
 const coveredBy = (s: TuState, id: number) => {
   const t = s.tiles.find((x) => x.id === id)!;
@@ -98,9 +103,9 @@ describe("createTuGame", () => {
 describe("bag", () => {
   it("keeps equal tiers grouped, reports the slot, packs 3 at once, and never holds 6 while alive", () => {
     for (let seed = 0; seed < 60; seed++) {
-      const bot = seed % 2 ? greedyTu(`b${seed}`, TIERS, 300) : randomTu(`b${seed}`, TIERS);
+      const taps = seed % 2 ? greedyTaps(`b${seed}`, 300) : (randomTu(`b${seed}`, TIERS).taps as TuTap[]);
       const g = createTuGame({ seed: `b${seed}`, tiers: TIERS });
-      for (const tap of bot.taps) {
+      for (const tap of taps) {
         const before = g.state().bag;
         const ev = g.tap(tap.id)!;
         const after = g.state();
@@ -136,8 +141,8 @@ describe("bag", () => {
     expect(bot.over).toBe(true);
     const g = createTuGame({ seed: "over", tiers: TIERS });
     let last: TuEvent[] = [];
-    for (const t of bot.taps) last = g.tap(t.id)!;
-    expect(last.map((e) => e.type)).toEqual(["move", "over"]);
+    for (const t of bot.taps) last = step(g, t)!;
+    expect(last.map((e) => e.type)).toEqual(["move", "bonus", "over"]);
     expect(g.state().bag).toHaveLength(BAG_SIZE);
     const free = g.state().tiles.find((t) => t.free)!;
     expect(g.tap(free.id)).toBeNull();
@@ -168,13 +173,14 @@ describe("scoring and orders", () => {
     }
   });
 
-  it("score always equals the sum of pack points and batch bonuses", () => {
+  it("score always equals the sum of pack points, batch bonuses and the end bonus", () => {
     for (let seed = 0; seed < 40; seed++) {
       const bot = greedyTu(`sum${seed}`, TIERS);
       const g = createTuGame({ seed: `sum${seed}`, tiers: TIERS });
       let sum = 0;
       for (const t of bot.taps)
-        for (const e of g.tap(t.id)!) sum += e.type === "pack" ? e.points : e.type === "batch" ? e.bonus : 0;
+        for (const e of step(g, t)!)
+          sum += e.type === "pack" ? e.points : e.type === "batch" ? e.bonus : e.type === "bonus" ? e.points : 0;
       expect(sum).toBe(g.score);
       expect(g.score).toBe(bot.score);
     }
@@ -184,8 +190,7 @@ describe("scoring and orders", () => {
     let hits = 0;
     for (let seed = 0; seed < 60; seed++) {
       const g = createTuGame({ seed: `ord${seed}`, tiers: TIERS });
-      const bot = greedyTu(`ord${seed}`, TIERS, 400);
-      for (const t of bot.taps) {
+      for (const t of greedyTaps(`ord${seed}`, 400)) {
         const before = g.state().orders;
         const ev = g.tap(t.id)!;
         const s = g.state();
@@ -220,16 +225,22 @@ describe("scoring and orders", () => {
     expect(hits).toBeGreaterThan(100);
   });
 
-  it("events come in the order move, pack, reveal, order*, batch, over", () => {
-    const rank = { move: 0, pack: 1, reveal: 2, order: 3, batch: 4, over: 5 };
-    for (let seed = 0; seed < 20; seed++) {
+  it("tap events come in the order move, pack, reveal, order/gain*, batch, bagSize, bonus, over; prop events start with prop", () => {
+    const rank = { prop: 0, move: 0, pack: 1, reveal: 2, order: 3, gain: 3, batch: 4, bagSize: 5, bonus: 6, over: 7 };
+    const seen = new Set<string>();
+    for (let seed = 0; seed < 30; seed++) {
       const g = createTuGame({ seed: `ev${seed}`, tiers: TIERS });
       for (const t of greedyTu(`ev${seed}`, TIERS).taps) {
-        const r = g.tap(t.id)!.map((e) => rank[e.type]);
-        expect(r[0]).toBe(0);
+        const ev = step(g, t)!;
+        ev.forEach((e) => seen.add(e.type));
+        const r = ev.map((e) => rank[e.type]);
+        expect(ev[0].type).toBe("p" in t ? "prop" : "move");
         expect([...r].sort((a, b) => a - b)).toEqual(r);
+        // A gain comes right after the order event of the order that earned it.
+        ev.forEach((e, i) => e.type === "gain" && expect(ev[i - 1].type).toBe("order"));
       }
     }
+    expect([...seen].sort()).toEqual(Object.keys(rank).sort());
   });
 });
 
@@ -251,7 +262,7 @@ describe("hidden tiles (C7, D128)", () => {
     let partly = 0;
     for (let seed = 0; seed < 40; seed++) {
       const g = createTuGame({ seed: `vis${seed}`, tiers: TIERS });
-      for (const tap of greedyTu(`vis${seed}`, TIERS, 250).taps) {
+      for (const tap of greedyTaps(`vis${seed}`, 250)) {
         const s = g.state();
         for (const t of s.tiles) {
           expect(t.visible).toBe(!hiddenByPoints(s, t.id));
@@ -281,7 +292,7 @@ describe("hidden tiles (C7, D128)", () => {
     let reveals = 0;
     for (let seed = 0; seed < 40; seed++) {
       const g = createTuGame({ seed: `rev${seed}`, tiers: TIERS });
-      for (const tap of greedyTu(`rev${seed}`, TIERS).taps) {
+      for (const tap of greedyTaps(`rev${seed}`)) {
         const before = g.state();
         const ev = g.tap(tap.id)!;
         const after = g.state();
@@ -318,7 +329,7 @@ describe("determinism, replay and pinned vectors", () => {
     const a = createTuGame({ seed: "det", tiers: TIERS });
     const b = createTuGame({ seed: "det", tiers: TIERS });
     for (const t of bot.taps) {
-      expect(a.tap(t.id)).toEqual(b.tap(t.id));
+      expect(step(a, t)).toEqual(step(b, t));
       expect(hashTuState(a.state())).toBe(hashTuState(b.state()));
     }
     expect(hashTuState(createTuGame({ seed: "det2", tiers: TIERS }).state())).not.toBe(
@@ -348,19 +359,19 @@ describe("determinism, replay and pinned vectors", () => {
   });
 
   it("pinned vector: dealt board and a greedy game never change", () => {
-    expect(hashTuState(createTuGame({ seed: "pinned", tiers: TIERS }).state())).toMatchInlineSnapshot(`"9c40bc97"`);
+    expect(hashTuState(createTuGame({ seed: "pinned", tiers: TIERS }).state())).toMatchInlineSnapshot(`"e3b5a02c"`);
     const bot = greedyTu("pinned", TIERS);
     const g = createTuGame({ seed: "pinned", tiers: TIERS });
     const revealed: number[] = [];
-    for (const t of bot.taps) for (const e of g.tap(t.id)!) if (e.type === "reveal") revealed.push(...e.tiles);
+    for (const t of bot.taps) for (const e of step(g, t)!) if (e.type === "reveal") revealed.push(...e.tiles);
     expect({ score: bot.score, batch: bot.batch, over: bot.over, taps: bot.taps.length, hash: hashTuState(g.state()), revealed: revealed.length }).toMatchInlineSnapshot(`
       {
         "batch": 3,
-        "hash": "0298e30c",
+        "hash": "fd258f9a",
         "over": true,
-        "revealed": 32,
-        "score": 2350,
-        "taps": 108,
+        "revealed": 53,
+        "score": 2540,
+        "taps": 107,
       }
     `);
   });
@@ -374,7 +385,7 @@ describe("determinism, replay and pinned vectors", () => {
 describe("replay errors", () => {
   const seed = "err";
   const bot = randomTu(seed, TIERS);
-  const ok = bot.taps;
+  const ok = bot.taps as TuTap[];
   const s0 = createTuGame({ seed, tiers: TIERS }).state();
   const covered = s0.tiles.find((t) => !t.free)!.id;
   const expectErr = (taps: unknown, msg: RegExp) => {
@@ -395,7 +406,7 @@ describe("replay errors", () => {
     expectErr([{ id: ok[0].id, at: -1 }], /bad tap time/);
     expectErr([{ id: ok[0].id, at: 1.5 }], /bad tap time/);
     expectErr([{ id: ok[0].id, at: Number.NaN }], /bad tap time/);
-    expectErr([{ id: ok[0].id }], /bad tap time/);
+    expectErr([{ id: ok[0].id }], /^bad tap$/);
     expectErr([ok[0], { ...ok[1], at: ok[0].at }], /not increasing/);
     expectErr([ok[0], { ...ok[1], at: ok[0].at - 1 }], /not increasing/);
     expectErr([{ id: 9999, at: 0 }], /not tappable/);
