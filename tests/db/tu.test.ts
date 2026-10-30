@@ -453,8 +453,8 @@ describe("routes", () => {
     const lres = await leaderboardGET(getRequest("/api/game/tu/leaderboard?wechatId=wx_route"));
     expect(lres.headers.get("cache-control")).toBe("no-store");
     const board = await lres.json();
-    expect(Object.keys(board).sort()).toEqual(["allTime", "lastWinner", "myBest", "top", "week"]);
-    expect(board.top[0]).toEqual({ rank: 1, nickname: "Rou", wechatMasked: "wx***te", score: bot.score });
+    expect(Object.keys(board).sort()).toEqual(["allTime", "lastWinner", "liveScores", "myBest", "top", "week"]);
+    expect(board.top[0]).toEqual({ live: false, rank: 1, nickname: "Rou", wechatMasked: "wx***te", score: bot.score });
     expect(board.allTime).toEqual({ nickname: "Rou", wechatMasked: "wx***te", score: bot.score });
     expect(board.myBest).toBe(bot.score);
     const viaHeader = await (await leaderboardGET(getRequest("/api/game/tu/leaderboard", { "x-game-wechat": "wx_route" }))).json();

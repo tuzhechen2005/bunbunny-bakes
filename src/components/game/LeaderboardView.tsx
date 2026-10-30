@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { canReportLiveScores, startVisibleRefresh } from "@/lib/liveScoreClient";
+import { LiveBadge } from "./LiveBadge";
 import { copy } from "@/copy";
 import { focusRing } from "@/components/ui/focus";
 import { fill } from "@/components/customer/format";
@@ -35,12 +37,27 @@ export function LeaderboardView({
 
   useEffect(() => {
     let alive = true;
-    fetcher(wechatId || undefined).then((r) => {
-      if (!alive) return;
-      setState(r.ok && r.data && Array.isArray(r.data.top) ? { status: "ready", data: r.data } : { status: "error" });
-    });
+    let enabled = false, busy = false;
+    const load = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        const r = await fetcher(wechatId || undefined);
+        if (!alive) return;
+        if (r.ok && r.data && Array.isArray(r.data.top)) {
+          enabled = r.data.liveScores === true;
+          setState({ status: "ready", data: r.data });
+        } else setState(previous => previous.status === "ready" ? previous : { status: "error" });
+      } finally { busy = false; }
+    };
+    void load();
+    const stop = startVisibleRefresh(() => void load(), () => document.visibilityState !== "hidden", () => enabled && canReportLiveScores());
+    const visible = () => { if (enabled && document.visibilityState !== "hidden") void load(); };
+    document.addEventListener("visibilitychange", visible);
     return () => {
       alive = false;
+      stop();
+      document.removeEventListener("visibilitychange", visible);
     };
   }, [wechatId, attempt, version, fetcher]);
 
@@ -104,6 +121,7 @@ export function LeaderboardView({
                 <b className="font-display block truncate text-[15px] text-c-ink">{row.nickname}</b>
                 <span className="font-num block text-xs text-c-grey">{row.wechatMasked}</span>
               </span>
+              {data.liveScores && row.live ? <LiveBadge /> : null}
               {hasPrize && row.rank === 1 ? (
                 <span role="img" aria-label={t.prizeMarkLabel} className="text-lg leading-none" data-testid="game-prize-mark">
                   {t.prizeMark}

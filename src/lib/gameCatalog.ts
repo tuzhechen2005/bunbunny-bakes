@@ -11,7 +11,8 @@ export const GAME_CATALOG: readonly { kind: GameKind; name: string; href: string
 ];
 
 export interface GameHub {
+  liveScores?: boolean;
   week: { start: string; end: string };
   prizeGame: GameKind;
-  games: { kind: GameKind; name: string; href: string; weekBest: number | null }[];
+  games: { kind: GameKind; name: string; href: string; weekBest: number | null; live?: boolean }[];
 }

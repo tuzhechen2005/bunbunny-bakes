@@ -264,3 +264,5 @@ NEW ──▶ CONTACTED ──▶ CONFIRMED ──▶ BAKING ──▶ READY ─
 5. **幂等**：同一个 `idempotencyKey` 并发提交 5 次 → 只生成 1 笔订单，5 次都返回同一个 `viewToken`。
 6. **跨日改单不死锁**：两个改单请求同时把 A→B、B→A 互换日期 → 都能完成或其中一个按超限拒绝，不会卡住。
 7. **seq 唯一**：并发下单后，同一天的 `seq` 连续且不重复。
+
+**S5 / D136 实时成绩**：增量迁移 `20261030210000_game_live_scores` 只为 `GameRun` 增加可空 `updatedAt`、`progressAttemptAt`（均 timestamptz(3)）。`score` 与 `drops/dropCount/simSteps/playMs/suspicious` 复用为最后一次从头验分的结果；`updatedAt` 为最后接受进度的时间，`finishedAt = null AND updatedAt != null` 表示已有未完成成绩。`progressAttemptAt` 原子限流，验证失败也计入 8 秒间隔。finish 保存最终成绩并清空 `updatedAt`，不影响原有结束幂等。`weekKey` 为开局周；旧局过周不可再改，清理仅删除没有任何验分进度的未完成局，保留已验分局供历史周榜、奖励和邮件引用。关停实时功能不删除这些记录。

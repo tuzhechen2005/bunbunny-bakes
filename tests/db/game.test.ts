@@ -408,12 +408,12 @@ describe("leaderboard", () => {
     const board = await getLeaderboard(db, T);
     expect(board.top).toHaveLength(20);
     expect(board.week).toEqual({ start: WEEK, end: "2026-10-25" });
-    expect(board.top[0]).toEqual({ rank: 1, nickname: "Nick0", wechatMasked: "pl***id", score: 1000 });
+    expect(board.top[0]).toEqual({ live: false, rank: 1, nickname: "Nick0", wechatMasked: "pl***id", score: 1000 });
     expect(board.top.map((r) => r.rank)).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
     expect(board.lastWinner).toBeNull();
     expect("myBest" in board).toBe(false);
     expect(JSON.stringify(board)).not.toContain("player_00_id");
-    for (const r of board.top) expect(Object.keys(r).sort()).toEqual(["nickname", "rank", "score", "wechatMasked"]);
+    for (const r of board.top) expect(Object.keys(r).sort()).toEqual(["live", "nickname", "rank", "score", "wechatMasked"]);
   });
 
   it("myBest for the caller's id, even when outside the top 20", async () => {
@@ -470,7 +470,7 @@ describe("routes", () => {
     expect(await fres.json()).toMatchObject({ score, best: score, rank: 1 });
     const lres = await leaderboardGET(getRequest("/api/game/leaderboard?wechatId=wx_route"));
     const board = await lres.json();
-    expect(board.top[0]).toEqual({ rank: 1, nickname: "Rou", wechatMasked: "wx***te", score });
+    expect(board.top[0]).toEqual({ live: false, rank: 1, nickname: "Rou", wechatMasked: "wx***te", score });
     expect(board.myBest).toBe(score);
     expect(lres.headers.get("cache-control")).toBe("no-store");
     const viaHeader = await (await leaderboardGET(getRequest("/api/game/leaderboard", { "x-game-wechat": "wx_route" }))).json();

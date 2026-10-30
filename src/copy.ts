@@ -266,6 +266,8 @@ export const copy = {
     },
     /** 消除大面包 (D100–D105): the `/game` page. */
     game: {
+      live: "正在玩",
+      liveDot: "●",
       title: "消除大面包",
       pageTitle: "消除大面包",
       backLabel: "返回首页",

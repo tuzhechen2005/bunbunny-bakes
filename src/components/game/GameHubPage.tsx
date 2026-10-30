@@ -5,6 +5,7 @@ import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import { copy } from "@/copy";
 import { GAME_CATALOG } from "@/lib/gameCatalog";
+import { LiveBadge } from "./LiveBadge";
 import { GameIcon } from "./GameIcon";
 import { useGameHub } from "./useGameHub";
 
@@ -14,7 +15,7 @@ const g = copy.customer.game;
 export function GameHubPage() {
   const { data, error, reload } = useGameHub();
   // Links stay usable while scores load, or when the connection fails.
-  const games = data?.games ?? GAME_CATALOG.map((game) => ({ ...game, weekBest: null }));
+  const games = data?.games ?? GAME_CATALOG.map((game) => ({ ...game, weekBest: null, live: false }));
   return (
     <div className="flex flex-1 flex-col bg-c-wash text-c-ink">
       <div className="mx-auto flex w-full max-w-[430px] flex-1 flex-col bg-c-paper">
@@ -31,6 +32,7 @@ export function GameHubPage() {
                 <p className="m-0 mt-2 min-h-6 text-xs text-c-grey" data-testid="hub-best">
                   {data ? game.weekBest === null ? t.emptyBest : <>{g.entryBest} <b className="font-num text-base text-c-ink">{game.weekBest}</b></> : null}
                 </p>
+                {data?.liveScores && game.live ? <LiveBadge /> : null}
               </Link>
             ))}
           </div>

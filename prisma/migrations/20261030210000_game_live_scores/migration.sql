@@ -1,0 +1,2 @@
+ALTER TABLE "GameRun" ADD COLUMN "updatedAt" TIMESTAMPTZ(3),
+  ADD COLUMN "progressAttemptAt" TIMESTAMPTZ(3);

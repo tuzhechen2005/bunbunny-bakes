@@ -1,5 +1,7 @@
 // 兔兔三连烤 server (S2, D135). Mirrors TU run lifecycle, validation and leaderboard policy.
 
+import type { GameRun } from "@/generated/prisma/client";
+
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { copy } from "@/copy";
@@ -90,6 +92,34 @@ export async function finishM3Run(db: DbClient, input: unknown, ipHash: string, 
   if (await isBanned(db, run.wechatId)) {
     throw new AppError("VALIDATION", { message: copy.gameApi.banned });
   }
+  const verified = verifyM3Run(run, data, now);
+  const weekKey = weekKeyOf(now);
+  const claimed = await db.gameRun.updateMany({
+    where: { id: run.id, finishedAt: null },
+    data: {
+      finishedAt: now,
+      updatedAt: null,
+      score: verified.score,
+      weekKey,
+      drops: data.moves as unknown as Prisma.InputJsonValue,
+      dropCount: data.moves.length,
+      playMs: verified.playMs,
+      suspicious: verified.suspicious,
+    },
+  });
+  if (claimed.count === 0) {
+    const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
+    return resultFor(db, stored, "M3");
+  }
+  return resultFor(db, { id: run.id, wechatId: run.wechatId, score: verified.score, weekKey }, "M3");
+}
+
+export function getM3Leaderboard(db: DbClient, now: Date, myWechatId?: string | null): Promise<Leaderboard> {
+  return getLeaderboard(db, now, myWechatId, "M3");
+}
+
+/** Shared finish/progress replay and wall-clock validation. */
+export function verifyM3Run(run: GameRun, data: z.output<typeof m3FinishSchema>, now: Date) {
   const badRun = () => new AppError("VALIDATION", { message: copy.gameApi.badRun });
   let outcome;
   try {
@@ -104,26 +134,5 @@ export async function finishM3Run(db: DbClient, input: unknown, ipHash: string, 
   }
   const playMs = data.moves[data.moves.length - 1]?.at ?? 0;
   if (playMs > now.getTime() - run.startedAt.getTime() + PLAUSIBILITY_SLACK_MS) throw badRun();
-  const weekKey = weekKeyOf(now);
-  const claimed = await db.gameRun.updateMany({
-    where: { id: run.id, finishedAt: null },
-    data: {
-      finishedAt: now,
-      score: outcome.score,
-      weekKey,
-      drops: data.moves as unknown as Prisma.InputJsonValue,
-      dropCount: data.moves.length,
-      playMs,
-      suspicious: isM3Suspicious(data.moves),
-    },
-  });
-  if (claimed.count === 0) {
-    const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
-    return resultFor(db, stored, "M3");
-  }
-  return resultFor(db, { id: run.id, wechatId: run.wechatId, score: outcome.score, weekKey }, "M3");
-}
-
-export function getM3Leaderboard(db: DbClient, now: Date, myWechatId?: string | null): Promise<Leaderboard> {
-  return getLeaderboard(db, now, myWechatId, "M3");
+  return { score: outcome.score, playMs, suspicious: isM3Suspicious(data.moves) };
 }

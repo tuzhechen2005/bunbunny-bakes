@@ -333,7 +333,7 @@ production: {
 
 | 路径 | 频率（America/Chicago） | 做什么 |
 |---|---|---|
-| POST `/api/cron/outbox` | 每 5 分钟 | 发送 `nextAttemptAt ≤ now` 的待发通知；清理过期的频率记录和登录会话、今天以前的小小🐰 计数（`AssistantUsage`）；删除开始于本周一 0:00 之前、一直没完成的游戏局（已过期） |
+| POST `/api/cron/outbox` | 每 5 分钟 | 发送 `nextAttemptAt ≤ now` 的待发通知；清理过期的频率记录和登录会话、今天以前的小小🐰 计数（`AssistantUsage`）；删除开始于本周一 0:00 之前、一直没完成且从未验分上报的游戏局（已过期；S5 保留已有进度成绩） |
 | POST `/api/cron/game-winner` | 每周一 09:00 | 上周（刚结束的那一周）选中的发奖游戏排行榜第一名的邮件（D114，`NOTIFICATIONS.md` 第 6 节）入队，`dedupeKey = game_winner:<上周一>`，入队后立即发送（`send` 同 summary），重复调用只发一次；上周发奖游戏没有算数的局时返回 `{ status: "empty" }`，什么都不发 |
 | POST `/api/cron/summary` | 每天 20:05 | 生成生产汇总（`CAPACITY_RULES.md` 第 10 节）并入队，`dedupeKey = summary:<明天日期>`，入队后立即发送（响应里的 `send` 是发送结果，失败的由 outbox 重试），重复调用只发一次 |
 
@@ -357,3 +357,13 @@ production: {
 | `ASSISTANT_MODEL` | 可选，默认 `deepseek-chat` |
 
 `.env.example` 进仓库（只有名称，没有值）；`.env` 不进仓库。
+
+### 实时游戏成绩（S5 / D136，BIG、TU、M3）
+
+- `POST /api/game/progress`、`POST /api/game/tu/progress`、`POST /api/game/m3/progress`：统一请求 `{ runId, log }`，`log` 是这一局到目前为止的完整投放／点击与道具／交换记录。返回 `{ score, live }`；从头重放，复用各游戏 finish 的结构、引擎版本、冷却和真实时间检查，不要求游戏已结束，不信任客户端分数。请求体大小上限同对应 finish。
+- 每局至少间隔 8 秒；原子占位先于日志解析和重放，失败的验证也占用间隔，提前重试返回 `429`。未知／跨游戏局返回 `404`；过周、版本过期、封禁、非法操作或回退已接受日志返回 `422`。完成的局不再改写，返回已存分数及 `live: false`。
+- 客户端游戏进行时每 10 秒上报，退出、`pagehide`、切后台也尝试发送完整日志；结束继续走 finish。失败不打断游戏，下次周期重试；小日志退出使用 fetch keepalive，大于 60 KiB 的日志使用普通 fetch（浏览器后台退出投递为尽力而为）。
+- 已完成和未完成局的最后验分共同参与每周排名、历史最高、大厅、后台和冠军邮件。每微信号取最高分，分数相同按完成时刻／最后验分时刻升序，再按局 id 升序。周一芝加哥零点起不再接受旧局更新；已验分的未完成局保留，以最后分数结算，邮件仍按周幂等。
+- 三游戏 leaderboard 响应新增 `liveScores: boolean`，`top` 每行新增 `live: boolean`；未完成且最近 30 秒内验分才为 live。大厅响应也有 `liveScores`，各游戏项有 `live`，表示当前榜首是否正在玩。页面可见时每 15 秒刷新；切后台暂停请求。显示小字「● 正在玩」，圆点使用 `c-red`。
+- `LIVE_SCORES=off` 为运行时关停开关（未设置时开启，含 dev/test）：progress 在读请求体和访问数据库之前返回 404；客户端收到首次 404 后本次页面会话停止所有游戏上报。榜单返回 `liveScores: false`，只按已完成局排名、不显示 live、不自动刷新。finish 保持可用；已经保存的历史验分数据不删除。
+- 四个时间常量统一在 `src/lib/liveScores.ts`；服务端开关在 `src/server/liveScores.ts`。生产部署前只需应用增量迁移 `20261030210000_game_live_scores`。

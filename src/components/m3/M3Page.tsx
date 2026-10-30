@@ -10,6 +10,7 @@ import { Sheet, type SheetHandle } from "@/components/ui/Sheet";
 import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import { useGameHub } from "@/components/game/useGameHub";
+import { useLiveProgress } from "@/components/game/useLiveProgress";
 import { copy } from "@/copy";
 import type { M3Move } from "@/lib/m3";
 import { fetchMenu } from "@/lib/api";
@@ -169,6 +170,10 @@ export function M3Page() {
     },
     [persist],
   );
+
+  const readProgress = useCallback(() => runId.current && !submitted.current.has(runId.current)
+    ? { runId: runId.current, log: progress.current.moves } : null, []);
+  useLiveProgress("/api/game/m3/progress", phase === "playing", readProgress);
 
   const toMenu = () => {
     setRun(null);
