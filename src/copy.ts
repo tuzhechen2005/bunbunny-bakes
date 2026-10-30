@@ -315,7 +315,7 @@ export const copy = {
       personalBest: "我的历史最高",
       newRecord: "👑 新纪录！",
       /** D104 rule line; {contact} is the owner line when the menu has it. */
-      rules: "每周一 0:00 重新开始，本周第一名可领总共价值 $10 以内的面包（需在本店下过单）。",
+      rules: "每周一 0:00 重新开始，上周第一名可领总共价值 $10 以内的面包（需在本店下过单）。",
       rulesContact: "领奖请联系店主微信 {id}。",
       /** Playing. */
       score: "得分",
