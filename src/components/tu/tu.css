@@ -175,3 +175,94 @@
     transform: none;
   }
 }
+
+/* Props (D131): peek shows the hidden tiles over the covering ones for a moment. */
+.tu-peeked {
+  z-index: 5;
+  animation: tu-fade 0.24s ease-out both;
+}
+.tu-peeked .tu-face {
+  box-shadow: 0 0 0 2px var(--c-ink);
+}
+.tu-peeked .tu-face::after {
+  content: none !important;
+}
+[data-peek="1"] .tu-tile:not(.tu-peeked) {
+  opacity: 0.22;
+  transition: opacity 0.2s;
+}
+/* The 7th bag slot unfolds. */
+@keyframes tu-slot-in {
+  from {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.tu-slot-extra {
+  animation: tu-slot-in 0.32s cubic-bezier(0.3, 0.7, 0.3, 1) both;
+}
+/* Swap: the two order cards turn over. */
+@keyframes tu-swap {
+  0% {
+    transform: rotateX(0);
+  }
+  50% {
+    transform: rotateX(90deg);
+    opacity: 0.4;
+  }
+  100% {
+    transform: rotateX(0);
+  }
+}
+.tu-order-swap {
+  animation: tu-swap 0.5s ease-in-out;
+}
+/* First game: the order cards pulse once. */
+@keyframes tu-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 2px var(--c-ink);
+  }
+}
+.tu-order-pulse {
+  animation: tu-pulse 0.9s ease-in-out 0.3s 1;
+}
+@keyframes tu-toast {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  12%,
+  80% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.tu-toast {
+  animation: tu-toast 2.2s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tu-peeked,
+  .tu-slot-extra,
+  .tu-toast {
+    animation: tu-fade 0.01s both;
+  }
+  .tu-order-swap,
+  .tu-order-pulse {
+    animation: none;
+  }
+  [data-peek="1"] .tu-tile:not(.tu-peeked) {
+    transition: none;
+  }
+}

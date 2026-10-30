@@ -189,7 +189,7 @@ test("save and resume: reload, 继续上一局 shows the last score and the same
   await expect.poll(flat).toBe(score);
   // Play on after the resume.
   await tapAll(page, bot.taps.slice(8, 10).map((x) => x.id));
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("bb_tu_save_v1")!).taps.length)).toBe(10);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("bb_tu_save_v2")!).taps.length)).toBe(10);
 });
 
 test("exit asks: 保存进度再走 keeps the run, 不保存 deletes it; 重新开始 asks first", async ({ page }) => {
@@ -208,14 +208,14 @@ test("exit asks: 保存进度再走 keeps the run, 不保存 deletes it; 重新�
   await page.getByTestId("tu-exit").click();
   await page.getByTestId("tu-exit-discard").click();
   await expect(page.getByTestId("tu-menu-start")).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem("bb_tu_save_v1"))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem("bb_tu_save_v2"))).toBeNull();
 });
 
 test("an expired save is not offered", async ({ page }) => {
   await mockApi(page);
   await page.goto("/game/tu");
   await page.evaluate(() =>
-    localStorage.setItem("bb_tu_save_v1", JSON.stringify({ v: 1, runId: "x", seed: "s", tiers: new Array(4).fill({}), taps: [{ id: 1, at: 200 }], nickname: "a", expiresAt: "2020-01-01T00:00:00Z", score: 10 })),
+    localStorage.setItem("bb_tu_save_v2", JSON.stringify({ v: 1, runId: "x", seed: "s", tiers: new Array(4).fill({}), taps: [{ id: 1, at: 200 }], nickname: "a", expiresAt: "2020-01-01T00:00:00Z", score: 10 })),
   );
   await page.reload();
   await expect(page.getByTestId("tu-menu-start")).toBeVisible();
@@ -252,7 +252,7 @@ test("a random player runs out of bag: result sheet with the server score, close
   await expect(page.getByTestId("game-all-time")).toBeVisible();
   await page.getByTestId("tu-board-close").click();
   await expect(sheet).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem("bb_tu_save_v1"))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem("bb_tu_save_v2"))).toBeNull();
 });
 
 test("reduced motion: no animation classes on packs", async ({ page }) => {
@@ -275,7 +275,7 @@ test("a saved run that is already over resumes into the result flow and is submi
   const taps = bot.taps.map((x, i) => ({ id: x.id, at: (i + 1) * 200 }));
   await page.goto("/game/tu");
   await page.evaluate(
-    (save) => localStorage.setItem("bb_tu_save_v1", JSON.stringify(save)),
+    (save) => localStorage.setItem("bb_tu_save_v2", JSON.stringify(save)),
     { v: 1, runId: "run-over", seed: SEED, tiers: TIERS, taps, nickname: "小面包", expiresAt: "2099-01-01T00:00:00Z", score: bot.score },
   );
   await page.reload();
@@ -284,5 +284,5 @@ test("a saved run that is already over resumes into the result flow and is submi
   await expect(page.getByTestId("tu-confirmed")).toBeVisible();
   expect(api.finishes).toHaveLength(1);
   expect(api.finishes[0].runId).toBe("run-over");
-  expect(await page.evaluate(() => localStorage.getItem("bb_tu_save_v1"))).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem("bb_tu_save_v2"))).toBeNull();
 });

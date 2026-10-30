@@ -2,7 +2,9 @@
 import type { TierView } from "@/components/game/types";
 import type { TuTapLog } from "./tuApi";
 
-export const TU_SAVE_KEY = "bb_tu_save_v1";
+// v2: props and the harder curve (C8) changed the engine, so runs saved by the old engine are dropped.
+export const TU_SAVE_KEY = "bb_tu_save_v2";
+const OLD_SAVE_KEY = "bb_tu_save_v1";
 
 export interface TuSave {
   v: 1;
@@ -33,6 +35,7 @@ export function parseTuSave(raw: string | null, now = Date.now()): TuSave | null
 
 export function readTuSave(now = Date.now()): TuSave | null {
   try {
+    window.localStorage.removeItem(OLD_SAVE_KEY);
     const raw = window.localStorage.getItem(TU_SAVE_KEY);
     const s = parseTuSave(raw, now);
     if (!s && raw) clearTuSave();
