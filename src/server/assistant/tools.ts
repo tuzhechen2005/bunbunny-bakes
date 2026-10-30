@@ -67,7 +67,8 @@ export function publicProduct(menu: Menu, p: MenuProduct, ref: string) {
     status: p.status === "ACTIVE" ? "可以订" : "暂停供应",
     leadDays: `需提前 ${p.leadDays} 天订`,
     pickupDays: weekdaysText(p.pickupWeekdays),
-    description: plainText(p.description, 80),
+    // Owner-written public text; long enough for flavour lists (a 176-char 泡芙 description was cut at 80).
+    description: plainText(p.description, 600),
   };
 }
 
