@@ -1,10 +1,12 @@
-// T4 (D125): the home card with two halves (消除大面包 / 兔了个兔) and the admin game switch.
+// S4 (D134): one home entry leading to the game hub, and the admin game switch.
 // The second game's API (T2) is mocked with route interception until it lands.
 import { expect, test, type Page } from "@playwright/test";
 import { copy } from "../../src/copy";
 import { createAdminSession, resetAndSeed, withDb } from "./support/seed";
 
 test.use({ browserName: "chromium" });
+
+import { hubFixture } from "./support/gameHub";
 
 const g = copy.customer.game;
 const a = copy.admin.game;
@@ -19,61 +21,49 @@ async function mockHome(page: Page, opts: { big?: number | null; tu?: number | n
   await page.route("**/api/menu", (route) =>
     route.fulfill({ json: { orderingEnabled: true, products: PRODUCTS, pickupNote: "", deliveryFeeCents: 500, freeDeliveryMinCents: 2500, maxQtyPerItem: 8, ownerWechatId: "x" } }),
   );
-  const board = (s: number | null | undefined) => ({ top: s ? [{ rank: 1, nickname: "n", wechatMasked: "ab***", score: s }] : [] });
-  await page.route("**/api/game/leaderboard**", (r) => { asked.push("big"); return r.fulfill({ json: board(opts.big) }); });
-  await page.route("**/api/game/tu/leaderboard**", (r) => { asked.push("tu"); return r.fulfill({ json: board(opts.tu) }); });
+  await page.route("**/api/game/hub", (r) => { asked.push("hub"); return r.fulfill({ json: hubFixture("TU", opts.big ?? null, opts.tu ?? null) }); });
   return asked;
 }
 
-test("home card: two halves, own links, own weekly bests, one prize tag", async ({ page }) => {
+test("home card: one link, the weekly prize game, and the original heartbeat", async ({ page }) => {
   const asked = await mockHome(page, { big: 1280, tu: 640 });
   await page.goto("/");
-  const card = page.getByTestId("game-entry-card");
-  await card.scrollIntoViewIfNeeded();
-  await expect(page.getByTestId("game-entry")).toContainText(g.title);
-  await expect(page.getByTestId("game-entry-tu")).toContainText(g.tuTitle);
-  await expect(page.getByTestId("game-entry-line")).toContainText(`${g.entryBest} 1280`);
-  await expect(page.getByTestId("game-entry-tu-line")).toContainText(`${g.entryBest} 640`);
+  await page.getByTestId("game-entry-card").scrollIntoViewIfNeeded();
+  await expect(page.getByTestId("game-entry")).toContainText(copy.customer.gameHub.title);
+  await expect(page.getByTestId("game-entry-line")).toContainText(copy.customer.tu.title);
   await expect(page.getByTestId("game-entry-prize")).toHaveCount(1);
-  await expect(page.getByRole("link", { name: g.entryLabel })).toHaveAttribute("href", "/game");
-  await expect(page.getByRole("link", { name: g.entryTuLabel })).toHaveAttribute("href", "/game/tu");
-  expect(asked.sort()).toEqual(["big", "tu"]);
-  const anim = await page.getByTestId("game-entry-tu").evaluate((e) => getComputedStyle(e).animationName);
-  expect(anim).toBe("game-breathe");
+  await expect(page.getByTestId("game-entry")).toHaveAttribute("href", "/game/hub");
+  expect(asked).toEqual(["hub"]);
+  expect(await page.getByTestId("game-entry").evaluate((e) => getComputedStyle(e).animationName)).toBe("game-breathe");
   await page.emulateMedia({ reducedMotion: "reduce" });
-  for (const id of ["game-entry", "game-entry-tu"]) {
-    expect(await page.getByTestId(id).evaluate((e) => getComputedStyle(e).animationName)).toBe("none");
-  }
+  expect(await page.getByTestId("game-entry").evaluate((e) => getComputedStyle(e).animationName)).toBe("none");
 });
 
-test("home card: the right half goes to /game/tu; failures keep the neutral line", async ({ page }) => {
+test("home card: failures keep the neutral line and the link still opens the hub", async ({ page }) => {
   await mockHome(page);
-  await page.route("**/api/game/tu/leaderboard**", (r) => r.fulfill({ status: 500, json: { error: "X" } }));
+  await page.route("**/api/game/hub", (r) => r.fulfill({ status: 500, json: { error: "X" } }));
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await page.getByTestId("game-entry-card").scrollIntoViewIfNeeded();
-  await expect(page.getByTestId("game-entry-tu-line")).toHaveText(g.entryNeutral);
-  await page.route("**/game/tu", (r) => r.fulfill({ body: "<html></html>", contentType: "text/html" }));
-  await page.getByTestId("game-entry-tu").click();
-  await expect(page).toHaveURL(/\/game\/tu$/);
+  await expect(page.getByTestId("game-entry-line")).toHaveText(g.entryNeutral);
+  await page.getByTestId("game-entry").click();
+  await expect(page).toHaveURL(/\/game\/hub$/);
 });
 
 for (const width of [390, 320]) {
-  test(`home card at ${width}px: no horizontal scroll, targets >= 44px`, async ({ page }) => {
+  test(`home card at ${width}px: no horizontal scroll, target >= 44px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
-    await mockHome(page, { big: 1280, tu: 640 });
+    await mockHome(page);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
     const card = page.getByTestId("game-entry-card");
     await card.scrollIntoViewIfNeeded();
-    await expect(page.getByTestId("game-entry-tu-line")).toContainText("640");
+    await expect(page.getByTestId("game-entry-line")).toContainText(copy.customer.tu.title);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-    for (const id of ["game-entry", "game-entry-tu"]) {
-      const b = (await page.getByTestId(id).boundingBox())!;
-      expect(b.height).toBeGreaterThanOrEqual(44);
-      expect(b.width).toBeGreaterThanOrEqual(44);
-    }
-    await card.screenshot({ path: `${SCREENS}/t4_tu_home_admin-home-${width}.png` });
+    const b = (await page.getByTestId("game-entry").boundingBox())!;
+    expect(b.height).toBeGreaterThanOrEqual(44);
+    expect(b.width).toBeGreaterThanOrEqual(44);
+    await card.screenshot({ path: `${SCREENS}/s4-home-${width}.png` });
   });
 }
 

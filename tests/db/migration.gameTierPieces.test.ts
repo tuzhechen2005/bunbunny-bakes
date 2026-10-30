@@ -1,4 +1,4 @@
-// The 20261026140000_game_tier_name_colour migration run on a seeded scratch database:
+// The 20261026140000_game_tier_name_colour migration run on a seeded scratch schema:
 // existing tiers keep working (NULL name / colour), the checks hold, a product delete leaves a game-only row.
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -11,22 +11,15 @@ const dir = "prisma/migrations";
 
 const baseUrl = new URL(testDirectDatabaseUrl());
 const scratchName = `${databaseName(baseUrl.toString())}_gtm_test`;
-const scratchUrl = new URL(baseUrl);
-scratchUrl.pathname = `/${scratchName}`;
-const maintenanceUrl = new URL(baseUrl);
-maintenanceUrl.pathname = "/postgres";
 
 const sqlOf = (name: string) => readFileSync(`${dir}/${name}/migration.sql`, "utf8");
 let client: Client;
 
 beforeAll(async () => {
-  const admin = new Client({ connectionString: maintenanceUrl.toString() });
-  await admin.connect();
-  await admin.query(`DROP DATABASE IF EXISTS "${scratchName}"`);
-  await admin.query(`CREATE DATABASE "${scratchName}"`);
-  await admin.end();
-  client = new Client({ connectionString: scratchUrl.toString() });
+  client = new Client({ connectionString: baseUrl.toString() });
   await client.connect();
+  await client.query(`CREATE SCHEMA "${scratchName}"`);
+  await client.query(`SET search_path TO "${scratchName}"`);
   const older = readdirSync(dir)
     .filter((d) => /^\d{14}_/.test(d) && d < NEW_MIGRATION)
     .sort();
@@ -34,11 +27,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (!client) return;
+  await client.query(`DROP SCHEMA IF EXISTS "${scratchName}" CASCADE`);
   await client.end();
-  const admin = new Client({ connectionString: maintenanceUrl.toString() });
-  await admin.connect();
-  await admin.query(`DROP DATABASE IF EXISTS "${scratchName}"`);
-  await admin.end();
 });
 
 describe("game tier name and colour migration", () => {

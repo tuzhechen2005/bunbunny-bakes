@@ -1,6 +1,6 @@
 // The 20261026120000_product_colour_and_photos migration run on a seeded database:
 // covers become the first ProductImage, the existing products keep their colours (by name).
-// Uses its own scratch database next to the test one; no other database is touched.
+// Uses its own scratch schema next to the test one; no other database is touched.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { Client } from "pg";
@@ -12,10 +12,6 @@ const dir = "prisma/migrations";
 
 const baseUrl = new URL(testDirectDatabaseUrl());
 const scratchName = `${databaseName(baseUrl.toString())}_mig_test`;
-const scratchUrl = new URL(baseUrl);
-scratchUrl.pathname = `/${scratchName}`;
-const maintenanceUrl = new URL(baseUrl);
-maintenanceUrl.pathname = "/postgres";
 
 const sqlOf = (name: string) => readFileSync(`${dir}/${name}/migration.sql`, "utf8");
 let client: Client;
@@ -30,13 +26,10 @@ async function insertProduct(name: string, imageUrl: string | null, sortOrder: n
 }
 
 beforeAll(async () => {
-  const admin = new Client({ connectionString: maintenanceUrl.toString() });
-  await admin.connect();
-  await admin.query(`DROP DATABASE IF EXISTS "${scratchName}"`);
-  await admin.query(`CREATE DATABASE "${scratchName}"`);
-  await admin.end();
-  client = new Client({ connectionString: scratchUrl.toString() });
+  client = new Client({ connectionString: baseUrl.toString() });
   await client.connect();
+  await client.query(`CREATE SCHEMA "${scratchName}"`);
+  await client.query(`SET search_path TO "${scratchName}"`);
   const older = readdirSync(dir)
     .filter((d) => /^\d{14}_/.test(d) && d < NEW_MIGRATION)
     .sort();
@@ -44,11 +37,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (!client) return;
+  await client.query(`DROP SCHEMA IF EXISTS "${scratchName}" CASCADE`);
   await client.end();
-  const admin = new Client({ connectionString: maintenanceUrl.toString() });
-  await admin.connect();
-  await admin.query(`DROP DATABASE IF EXISTS "${scratchName}"`);
-  await admin.end();
 });
 
 describe("product colour and photos migration", () => {

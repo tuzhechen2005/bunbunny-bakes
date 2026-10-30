@@ -8,6 +8,7 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { copy } from "@/copy";
+import type { GameKind } from "@/lib/gameCatalog";
 import { Prisma } from "@/generated/prisma/client";
 import { MAX_DROPS, MAX_STEPS, replay, ReplayError } from "@/lib/game";
 import type { LocalDate } from "@/domain/types";
@@ -29,7 +30,7 @@ export const LEADERBOARD_SIZE = 20;
 export const MAX_FINISH_BODY_BYTES = 64 * 1024;
 
 /** GameRun.game / GameAward.game (D124): BIG = 消除大面包, TU = 兔了个兔. */
-export type GameKind = "BIG" | "TU";
+export type { GameKind };
 
 const codePoints = (s: string) => [...s].length;
 // Control, format (zero-width, bidi marks and overrides) and line/paragraph separator characters:
@@ -156,6 +157,11 @@ function rankedSql(weekKey: string, game: GameKind) {
 
 async function topOfWeek(db: DbClient, weekKey: string, limit: number, game: GameKind): Promise<BoardRow[]> {
   return db.$queryRaw<BoardRow[]>`${rankedSql(weekKey, game)} SELECT * FROM ranked ORDER BY rank LIMIT ${limit}`;
+}
+
+/** Public hub only needs the score; use the same eligibility and ranking as the boards. */
+export async function weekBest(db: DbClient, weekKey: string, game: GameKind): Promise<number | null> {
+  return (await topOfWeek(db, weekKey, 1, game))[0]?.score ?? null;
 }
 
 /** The whole ranked board of a week (full WeChat ids: server and owner use only). */

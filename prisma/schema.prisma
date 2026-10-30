@@ -357,6 +357,19 @@ enum GameKind {
   TU
 }
 
+enum GamePrizeChosenBy {
+  RANDOM
+  OWNER
+}
+
+/// One prize game per Chicago week (D133); owner overrides keep the original creation time.
+model GamePrizeWeek {
+  weekKey   String            @id
+  game      GameKind
+  chosenBy  GamePrizeChosenBy
+  createdAt DateTime          @default(now()) @db.Timestamptz(3)
+}
+
 model GameRun {
   id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   game          GameKind  @default(BIG)

@@ -94,7 +94,7 @@ export async function resetAndSeed(opts: SeedOptions = {}): Promise<Seeded> {
     await c.query(
       `TRUNCATE "AuditLog","Notification","OrderItem","Order","OpenDateProductLimit","OpenDate","Product",
                 "Setting","AdminSession","PasswordReset","AdminUser","RateLimitHit",
-                "GameAward","GameRun","GameBan","GameTier" RESTART IDENTITY CASCADE`,
+                "GamePrizeWeek","GameAward","GameRun","GameBan","GameTier" RESTART IDENTITY CASCADE`,
     );
     await c.query(
       `INSERT INTO "Setting" (id, "orderingEnabled", "ownerWechatId", "updatedAt") VALUES (1, $1, $2, now())`,

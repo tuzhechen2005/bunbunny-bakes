@@ -3,100 +3,53 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
+import { useGameHub } from "@/components/game/useGameHub";
 import { copy } from "@/copy";
 import { focusRing } from "@/components/ui/focus";
+import { fill } from "./format";
 import "@/components/game/game.css";
 
-const t = copy.customer.game;
-// Owner decision: the titles use bold 700 in the system sans stack; the dot of 「兔」 vanishes in the 900 display subset at this size.
-const TITLE_FONT = { fontFamily: '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif' };
+const t = copy.customer.gameHub;
 
-/**
- * Home entry to the two games (D125): one card, two halves split by a diagonal slash. Left 消除大面包
- * (D100) → /game, right 兔了个兔 → /game/tu, each with its own weekly best and one shared prize tag.
- * The bests are fetched lazily, a moment after the card comes near the screen, so they are never part of
- * the first load. Each half beats like a heart (game.css) except under reduced motion. Any failure just
- * keeps the neutral line.
- */
+/** One quiet entrance to the games; keep the original heartbeat and lazy request. */
 export function GameEntryCard() {
   const ref = useRef<HTMLDivElement>(null);
-  const [best, setBest] = useState<number | null>(null);
-  const [bestTu, setBestTu] = useState<number | null>(null);
+  const [near, setNear] = useState(false);
+  const { data } = useGameHub(near);
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    let cancelled = false;
+    if (!el) return;
     let idle: number | undefined;
-    const fetchBest = (url: string, set: (n: number) => void) =>
-      fetch(url, { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d: { top?: { score?: unknown }[] } | null) => {
-          const s = d?.top?.[0]?.score;
-          if (!cancelled && typeof s === "number" && s > 0) set(s);
-        })
-        .catch(() => {});
-    const load = () => {
-      void fetchBest("/api/game/leaderboard", setBest);
-      void fetchBest("/api/game/tu/leaderboard", setBestTu);
-    };
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((e) => e.isIntersecting)) return;
-        io.disconnect();
-        idle = window.setTimeout(load, 400);
-      },
-      { rootMargin: "300px" },
-    );
-    io.observe(el);
-    return () => {
-      cancelled = true;
+    const load = () => { idle = window.setTimeout(() => setNear(true), 400); };
+    if (typeof IntersectionObserver === "undefined") {
+      load();
+      return () => clearTimeout(idle);
+    }
+    const io = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
       io.disconnect();
-      if (idle !== undefined) clearTimeout(idle);
-    };
+      load();
+    }, { rootMargin: "300px" });
+    io.observe(el);
+    return () => { io.disconnect(); clearTimeout(idle); };
   }, []);
 
-  const half = `game-entry flex min-w-0 flex-col items-center gap-2 rounded-3xl px-2 pt-10 pb-5 text-center text-c-ink ${focusRing}`;
-  const line = (n: number | null, id: string) => (
-    <span className="block text-sm text-c-grey" data-testid={id}>
-      {n !== null ? (
-        <>
-          {t.entryBest} <b className="font-num text-[17px] text-c-ink">{n}</b>
-        </>
-      ) : (
-        t.entryNeutral
-      )}
-    </span>
-  );
-
+  const prize = data?.games.find((game) => game.kind === data.prizeGame);
   return (
     <section className="px-5 pt-2 pb-7">
-      <div ref={ref} className="relative grid min-h-[84px] grid-cols-2 rounded-3xl bg-c-wash" data-testid="game-entry-card">
-        <span
-          className="pointer-events-none absolute top-3 left-4 z-10 rounded-full bg-c-paper px-2 py-0.5 text-xs font-bold whitespace-nowrap text-c-ink shadow-[inset_0_0_0_1px_var(--c-line)]"
-          data-testid="game-entry-prize"
-        >
-          {t.entryPrize}
-        </span>
-        <Link href="/game" aria-label={t.entryLabel} className={half} data-testid="game-entry">
-          <span className="game-entry-logo grid size-14 shrink-0 place-items-center rounded-full bg-c-paper shadow-[inset_0_0_0_1.5px_var(--c-line)]">
+      <div ref={ref} data-testid="game-entry-card">
+        <Link href="/game/hub" className={`game-entry flex min-h-24 items-center gap-4 rounded-3xl bg-c-wash px-5 py-5 text-c-ink ${focusRing}`} data-testid="game-entry">
+          <span className="game-entry-logo grid size-14 shrink-0 place-items-center rounded-full bg-c-paper">
             <Logo className="h-10 w-auto" />
           </span>
-          <b className="text-[22px] leading-[1.15] font-bold tracking-[-0.02em]" style={TITLE_FONT}>{t.title}</b>
-          {line(best, "game-entry-line")}
-        </Link>
-        <span aria-hidden="true" className="pointer-events-none absolute top-5 bottom-5 left-1/2 w-[1.5px] -translate-x-1/2 rotate-[14deg] rounded-full bg-c-line" />
-        <Link href="/game/tu" aria-label={t.entryTuLabel} className={`${half} game-entry-b`} data-testid="game-entry-tu">
-          <span className="game-entry-logo game-entry-b grid size-14 shrink-0 place-items-center">
-            <span className="relative block h-14 w-[37px]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/bag.webp" alt="" width={440} height={660} className="h-full w-full" draggable={false} />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/logo.webp" alt="" width={772} height={951} className="absolute top-[34%] left-[19%] w-[62%]" draggable={false} />
+          <span className="min-w-0 flex-1">
+            <b className="block text-[24px] leading-tight font-bold tracking-[-0.03em]">{t.title}</b>
+            <span className="mt-1.5 block text-[13px] text-c-grey" data-testid="game-entry-line">
+              {prize ? <span data-testid="game-entry-prize">{fill(t.entryPrize, { game: prize.name })}</span> : copy.customer.game.entryNeutral}
             </span>
           </span>
-          <b className="text-[22px] leading-[1.15] font-bold tracking-[-0.02em]" style={TITLE_FONT}>{t.tuTitle}</b>
-          {line(bestTu, "game-entry-tu-line")}
+          <svg viewBox="0 0 24 24" className="size-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
         </Link>
       </div>
     </section>

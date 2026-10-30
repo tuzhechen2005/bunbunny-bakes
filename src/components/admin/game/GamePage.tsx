@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { copy } from "@/copy";
 import { BoardPanel } from "./BoardPanel";
 import { TiersPanel } from "./TiersPanel";
+import { PrizePanel } from "./PrizePanel";
 
 const t = copy.admin.game;
 
@@ -18,6 +19,7 @@ export function GamePage() {
   return (
     <>
       <PageHeader title={t.title} />
+      <PrizePanel />
       <div role="tablist" aria-label={t.title} className="mb-4 flex gap-2">
         {tabs.map((x) => (
           <button

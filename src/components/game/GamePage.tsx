@@ -6,6 +6,7 @@ import { fill } from "@/components/customer/format";
 import { Sheet, type SheetHandle } from "@/components/ui/Sheet";
 import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
+import { useGameHub } from "@/components/game/useGameHub";
 import { copy } from "@/copy";
 import { fetchMenu } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
@@ -68,6 +69,8 @@ function SpeakerButton({ on, onToggle }: { on: boolean; onToggle: () => void }) 
 
 export function GamePage() {
   const { reduced } = useMotionPrefs();
+  const { data: hub } = useGameHub();
+  const hasPrize = hub?.prizeGame === "BIG";
   const [phase, setPhase] = useState<Phase>("menu");
   const [wechatId, setWechatId] = useState("");
   const [nickname, setNickname] = useState("");
@@ -250,8 +253,8 @@ export function GamePage() {
 
   const top = (
     <TopBar
-      backHref="/"
-      backLabel={t.backLabel}
+      backHref="/game/hub"
+      backLabel={copy.customer.gameHub.backLabel}
       title={t.pageTitle}
       titleAs="h1"
       right={
@@ -285,7 +288,7 @@ export function GamePage() {
               {t.closeBoard}
             </button>
           </div>
-          <LeaderboardView wechatId={wechatId.trim()} version={boardVersion} />
+          <LeaderboardView hasPrize={hasPrize} wechatId={wechatId.trim()} version={boardVersion} />
         </main>
       </Shell>
     );
@@ -293,7 +296,7 @@ export function GamePage() {
 
   // ---------------- menu (D110) ----------------
   if (phase === "menu") {
-    const rules = [t.rules, owner ? fill(t.rulesContact, { id: owner }) : ""].join("");
+    const rules = hasPrize ? [t.rules, owner ? fill(t.rulesContact, { id: owner }) : ""].join("") : copy.customer.gameHub.rules;
     const secondary = `min-h-11 w-full rounded-full bg-c-wash text-[15px] font-bold ${focusRing}`;
     return (
       <Shell>
@@ -301,9 +304,9 @@ export function GamePage() {
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
           <h2 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.startTitle}</h2>
           <p className="m-0 mt-2 text-sm leading-relaxed text-c-grey">{t.startHint}</p>
-          <p className="font-display m-0 mt-6 text-center text-[15px] leading-snug text-c-ink" data-testid="game-prize-line">
+          {hasPrize ? <p className="font-display m-0 mt-6 text-center text-[15px] leading-snug text-c-ink" data-testid="game-prize-line">
             {t.prizeLine}
-          </p>
+          </p> : null}
           <div className="mt-4 flex flex-col gap-3">
             {save ? (
               <>
