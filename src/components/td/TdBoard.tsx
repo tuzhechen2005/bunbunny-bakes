@@ -36,7 +36,7 @@ export function TdBoard({ save, paused, soundOn, reduced, onProgress, onOver }: 
   const [clock] = useState(() => createTdClock(save.endTick));
   const [hud, setHud] = useState(() => game.state());
   const [ready, setReady] = useState(false), [hidden, setHidden] = useState(false);
-  const [selected, setSelected] = useState<number | null>(null), [speed, setSpeed] = useState<1 | 2>(1);
+  const [selected, setSelected] = useState<number | null>(null), [speed, setSpeed] = useState<1 | 2 | 3>(1);
   const [preview, setPreview] = useState<TowerKind | null>(null);
   const [boss, setBoss] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null), wrapper = useRef<HTMLDivElement>(null);
@@ -173,7 +173,7 @@ export function TdBoard({ save, paused, soundOn, reduced, onProgress, onOver }: 
       {(!ready || paused || hidden) && <p className="td-overlay" role="status">{!ready ? t.loading : t.paused}</p>}
     </div></div>
     <div className="td-controls">
-      <button className="td-ctl" data-testid="td-speed" aria-pressed={speed === 2} disabled={disabled} onClick={() => { const value = speed === 1 ? 2 : 1; clock.speed(value, performance.now()); setSpeed(value); }}>{speed === 1 ? t.speedOne : t.speedTwo}</button>
+      <button className="td-ctl" data-testid="td-speed" aria-pressed={speed > 1} disabled={disabled} onClick={() => { const value = speed === 3 ? 1 : speed === 1 ? 2 : 3; clock.speed(value, performance.now()); setSpeed(value); }}>{speed === 1 ? t.speedOne : speed === 2 ? t.speedTwo : t.speedThree}</button>
       <button className="td-ctl td-ctl-main" data-testid="td-call-wave" disabled={disabled || hud.nextWaveTick === null} onClick={() => action.current({ type: 'callWave', slot: -1 })}>{t.nextWave}</button>
     </div>
     {hud.inputsAccepted + hud.inputsRejected >= MAX_INPUTS && <p role="status">{t.inputLimit}</p>}

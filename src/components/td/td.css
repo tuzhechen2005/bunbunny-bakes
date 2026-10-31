@@ -66,3 +66,23 @@
 @keyframes td-boss { 0% { opacity:0; transform:translate(-50%,-50%) scale(.6); } 12% { opacity:1; transform:translate(-50%,-50%) scale(1.08); } 20% { transform:translate(-50%,-50%) scale(1); } 80% { opacity:1; } 100% { opacity:0; } }
 @media (prefers-reduced-motion:reduce) { .td-tray, .td-boss { animation:none; } }
 .td-tray-top { bottom:auto; top:8px; }
+
+/* ---- landscape play (D161): the board is 16:9; portrait phones rotate the play screen ---- */
+.td-play { display:grid; grid-template-columns:minmax(0,1fr) 128px; grid-template-rows:auto auto 1fr auto; grid-template-areas:"field hud" "field next" "field gap" "field ctl"; column-gap:10px; padding:0 max(8px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left)); }
+.td-play > .td-hud { grid-area:hud; grid-template-columns:1fr 1fr; padding:0; row-gap:8px; }
+.td-play > .td-hud .td-waves { grid-column:1 / -1; justify-content:flex-start; }
+.td-play > .td-hud .td-chip { grid-column:1 / -1; justify-self:start; }
+.td-play > .td-next { grid-area:next; flex-wrap:wrap; justify-content:flex-start; height:auto; gap:6px; margin-top:10px; }
+.td-play > .td-next > span:first-child { width:100%; }
+.td-play > .td-field-wrap { grid-area:field; }
+.td-play > .td-controls { grid-area:ctl; flex-direction:column; align-items:stretch; padding:0; gap:8px; }
+.td-play .td-ctl-main { min-width:0; }
+.td-field { width:min(100cqw, calc(100cqh * 16 / 9)); height:auto; }
+.td-field .td-slot { min-width:40px; }
+.td-tray { padding:6px 36px 6px 6px; gap:5px; }
+.td-card img { width:36px; height:40px; }
+.td-shell-playing .top-bar, .td-shell-playing header { flex:none; }
+@media (orientation:portrait) {
+  .td-shell-playing { position:fixed; top:0; left:100vw; width:100dvh; height:100vw; max-width:none !important; transform-origin:0 0; transform:rotate(90deg); z-index:20; }
+}
+@media (orientation:landscape) { .td-shell-playing { max-width:none !important; height:100dvh; } }

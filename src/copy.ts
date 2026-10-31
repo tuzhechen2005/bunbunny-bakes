@@ -429,7 +429,7 @@ export const copy = {
       maxed: "满级", nextWaveLabel: "下一波", lastWave: "最后一波", boss: "大胃王鼠来了！",
       slot: "炮位 {n}", closePicker: "收起厨具", boardLabel: "面包防守小路",
       win: "守住了！", fail: "面包被偷走了", next: "下一关", retry: "再来一次",
-      pause: "暂停", paused: "已暂停", resume: "继续", speedOne: "1×", speedTwo: "2×",
+      pause: "暂停", paused: "已暂停", resume: "继续", speedOne: "1×", speedTwo: "2×", speedThree: "3×",
       prizeNotReady: "保卫大面包下周起参与抽奖", loading: "面包准备中…",
       inputLimit: "操作已达上限，厨具继续守护", unavailable: "面包还没备齐，稍后再来",
     },

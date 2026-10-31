@@ -7,7 +7,7 @@ import type { TdArt, TdSprite } from './tdAssets';
 const towerNames: Record<TowerKind, string> = { rollingPin: 'tower-pin', flourSifter: 'tower-sifter', whisk: 'tower-whisk', oven: 'tower-oven' };
 const pestNames: Record<PestKind, string> = { ant: 'pest-ant', mouse: 'pest-mouse', sparrow: 'pest-sparrow', beetle: 'pest-beetle' };
 const shotNames: Record<TowerKind, string> = { rollingPin: 'proj-pin', flourSifter: '', whisk: 'proj-whisk', oven: 'proj-oven' };
-const TOWER_W = 150, PEST_W = 110, BOSS_SCALE = 1.75, PHOTO = 34;
+const TOWER_W = 150, PEST_W = 110, BOSS_SCALE = 1.75, PHOTO = 28;
 const FX = 64;
 type FxKind = 0 | 1 | 2 | 3 | 4; // none, puff, coin, ring, dust
 const GOLD = '#f2c14e', INK = '#3b2a1f', CREAM = '#fff8ec';
@@ -28,7 +28,7 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
   const inside = (v: number, max: number) => Math.max(110, Math.min(max - 110, v));
   // Portrait maps exit at the bottom, landscape maps on the right: step back inside along the last segment.
   const prev = map.path[map.path.length - 2] ?? last, len = Math.hypot(last.x - prev.x, last.y - prev.y) || 1;
-  const end = { x: inside(last.x - (last.x - prev.x) / len * 86, W), y: inside(last.y - (last.y - prev.y) / len * 86, H) };
+  const end = { x: inside(last.x - (last.x - prev.x) / len * 40, W), y: inside(last.y - (last.y - prev.y) / len * 40, H) };
   const layer = document.createElement('canvas'); layer.width = W; layer.height = H;
   const bg = layer.getContext('2d')!;
   bg.fillStyle = '#e9dcc6'; bg.fillRect(0, 0, W, H);
@@ -53,7 +53,7 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
     bg.restore();
   }
   // Plate at the path end where the bread pile sits.
-  bg.save(); bg.translate(end.x, end.y); bg.scale(1, .62);
+  bg.save(); bg.translate(end.x, end.y); bg.scale(.78, .78 * .62);
   bg.fillStyle = 'rgba(60,30,10,.28)'; bg.beginPath(); bg.arc(0, 14, 92, 0, 7); bg.fill();
   bg.fillStyle = '#fbf6ee'; bg.beginPath(); bg.arc(0, 0, 88, 0, 7); bg.fill();
   bg.strokeStyle = '#e7d9c4'; bg.lineWidth = 6; bg.beginPath(); bg.arc(0, 0, 70, 0, 7); bg.stroke();
@@ -144,7 +144,7 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
 
     // Bread pile on the plate: the owner's photos, most expensive on top.
     const pile = s.breadTiers;
-    for (let i = 0; i < pile.length && i < PILE.length; i++) ctx.drawImage(token(pile[i]), end.x + PILE[i][0] - PHOTO, end.y + PILE[i][1] * .8 - PHOTO - 10, PHOTO * 2, PHOTO * 2);
+    for (let i = 0; i < pile.length && i < PILE.length; i++) ctx.drawImage(token(pile[i]), end.x + PILE[i][0] * .8 - PHOTO, end.y + PILE[i][1] * .65 - PHOTO - 8, PHOTO * 2, PHOTO * 2);
     // Dropped bread rolls home along the path.
     for (let i = 0; i < s.dropped.length; i++) {
       const d = s.dropped[i];
