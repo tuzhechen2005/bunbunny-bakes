@@ -1,8 +1,9 @@
-# Run engine — R5 / D150
+# Run engine — R6 / D153
 
 Pure TypeScript shared by client and server. Uses the existing seeded RNG in
 `../game/rng.ts`; simulation has no clock, global randomness, DOM, or framework imports.
-Version 2 adds continuous obstacle overlap and shared visual clearance geometry.
+Version 3 retains D150 continuous overlap/clearance and changes cart height to 4.4 m
+with the R6 pinhole camera. Seeds and saves use v3; old unfinished runs are rejected.
 This directory implements simulation and replay only; rendering, server ownership,
 wall-clock plausibility, persistence, leaderboard updates, and art are separate tasks.
 
@@ -19,7 +20,7 @@ const verified = replayRun("server-issued-seed", [{ tick: 0, dir: "L" }], 60);
 // { score, distance, bread, over, endTick }
 ```
 
-`RUN_ENGINE_VERSION = 2`. Store the version with the seed/log; changes to the rules,
+`RUN_ENGINE_VERSION = 3`. Store the version with the seed/log; changes to the rules,
 constants, PRNG consumption, or ordering require a version bump before ranked deployment.
 Restore a run by replaying its input prefix, then stepping to its saved tick. There is no
 mutable state injection API. Empty and unfinished prefixes are valid for D136 reporting.
@@ -64,7 +65,7 @@ Snapshots contain:
 
 ## Fixed-tick rules
 
-| Rule | Version 2 value |
+| Rule | Version 3 value |
 | --- | --- |
 | Tick rate | 60 Hz |
 | Base / cap speed | 200 / 500 mm per tick (12 / 30 m/s) |
@@ -129,7 +130,8 @@ The 90-metre view contains the next row before the previous row is crossed. Thus
 can always choose the next open lane after crossing the previous row, without powers or
 jump/slide. All slower speeds have more time. This is a constructive guarantee, not rejection
 sampling or a probabilistic claim. Read-ahead generation and periodic removal of crossed
-objects bound live memory independently of total run length.
+objects bound server replay memory independently of total run length. The live client
+pre-generates the finite capped track so no chunk allocations run inside rAF.
 
 ## Verification and bots
 
@@ -163,3 +165,7 @@ npx tsc --noEmit --incremental false
 npx eslint src/lib/run tests/support/runBot.ts tests/unit/run*.test.ts
 npx vitest run --configLoader runner --project unit
 ```
+
+The browser opts into `realtime: true` and calls `frame(tick)` for a borrowed, pooled view.
+It pre-generates the capped track at startup. Never retain that view across draws.
+`state()` and `step()` retain detached snapshot/event semantics for replay and tests.

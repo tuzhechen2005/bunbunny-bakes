@@ -6,7 +6,7 @@ import { sound } from "@/components/game/sound";
 import { haptic, useMotionPrefs } from "@/lib/motion/react";
 import { createRunClock, elapsedTick } from "./runClock";
 import { preloadRunArt, type RunArt } from "./runAssets";
-import { renderRun } from "./runRenderer";
+import { prepareRunRenderer, renderRun } from "./runRenderer";
 import { swipeDirection } from "./runHelpers";
 import { RunSprite } from "./RunArt";
 
@@ -18,6 +18,7 @@ interface Props {
 }
 const t=copy.customer.run;
 const HUD_INTERVAL_MS = 100;
+const EMPTY_EVENTS:RunEvent[]=[];
 const hudValues = (s: RunState) => ({
   distance: Math.floor(s.distance/1000), bread: s.bread, over: s.over,
   magnetTicks: s.powerUps.magnetTicks, coffeeTicks: s.powerUps.coffeeTicks,
@@ -26,7 +27,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
   const {degraded}=useMotionPrefs();
   const quiet=reduced||degraded;
   const [game]=useState(()=>{
-    const g=createRunGame({seed});
+    const g=createRunGame({seed,realtime:true});
     initialInputs.forEach(i=>g.input(i.tick,i.dir));g.step(elapsedTick(initialElapsedMs));return g;
   });
   const [clock]=useState(()=>createRunClock(initialElapsedMs));
@@ -40,6 +41,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
   const [hidden,setHidden]=useState(false);
   const [art,setArt]=useState<RunArt|null>(null);
   const canvas=useRef<HTMLCanvasElement>(null);
+  const fps=useRef<HTMLOutputElement>(null);
   const wrapper=useRef<HTMLDivElement>(null);
   const active=useRef(false), reported=useRef(false), raf=useRef<number|null>(null);
   const crashFrame=useRef<number|null>(initialState.over?2:null);
@@ -61,29 +63,29 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
     const resize=()=>{
       const {width:w,height:h}=el.getBoundingClientRect();
       if(w<=0||h<=0){surface.current=null;return;}
-      const dpr=window.devicePixelRatio||1;
+      const dpr=Math.min(2,window.devicePixelRatio||1);
       const width=Math.round(w*dpr),height=Math.round(h*dpr);
       if(el.width!==width||el.height!==height){el.width=width;el.height=height;}
       const ctx=el.getContext('2d');if(!ctx)return;
       ctx.setTransform(width/w,0,0,height/h,0,0);
+      if(art)prepareRunRenderer(ctx,art,w,h,dpr);
       surface.current={ctx,w,h};draw();
     };
     const observer=new ResizeObserver(resize);
     observer.observe(el);window.addEventListener('resize',resize);
     resize();
     return ()=>{observer.disconnect();window.removeEventListener('resize',resize);};
-  },[draw]);
-  const publish=useCallback((events:RunEvent[],force=false,render=true)=>{
-    const s=game.state();state.current=s;
+  },[art,draw]);
+  const publish=useCallback((events:RunEvent[],force=false,render=true,snapshot?:RunState)=>{
+    const s=snapshot??game.state();state.current=s;
     const now=performance.now();
     const terminal=s.over&&!reported.current;
     let progress:RunProgress|undefined;
-    if(force||terminal||now-lastProgress.current>=HUD_INTERVAL_MS) {
+    if(force||terminal||now-lastProgress.current>=1000) {
       lastProgress.current=now;
       progress={inputs:[...inputs.current],score:s.score,elapsedMs:s.tick*1000/60,endTick:s.tick};
       onProgress(progress);
     }
-    if(!render)return s.over;
     // Publish diagnostics at HUD cadence, flushing exact ticks on input/pause/hide/over.
     if(force||terminal||now-lastHud.current>=HUD_INTERVAL_MS) {
       const el=wrapper.current;
@@ -97,7 +99,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
         publishedHud.current=next;setHud(next);
       }
     }
-    if(events.some(e=>e.type==='collect')) {if(soundOn)sound.merge(1);if(!quiet)haptic(8);}
+    for(let i=0;i<events.length;i++)if(events[i].type==='collect'){if(soundOn)sound.merge(1);if(!quiet)haptic(8);break;}
     if(terminal) {
       reported.current=true;
       crashFrame.current=quiet?2:0;
@@ -105,7 +107,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
       if(!quiet)haptic(24);
       onOver(progress!);
     }
-    draw();
+    if(render)draw();
     return s.over;
   },[game,onProgress,onOver,soundOn,quiet,draw]);
   useEffect(()=>{
@@ -114,27 +116,47 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
       if(raf.current!==null)cancelAnimationFrame(raf.current);raf.current=null;
       publish(game.step(elapsedTick(clock.pause(performance.now()))),true);
     };
-    const frame=()=>{
+    let frames=0,fpsStart=0,collected=false;
+    const fpsEnabled=process.env.NODE_ENV!=='production'&&new URLSearchParams(window.location.search).get('fps')==='1';
+    const fpsElement=fps.current;
+    if(fpsElement)fpsElement.hidden=!fpsEnabled;
+    const frame=(now:number)=>{
       if(!active.current)return;
-      const over=publish(game.step(elapsedTick(clock.read(performance.now()))));
-      if(!over)raf.current=requestAnimationFrame(frame);
-      else {active.current=false;raf.current=null;clock.pause(performance.now());}
+      const snapshot=game.frame(elapsedTick(clock.read(now)));
+      state.current=snapshot;
+      for(let i=0;i<snapshot.events.length;i++)if(snapshot.events[i].type==='collect')collected=true;
+      if(snapshot.over)crashFrame.current=quiet?2:0;
+      draw();
+      if(fpsEnabled){frames++;if(!fpsStart)fpsStart=now;}
+      if(!snapshot.over)raf.current=requestAnimationFrame(frame);
+      else {active.current=false;raf.current=null;clock.pause(now);}
     };
     const start=()=>{
       if(!art||paused||document.hidden||state.current.over||active.current)return;
-      active.current=true;clock.resume(performance.now());raf.current=requestAnimationFrame(frame);
+      frames=0;fpsStart=0;active.current=true;clock.resume(performance.now());raf.current=requestAnimationFrame(frame);
     };
     const visibility=()=>{setHidden(document.hidden);if(document.hidden)stop();else start();};
     document.addEventListener('visibilitychange',visibility,true);
     window.addEventListener('pagehide',stop,true);
-    const boot=setTimeout(()=>{publish([],true);start();},0);
+    const boot=setTimeout(()=>{publish(EMPTY_EVENTS,true);start();},0);
+    // React, string formatting, persistence and DOM diagnostics stay out of rAF.
+    const telemetry=setInterval(()=>{
+      if(!active.current&&(!state.current.over||reported.current))return;
+      if(collected){collected=false;if(soundOn)sound.merge(1);if(!quiet)haptic(8);}
+      publish(EMPTY_EVENTS,false,false,state.current);
+      const now=performance.now();
+      if(fpsEnabled&&fpsElement&&fpsStart&&now-fpsStart>=1000){
+        fpsElement.textContent=`${Math.round(frames*1000/(now-fpsStart))} ${t.fpsUnit}`;
+        frames=0;fpsStart=now;
+      }
+    },HUD_INTERVAL_MS);
     return ()=>{
-      clearTimeout(boot);active.current=false;
+      clearTimeout(boot);clearInterval(telemetry);active.current=false;
       if(raf.current!==null)cancelAnimationFrame(raf.current);raf.current=null;
       publish(game.step(elapsedTick(clock.pause(performance.now()))),true,false);
       document.removeEventListener('visibilitychange',visibility,true);window.removeEventListener('pagehide',stop,true);
     };
-  },[art,clock,game,paused,publish]);
+  },[art,clock,game,paused,publish,draw,soundOn,quiet]);
   // Three finite draws after collision, never an over-state rAF loop. Hiding cancels them.
   useEffect(()=>{
     if(!hud.over||hidden)return;
@@ -185,6 +207,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
     </div>
     <div ref={wrapper} className="run-board" role="application" aria-label={t.boardLabel} tabIndex={0} onClick={()=>{if(state.current.over)onShowResult?.();}} data-testid="run-board" >
       <canvas ref={canvas} aria-hidden="true" />
+      {process.env.NODE_ENV!=='production'&&<output ref={fps} hidden className="run-fps" aria-hidden="true" />}
       {!art&&<p className="run-overlay" role="status">{t.loading}</p>}
       {capped&&!hud.over&&<p className="run-input-limit" role="status">{t.inputLimit}</p>}
       {(paused||hidden)&&!hud.over&&<p className="run-overlay" role="status">{t.paused}</p>}

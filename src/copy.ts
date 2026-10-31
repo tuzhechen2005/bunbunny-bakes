@@ -392,6 +392,7 @@ export const copy = {
       paused: "已暂停", loading: "小兔准备中…", loadFailed: "小路还没准备好，请重试",
       prizeNotReady: "兔兔跑酷下周起参与抽奖",
       inputLimit: "操作次数已到上限，小兔将继续直行",
+      fpsUnit: "FPS",
     },
     grab: {
       title: "兔兔夹面包", pageTitle: "兔兔夹面包",

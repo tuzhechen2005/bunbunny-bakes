@@ -15,10 +15,10 @@ const expected = {
   'paper-bag': 1, 'coffee-cup': 1, 'road-stone': 1, 'shops-left': 3, 'shops-right': 3, 'sky-dawn': 1,
 };
 const manifest = {
-  version: 2, baseUrl: '/brand/run/', pixelRatio: 2, colorSpace: 'srgb',
+  version: 3, baseUrl: '/brand/run/', pixelRatio: 2, colorSpace: 'srgb',
   renderer: specs.find(spec => spec.renderer)?.renderer,
-  camera: { projection: 'orthographic', azimuthDegrees: 0, elevationDegrees: 36.869898,
-    forwardAxis: '+Y', screenRightAxis: '+X', bunnyYawDegrees: -28 },
+  camera: { projection: 'orthographic', azimuthDegrees: 0, elevationDegrees: 22.619865,
+    forwardAxis: '+Y', screenRightAxis: '+X', bunnyYawDegrees: 0 },
   coordinates: { origin: 'top-left', units: 'source pixels',
     anchor: 'projected world origin; place at ground contact, not image center',
     draw: 'drawImage(sheet, ...rect, x-anchor[0]*scale, y-anchor[1]*scale, frameWidth*scale, frameHeight*scale)',
@@ -74,7 +74,7 @@ for (const spec of specs) {
       }
     }
     assert.ok(maxX >= 0, `Empty frame ${frame.file}`);
-    if (!spec.repeatAxis && spec.id !== 'sky-dawn') {
+    if (!spec.repeatAxis && spec.id !== 'sky-dawn' && !spec.id.startsWith('shops-')) {
       assert.ok(minX > 1 && minY > 1 && maxX < width-2 && maxY < height-2,
         `Clipped sprite ${frame.file}: ${[minX, minY, maxX, maxY]}`);
     }
@@ -137,7 +137,7 @@ async function thumb(id, index, x, y, w, h) {
   reviewLayers.push({ input, left: x, top: y });
 }
 label('BUNBUNNY / DAWN DELIVERY', 52, 63, 34);
-label('R5 • Procedural Blender clay town • 2x sprites • No runtime 3D', 52, 100, 19);
+label('R6 • Procedural Blender clay town • 2x sprites • No runtime 3D', 52, 100, 19);
 let y = 155;
 for (const [id, title, count] of [
   ['bunny-run', 'RUN / 8', 8], ['bunny-jump', 'JUMP / 3', 3],
@@ -157,7 +157,7 @@ label('COLLECT + POWER UP', 52, 1280, 18);
 for (let i = 0; i < 6; i++) await thumb('loaf-spin', i, 295+i*116, 1235, 105, 110);
 await thumb('paper-bag', 0, 1060, 1230, 145, 155);
 await thumb('coffee-cup', 0, 1280, 1230, 145, 155);
-label('TOWN / WHOLE PERSPECTIVE SPRITES', 52, 1444, 18);
+label('STREET / FLAT FACADES — BAKERY · CAFE · FLOWERS', 52, 1444, 18);
 for (const [sideIndex, side] of ['left', 'right'].entries()) {
   for (let i = 0; i < 3; i++) await thumb(`shops-${side}`, i, 52+(sideIndex*3+i)*155, 1470, 143, 330);
 }
@@ -170,6 +170,6 @@ label('Dawn sky', 1360, 1832, 18);
 label(`${Object.values(expected).reduce((a,b)=>a+b,0)} frames • ${(total/1000).toFixed(1)} kB shipped / 1500 kB budget`, 52, 1923, 24);
 label('Ground anchors, frame rectangles, labels and playback hints: public/brand/run/manifest.json', 52, 1964, 19);
 await sharp({ create: { width: W, height: H, channels: 4, background: '#f4ebdd' } })
-  .composite(reviewLayers).png().toFile(resolve(root, 'preview.png'));
+  .composite(reviewLayers).png().toFile(resolve(root, '.cache/contact-sheet.png'));
 console.log(checks.join('\n'));
 console.log(`PASS: dimensions, alpha margins, unique poses, tile edges, complete manifest; total ${total} bytes.`);

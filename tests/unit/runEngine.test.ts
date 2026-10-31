@@ -15,7 +15,7 @@ describe("run engine", () => {
     const g = createRunGame({ seed: "copy" });
     const twin = createRunGame({ seed: "copy" });
     const s = g.state();
-    expect(RUN_ENGINE_VERSION).toBe(2);
+    expect(RUN_ENGINE_VERSION).toBe(3);
     expect(s).toMatchObject({ tick: 0, distance: 0, score: 0, bread: 0, speed: BASE_SPEED, over: false, player: { lane: 1, pose: "run" } });
     s.objects[0].lane = 2; s.objects.pop(); s.player.lane = 2;
     s.powerUps.coffeeUntil = 999; s.events.push({ type: "over", tick: 0, reason: "limit" });
@@ -79,7 +79,7 @@ describe("run engine", () => {
     expect(random[50]).toBeLessThan(20 * 60);
   }, 30_000);
 
-  it("pins version-two scoring and a nontrivial seeded run", () => {
+  it("pins version-three scoring and a nontrivial seeded run", () => {
     const run = goodRun("pinned");
     expect(replayRun("pinned", run.inputs, run.endTick)).toEqual({
       score: 38665, distance: 26775270, bread: 1189, over: true, endTick: 54000,
@@ -155,4 +155,22 @@ describe("run replay validation", () => {
     bad([{ tick: dead.tick + 1, dir: "L" }], MAX_RUN_TICKS, /after game over/);
     g.step(MAX_RUN_TICKS); expect(g.state()).toEqual(dead);
   });
+});
+
+it("reuses live frame storage while matching detached authoritative replay",()=>{
+  const seed='v3.live-frame', path=goodRun(seed,3600);
+  const live=createRunGame({seed,realtime:true});
+  const replay=createRunGame({seed});
+  const first=live.frame(0),player=first.player,powers=first.powerUps,objects=first.objects;
+  let input=0;
+  for(let tick=1;tick<=path.endTick;tick++) {
+    while(input<path.inputs.length&&path.inputs[input].tick<=tick) {
+      const i=path.inputs[input++];live.input(i.tick,i.dir);replay.input(i.tick,i.dir);
+    }
+    replay.step(tick);
+    const frame=live.frame(tick);
+    expect(frame).toBe(first);expect(frame.player).toBe(player);
+    expect(frame.powerUps).toBe(powers);expect(frame.objects).toBe(objects);
+    expect(frame).toEqual(replay.state());
+  }
 });

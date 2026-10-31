@@ -172,7 +172,7 @@ def bread_bag(parent=None, loc=(0, 0, 0), scale=1, with_bread=True):
 def bunny(action, frame):
     phase = frame * math.tau / 8
     bob = .035 * (1-math.cos(phase*2)) if action == "run" else 0
-    root = group("Courier pose", (0, 0, bob), (0, 0, math.radians(-28)))
+    root = group("Courier pose", (0, 0, bob), (0, 0, 0))
     if action == "lean":
         root.rotation_euler.y = -.24 if frame == 0 else .24
         root.rotation_euler.z += .13 if frame == 0 else -.13
@@ -188,7 +188,7 @@ def bunny(action, frame):
         root.rotation_euler.z += (0, -.12, -.35)[frame]
         root.location = (0, -.22, (0, .08, .18)[frame])
     ball("Pear-shaped white body", (0, 0, .94), (.41, .33, .55), "fur", root)
-    head = group("Turned head", (0, .065, 1.57), (0, 0, -.42), root)
+    head = group("Turned head", (0, .065, 1.57), (0, 0, 0), root)
     ball("Round head", (0, 0, 0), (.46, .39, .41), "fur", head)
     for side in (-1, 1):
         ball("Velvet cheek", (side*.28, .24, -.11), (.18, .16, .15), "cream", head)
@@ -207,7 +207,7 @@ def bunny(action, frame):
             ear.rotation_euler.x = (.3, 1.15, 2.0)[frame] + side*.12
         ball("Long ear", (0, 0, .38), (.135, .105, .45), "fur", ear)
         # Warm pink is visible on the edge of the turned ears from behind.
-        ball("Ear inset", (side*.04, -.075, .4), (.071, .026, .32), "pink", ear)
+        ball("Ear inset", (side*.04, .075, .4), (.071, .026, .32), "pink", ear)
         leg = group("Hind leg", (side*.235, 0, .58), parent=root)
         swing = math.sin(phase + (math.pi if side == 1 else 0))*.75 if action in ("run", "lean") else 0
         if action == "jump":
@@ -223,8 +223,8 @@ def bunny(action, frame):
         ball("Paw", (0, .03, -.24), (.13, .14, .32), "fur", arm)
         tube("Delivery strap", [(side*.24, -.19, 1.36), (side*.3, -.35, 1.2),
                                (side*.27, -.36, .69)], .035, "fold", root)
-    bread_bag(root, (0, -.48, .62), .9)
-    ball("Cotton tail", (0, -.34, .53), (.19, .18, .18), "fur", root)
+    bread_bag(root, (0, -.42, .78), .9)
+    ball("Cotton tail", (0, -.48, .46), (.19, .18, .18), "fur", root)
 
 
 
@@ -322,50 +322,44 @@ def road():
 
 
 def shop(side, variant):
-    # Complete beveled shop, turned toward the street; never stretched into strips.
-    palette = ("butter", "sage", "rose")
-    color = palette[variant]
-    period = 20/3
-    for repeat in range(1):
-        g = group("Individual shop module", (0, repeat*period, 0), (0, 0, .28 if side == "left" else -.28))
-        box("Sidewalk", (0, 0, -.07), (2.6, 5.4, .14), "stone", .015, g)
-        # Road-facing curb stays on the inner edge; left and right are separate renders.
-        inner = .96 if side == "left" else -.96
-        for i in range(8):
-            box("Curb block", (inner, -2.7+(i+.5)*5.4/8, .04), (.19, 5.4/8-.025, .19), "cream", .025, g)
-        x = -.16 if side == "left" else .16
-        house = group("Little stone-street shop", (x, .10, 0), parent=g)
-        box("Plaster shop walls", (0, 0, 1.04), (1.56, 2.65, 2.08), "plaster", .065, house)
-        box("Foundation", (0, -.04, .16), (1.68, 2.7, .29), "cream", .04, house)
-        for z in (.61, 1.12, 1.63):
-            for sx in (-.72, .72):
-                box("Corner stone", (sx, -1.335, z), (.19, .09, .20), "cream", .02, house)
-        box("Display window surround", (-.26, -1.357, 1.12), (.72, .10, .91), "wood", .08, house)
-        box("Morning glass", (-.26, -1.42, 1.12), (.59, .035, .77), "glass", .04, house)
-        box("Window mullion", (-.26, -1.45, 1.12), (.055, .035, .77), "cream", .01, house)
-        box("Door", (.42, -1.38, .68), (.38, .09, 1.15), color, .06, house)
-        box("Door pane", (.42, -1.435, .89), (.23, .025, .50), "glass", .03, house)
-        ball("Brass door knob", (.53, -1.46, .55), (.028, .025, .028), "butter", house)
-        box("Window ledge", (-.26, -1.5, .69), (.88, .26, .09), "cream", .025, house)
-        for bx in (-.44, -.16):
-            loaf(house, (bx, -1.48, .74), .19, math.pi/2)
-        awning(house, (0, -1.25, .55), .73, color, poles=False)
-        # Rounded terracotta roof made of individual procedural tiles.
-        for sx in (-1, 1):
-            roof = box("Pitched roof", (sx*.43, 0, 2.19), (.99, 2.98, .14), "roof", .05, house)
-            roof.rotation_euler.y = sx*.40
-            for iy in range(9):
-                tube("Roof tile roll", [(sx*.04, -1.36+iy*.34, 2.43), (sx*.86, -1.36+iy*.34, 2.10)], .042, "roof", house)
-        box("Chimney", (.46, .65, 2.43), (.26, .32, .6), "cream", .04, house)
-        box("Chimney cap", (.46, .65, 2.76), (.34, .4, .10), "wood", .03, house)
-        # A planter and small courtyard vary the rhythm without visible signage.
-        potx = -.53 if side == "left" else .53
-        cylinder("Clay flowerpot", (potx, -1.96, .21), .19, .38, "roof", g, top=.25)
-        for dx, dy, dz in ((0, 0, .55), (-.15, .03, .45), (.14, -.03, .48)):
-            ball("Rounded herb leaves", (potx+dx, -1.96+dy, dz), (.19, .18, .23), "sage", g)
-        box("Courtyard bench", (-x, 2.15, .34), (1.1, .42, .12), "wood", .045, g)
-        for bx in (-.4, .4):
-            box("Bench feet", (-x+bx, 2.15, .16), (.09, .30, .3), "wood", .02, g)
+    # Orthographic front elevation: the client maps this continuous wall onto
+    # x = +/- streetWidth. No ground, foundation plinth, roof diorama or baked perspective.
+    color = ("butter", "sage", "rose")[variant]
+    box("Continuous plaster facade", (0, .20, 2.5), (6.1, .4, 5.1), "plaster", 0)
+    for x in (-2.9, 2.9):
+        box("Painted pilaster", (x, -.06, 2.5), (.17, .12, 5), color, .015)
+    for z in (.12, 3.1, 4.85):
+        box("Continuous cornice", (0, -.13, z), (6.1, .22, .14), "cream", .02)
+    for x in (-1.8, 0, 1.8):
+        box("Upper window frame", (x, -.07, 3.94), (1.12, .12, 1.24), color, .04)
+        box("Warm upper glass", (x, -.15, 3.94), (.91, .04, 1.04), "butter", .025)
+        box("Upper mullion", (x, -.19, 3.94), (.055, .04, 1.04), "cream", .01)
+    box("Display surround", (-.85, -.10, 1.53), (2.85, .16, 1.9), "wood", .045)
+    box("Warm display glass", (-.85, -.20, 1.53), (2.59, .06, 1.65), "butter", .03)
+    for x in (-1.7, -.8, .1):
+        box("Display mullion", (x, -.25, 1.53), (.05, .05, 1.65), "cream", .01)
+    box("Shop door", (1.55, -.12, 1.35), (1.10, .16, 2.55), color, .045)
+    box("Door glass", (1.55, -.22, 1.72), (.79, .04, 1.40), "glass", .025)
+    ball("Door handle", (1.9, -.27, 1.15), (.05, .06, .05), "wood")
+    awning(loc=(-.85, -.18, .10), scale=1.42, color=color, poles=False)
+    box("Display sill", (-.85, -.34, .62), (2.95, .38, .12), "cream", .025)
+    if variant == 0:
+        for x in (-1.8, -.9, 0):
+            loaf(loc=(x, -.38, .70), scale=.43, rotation=math.pi/2)
+    elif variant == 1:
+        for x in (-1.65, -.75, .15):
+            cylinder("Cafe cup", (x, -.39, .88), .16, .31, "cream")
+            cylinder("Coffee surface", (x, -.39, 1.04), .14, .025, "wood")
+    for x in (-2.40, 2.45):
+        cylinder("Small terracotta planter", (x, -.35, .24), .23, .46, "roof", top=.29)
+        for j in range(5):
+            dx = math.sin(j*2.4)*.22
+            ball("Planter foliage", (x+dx, -.35, .66+math.cos(j)*.12), (.22,.17,.24), "sage")
+            if variant == 2:
+                ball("Flower head", (x+dx, -.49, .87+math.cos(j)*.12), (.12,.10,.12), "rose" if j%2 else "butter")
+    cylinder("Street lamp post", (-2.65, -.40, 1.35), .045, 2.7, "wood")
+    box("Lantern frame", (-2.65, -.40, 2.8), (.33,.25,.45), "wood", .04)
+    box("Warm lantern", (-2.65, -.55, 2.8), (.23,.035,.32), "butter", .025)
 
 
 def setup(width, height, span, target=(0, 0, 1.2), transparent=True, top=False):
@@ -401,7 +395,7 @@ def setup(width, height, span, target=(0, 0, 1.2), transparent=True, top=False):
     bpy.ops.object.camera_add()
     camera = bpy.context.object
     target = Vector(target)
-    camera.location = target + Vector((0, 0, 10) if top else (0, -8, 6))
+    camera.location = target + Vector((0, 0, 10) if top else (0, -12, 5))
     camera.rotation_euler = (target-camera.location).to_track_quat("-Z", "Y").to_euler()
     camera.data.type = "ORTHO"
     camera.data.ortho_scale = span
@@ -457,7 +451,7 @@ SPECS = []
 
 
 def render_asset(name, count, width, height, span, build, target=(0, 0, 1.2), fps=0,
-                 loop=False, top=False, tile=False, labels=None, obstacle=None):
+                 loop=False, top=False, tile=False, labels=None, obstacle=None, facade=False):
     spec = {"id": name, "frameSize": [width, height], "frameCount": count,
             "fps": fps, "loop": loop, "pixelRatio": 2, "supersample": SUPERSAMPLE,
             "pixelsPerMetre": max(width, height)/span*.8,
@@ -470,6 +464,10 @@ def render_asset(name, count, width, height, span, build, target=(0, 0, 1.2), fp
         if SELECTED and name not in SELECTED:
             continue
         scene = setup(width, height, span, target, top=top)
+        if facade:
+            scene.camera.location = (0, -12, 2.5)
+            scene.camera.rotation_euler = (math.pi/2, 0, 0)
+            scene.camera.data.ortho_scale = 6
         build(i)
         if obstacle:
             shape = GEOMETRY["obstacles"][obstacle]
@@ -487,7 +485,7 @@ def render_asset(name, count, width, height, span, build, target=(0, 0, 1.2), fp
             fit.location.y = -shape["front"]/1000-low[1]*fit.scale.y
             fit.scale.z = shape["height"]/1000/(high[2]-low[2])
             fit.location.z = -low[2]*fit.scale.z
-            fit.scale.x = 1.4 if obstacle != "awning" else 1.25
+            fit.scale.x = 2.8 if obstacle == "cart" else 1.25 if obstacle == "awning" else 1.4
             bpy.context.view_layer.update()
             if obstacle == "awning":
                 for obj in meshes:
@@ -513,7 +511,7 @@ for action, count, fps, loop, labels in (
 ):
     render_asset("bunny-"+action, count, 256, 320, 4.1 if action == "crash" else 3.25, lambda i, a=action: bunny(a, i),
                  target=(.45 if action == "crash" else 0, 0, 1.2), fps=fps, loop=loop, labels=labels)
-render_asset("bread-cart", 1, 320, 320, 5.4, lambda _: cart(), target=(0, 0, 1.2), obstacle="cart")
+render_asset("bread-cart", 1, 320, 320, 6.5, lambda _: cart(), target=(0, 0, 2.0), obstacle="cart")
 render_asset("flour-sacks", 1, 288, 288, 3.9,
              lambda _: [sack((-.40, 0, 0), 1, -.16), sack((.38, .12, 0), 1, .12), sack((0, .05, .66), .9, -.1)], target=(0, 0, .85), obstacle="flour")
 render_asset("shop-awning", 1, 384, 384, 5.5, lambda _: awning(), target=(0, 0, 1.65), obstacle="awning")
@@ -524,8 +522,8 @@ render_asset("paper-bag", 1, 192, 224, 1.8, lambda _: bread_bag(), target=(0, 0,
 render_asset("coffee-cup", 1, 192, 224, 1.8, lambda _: coffee(), target=(0, 0, .70))
 render_asset("road-stone", 1, 768, 512, 6, lambda _: road(), target=(0, 0, 0), top=True, tile=True)
 for side in ("left", "right"):
-    render_asset("shops-"+side, 3, 384, 512, 7.4, lambda i, s=side: shop(s, i),
-                 target=(0, 0, .8), labels=["butter", "sage", "rose"])
+    render_asset("shops-"+side, 3, 600, 500, 6, lambda i, s=side: shop(s, i),
+                 target=(0, 0, 2.5), labels=["bakery", "cafe", "flowers"], facade=True)
 if not SELECTED or "sky-dawn" in SELECTED:
     scene = sky()
     scene.render.filepath = str(CACHE / "sky-dawn-00.png")
@@ -542,4 +540,4 @@ if SELECTED and metadata_path.exists():
             previous[spec["id"]] = spec
     SPECS = list(previous.values())
 metadata_path.write_text(json.dumps(SPECS, indent=2) + "\n")
-print("R5 rendering complete:", metadata_path)
+print("R6 rendering complete:", metadata_path)

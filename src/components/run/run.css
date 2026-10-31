@@ -24,3 +24,5 @@
 @media (prefers-reduced-motion:reduce) { .run-record-pop { animation-name:run-fade; } }
 
 .run-input-limit { position:absolute; inset:12px 12px auto; margin:0; padding:10px; border-radius:12px; background:var(--c-paper); color:var(--c-ink); font-size:12px; text-align:center; }
+
+.run-fps { position: absolute; top: .5rem; left: .5rem; z-index: 2; padding: .15rem .4rem; background: var(--c-paper); color: var(--c-ink); font: 12px monospace; pointer-events: none; }
