@@ -3,7 +3,8 @@ import { runSeed, runSeedVersion, RUN_ENGINE_VERSION } from "@/lib/run";
 import { isRunSuspicious } from "@/server/runRules";
 it("pins replay versions", () => {
   expect(runSeedVersion(runSeed("ab12"))).toBe(RUN_ENGINE_VERSION);
-  expect(runSeed("ab12")).toBe("v4.ab12");
+  expect(runSeed("ab12")).toBe("v5.ab12");
+  expect(runSeedVersion("v4.ab12")).not.toBe(RUN_ENGINE_VERSION);
   expect(runSeedVersion("v3.ab12")).not.toBe(RUN_ENGINE_VERSION);
   expect(runSeedVersion("v2.ab12")).not.toBe(RUN_ENGINE_VERSION);
   expect(runSeedVersion("v1.ab12")).not.toBe(RUN_ENGINE_VERSION);

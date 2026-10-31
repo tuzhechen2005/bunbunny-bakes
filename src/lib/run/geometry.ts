@@ -3,6 +3,7 @@ import type { RunObstacleKind, RunPlayer } from "./types";
 
 /** Millimetres; Blender reads this same file when fitting obstacle meshes. */
 export const runGeometry = geometry;
+export const TRUCK_SPEED = geometry.truckSpeed;
 export const MAX_OBSTACLE_FRONT = Math.max(...Object.values(geometry.obstacles).map(o => o.front));
 export const MAX_OBSTACLE_BACK = Math.max(...Object.values(geometry.obstacles).map(o => o.back));
 /** Integer parabola, shared by replay and drawing (progress is 0..1000). */

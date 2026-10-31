@@ -109,7 +109,7 @@ it("maps continuous facade columns from cached mips, with no large source sheet 
 
 it("preserves projected collision ground endpoints in the actual obstacle draw bands",()=>{
   const {art,game,ctx}=setup();
-  const state=game.state();state.objects=[{id:1,lane:1,z:1000,kind:'cart'}];
+  const state=game.state();state.objects=[{...runGeometry.obstacles.cart,id:1,lane:1,z:1000,kind:'cart'}];
   renderRun(canvasContext(ctx),art,state,390,650,false);
   const a=manifest.assets['bread-cart'];
   const calls=ctx.drawImage.mock.calls.filter(c=>c.length===9&&c[7]>5&&Math.abs(c[5]-(195-a.anchor[0]*worldHeightPixels(4400,650)*(24000/25000)/(a.anchor[1]-a.heightTop[1])))<1e-6);

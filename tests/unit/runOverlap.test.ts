@@ -3,13 +3,13 @@ import { RAMP_TICKS, type RunObject, type RunObstacleKind } from "@/lib/run/type
 const fixture = vi.hoisted(() => ({ objects: [] as RunObject[] }));
 vi.mock("@/lib/run/track", () => ({ createRunTrack: () => ({ next: () => ({ end: 100_000_000, objects: fixture.objects }) }) }));
 import { createRunGame, runSpeed } from "@/lib/run/engine";
-import { clearsObstacle, overlapsObstacle } from "@/lib/run/geometry";
+import { runGeometry, clearsObstacle, overlapsObstacle } from "@/lib/run/geometry";
 import { replayRun } from "@/lib/run/replay";
 
 function scenario(kind: RunObstacleKind, centreTick: number, offset: number) {
   let centre = 0;
   for(let t=1;t<=centreTick;t++) centre += runSpeed(t);
-  fixture.objects = [{id:1,lane:1,z:centre,kind}];
+  fixture.objects = [{...runGeometry.obstacles[kind],id:1,lane:1,z:centre,kind}];
   const game=createRunGame({seed:"geometry"});
   const dir=kind==='awning'?'D':'U';
   const at=centreTick-offset;
@@ -58,7 +58,7 @@ describe("continuous obstacle overlap", () => {
   it("entering a lane midway through an overlap collides; the target lane is free before midpoint", () => {
     let centre = 0;
     for (let tick = 1; tick <= 100; tick++) centre += runSpeed(tick);
-    fixture.objects=[{id:1,lane:2,z:centre,kind:'cart'}];
+    fixture.objects=[{...runGeometry.obstacles.cart,id:1,lane:2,z:centre,kind:'cart'}];
     const game=createRunGame({seed:'lane'});
     game.step(96);game.input(96,'R');
     game.step(101);expect(game.state().player.lane).toBe(1);expect(game.state().over).toBe(false);

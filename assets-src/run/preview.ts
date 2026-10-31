@@ -6,6 +6,7 @@ import sharp from 'sharp';
 import { manifest, type RunArt } from '../../src/components/run/runAssets';
 import { prepareRunRenderer, renderRun } from '../../src/components/run/runRenderer';
 import { createRunGame } from '../../src/lib/run';
+import { runGeometry } from '../../src/lib/run/geometry';
 
 async function main() {
   const require=createRequire(resolve('assets-src/run/.cache/preview/package.json'));
@@ -18,9 +19,9 @@ async function main() {
   }
   const game=createRunGame({seed:'v3.preview',realtime:true});
   const state=game.frame(0);
-  state.objects=[{id:1,lane:0,z:500,kind:'cart'},{id:2,lane:2,z:14000,kind:'flour'},
-    {id:3,lane:0,z:36000,kind:'awning'}, {id:4,lane:1,z:10000,kind:'bread'},
-    {id:5,lane:1,z:17000,kind:'bread'},{id:6,lane:1,z:24000,kind:'bread'}];
+  state.objects=[{...runGeometry.obstacles.cart,id:1,lane:0,z:500,kind:'cart'},{...runGeometry.obstacles.flour,id:2,lane:2,z:14000,kind:'flour'},
+    {...runGeometry.obstacles.awning,id:3,lane:0,z:36000,kind:'awning'}, {front:0,back:0,height:0,id:4,lane:1,z:10000,kind:'bread'},
+    {front:0,back:0,height:0,id:5,lane:1,z:17000,kind:'bread'},{front:0,back:0,height:0,id:6,lane:1,z:24000,kind:'bread'}];
   state.objects.sort((a,b)=>a.z-b.z);
   const layers=[];
   const times:number[]=[];

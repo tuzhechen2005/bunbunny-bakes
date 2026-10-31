@@ -1,4 +1,4 @@
-export const RUN_ENGINE_VERSION = 4;
+export const RUN_ENGINE_VERSION = 5;
 export const TICK_RATE = 60;
 export const UNITS_PER_METRE = 1000;
 export const MAX_RUN_TICKS = 15 * 60 * TICK_RATE;
@@ -20,7 +20,7 @@ export const VISIBLE_DISTANCE = 90_000;
 export const LANES = [0, 1, 2] as const;
 export type RunLane = typeof LANES[number];
 export type RunDirection = "L" | "R" | "U" | "D";
-export type RunObstacleKind = "cart" | "flour" | "awning" | "puddle";
+export type RunObstacleKind = "cart" | "flour" | "awning" | "puddle" | "ramp" | "van" | "truck";
 export type RunObjectKind = RunObstacleKind | "bread" | "paper-bag" | "coffee";
 export interface RunInput { tick: number; dir: RunDirection }
 export interface RunObject {
@@ -29,9 +29,17 @@ export interface RunObject {
   /** Relative millimetres ahead in snapshots; absolute millimetres in track chunks. */
   z: number;
   kind: RunObjectKind;
+  front: number;
+  back: number;
+  height: number;
+  speed?: number;
+  /** Collectible elevation above the road. */
+  y?: number;
 }
 export interface RunLaneChange { from: RunLane; to: RunLane; progress: number }
 export interface RunPlayer {
+  y: number;
+  surface: "ground" | "roof";
   lane: RunLane;
   pose: "run" | "jump" | "slide" | "lane-change";
   /** Integer 0..1000 progress of pose; run has zero progress. */
