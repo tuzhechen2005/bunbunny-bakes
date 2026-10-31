@@ -15,7 +15,7 @@ describe("run engine", () => {
     const g = createRunGame({ seed: "copy" });
     const twin = createRunGame({ seed: "copy" });
     const s = g.state();
-    expect(RUN_ENGINE_VERSION).toBe(1);
+    expect(RUN_ENGINE_VERSION).toBe(2);
     expect(s).toMatchObject({ tick: 0, distance: 0, score: 0, bread: 0, speed: BASE_SPEED, over: false, player: { lane: 1, pose: "run" } });
     s.objects[0].lane = 2; s.objects.pop(); s.player.lane = 2;
     s.powerUps.coffeeUntil = 999; s.events.push({ type: "over", tick: 0, reason: "limit" });
@@ -79,14 +79,14 @@ describe("run engine", () => {
     expect(random[50]).toBeLessThan(20 * 60);
   }, 30_000);
 
-  it("pins version-one scoring and a nontrivial seeded run", () => {
+  it("pins version-two scoring and a nontrivial seeded run", () => {
     const run = goodRun("pinned");
     expect(replayRun("pinned", run.inputs, run.endTick)).toEqual({
-      score: 17875, distance: 12555270, bread: 532, over: true, endTick: 26414,
+      score: 38665, distance: 26775270, bread: 1189, over: true, endTick: 54000,
     });
     expect(run.inputs.slice(0, 5)).toEqual([
-      { tick: 195, dir: "U" }, { tick: 405, dir: "U" }, { tick: 993, dir: "L" },
-      { tick: 1179, dir: "U" }, { tick: 1353, dir: "U" },
+      { tick: 200, dir: "U" }, { tick: 411, dir: "U" }, { tick: 993, dir: "L" },
+      { tick: 1181, dir: "U" }, { tick: 1359, dir: "U" },
     ]);
   });
 

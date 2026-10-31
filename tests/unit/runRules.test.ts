@@ -4,6 +4,7 @@ import {
   MAGNET_TICKS, COFFEE_TICKS, JUMP_TICKS, SLIDE_TICKS, LANE_CHANGE_TICKS,
   type RunGame, type RunLane, type RunEvent, type RunObstacleKind,
 } from "@/lib/run";
+import { runGeometry } from "@/lib/run/geometry";
 import { createRunTrack } from "@/lib/run/track";
 
 function moveTo(game: RunGame, lane: RunLane) {
@@ -25,7 +26,7 @@ function collisionFixture(kind: RunObstacleKind, adjacent = false) {
     const game = createRunGame({ seed });
     moveTo(game, obstacle.lane);
     let tick = 0, distance = 0;
-    while (distance < obstacle.z) distance += runSpeed(++tick);
+    while (distance < obstacle.z - runGeometry.obstacles[kind].front + runGeometry.edgeGrace) distance += runSpeed(++tick);
     return { game, obstacle, tick };
   }
   throw new Error("missing collision fixture");
@@ -63,7 +64,7 @@ function safelyAdvance(game: RunGame, target: number): RunEvent[] {
 }
 
 describe("run collision rules", () => {
-  it.each(["cart", "flour", "awning", "puddle"] as const)("%s kills on the exact crossing tick", (kind) => {
+  it.each(["cart", "flour", "awning", "puddle"] as const)("%s kills on the first overlap tick", (kind) => {
     const { game, tick, obstacle } = collisionFixture(kind);
     game.step(tick - 1); expect(game.state().over).toBe(false);
     expect(game.step(tick)).toContainEqual({ type: "collision", tick, id: obstacle.id, kind, lane: obstacle.lane });
@@ -83,15 +84,15 @@ describe("run collision rules", () => {
     game.input(tick - duration, dir); game.step(tick);
     expect(game.state().over).toBe(true);
   });
-  it("a late lane change still occupies the source lane; a completed one clears it", () => {
-    for (const offset of [LANE_CHANGE_TICKS - 1, LANE_CHANGE_TICKS]) {
+  it("lane occupancy switches exactly at the visual midpoint", () => {
+    for (const offset of [LANE_CHANGE_TICKS / 2 - 1, LANE_CHANGE_TICKS / 2]) {
       const { game, tick, obstacle } = collisionFixture("cart", true);
       const row = game.state().objects.filter((o) => o.z + game.state().distance === ROW_GAP && isRunObstacle(o.kind));
       const open = LANES.find((l) => !row.some((o) => o.lane === l))!;
       // Fixture has the cart adjacent to the open lane.
       expect(Math.abs(open - obstacle.lane)).toBe(1);
       game.input(tick - offset, open < obstacle.lane ? "L" : "R"); game.step(tick);
-      expect(game.state().over).toBe(offset < LANE_CHANGE_TICKS);
+      expect(game.state().over).toBe(offset < LANE_CHANGE_TICKS / 2);
     }
   });
 });
