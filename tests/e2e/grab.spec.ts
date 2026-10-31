@@ -4,6 +4,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { copy } from "../../src/copy";
 import { createGrabGame, replayGrab } from "../../src/lib/grab";
 import { GRAB_SAVE_KEY } from "../../src/components/grab/grabSave";
+test.use({ browserName: "chromium" });
 import { chooseGrabWait, greedyGrab } from "../support/grabBot";
 
 const SEED = "v1.abcdef0123456789";
@@ -33,7 +34,7 @@ async function start(page:Page) {
 async function stored(page:Page) { return page.evaluate(key=>JSON.parse(localStorage.getItem(key)!),GRAB_SAVE_KEY); }
 for(const width of [320,390]) {
  test.describe(`GRAB ${width}px`,()=>{
-  test.use({viewport:{width,height:800},hasTouch:true,browserName:"chromium"});
+  test.use({viewport:{width,height:800},hasTouch:true});
   test("four game hub, illustrated menu, prize gating and leaderboard",async({page})=>{
    await mockApi(page);await page.goto("/game/hub");
    const boxes=await Promise.all(["big","tu","m3","grab"].map(k=>page.getByTestId(`hub-game-${k}`).boundingBox()));
