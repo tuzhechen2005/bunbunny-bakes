@@ -1,6 +1,6 @@
 import { BOARD_REFRESH_MS, PROGRESS_MIN_GAP_MS, PROGRESS_REPORT_MS } from "./liveScores";
 
-export interface ProgressSnapshot { runId: string; log: readonly unknown[] }
+export interface ProgressSnapshot { runId: string; log: readonly unknown[]; endTick?: number }
 type Send = (snapshot: ProgressSnapshot, exiting: boolean) => Promise<{ status: number }>;
 
 /** One request in flight; failures retry on the next tick, a 404 disables this reporter. */
@@ -44,7 +44,7 @@ export function startVisibleRefresh(refresh: () => void, visible: () => boolean,
   return () => clearInterval(timer);
 }
 
-// A 404 applies to all three reporters until navigation/reload. Server response flags also
+// A 404 applies to all game reporters until navigation/reload. Server response flags also
 // turn off board timers; progress still probes once so old cached pages honor the kill switch.
 let reportingDisabled = false;
 export const canReportLiveScores = () => !reportingDisabled;

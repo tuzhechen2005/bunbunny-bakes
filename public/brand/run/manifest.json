@@ -1,0 +1,1051 @@
+{
+  "version": 1,
+  "baseUrl": "/brand/run/",
+  "pixelRatio": 2,
+  "colorSpace": "srgb",
+  "renderer": {
+    "blender": "4.3.2",
+    "engine": "Cycles CPU"
+  },
+  "camera": {
+    "projection": "orthographic",
+    "azimuthDegrees": 0,
+    "elevationDegrees": 36.869898,
+    "forwardAxis": "+Y",
+    "screenRightAxis": "+X",
+    "bunnyYawDegrees": -12
+  },
+  "coordinates": {
+    "origin": "top-left",
+    "units": "source pixels",
+    "anchor": "projected world origin; place at ground contact, not image center",
+    "draw": "drawImage(sheet, ...rect, x-anchor[0]*scale, y-anchor[1]*scale, frameWidth*scale, frameHeight*scale)",
+    "scale": "0.5 gives nominal CSS size at 2x; multiply by perspective scale"
+  },
+  "assets": {
+    "bunny-run": {
+      "file": "bunny-run.webp",
+      "frameSize": [
+        256,
+        320
+      ],
+      "frameCount": 8,
+      "columns": 8,
+      "rows": 1,
+      "fps": 14,
+      "loop": true,
+      "anchor": [
+        128,
+        254.523
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            83,
+            39,
+            92,
+            217
+          ]
+        },
+        {
+          "rect": [
+            256,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            81,
+            39,
+            96,
+            219
+          ]
+        },
+        {
+          "rect": [
+            512,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            81,
+            39,
+            97,
+            218
+          ]
+        },
+        {
+          "rect": [
+            768,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            81,
+            44,
+            96,
+            214
+          ]
+        },
+        {
+          "rect": [
+            1024,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            83,
+            46,
+            92,
+            210
+          ]
+        },
+        {
+          "rect": [
+            1280,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            83,
+            41,
+            93,
+            211
+          ]
+        },
+        {
+          "rect": [
+            1536,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            82,
+            35,
+            95,
+            217
+          ]
+        },
+        {
+          "rect": [
+            1792,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            83,
+            36,
+            93,
+            216
+          ]
+        }
+      ],
+      "bytes": 25986
+    },
+    "bunny-jump": {
+      "file": "bunny-jump.webp",
+      "frameSize": [
+        256,
+        320
+      ],
+      "frameCount": 3,
+      "columns": 3,
+      "rows": 1,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        128,
+        254.523
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            87,
+            26,
+            91,
+            224
+          ]
+        },
+        {
+          "rect": [
+            256,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            83,
+            4,
+            98,
+            245
+          ]
+        },
+        {
+          "rect": [
+            512,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            80,
+            61,
+            95,
+            194
+          ]
+        }
+      ],
+      "bytes": 11220,
+      "frameLabels": [
+        "takeoff",
+        "airborne",
+        "landing"
+      ]
+    },
+    "bunny-slide": {
+      "file": "bunny-slide.webp",
+      "frameSize": [
+        256,
+        320
+      ],
+      "frameCount": 2,
+      "columns": 2,
+      "rows": 1,
+      "fps": 8,
+      "loop": true,
+      "anchor": [
+        128,
+        254.523
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            89,
+            82,
+            113,
+            188
+          ]
+        },
+        {
+          "rect": [
+            256,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            89,
+            85,
+            114,
+            187
+          ]
+        }
+      ],
+      "bytes": 6892,
+      "frameLabels": [
+        "enter",
+        "hold"
+      ]
+    },
+    "bunny-lean": {
+      "file": "bunny-lean.webp",
+      "frameSize": [
+        256,
+        320
+      ],
+      "frameCount": 2,
+      "columns": 2,
+      "rows": 1,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        128,
+        254.523
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            32,
+            47,
+            133,
+            210
+          ]
+        },
+        {
+          "rect": [
+            256,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            94,
+            54,
+            124,
+            215
+          ]
+        }
+      ],
+      "bytes": 7748,
+      "frameLabels": [
+        "left",
+        "right"
+      ]
+    },
+    "bunny-crash": {
+      "file": "bunny-crash.webp",
+      "frameSize": [
+        256,
+        320
+      ],
+      "frameCount": 3,
+      "columns": 3,
+      "rows": 1,
+      "fps": 8,
+      "loop": false,
+      "anchor": [
+        128,
+        254.523
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            91,
+            32,
+            114,
+            236
+          ]
+        },
+        {
+          "rect": [
+            256,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            98,
+            41,
+            147,
+            228
+          ]
+        },
+        {
+          "rect": [
+            512,
+            0,
+            256,
+            320
+          ],
+          "anchor": [
+            128,
+            254.523
+          ],
+          "contentBounds": [
+            99,
+            117,
+            155,
+            167
+          ]
+        }
+      ],
+      "bytes": 11510,
+      "frameLabels": [
+        "impact",
+        "tumble",
+        "rest"
+      ]
+    },
+    "bread-cart": {
+      "file": "bread-cart.webp",
+      "frameSize": [
+        320,
+        320
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        160,
+        235.035
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            320,
+            320
+          ],
+          "anchor": [
+            160,
+            235.035
+          ],
+          "contentBounds": [
+            72,
+            38,
+            176,
+            230
+          ]
+        }
+      ],
+      "bytes": 5734
+    },
+    "flour-sacks": {
+      "file": "flour-sacks.webp",
+      "frameSize": [
+        288,
+        288
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        144,
+        219.323
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            288,
+            288
+          ],
+          "anchor": [
+            144,
+            219.323
+          ],
+          "contentBounds": [
+            53,
+            87,
+            180,
+            145
+          ]
+        }
+      ],
+      "bytes": 3052
+    },
+    "shop-awning": {
+      "file": "shop-awning.webp",
+      "frameSize": [
+        384,
+        384
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        192,
+        291.474
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            384,
+            384
+          ],
+          "anchor": [
+            192,
+            291.474
+          ],
+          "contentBounds": [
+            66,
+            72,
+            252,
+            207
+          ]
+        }
+      ],
+      "bytes": 4102
+    },
+    "puddle": {
+      "file": "puddle.webp",
+      "frameSize": [
+        320,
+        192
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        160,
+        96
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            320,
+            192
+          ],
+          "anchor": [
+            160,
+            96
+          ],
+          "contentBounds": [
+            34,
+            43,
+            258,
+            106
+          ]
+        }
+      ],
+      "bytes": 2808
+    },
+    "loaf-spin": {
+      "file": "loaf-spin.webp",
+      "frameSize": [
+        128,
+        128
+      ],
+      "frameCount": 6,
+      "columns": 6,
+      "rows": 1,
+      "fps": 10,
+      "loop": true,
+      "anchor": [
+        64,
+        90.686
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            128,
+            128
+          ],
+          "anchor": [
+            64,
+            90.686
+          ],
+          "contentBounds": [
+            30,
+            26,
+            68,
+            77
+          ]
+        },
+        {
+          "rect": [
+            128,
+            0,
+            128,
+            128
+          ],
+          "anchor": [
+            64,
+            90.686
+          ],
+          "contentBounds": [
+            17,
+            29,
+            94,
+            67
+          ]
+        },
+        {
+          "rect": [
+            256,
+            0,
+            128,
+            128
+          ],
+          "anchor": [
+            64,
+            90.686
+          ],
+          "contentBounds": [
+            17,
+            33,
+            94,
+            63
+          ]
+        },
+        {
+          "rect": [
+            384,
+            0,
+            128,
+            128
+          ],
+          "anchor": [
+            64,
+            90.686
+          ],
+          "contentBounds": [
+            30,
+            26,
+            68,
+            77
+          ]
+        },
+        {
+          "rect": [
+            512,
+            0,
+            128,
+            128
+          ],
+          "anchor": [
+            64,
+            90.686
+          ],
+          "contentBounds": [
+            17,
+            30,
+            94,
+            66
+          ]
+        },
+        {
+          "rect": [
+            640,
+            0,
+            128,
+            128
+          ],
+          "anchor": [
+            64,
+            90.686
+          ],
+          "contentBounds": [
+            17,
+            32,
+            94,
+            64
+          ]
+        }
+      ],
+      "bytes": 7204
+    },
+    "paper-bag": {
+      "file": "paper-bag.webp",
+      "frameSize": [
+        192,
+        224
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        96,
+        175.716
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            192,
+            224
+          ],
+          "anchor": [
+            96,
+            175.716
+          ],
+          "contentBounds": [
+            50,
+            46,
+            90,
+            139
+          ]
+        }
+      ],
+      "bytes": 2874
+    },
+    "coffee-cup": {
+      "file": "coffee-cup.webp",
+      "frameSize": [
+        192,
+        224
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        96,
+        181.689
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            192,
+            224
+          ],
+          "anchor": [
+            96,
+            181.689
+          ],
+          "contentBounds": [
+            45,
+            37,
+            102,
+            153
+          ]
+        }
+      ],
+      "bytes": 3208
+    },
+    "road-stone": {
+      "file": "road-stone.webp",
+      "frameSize": [
+        768,
+        512
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        384,
+        256
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            768,
+            512
+          ],
+          "anchor": [
+            384,
+            256
+          ],
+          "contentBounds": [
+            0,
+            0,
+            768,
+            512
+          ]
+        }
+      ],
+      "bytes": 232396,
+      "repeatAxis": "y",
+      "projection": "ground-plan; map onto road trapezoid"
+    },
+    "shops-left": {
+      "file": "shops-left.webp",
+      "frameSize": [
+        256,
+        512
+      ],
+      "frameCount": 3,
+      "columns": 3,
+      "rows": 1,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        128,
+        256
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            256,
+            512
+          ],
+          "anchor": [
+            128,
+            256
+          ],
+          "contentBounds": [
+            0,
+            0,
+            256,
+            512
+          ]
+        },
+        {
+          "rect": [
+            256,
+            0,
+            256,
+            512
+          ],
+          "anchor": [
+            128,
+            256
+          ],
+          "contentBounds": [
+            0,
+            0,
+            256,
+            512
+          ]
+        },
+        {
+          "rect": [
+            512,
+            0,
+            256,
+            512
+          ],
+          "anchor": [
+            128,
+            256
+          ],
+          "contentBounds": [
+            0,
+            0,
+            256,
+            512
+          ]
+        }
+      ],
+      "bytes": 245802,
+      "frameLabels": [
+        "butter",
+        "sage",
+        "rose"
+      ],
+      "repeatAxis": "y",
+      "projection": "camera-plane; repeat vertically before perspective scaling",
+      "variantPolicy": "repeat the same variant; crossfade when changing palette"
+    },
+    "shops-right": {
+      "file": "shops-right.webp",
+      "frameSize": [
+        256,
+        512
+      ],
+      "frameCount": 3,
+      "columns": 3,
+      "rows": 1,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        128,
+        256
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            256,
+            512
+          ],
+          "anchor": [
+            128,
+            256
+          ],
+          "contentBounds": [
+            0,
+            0,
+            256,
+            512
+          ]
+        },
+        {
+          "rect": [
+            256,
+            0,
+            256,
+            512
+          ],
+          "anchor": [
+            128,
+            256
+          ],
+          "contentBounds": [
+            0,
+            0,
+            256,
+            512
+          ]
+        },
+        {
+          "rect": [
+            512,
+            0,
+            256,
+            512
+          ],
+          "anchor": [
+            128,
+            256
+          ],
+          "contentBounds": [
+            0,
+            0,
+            256,
+            512
+          ]
+        }
+      ],
+      "bytes": 235556,
+      "frameLabels": [
+        "butter",
+        "sage",
+        "rose"
+      ],
+      "repeatAxis": "y",
+      "projection": "camera-plane; repeat vertically before perspective scaling",
+      "variantPolicy": "repeat the same variant; crossfade when changing palette"
+    },
+    "sky-dawn": {
+      "file": "sky-dawn.webp",
+      "frameSize": [
+        780,
+        960
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        390,
+        960
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            780,
+            960
+          ],
+          "anchor": [
+            390,
+            960
+          ],
+          "contentBounds": [
+            0,
+            0,
+            780,
+            960
+          ]
+        }
+      ],
+      "bytes": 3120
+    }
+  }
+}

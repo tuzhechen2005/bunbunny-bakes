@@ -242,7 +242,7 @@ function renderGameWinner(n: NotificationToRender): RenderedEmail {
   const g = t.gameWinner;
   const p = payloadObject(n) as unknown as GameWinnerPayload;
   if (!p.week || !p.winner) throw new Error(`GAME_WINNER notification ${n.id}: payload has no winner`);
-  const names: Record<GameWinnerPayload["game"], string> = { BIG: g.gameBig, TU: g.gameTu, M3: g.gameM3 };
+  const names: Record<GameWinnerPayload["game"], string> = { BIG: g.gameBig, TU: g.gameTu, M3: g.gameM3, GRAB: g.gameGrab };
   const name = names[p.game];
   if (!name) throw new Error(`GAME_WINNER notification ${n.id}: unknown game`);
   const weekHeader = fill(g.weekHeader, { start: dayLabel(p.week.start), end: dayLabel(p.week.end) });
