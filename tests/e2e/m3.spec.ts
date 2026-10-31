@@ -85,6 +85,16 @@ for (const width of [320, 390]) {
       await m3.click();
       await expect(page).toHaveURL(/\/game\/m3$/);
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(copy.customer.m3.title);
+      for (const kind of ["roll", "big"] as const) {
+        const card = page.getByTestId(`m3-help-${kind}`);
+        await expect(card).toContainText(copy.customer.m3.specialHelp[kind].match);
+        await expect(card).toContainText(copy.customer.m3.specialHelp[kind].effect);
+        await expect(card.locator("img")).toHaveAttribute("src", `/brand/m3/${kind}.svg`);
+      }
+      const rollCard = (await page.getByTestId("m3-help-roll").boundingBox())!;
+      const bigCard = (await page.getByTestId("m3-help-big").boundingBox())!;
+      expect(rollCard.y).toBe(bigCard.y);
+      expect(bigCard.x).toBeGreaterThanOrEqual(rollCard.x + rollCard.width);
       await expect(page.getByTestId("m3-prize-line")).toHaveText(g.prizeLine);
       await expect(page.getByTestId("m3-rules")).toContainText("test_owner");
       await expect(page.getByTestId("top-bar-back").filter({ visible: true })).toHaveAttribute("href", "/game/hub");
@@ -96,6 +106,49 @@ for (const width of [320, 390]) {
       await page.reload();
       await expect(page.getByTestId("m3-rules")).toHaveText(copy.customer.gameHub.rules);
       await expect(page.getByTestId("m3-prize-line")).toHaveCount(0);
+    });
+
+    test("special tips appear once per kind, queue, fade and stay dismissed after reload", async ({ page }) => {
+      await mockApi(page);
+      await page.emulateMedia({ reducedMotion: width === 320 ? "reduce" : "no-preference" });
+      await page.goto("/game/m3"); await start(page);
+      const tip = page.getByTestId("m3-special-tip");
+      await expect(tip).toHaveCount(0);
+      const boardBox = await page.getByTestId("m3-board").boundingBox();
+      const game = createM3Game({ seed: SEED, tiers: TIERS });
+      const move = chooseM3Move(game.state(), true, () => 0);
+      const events = game.swap(move.a, move.b)!;
+      const kinds = [...new Set(events.flatMap(e => e.type === "special" && e.action === "created" ? [e.kind] : []))];
+      expect(kinds).toHaveLength(2);
+      await tapSwap(page, move);
+      for (const kind of kinds) {
+        await expect(tip).toHaveText(copy.customer.m3.specialHelp[kind].tip);
+        await expect(tip).toHaveCSS("pointer-events", "none");
+        await expect(tip).toHaveCSS("white-space", "nowrap");
+        await expect(tip).toHaveCSS("animation-name", "m3-special-tip-fade");
+        expect(await page.getByTestId("m3-board").boundingBox()).toEqual(boardBox);
+        const tipBox = (await tip.boundingBox())!;
+        expect(tipBox.y + tipBox.height).toBeLessThanOrEqual(boardBox!.y);
+        expect(tipBox.width).toBeLessThanOrEqual(boardBox!.width);
+        await expect.poll(() => page.evaluate(kind => localStorage.getItem(`bb_m3_special_tip_${kind}`), kind)).toBe("1");
+      }
+      await expect(tip).toHaveCount(0);
+      await settled(page, game.state());
+      const roll = page.locator(".m3-board .m3-special-roll").first();
+      const badgeSize = await roll.evaluate(el => el.getBoundingClientRect().width / el.parentElement!.getBoundingClientRect().width);
+      expect(badgeSize).toBeCloseTo(.4, 2);
+      await expect(roll.locator("..").locator(".m3-face img")).toBeVisible();
+      const big = page.locator(".m3-board .m3-special-big").first();
+      expect(await big.evaluate(el => el.getBoundingClientRect().width / el.parentElement!.getBoundingClientRect().width)).toBeCloseTo(1, 2);
+      await page.reload(); await page.getByTestId("m3-resume").click();
+      await settled(page, game.state());
+      await page.waitForTimeout(2400);
+      await expect(tip).toHaveCount(0);
+      // Each kind has its own browser history; clearing one must not replay the other.
+      await page.evaluate(() => localStorage.removeItem("bb_m3_special_tip_big"));
+      await page.reload(); await page.getByTestId("m3-resume").click();
+      await expect(tip).toHaveText(copy.customer.m3.specialHelp.big.tip);
+      await expect(tip).toHaveCount(0);
     });
 
     test("legal swipe, illegal swap returns, orders, autosave and resume", async ({ page }) => {

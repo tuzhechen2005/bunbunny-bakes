@@ -16,6 +16,7 @@ import type { M3Move } from "@/lib/m3";
 import { fetchMenu } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { M3Board, type M3Progress } from "./M3Board";
+import { SpecialMark } from "./M3Art";
 import { fetchM3Leaderboard, finishM3, startM3 } from "./m3Api";
 import { clearM3Save, readM3Save, writeM3Save, type M3Save } from "./m3Save";
 
@@ -324,6 +325,12 @@ export function M3Page() {
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
           <h1 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.title}</h1>
           <p className="m-0 mt-2 text-sm leading-relaxed text-c-grey">{t.startHint}</p>
+          <div className="m3-help-cards">
+            {(["roll", "big"] as const).map(kind => <div key={kind} className="m3-help-card" data-testid={`m3-help-${kind}`}>
+              <span className="m3-help-art"><SpecialMark kind={kind} /></span>
+              <div><b className="font-display">{t.specialHelp[kind].match}</b><span>{t.specialHelp[kind].effect}</span></div>
+            </div>)}
+          </div>
           <p className="mt-2 text-xs leading-relaxed text-c-grey">{t.rules}</p>
           {/* Keep the full line's space, including wrapping, while the hub loads or fails. */}
           <p

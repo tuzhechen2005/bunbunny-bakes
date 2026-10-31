@@ -10,6 +10,7 @@ import { motionHealth } from "@/lib/motion/fps";
 import { haptic, useMotionPrefs } from "@/lib/motion/react";
 import { adjacent, animationQueue, sameCell, swipeDirection, swipeTarget, type AnimationFrame, type SwipeDirection } from "./m3Animation";
 import { BoardPaper, BreadFace, PieceFace } from "./M3Art";
+import { M3SpecialTip } from "./M3SpecialTip";
 import "./m3.css";
 
 const t = copy.customer.m3;
@@ -174,39 +175,42 @@ export function M3Board({ tiers, seed, initialMoves = [], soundOn, reduced, onPr
         <progress value={order.have} max={order.need} aria-label={tiers[order.tier].name ?? t.orders} />
       </div>)}
     </div>
-    <div ref={board} className={`m3-board ${event?.type === "shuffle" ? "m3-shuffle" : ""}`} role="group" aria-label={t.boardLabel} aria-busy={busy} data-testid="m3-board">
-      <BoardPaper />
-      {view.board.flatMap((row, r) => row.map((code, c) => {
-        const p = { r, c };
-        let dx = 0, dy = 0, effect = "";
-        const swap = invalid ?? (event?.type === "swap" ? event : null);
-        if (swap && (sameCell(swap.a, p) || sameCell(swap.b, p))) {
-          const to = sameCell(swap.a, p) ? swap.b : swap.a;
-          dx = (to.c - c) * 100; dy = (to.r - r) * 100; effect = invalid ? "m3-invalid" : "m3-travel";
-        }
-        if (event?.type === "fall") {
-          const tile = event.tiles.find(tile => sameCell(tile.from, p));
-          if (tile) { dy = (tile.to.r - r) * 100; effect = "m3-travel"; }
-        }
-        if (event?.type === "refill" && event.tiles.some(tile => sameCell(tile, p))) { dy = -(r + 1) * 100; effect = "m3-refill"; }
-        if (event?.type === "match" && event.cells.some(cell => sameCell(cell, p))) effect = "m3-pop";
-        if (event?.type === "special" && sameCell(event.cell, p)) effect = "m3-flash";
-        const tier = tiers[tierOf(code)];
-        return <div key={`${r}-${c}`} className="m3-cell" style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%` }}>
-          {code >= 0 && <span className={`m3-piece ${effect} ${!quiet && hint && (sameCell(hint.a, p) || sameCell(hint.b, p)) ? "m3-hint" : ""}`} style={{ "--dx": `${dx}%`, "--dy": `${dy}%`, "--duration": `${invalid ? 360 : frame?.ms ?? 180}ms` } as CSSProperties}>
-            <PieceFace tier={tier} kind={code >= ROLL_BASE ? code >= BIG_BASE ? "big" : "roll" : undefined} />
-          </span>}
-          <button type="button" className="m3-target" data-cell={`${r},${c}`} data-testid={`m3-cell-${r}-${c}`} data-code={code} aria-pressed={sameCell(selected, p)} disabled={busy}
-            aria-label={fill(t.tileLabel, { r: String(r + 1), c: String(c + 1), name: tier?.name ?? "", special: code >= BIG_BASE ? t.big : code >= ROLL_BASE ? t.roll : "" })}
-            onClick={() => {
-              if (locked.current) return;
-              if (game.over) { onShowResult?.(); return; }
-              setHint(null); setActivity(n => n + 1);
-              if (selected && adjacent(selected, p)) attempt(selected, p);
-              else setSelected(sameCell(selected, p) ? null : p);
-            }} />
-        </div>;
-      }))}
+    <div className="m3-board-wrap">
+      <M3SpecialTip board={view.board} />
+      <div ref={board} className={`m3-board ${event?.type === "shuffle" ? "m3-shuffle" : ""}`} role="group" aria-label={t.boardLabel} aria-busy={busy} data-testid="m3-board">
+        <BoardPaper />
+        {view.board.flatMap((row, r) => row.map((code, c) => {
+          const p = { r, c };
+          let dx = 0, dy = 0, effect = "";
+          const swap = invalid ?? (event?.type === "swap" ? event : null);
+          if (swap && (sameCell(swap.a, p) || sameCell(swap.b, p))) {
+            const to = sameCell(swap.a, p) ? swap.b : swap.a;
+            dx = (to.c - c) * 100; dy = (to.r - r) * 100; effect = invalid ? "m3-invalid" : "m3-travel";
+          }
+          if (event?.type === "fall") {
+            const tile = event.tiles.find(tile => sameCell(tile.from, p));
+            if (tile) { dy = (tile.to.r - r) * 100; effect = "m3-travel"; }
+          }
+          if (event?.type === "refill" && event.tiles.some(tile => sameCell(tile, p))) { dy = -(r + 1) * 100; effect = "m3-refill"; }
+          if (event?.type === "match" && event.cells.some(cell => sameCell(cell, p))) effect = "m3-pop";
+          if (event?.type === "special" && sameCell(event.cell, p)) effect = "m3-flash";
+          const tier = tiers[tierOf(code)];
+          return <div key={`${r}-${c}`} className="m3-cell" style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%` }}>
+            {code >= 0 && <span className={`m3-piece ${effect} ${!quiet && hint && (sameCell(hint.a, p) || sameCell(hint.b, p)) ? "m3-hint" : ""}`} style={{ "--dx": `${dx}%`, "--dy": `${dy}%`, "--duration": `${invalid ? 360 : frame?.ms ?? 180}ms` } as CSSProperties}>
+              <PieceFace tier={tier} kind={code >= ROLL_BASE ? code >= BIG_BASE ? "big" : "roll" : undefined} />
+            </span>}
+            <button type="button" className="m3-target" data-cell={`${r},${c}`} data-testid={`m3-cell-${r}-${c}`} data-code={code} aria-pressed={sameCell(selected, p)} disabled={busy}
+              aria-label={fill(t.tileLabel, { r: String(r + 1), c: String(c + 1), name: tier?.name ?? "", special: code >= BIG_BASE ? t.big : code >= ROLL_BASE ? t.roll : "" })}
+              onClick={() => {
+                if (locked.current) return;
+                if (game.over) { onShowResult?.(); return; }
+                setHint(null); setActivity(n => n + 1);
+                if (selected && adjacent(selected, p)) attempt(selected, p);
+                else setSelected(sameCell(selected, p) ? null : p);
+              }} />
+          </div>;
+        }))}
+      </div>
     </div>
   </div>;
 }

@@ -1,4 +1,14 @@
 .m3-play { padding: 0 8px calc(84px + env(safe-area-inset-bottom)); }
+.m3-help-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:16px; }
+.m3-help-card { display:flex; align-items:center; gap:8px; padding:10px 8px; border:1px solid var(--c-line); border-radius:14px; background:var(--c-wash); }
+.m3-help-art { position:relative; flex:none; width:44px; height:44px; }
+.m3-help-card b, .m3-help-card div > span { display:block; }
+.m3-help-card b { font-size:14px; }
+.m3-help-card div > span { margin-top:2px; font-size:12px; color:var(--c-grey-text); }
+.m3-board-wrap { position:relative; }
+.m3-special-tip-region { position:absolute; bottom:calc(100% + 4px); inset-inline:0; z-index:3; pointer-events:none; }
+.m3-special-tip { margin:0; padding:7px 4px; border:1px solid var(--c-line); border-radius:10px; background:var(--c-paper); color:var(--c-ink); text-align:center; font-size:12px; line-height:1.5; white-space:nowrap; box-shadow:0 2px 8px color-mix(in srgb,var(--c-ink) 12%,transparent); animation:m3-special-tip-fade 2200ms ease-out both; }
+@keyframes m3-special-tip-fade { 0% { opacity:0; } 6%,90.909% { opacity:1; } 100% { opacity:0; } }
 /* At 320px, 3px gutters + 1px board borders leave eight distinct 39px targets. */
 @media (max-width:360px) { .m3-play { padding-inline:3px; } }
 .m3-hud { display:flex; justify-content:space-between; padding:0 6px 14px; }
@@ -27,6 +37,7 @@
 .m3-piece-face-special > .m3-piece-bounce { transform-origin:50% 100%; animation:var(--m3-hop, none) 2.4s ease-in-out var(--m3-idle-phase, 0s) infinite; }
 .m3-special { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
 .m3-special img { display:block; width:100%; height:100%; }
+.m3-piece-bounce > .m3-special-roll { inset:auto -3% -3% auto; width:40%; height:40%; }
 /* Position-based phases need no timers or changes to the board's accessible targets. */
 .m3-cell:nth-child(4n) { --m3-idle-phase:-.4s; }
 .m3-cell:nth-child(4n + 1) { --m3-idle-phase:-.8s; }
@@ -73,6 +84,7 @@
   .m3-play *, .m3-play *::before, .m3-play *::after { animation-name:m3-fade !important; transform:none !important; }
   .m3-play .m3-hint { animation:none !important; }
   .m3-play .m3-piece-face, .m3-play .m3-piece-bounce { animation:none !important; transform:none !important; }
+  .m3-play .m3-special-tip { animation-name:m3-special-tip-fade !important; }
 }
 .m3-record-pop { animation:m3-record 600ms ease-out both; }
 .m3-record-fade { animation:m3-record-fade 250ms ease-out both; }

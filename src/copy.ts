@@ -384,7 +384,11 @@ export const copy = {
       title: "兔兔三连烤",
       pageTitle: "兔兔三连烤",
       startHint: "交换相邻面包，连成 3 个就消掉",
-      rules: "滑动或点两个相邻面包。30 步比分，完成订单加分；连 4 得擀面杖，连 5 得大面包。没路可走会自动洗牌。",
+      rules: "30 步比分 · 订单加分 · 没路自动洗牌",
+      specialHelp: {
+        roll: { match: "连 4 个", effect: "消一整行", tip: "擀面杖：和同种连线，消一整行" },
+        big: { match: "连 5 个", effect: "消掉一种", tip: "大面包：和任意面包交换，消掉那一种" },
+      },
       unavailable: "面包还没备齐，稍后再来",
       boardLabel: "三连烤棋盘",
       tileLabel: "第 {r} 行第 {c} 格，{name}{special}",
