@@ -147,7 +147,7 @@ export function BoardPanel({ game = "big" }: { game?: "big" | "tu" | "m3" | "gra
                 <span className="text-lg font-semibold">{w.nickname}</span>{" "}
                 <span className="text-muted" data-testid="winner-wechat">{w.wechatId}</span>
               </div>
-              <span className="text-lg font-semibold">{w.score}</span>
+              <span className="text-lg font-semibold">{game === "m3" && <small className="mr-2">{copy.customer.m3.levels}</small>}{w.score}</span>
             </div>
             <div className="mt-1">
               <span className={chip} data-testid="winner-ordered">{w.ordered ? t.ordered : t.notOrdered}</span>
@@ -218,7 +218,7 @@ export function BoardPanel({ game = "big" }: { game?: "big" | "tu" | "m3" | "gra
                     <span className="font-semibold">{r.nickname}</span>{" "}
                     <span className="text-muted" data-testid="run-wechat">{r.wechatId}</span>
                   </div>
-                  <span className="text-lg font-semibold" data-testid="run-score">{r.score}</span>
+                  <span className="text-lg font-semibold" data-testid="run-score">{game === "m3" && <small className="mr-2">{copy.customer.m3.levels}</small>}{r.score}</span>
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted">
                   <span>{timeLabel(r.finishedAt ?? r.updatedAt ?? "")}</span>

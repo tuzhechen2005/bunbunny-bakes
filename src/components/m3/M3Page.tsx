@@ -5,19 +5,19 @@ import { fill } from "@/components/customer/format";
 import { LeaderboardView } from "@/components/game/LeaderboardView";
 import { isRetryable, readRemembered, writeRemembered } from "@/components/game/gameApi";
 import { sound, unlockAudio } from "@/components/game/sound";
-import type { FinishResult, TierView } from "@/components/game/types";
+import type { TierView } from "@/components/game/types";
 import { Sheet, type SheetHandle } from "@/components/ui/Sheet";
 import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import { useGameHub } from "@/components/game/useGameHub";
 import { useLiveProgress } from "@/components/game/useLiveProgress";
 import { copy } from "@/copy";
-import type { M3Move } from "@/lib/m3";
+import { m3LevelRules, type M3Move } from "@/lib/m3";
 import { fetchMenu } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { M3Board, type M3Progress } from "./M3Board";
 import { SpecialMark } from "./M3Art";
-import { fetchM3Leaderboard, finishM3, startM3 } from "./m3Api";
+import { fetchM3Leaderboard, finishM3, startM3, type M3Finish } from "./m3Api";
 import { clearM3Save, readM3Save, writeM3Save, type M3Save } from "./m3Save";
 
 const g = copy.customer.game;
@@ -27,9 +27,11 @@ const SHEET_DELAY_MS = 900;
 type Phase = "menu" | "form" | "playing" | "over" | "board";
 type Finish =
   | { state: "submitting" }
-  | { state: "ok"; result: FinishResult }
+  | { state: "ok"; result: M3Finish }
   | { state: "failed"; message: string; retry: boolean };
 interface Run {
+  level: number;
+  weekKey: string;
   key: string;
   seed: string;
   tiers: TierView[];
@@ -78,6 +80,7 @@ export function M3Page() {
   const { reduced, degraded } = useMotionPrefs();
   const { data: hub } = useGameHub();
   const hasPrize = hub?.prizeGame === "M3";
+  const [nextLevel, setNextLevel] = useState(1);
   const [phase, setPhase] = useState<Phase>("menu");
   const [wechatId, setWechatId] = useState("");
   const [nickname, setNickname] = useState("");
@@ -98,7 +101,7 @@ export function M3Page() {
   const [dialog, setDialog] = useState<"restart" | "exit" | null>(null);
   const dialogRef = useRef<SheetHandle>(null);
   const afterDialog = useRef<() => void>(() => {});
-  const meta = useRef({ seed: "", expiresAt: "", nickname: "", tiers: [] as TierView[] });
+  const meta = useRef({ level: 1, weekKey: "", seed: "", expiresAt: "", nickname: "", tiers: [] as TierView[] });
   const submitted = useRef(new Set<string>());
   const inflight = useRef<string | null>(null);
   const sheetRef = useRef<SheetHandle>(null);
@@ -129,6 +132,15 @@ export function M3Page() {
     };
   }, []);
 
+  useEffect(() => {
+    if (phase !== "menu" || !wechatId.trim()) return;
+    let alive = true;
+    void fetchM3Leaderboard(wechatId.trim()).then(r => {
+      if (alive && r.ok) setNextLevel(r.data.nextLevel);
+    });
+    return () => { alive = false; };
+  }, [phase, wechatId, boardVersion]);
+
   const toggleSound = () => {
     const next = !soundOn;
     setSoundOn(next);
@@ -152,6 +164,7 @@ export function M3Page() {
       // Keep completed logs retryable until the server acknowledges this exact run.
       if (readM3Save()?.runId === id) clearM3Save();
       setFinish({ state: "ok", result: r.data });
+      setNextLevel(r.data.level + Number(r.data.passed));
       setBoardVersion((n) => n + 1);
     } else {
       setFinish({ state: "failed", message: r.error.message, retry: isRetryable(r.status) });
@@ -162,7 +175,7 @@ export function M3Page() {
     const p = progress.current;
     if (phaseRef.current !== "playing") return;
     const m = meta.current;
-    writeM3Save({ v: 1, runId: runId.current, seed: m.seed, tiers: m.tiers, moves: p.moves, nickname: m.nickname, expiresAt: m.expiresAt, score: p.score });
+    writeM3Save({ v: 1, level: m.level, weekKey: m.weekKey, runId: runId.current, seed: m.seed, tiers: m.tiers, moves: p.moves, nickname: m.nickname, expiresAt: m.expiresAt, score: p.score });
   }, []);
   const onProgress = useCallback(
     (p: M3Progress) => {
@@ -193,9 +206,9 @@ export function M3Page() {
     if (soundOn) unlockAudio();
     runId.current = sv.runId;
     inflight.current = null;
-    meta.current = { seed: sv.seed, expiresAt: sv.expiresAt, nickname: sv.nickname, tiers: sv.tiers };
+    meta.current = { level: sv.level, weekKey: sv.weekKey, seed: sv.seed, expiresAt: sv.expiresAt, nickname: sv.nickname, tiers: sv.tiers };
     progress.current = { moves: sv.moves, score: sv.score };
-    setRun({ key: sv.runId, seed: sv.seed, tiers: sv.tiers, initialMoves: sv.moves });
+    setRun({ level: sv.level, weekKey: sv.weekKey, key: sv.runId, seed: sv.seed, tiers: sv.tiers, initialMoves: sv.moves });
     setSheetOpen(false);
     setPhase("playing");
   };
@@ -219,9 +232,11 @@ export function M3Page() {
     if (soundOn) unlockAudio();
     const w = wechatId.trim();
     const n = nickname.trim();
-    const r = await startM3(w, n);
+    const retryLevel = phase === "over" && run && finish.state === "ok" && Date.now() < Date.parse(meta.current.expiresAt)
+      ? run.level + Number(finish.result.passed) : undefined;
+    const r = await startM3(w, n, retryLevel);
     setStarting(false);
-    if (!r.ok || !Array.isArray(r.data.tiers) || r.data.tiers.length !== 6) {
+    if (!r.ok || !Array.isArray(r.data.tiers) || r.data.tiers.length !== r.data.tierCount) {
       setFormError(r.ok || r.error.error.toLowerCase() === "unavailable" ? t.unavailable : r.error.message);
       setSheetOpen(false);
       setPhase("form");
@@ -229,13 +244,13 @@ export function M3Page() {
     }
     writeRemembered({ wechatId: w, nickname: n });
     clearM3Save();
-    meta.current = { seed: r.data.seed, expiresAt: r.data.expiresAt, nickname: r.data.nickname ?? n, tiers: r.data.tiers };
+    meta.current = { level: r.data.level, weekKey: r.data.weekKey, seed: r.data.seed, expiresAt: r.data.expiresAt, nickname: r.data.nickname ?? n, tiers: r.data.tiers };
     runId.current = r.data.runId;
     inflight.current = null;
     progress.current = { moves: [], score: 0 };
-    writeM3Save({ v: 1, runId: r.data.runId, seed: r.data.seed, tiers: r.data.tiers, moves: [], nickname: r.data.nickname ?? n, expiresAt: r.data.expiresAt, score: 0 });
+    writeM3Save({ v: 1, level: r.data.level, weekKey: r.data.weekKey, runId: r.data.runId, seed: r.data.seed, tiers: r.data.tiers, moves: [], nickname: r.data.nickname ?? n, expiresAt: r.data.expiresAt, score: 0 });
     setFinish({ state: "submitting" });
-    setRun({ key: r.data.runId, seed: r.data.seed, tiers: r.data.tiers, initialMoves: [] });
+    setRun({ level: r.data.level, weekKey: r.data.weekKey, key: r.data.runId, seed: r.data.seed, tiers: r.data.tiers, initialMoves: [] });
     setSheetOpen(false);
     setPhase("playing");
   };
@@ -310,7 +325,7 @@ export function M3Page() {
               {g.closeBoard}
             </button>
           </div>
-          <LeaderboardView hasPrize={hasPrize} wechatId={wechatId.trim()} version={boardVersion} fetcher={fetchM3Leaderboard} />
+          <LeaderboardView scoreLabel={t.levels} hasPrize={hasPrize} wechatId={wechatId.trim()} version={boardVersion} fetcher={fetchM3Leaderboard} />
         </main>
       </Shell>
     );
@@ -324,6 +339,7 @@ export function M3Page() {
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
           <h1 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.title}</h1>
+          <p className="font-display mt-3 text-xl" data-testid="m3-menu-level">{fill(t.level, { n: String(save?.level ?? nextLevel) })}</p>
           <p className="m-0 mt-2 text-sm leading-relaxed text-c-grey">{t.startHint}</p>
           <div className="m3-help-cards">
             {(["roll", "big"] as const).map(kind => <div key={kind} className="m3-help-card" data-testid={`m3-help-${kind}`}>
@@ -363,7 +379,7 @@ export function M3Page() {
                 className={primary}
                 data-testid="m3-menu-start"
               >
-                {g.start}
+                {nextLevel > 1 ? g.resume : g.start}
               </button>
             )}
             <button
@@ -490,19 +506,20 @@ export function M3Page() {
 
   // ---------------- playing / over ----------------
   const shownScore = finish.state === "ok" ? finish.result.score : finalScore;
+  const passed = finish.state === "ok" ? finish.result.passed : finalScore >= m3LevelRules(run.level).target;
   const sameScore = finish.state === "ok" && finish.result.score === finalScore;
   return (
     <Shell>
       {top}
       <main className="relative flex flex-1 flex-col" style={{ minHeight: "calc(100svh - 56px)" }}>
-        <M3Board key={run.key} tiers={run.tiers} seed={run.seed} initialMoves={run.initialMoves} soundOn={soundOn} reduced={reduced} onProgress={onProgress} onOver={onOver} onShowResult={phase === "over" ? () => setSheetOpen(true) : undefined} />
+        <M3Board level={run.level} rules={{ seed: run.seed, ...m3LevelRules(run.level) }} key={run.key} tiers={run.tiers} seed={run.seed} initialMoves={run.initialMoves} soundOn={soundOn} reduced={reduced} onProgress={onProgress} onOver={onOver} onShowResult={phase === "over" ? () => setSheetOpen(true) : undefined} />
         {phase === "over" && !sheetOpen ? (
           <div
             className="absolute inset-x-2 bottom-[calc(12px+env(safe-area-inset-bottom))] z-50 flex h-12 items-stretch overflow-hidden rounded-full border border-c-line bg-c-paper/90 text-c-ink backdrop-blur-sm"
             data-testid="m3-bar"
           >
-            <button type="button" onClick={() => void begin()} disabled={finish.state === "submitting"} className={`font-display flex-1 text-base disabled:opacity-50 ${focusRing}`} data-testid="m3-bar-again">
-              {g.barAgain}
+            <button type="button" onClick={() => void begin()} disabled={finish.state === "submitting" || (finish.state === "failed" && finish.retry)} className={`font-display flex-1 text-base disabled:opacity-50 ${focusRing}`} data-testid="m3-bar-again">
+              {passed && finish.state !== "failed" ? t.next : t.retry}
             </button>
             <span aria-hidden="true" className="self-center opacity-50">
               ·
@@ -563,7 +580,7 @@ export function M3Page() {
       {phase === "over" && sheetOpen ? (
         <Sheet
           ref={sheetRef}
-          label={g.overTitle}
+          label={passed ? t.win : t.fail}
           onClosed={() => {
             setSheetOpen(false);
             const fn = afterSheet.current;
@@ -584,7 +601,7 @@ export function M3Page() {
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
-          <h2 className="font-display m-0 text-center text-[28px] leading-none tracking-[-0.03em]">{g.overTitle}</h2>
+          <h2 className="font-display m-0 text-center text-[28px] leading-none tracking-[-0.03em]">{passed ? t.win : t.fail}</h2>
           <p className="m-0 mt-5 text-center text-xs font-bold text-c-grey">{g.finalScore}</p>
           <p className="font-num m-0 text-center text-[56px] leading-[1.1]" data-testid="m3-final-score">
             {shownScore}
@@ -622,7 +639,7 @@ export function M3Page() {
                   </p>
                 )}
                 <p className="m-0 text-sm font-bold">
-                  {g.best}
+                  {t.levels}
                   <span className="font-num mt-0.5 block text-xl font-normal" data-testid="m3-best">
                     {finish.result.best}
                   </span>
@@ -646,8 +663,8 @@ export function M3Page() {
             </div>
           ) : null}
           <div className="mt-4 flex flex-col gap-2.5">
-            <button type="button" onClick={() => closeSheetThen(() => void begin())} className={`${primary} disabled:opacity-50`} disabled={finish.state === "submitting"} data-testid="m3-again">
-              {finish.state === "failed" ? g.againDiscard : g.again}
+            <button type="button" onClick={() => closeSheetThen(() => void begin())} className={`${primary} disabled:opacity-50`} disabled={finish.state === "submitting" || (finish.state === "failed" && finish.retry)} data-testid="m3-again">
+              {passed && finish.state !== "failed" ? t.next : t.retry}
             </button>
             <button
               type="button"

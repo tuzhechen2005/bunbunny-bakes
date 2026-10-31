@@ -21,28 +21,56 @@ export function immediateM3Score(state: M3State, a: M3Cell, b: M3Cell): number |
   }, 0);
 }
 
-export function createM3Game(opts: { seed: string; tiers: readonly M3TierInput[] }): M3Game {
+type GameOptions = { seed: string; tiers: readonly M3TierInput[]; moves?: number; target?: number };
+interface ForkRng { next(): number; int(n: number): number; fork(): ForkRng }
+/** Share immutable random draws, never mutable cursors. A fork consumes the exact same
+ * seeded stream without replaying its prefix or modifying a sibling's random position.
+ */
+function forkRng(seed: string): ForkRng {
+  const source = createRng(seed), tape: number[] = [];
+  const branch = (offset: number): ForkRng => {
+    let cursor = offset;
+    const next = () => {
+      if (cursor === tape.length) tape.push(source.next());
+      return tape[cursor++];
+    };
+    return { next, int: n => Math.floor(next() * n), fork: () => branch(cursor) };
+  };
+  return branch(0);
+}
+interface Branch {
+  board: number[][]; moves: number; score: number; orders: [M3Order, M3Order];
+  rng: ForkRng; orderRng: ForkRng;
+}
+
+export function createM3Game(opts: GameOptions): M3Game { return buildGame(opts); }
+
+function buildGame(opts: GameOptions, branch?: Branch): M3Game {
   if (opts.tiers.length < MIN_TIERS) throw new RangeError(`m3: needs at least ${MIN_TIERS} bread tiers`);
+  const moveLimit = opts.moves ?? MAX_MOVES;
+  const target = opts.target ?? Infinity;
+  if (!Number.isInteger(moveLimit) || moveLimit < 1 || moveLimit > MAX_MOVES || !(target > 0)) throw new RangeError("bad m3 level rules");
+  const isOver = () => moves >= moveLimit || score >= target;
   const n = Math.min(MAX_TIERS, opts.tiers.length);
-  const rng = createRng(`${opts.seed}:m3:board`);
-  const orderRng = createRng(`${opts.seed}:m3:orders`);
-  let board = initialBoard(n, rng);
-  let moves = 0, score = 0;
+  const rng = branch?.rng ?? forkRng(`${opts.seed}:m3:board`);
+  const orderRng = branch?.orderRng ?? forkRng(`${opts.seed}:m3:orders`);
+  let board = branch?.board ?? initialBoard(n, rng);
+  let moves = branch?.moves ?? 0, score = branch?.score ?? 0;
   const newOrder = (other: number): M3Order => {
     const pool = Array.from({ length: n }, (_, i) => i).filter((t) => t !== other);
     const tier = pool[orderRng.int(pool.length)];
     const need = ORDER_MIN_NEED + orderRng.int(ORDER_MAX_NEED - ORDER_MIN_NEED + 1);
     return { tier, need, have: 0, points: need * ORDER_POINTS_PER_TILE };
   };
-  const first = newOrder(-1);
-  const orders: [M3Order, M3Order] = [first, newOrder(first.tier)];
+  const first = branch?.orders[0] ?? newOrder(-1);
+  const orders: [M3Order, M3Order] = branch?.orders ?? [first, newOrder(first.tier)];
 
   const state = (): M3State => {
     const specials: M3Special[] = [];
     board.forEach((row, r) => row.forEach((code, c) => {
       if (code >= ROLL_BASE) specials.push({ r, c, kind: kindOf(code), tier: tierOf(code) });
     }));
-    return { board: copyBoard(board), specials, orders: [{ ...orders[0] }, { ...orders[1] }], score, movesLeft: MAX_MOVES - moves, over: moves === MAX_MOVES };
+    return { board: copyBoard(board), specials, orders: [{ ...orders[0] }, { ...orders[1] }], score, movesLeft: moveLimit - moves, over: isOver() };
   };
 
   function resolve(wave: Wave, chain: number, events: M3Event[]): void {
@@ -108,7 +136,7 @@ export function createM3Game(opts: { seed: string; tiers: readonly M3TierInput[]
   }
 
   function swap(a: M3Cell, b: M3Cell): M3Event[] | null {
-    if (moves === MAX_MOVES) return null;
+    if (isOver()) return null;
     const plan = planSwap(board, a, b);
     if (!plan) return null;
     board = plan.board;
@@ -129,10 +157,12 @@ export function createM3Game(opts: { seed: string; tiers: readonly M3TierInput[]
       board = reshuffle(board, rng, n);
       events.push({ type: "shuffle", board: copyBoard(board) });
     }
-    if (moves === MAX_MOVES) events.push({ type: "over" });
+    if (isOver()) events.push({ type: "over" });
     return events;
   }
-  return { state, swap, get score() { return score; }, get over() { return moves === MAX_MOVES; }, get moves() { return moves; } };
+  const fork = () => buildGame(opts, { board: copyBoard(board), moves, score,
+    orders: [{ ...orders[0] }, { ...orders[1] }], rng: rng.fork(), orderRng: orderRng.fork() });
+  return { state, swap, fork, get score() { return score; }, get over() { return isOver(); }, get moves() { return moves; } };
 }
 
 /** FNV-1a debugging fingerprint of the entire public state (not a security hash). */

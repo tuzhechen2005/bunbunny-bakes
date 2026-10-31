@@ -216,23 +216,23 @@ function renderDailySummary(n: NotificationToRender): RenderedEmail {
   return { subject, text: sections.map((sec) => sec.join("\n")).join("\n\n") };
 }
 
-function winnerLines(l: WinnerLine): string[] {
+function winnerLines(l: WinnerLine, levels = false): string[] {
   const g = t.gameWinner;
   return [
     fill(g.nicknameLine, { nickname: l.nickname }),
     fill(g.wechatLine, { wechatId: l.wechatId }),
-    fill(g.scoreLine, { score: l.score }),
+    fill(levels ? g.levelLine : g.scoreLine, { score: l.score }),
     fill(g.orderedLine, { ordered: l.ordered ? g.yes : g.no }),
   ];
 }
 
 /** One game's content in the winner email: #1 and the ⚠️ path. */
-function winnerSections(w: WinnerLine, runnerUp: WinnerLine | null): string[][] {
+function winnerSections(w: WinnerLine, runnerUp: WinnerLine | null, levels = false): string[][] {
   const g = t.gameWinner;
-  const sections: string[][] = [winnerLines(w)];
+  const sections: string[][] = [winnerLines(w, levels)];
   if (!w.ordered) {
     sections.push([g.warn]);
-    sections.push(runnerUp ? [fill(g.runnerUpHeader, { rank: runnerUp.rank }), ...winnerLines(runnerUp)] : [g.noRunnerUp]);
+    sections.push(runnerUp ? [fill(g.runnerUpHeader, { rank: runnerUp.rank }), ...winnerLines(runnerUp, levels)] : [g.noRunnerUp]);
   }
   return sections;
 }
@@ -246,8 +246,8 @@ function renderGameWinner(n: NotificationToRender): RenderedEmail {
   const name = names[p.game];
   if (!name) throw new Error(`GAME_WINNER notification ${n.id}: unknown game`);
   const weekHeader = fill(g.weekHeader, { start: dayLabel(p.week.start), end: dayLabel(p.week.end) });
-  const [first, ...rest] = winnerSections(p.winner, p.runnerUp);
-  const part = fill(g.subjectPart, { game: name, nickname: p.winner.nickname, score: p.winner.score });
+  const [first, ...rest] = winnerSections(p.winner, p.runnerUp, p.game === "M3");
+  const part = fill(p.game === "M3" ? g.levelSubjectPart : g.subjectPart, { game: name, nickname: p.winner.nickname, score: p.winner.score });
   return {
     subject: fill(p.winner.ordered ? g.twoSubject : g.twoSubjectWarn, { games: part }),
     text: [[weekHeader], [fill(g.sectionTitle, { game: name }), ...first], ...rest,

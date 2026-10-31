@@ -34,8 +34,8 @@ export function chooseM3Move(state: M3State, greedy: boolean, pick: (n: number) 
   return choices[pick(choices.length)];
 }
 
-function run(seed: string, tiers: readonly M3TierInput[], greedy: boolean): M3BotResult {
-  const game = createM3Game({ seed, tiers });
+function run(seed: string, tiers: readonly M3TierInput[], greedy: boolean, rules?: { moves: number; target: number }): M3BotResult {
+  const game = createM3Game({ seed, tiers, ...rules });
   const rng = createRng(`${seed}:m3:bot`);
   const result: M3BotResult = { moves: [], score: 0, over: false, specials: 0, fired: 0, converted: 0, reshuffles: 0,
     clears: 0, movesWithThreeClears: 0, ordersCompleted: 0, maxChain: 0 };
@@ -61,5 +61,5 @@ function run(seed: string, tiers: readonly M3TierInput[], greedy: boolean): M3Bo
   }
   return { ...result, score: game.score, over: game.over };
 }
-export const randomM3 = (seed: string, tiers: readonly M3TierInput[]) => run(seed, tiers, false);
-export const greedyM3 = (seed: string, tiers: readonly M3TierInput[]) => run(seed, tiers, true);
+export const randomM3 = (seed: string, tiers: readonly M3TierInput[], rules?: { moves: number; target: number }) => run(seed, tiers, false, rules);
+export const greedyM3 = (seed: string, tiers: readonly M3TierInput[], rules?: { moves: number; target: number }) => run(seed, tiers, true, rules);

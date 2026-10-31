@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createM3Game, legalM3Moves } from "@/lib/m3";
+import { createM3Game, legalM3Moves, m3Level } from "@/lib/m3";
 import { animationQueue, swipeDirection, swipeTarget } from "@/components/m3/m3Animation";
 import { parseM3Save } from "@/components/m3/m3Save";
 
@@ -29,11 +29,13 @@ it("plays engine events in order and reconstructs the entire game without mutati
   }
 });
 it("validates saves by replay: expiry, shape, timestamps, illegal moves, score and version", () => {
-  const seed = "save";
-  const game = createM3Game({ seed, tiers });
+  const rules = m3Level("2026-10-26", 1);
+  const { seed } = rules;
+  const selected = tiers.slice(0, rules.tierCount);
+  const game = createM3Game({ tiers: selected, ...rules });
   const move = { ...legalM3Moves(game.state())[0], at: 0 };
   game.swap(move.a, move.b);
-  const save = { v: 1, runId: "run", seed, tiers, moves: [move], nickname: "baker", expiresAt: "2099-01-01", score: game.score };
+  const save = { v: 1, level: 1, weekKey: "2026-10-26", runId: "run", seed, tiers: selected, moves: [move], nickname: "baker", expiresAt: "2099-01-01", score: game.score };
   const parse = (patch: object = {}) => parseM3Save(JSON.stringify({ ...save, ...patch }), 0);
   expect(parse()).toEqual(save);
   for (const patch of [{ v: 2 }, { score: 99999 }, { tiers: tiers.slice(1) }, { tiers: [null, ...tiers.slice(1)] }, { moves: [{ ...move, at: -1 }] }, { moves: [{ ...move, b: move.a }] }, { expiresAt: "bad" }, { expiresAt: "1970-01-01" }]) expect(parse(patch)).toBeNull();

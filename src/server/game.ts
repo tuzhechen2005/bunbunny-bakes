@@ -1,3 +1,4 @@
+import { boardScore, boardTime, levelEligibility, isLevelGame, levelPlayerActive } from "./gameLevels";
 // 消除大面包 server side (D100-D105): start a run, verify and store a finished one, leaderboard.
 // The client score is never trusted: finish replays the drop log with the run's own seed and the
 // tier snapshot taken at start (src/lib/game/replay.ts).
@@ -150,10 +151,10 @@ const eligible = () => Prisma.sql`(r."finishedAt" IS NOT NULL OR (${liveScoresEn
 function rankedSql(weekKey: string, game: GameKind) {
   return Prisma.sql`
     WITH best AS (
-      SELECT DISTINCT ON (lower(r."wechatId")) r.id, r."wechatId", r.nickname, r.score, r."finishedAt", r."updatedAt", r."progressAttemptAt", COALESCE(r."finishedAt", r."updatedAt") AS "rankedAt"
+      SELECT DISTINCT ON (lower(r."wechatId")) r.id, r."wechatId", r.nickname, ${boardScore(game)} AS score, r."finishedAt", r."updatedAt", r."progressAttemptAt", ${boardTime(game)} AS "rankedAt"
       FROM "GameRun" r
-      WHERE r.game = ${game}::"GameKind" AND r."weekKey" = ${weekKey} AND ${eligible()}
-      ORDER BY lower(r."wechatId"), r.score DESC, COALESCE(r."finishedAt", r."updatedAt") ASC, r.id ASC
+      WHERE r.game = ${game}::"GameKind" AND r."weekKey" = ${weekKey} AND ${eligible()} AND ${levelEligibility(game)}
+      ORDER BY lower(r."wechatId"), ${boardScore(game)} DESC, ${boardTime(game)} ASC, r.id ASC
     ), ranked AS (
       SELECT id, "wechatId", nickname, score, "finishedAt", "updatedAt", "progressAttemptAt",
              (ROW_NUMBER() OVER (ORDER BY score DESC, "rankedAt" ASC, id ASC))::int AS rank
@@ -185,17 +186,17 @@ interface AllTimeRow {
 /** The all-time record (D113): highest eligible score ever, ties → earliest finish. */
 async function allTimeRecord(db: DbClient, game: GameKind): Promise<AllTimeRow | null> {
   const rows = await db.$queryRaw<AllTimeRow[]>`
-    SELECT r.id::text AS id, r."wechatId", r.nickname, r.score FROM "GameRun" r
-    WHERE r.game = ${game}::"GameKind" AND ${eligible()}
-    ORDER BY r.score DESC, COALESCE(r."finishedAt", r."updatedAt") ASC, r.id ASC LIMIT 1`;
+    SELECT r.id::text AS id, r."wechatId", r.nickname, ${boardScore(game)} AS score FROM "GameRun" r
+    WHERE r.game = ${game}::"GameKind" AND ${eligible()} AND ${levelEligibility(game)}
+    ORDER BY ${boardScore(game)} DESC, ${boardTime(game)} ASC, r.id ASC LIMIT 1`;
   return rows[0] ?? null;
 }
 
 /** All-time best of a WeChat id (case-insensitive) over its finished, non-hidden runs. */
 async function personalBestOf(db: DbClient, id: string, game: GameKind): Promise<number | null> {
   const rows = await db.$queryRaw<{ best: number | null }[]>`
-    SELECT max(r.score)::int AS best FROM "GameRun" r
-    WHERE r.game = ${game}::"GameKind" AND lower(r."wechatId") = lower(${id.trim()}) AND r."finishedAt" IS NOT NULL AND r.score IS NOT NULL AND NOT r.hidden`;
+    SELECT max(${boardScore(game)})::int AS best FROM "GameRun" r
+    WHERE r.game = ${game}::"GameKind" AND lower(r."wechatId") = lower(${id.trim()}) AND r."finishedAt" IS NOT NULL AND r.score IS NOT NULL AND NOT r.hidden AND ${levelEligibility(game)}`;
   return rows[0]?.best ?? null;
 }
 
@@ -234,10 +235,10 @@ export async function resultFor(
   const score = run.score ?? 0;
   return {
     score,
-    best: mine?.score ?? score,
+    best: mine?.score ?? (isLevelGame(game) ? 0 : score),
     rank: mine?.rank ?? null,
     week: weekRange(weekKey),
-    personalBest: Math.max(best ?? score, score),
+    personalBest: isLevelGame(game) ? best ?? 0 : Math.max(best ?? score, score),
     newRecord: record?.id === run.id,
   };
 }
@@ -310,16 +311,18 @@ export async function getLeaderboard(
   // The owner's award (if any) names the winner; otherwise the top of last week.
   const award = await db.gameAward.findUnique({ where: { game_weekKey: { game, weekKey: last } }, include: { run: true } });
   let lastWinner: Leaderboard["lastWinner"] = null;
-  if (award?.run && award.run.score !== null && (award.run.finishedAt || liveScoresEnabled())) {
-    lastWinner = { nickname: award.run.nickname, wechatMasked: maskWechat(award.run.wechatId), score: award.run.score };
+  if (award?.run && award.run.score !== null && (!isLevelGame(game) || award.run.passedAt) && (award.run.finishedAt || liveScoresEnabled())) {
+    lastWinner = { nickname: award.run.nickname, wechatMasked: maskWechat(award.run.wechatId), score: isLevelGame(game) ? award.run.level! : award.run.score };
   } else {
     const [w] = await topOfWeek(db, last, 1, game);
     if (w) lastWinner = { nickname: w.nickname, wechatMasked: maskWechat(w.wechatId), score: w.score };
   }
+  const active = isLevelGame(game) && liveScoresEnabled()
+    ? await Promise.all(rows.map(r => levelPlayerActive(db, game, weekKey, r.wechatId, now, LIVE_WINDOW_MS))) : [];
   const out: Leaderboard = {
     liveScores: liveScoresEnabled(),
     week: weekRange(weekKey),
-    top: rows.map((r) => ({ rank: r.rank, nickname: r.nickname, wechatMasked: maskWechat(r.wechatId), score: r.score, live: isLiveRow(r, now) })),
+    top: rows.map((r, i) => ({ rank: r.rank, nickname: r.nickname, wechatMasked: maskWechat(r.wechatId), score: r.score, live: active[i] ?? isLiveRow(r, now) })),
     lastWinner,
     allTime: record ? { nickname: record.nickname, wechatMasked: maskWechat(record.wechatId), score: record.score } : null,
   };
@@ -356,5 +359,5 @@ export function isLiveRow(row: Pick<BoardRow, "finishedAt" | "updatedAt" | "prog
 
 export async function weekLeader(db: DbClient, week: string, game: GameKind, now: Date) {
   const row = (await topOfWeek(db, week, 1, game))[0];
-  return { weekBest: row?.score ?? null, live: !!row && isLiveRow(row, now) };
+  return { weekBest: row?.score ?? null, live: !!row && (isLevelGame(game) ? liveScoresEnabled() && await levelPlayerActive(db, game, week, row.wechatId, now, LIVE_WINDOW_MS) : isLiveRow(row, now)) };
 }

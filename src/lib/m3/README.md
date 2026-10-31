@@ -1,4 +1,4 @@
-# M3 engine — S1 / D135
+# M3 engine — weekly levels (S9 / D151 / D154)
 
 Pure TypeScript shared by client and server, with integer board/scoring arithmetic and the
 existing seeded RNG in `../game/rng.ts`. No clock, global randomness, DOM, or server imports.
@@ -7,22 +7,25 @@ The engine resolves a move synchronously; rendering consumes its events at its o
 ## Public API
 
 ```ts
-import { createM3Game, replayM3, M3ReplayError, legalM3Moves } from "@/lib/m3";
+import { m3Level, createM3Game, replayM3, M3ReplayError, legalM3Moves } from "@/lib/m3";
 
-const game = createM3Game({ seed, tiers }); // readonly { id: string }[]
+const level = m3Level(weekKey, levelNumber); // { seed, moves, target, tierCount }
+const seed = level.seed;
+const selected = tiers.slice(0, level.tierCount);
+const game = createM3Game({ ...level, tiers: selected }); // readonly { id: string }[]
 const before = game.state();
 const events = game.swap({ r: 2, c: 3 }, { r: 2, c: 4 }); // M3Event[] | null
 const after = game.state();
-const result = replayM3(seed, tiers, moves); // { score, over, moves: acceptedMoveCount }
+const result = replayM3(seed, selected, moves, level); // { score, over, moves: acceptedMoveCount }
 ```
 
 Use the first six bread tiers, or all when there are four/five. Fewer than four throws
 `RangeError` (including through replay: configuration error). IDs are presentation metadata;
 only the selected tier count affects simulation. Supply bread tiers in configured order.
 
-The S2 ranked server requires exactly six (`M3_MIN_TIERS = 6`), snapshots their ids in
-that order, and replays that exact snapshot even after configuration changes. Fewer than six
-returns unavailable; the four/five-tier engine modes above are for local simulations only.
+The server requires six configured kinds (`M3_MIN_TIERS = 6`) so every level is available,
+then snapshots the first `tierCount` kinds (4 → 5 → 6). Replay uses exactly that snapshot,
+including after product changes. Product ids/photos do not affect the board or scoring.
 `m3Seed(hex)` embeds `M3_ENGINE_VERSION`; `m3SeedVersion(seed)` returns null for
 unversioned/malformed seeds, which the server refuses to finish.
 
@@ -42,9 +45,11 @@ during event playback; a returned state is always full and settled.
 Illegal swaps return `null` without consuming a move, changing state, or advancing either RNG.
 This includes invalid coordinates, identical/nonadjacent cells, a swap that creates no match
 or special combo, and swaps after game over. No live board injection or restore hook is exposed;
-restore by replaying accepted moves from the seed.
+restore by replaying accepted moves from the seed. `game.fork()` copies board, orders, score,
+move count and both RNG cursors for independent planning; immutable random draws are shared
+without changing the seeded stream. It is used only by the generation-time proof search.
 
-## Rules and tie breaks (engine version 2)
+## Rules and tie breaks (engine version 3)
 
 - Initial boards have no matches and at least one legal move. Fill row-major, choosing a tier
   that cannot complete a horizontal/vertical triple; reject and regenerate a dead initial board.
@@ -87,7 +92,10 @@ restore by replaying accepted moves from the seed.
   multisets cannot loop forever. Initial generation also has 128 attempts, then a fixed
   match-free board with a guaranteed legal swap. Shuffle also runs if necessary on the final
   board before `over`.
-- Exactly **30 accepted moves**. Set `over` only after the final move's cascades settle.
+- A level ends after the accepted move’s cascades settle if `score >= target` (pass),
+  otherwise when its move allowance is exhausted (fail). Further swaps are refused.
+  The low-level simulation API defaults to a 30-move uncapped-score game for rule tests and
+  historical scoring benchmarks; production always supplies its server-derived level rules.
 
 ## Scoring and orders
 
@@ -103,7 +111,7 @@ restore by replaying accepted moves from the seed.
 | `MAX_CASCADE_STEPS` | 20 | Maximum scored resolutions per accepted move |
 | `MAX_MOVES` | 30 | Engine-enforced accepted-move cap |
 | `MIN_MOVE_GAP_MS` | 150 | Minimum gap between replay moves |
-| `M3_ENGINE_VERSION` | 2 | Pin this with saved/server runs; v1 saves/runs are rejected |
+| `M3_ENGINE_VERSION` | 3 | Pin this with saved/server runs; v1/v2 saves/runs are rejected |
 
 Orders use a separate `${seed}:m3:orders` RNG stream; board/refill/shuffle use
 `${seed}:m3:board`. New orders choose among the selected tiers, excluding the other active
@@ -142,7 +150,8 @@ The existing client save key follows the engine version and removes old keys on 
 `M3ReplayError` rejects
 nonarrays, more than 30 moves (necessarily also a move after over), malformed entries or
 coordinates, invalid times, non-increasing times, short gaps, and illegal swaps. Because the
-only ending condition is move 30, every move-after-over log is caught by the length check.
+level can end early, replay also rejects every attempted swap after reaching the target or
+its configured move limit.
 Server wall-clock plausibility, run ownership, and persistence live in `src/server/m3.ts` (S2).
 
 `legalM3Moves(state)` lists legal swaps in row-major order, right before down, once per pair;
@@ -205,7 +214,7 @@ The 300-seed regression pins needs 18–24, creation bonuses 100/200, p=20%, and
 3.79 greedy orders/run; this is a measurement regression, not a claim that the 2–3 goal was
 met. It retains the special-creation check, greedy clears/move 1.7–2.0, three-step moves
 22–28%, and no chain exceeding 20. Mean and median score-ratio requirements are removed.
-Replay is also checked against live at every prefix of a versioned v2 run, alongside
+Replay is also checked against live at every prefix of a versioned current run, alongside
 full-state/event determinism and refreshed pinned vectors.
 
 Run `npx tsx scripts/m3-tune.mts 1000 [tierCount=6]`. Bots use an independent seeded tie-break
@@ -235,4 +244,91 @@ The original unit regression required greedy median >1.35× random and >2× spec
 
 Tests cover 4/5/6 tiers, initialization, no-op rejections, full-game determinism and replay,
 replay validation, exact special fixtures and combos, orders and score accounting, event
-playback, reshuffling, greedy information limits, tuning bounds, and pinned version-2 vectors.
+playback, reshuffling, greedy information limits, tuning bounds, and pinned simulation vectors.
+
+## Weekly level contract
+
+`m3Level(weekKey, n)` is a pure public deal. The Chicago Monday week key and positive level
+number seed a deterministic candidate sequence; nobody’s identity, start time or secrets enter
+it. Targets rise smoothly towards a bounded late-game target, moves decrease from 9 to 8,
+and kinds increase from four (L1–6), to five (L7–18), to six (L19+). There is no final level.
+Each candidate must have a winning witness (four deterministic tie-breaking paths):
+visible-state greedy for 4/5 kinds, one-move refill lookahead for 6 kinds. Unsuitable
+candidates are skipped. `m3LevelWitness` returns that legal winning log.
+This proves solvability for **each generated board**, not just the sampled tuning weeks.
+The benchmark bot uses a separate RNG and never sees the witness or future refill results.
+The client uses cheap `m3LevelRules(n)` plus the server-issued seed; it never repeats the
+solvability search on the UI thread.
+A bounded cache accelerates repeated deals; eviction does not change a deal.
+
+One `GameRun` is one attempt. `level` and `passedAt` are nullable additions; old runs are not
+backfilled into level rankings. A successful finish records `passedAt` from server time; a
+failed finish records its score/evidence and leaves `passedAt` null. The atomic first finish
+wins. Empty/partial logs may report progress but cannot finish or unlock anything. Retrying
+has no attempt cap (existing per-IP abuse throttles remain). N requires a verified N−1 pass
+for the same case-insensitive WeChat id in the same week. Hiding a score affects ranking,
+not the fact that its player passed. Bans continue to block starts/finishes/progress.
+
+`src/server/gameLevels.ts` supplies shared progression, board score/time/eligibility and
+activity helpers for future level games. M3 board `score` fields represent **levels passed**;
+finish `score` remains the attempt’s replayed points, with explicit `level` and `passed`.
+The board, hub, owner award picker, crown, previous winner and winner email all rank by
+highest passed level then earliest server `passedAt` (UUID only breaks exact timestamp ties).
+Live reports retain points and show activity beside a player's already-passed level, without
+advancing that level or its tie-break time. `LIVE_SCORES=off`, hidden runs, bans and
+`M3_PRIZE_FROM_WEEK` keep their existing policies.
+
+Autosaves store week/level/seed, selected tier snapshot and the accepted move log. Resume
+reconstructs the same rules and checks the seed version, tier count, timing and score.
+The server additionally verifies the exact weekly seed, so editing local storage cannot pass a level. Completed logs
+survive network failure until finish is acknowledged. v2 keys are removed, v2 seeds/runs are
+rejected gracefully, and weekly expiry still applies.
+
+## S9 level calibration (v3)
+
+Reproduce: `npx tsx scripts/m3-level-tune.mts 100`. One greedy run per level per
+Chicago Monday key, **2026-01-05 through 2027-11-29** inclusive: 100 weeks × 30 levels
+= 3,000 independent level attempts. Each level is tested directly, rather than conditioning
+on the bot having passed earlier levels. Greedy uses only immediate visible-board points and
+current order bonuses, with seeded random ties; no refill lookahead or witness access.
+
+L1 **97.0%**, L12 **50.0%**, L25 **3.0%** (targets: approximately 95%, 50%, below 15%).
+The uniform-legal-move casual bot passed L1 in 63/100 weeks; successful attempts used
+**64.7% of the 9-move allowance on average**, close to the roughly 70% onboarding goal.
+Targets increase and moves never increase. Integer kind-count transitions at L7/L19 cause
+visible difficulty steps; weekly boards and this finite sample also make adjacent rates vary.
+A zero greedy rate in this sample is not an unsolvable level: generation requires a concrete
+winning path, and the level tests replay those witnesses independently to check their scores.
+
+| Level | Greedy pass rate (100 weeks) |
+| ---: | ---: |
+| 1 | 97.0% |
+| 2 | 97.0% |
+| 3 | 98.0% |
+| 4 | 98.0% |
+| 5 | 96.0% |
+| 6 | 96.0% |
+| 7 | 50.0% |
+| 8 | 67.0% |
+| 9 | 50.0% |
+| 10 | 56.0% |
+| 11 | 57.0% |
+| 12 | 50.0% |
+| 13 | 53.0% |
+| 14 | 57.0% |
+| 15 | 52.0% |
+| 16 | 53.0% |
+| 17 | 44.0% |
+| 18 | 57.0% |
+| 19 | 3.0% |
+| 20 | 5.0% |
+| 21 | 1.0% |
+| 22 | 0.0% |
+| 23 | 1.0% |
+| 24 | 3.0% |
+| 25 | 3.0% |
+| 26 | 3.0% |
+| 27 | 4.0% |
+| 28 | 4.0% |
+| 29 | 1.0% |
+| 30 | 4.0% |

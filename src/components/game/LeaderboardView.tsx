@@ -25,8 +25,10 @@ export function LeaderboardView({
   version = 0,
   hasPrize = false,
   fetcher = fetchLeaderboard,
+  scoreLabel,
 }: {
   wechatId: string;
+  scoreLabel?: string;
   version?: number;
   hasPrize?: boolean;
   /** Which game's board (the first game's by default). */
@@ -104,10 +106,11 @@ export function LeaderboardView({
       <p className="m-0 text-[13px] text-c-grey">{fill(t.weekRange, { start: md(data.week.start), end: md(data.week.end) })}</p>
       {typeof data.myBest === "number" ? (
         <p className="mt-3 flex items-baseline justify-between rounded-2xl bg-c-wash px-4 py-3 text-sm font-bold text-c-ink" data-testid="game-my-best">
-          <span>{t.myBest}</span>
+          <span>{scoreLabel ?? t.myBest}</span>
           <span className="font-num text-xl">{data.myBest}</span>
         </p>
       ) : null}
+      {scoreLabel && <p className="mt-3 text-right text-xs text-c-grey">{scoreLabel}</p>}
       {data.top.length === 0 ? (
         <p className="py-10 text-center text-sm text-c-grey" data-testid="game-board-empty">
           {t.empty}

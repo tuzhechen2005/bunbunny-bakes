@@ -407,7 +407,14 @@ export const copy = {
       title: "兔兔三连烤",
       pageTitle: "兔兔三连烤",
       startHint: "交换相邻面包，连成 3 个就消掉",
-      rules: "30 步比分 · 订单加分 · 没路自动洗牌",
+      rules: "达标过关 · 每周更新",
+      level: "第 {n} 关",
+      levels: "关数",
+      target: "目标",
+      win: "过关！",
+      fail: "差一点",
+      next: "下一关",
+      retry: "再来一次",
       specialHelp: {
         roll: { match: "连 4 个", effect: "消一整行", tip: "擀面杖：和同种连线，消一整行" },
         big: { match: "连 5 个", effect: "消掉一种", tip: "大面包：和任意面包交换，消掉那一种" },
@@ -507,6 +514,7 @@ export const copy = {
     tuNotReady: "兔了个兔还没准备好，请稍后再来",
     /** Ranked M3 needs all six bread tiers (D135). */
     grabNotReady: "兔兔夹面包还没准备好，请稍后再来",
+    levelLocked: "先通过上一关",
     m3NotReady: "兔兔三连烤还没准备好，请稍后再来",
   },
 
@@ -1375,6 +1383,8 @@ export const copy = {
         nicknameLine: "昵称：{nickname}",
         wechatLine: "微信号：{wechatId}",
         scoreLine: "分数：{score}",
+        levelLine: "关数：{score}",
+        levelSubjectPart: "{game} {nickname} {score} 关",
         orderedLine: "下过单：{ordered}",
         yes: "是",
         no: "否",

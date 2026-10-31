@@ -81,6 +81,7 @@ async function run(
       startedAt: finishedAt,
       finishedAt,
       score,
+      ...(game === "M3" ? { level: score, passedAt: finishedAt } : {}),
       weekKey: o.week ?? THIS_WEEK,
       hidden: o.hidden ?? false,
       dropCount: 30,
@@ -175,7 +176,7 @@ describe("weekly winner email selects only the closed week's prize game", () => 
       runnerUp: { rank: 2, wechatId: "m3_two", ordered: true },
     });
     const email = await renderNotification(db, { id: "n", kind: "GAME_WINNER", dedupeKey: "k", payload: p }, NOW);
-    expect(email.subject).toBe("⚠️ 上周游戏冠军｜兔兔三连烤 m3_one 300 分｜有冠军没下过单");
+    expect(email.subject).toBe("⚠️ 上周游戏冠军｜兔兔三连烤 m3_one 300 关｜有冠军没下过单");
     expect(email.text).toContain("===== 兔兔三连烤 =====");
     expect(email.text).toContain("【下过单的最高者：第 2 名】");
     expect(email.text).toContain("微信号：m3_two");

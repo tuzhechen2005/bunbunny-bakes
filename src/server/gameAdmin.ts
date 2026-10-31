@@ -1,3 +1,4 @@
+import { boardScore, boardTime, levelEligibility } from "./gameLevels";
 // Admin side of the 消除大面包 game (L3): tier configuration, leaderboard moderation, weekly award.
 //
 // Raw SQL is used for the game tables so every comparison is lower()/text based (no ILIKE: wechat
@@ -477,7 +478,7 @@ export function gameOfRequest(request: Request): GameKind {
   return r.data;
 }
 
-const RUN_COLUMNS = Prisma.sql`"id"::text AS id, "wechatId", "nickname", "score", "finishedAt", "updatedAt", "hidden", "dropCount", "simSteps", "playMs", "suspicious"`;
+const runColumns = (game: GameKind) => Prisma.sql`"id"::text AS id, "wechatId", "nickname", ${boardScore(game)} AS score, "finishedAt", "updatedAt", "hidden", "dropCount", "simSteps", "playMs", "suspicious"`;
 
 export async function getBoard(
   db: DbClient,
@@ -490,10 +491,10 @@ export async function getBoard(
   const g = Prisma.sql`${game}::"GameKind"`;
   const [runs, weekRows, bans, awardRows] = await Promise.all([
     db.$queryRaw<RawRun[]>`
-      SELECT ${RUN_COLUMNS}
-      FROM "GameRun"
-      WHERE "game" = ${g} AND "weekKey" = ${wk} AND ("finishedAt" IS NOT NULL OR (${liveScoresEnabled()} AND "updatedAt" IS NOT NULL)) AND "score" IS NOT NULL
-      ORDER BY "score" DESC, COALESCE("finishedAt", "updatedAt") ASC, "id" ASC LIMIT 300`,
+      SELECT ${runColumns(game)}
+      FROM "GameRun" r
+      WHERE "game" = ${g} AND "weekKey" = ${wk} AND ("finishedAt" IS NOT NULL OR (${liveScoresEnabled()} AND "updatedAt" IS NOT NULL)) AND "score" IS NOT NULL AND ${levelEligibility(game)}
+      ORDER BY ${boardScore(game)} DESC, ${boardTime(game)} ASC, "id" ASC LIMIT 300`,
     db.$queryRaw<{ weekKey: string }[]>`
       SELECT DISTINCT "weekKey" FROM "GameRun" WHERE "game" = ${g} AND "weekKey" IS NOT NULL ORDER BY "weekKey" DESC LIMIT 26`,
     db.$queryRaw<{ wechatId: string; reason: string | null; createdAt: Date }[]>`
@@ -507,8 +508,8 @@ export async function getBoard(
   const awardRun = award
     ? ((
         await db.$queryRaw<RawRun[]>`
-          SELECT ${RUN_COLUMNS}
-          FROM "GameRun" WHERE "id"::text = ${award.runId}`
+          SELECT ${runColumns(game)}
+          FROM "GameRun" r WHERE "id"::text = ${award.runId}`
       )[0] ?? null)
     : null;
   const ordered = await orderedSet(db, [...runs.map((r) => r.wechatId), ...(awardRun ? [awardRun.wechatId] : [])]);

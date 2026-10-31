@@ -5,7 +5,7 @@ import { fill } from "@/components/customer/format";
 import { sound } from "@/components/game/sound";
 import type { TierView } from "@/components/game/types";
 import { copy } from "@/copy";
-import { BIG_BASE, ROLL_BASE, MIN_MOVE_GAP_MS, createM3Game, legalM3Moves, tierOf, type M3Cell, type M3Move, type M3Swap } from "@/lib/m3";
+import { BIG_BASE, ROLL_BASE, MIN_MOVE_GAP_MS, createM3Game, legalM3Moves, tierOf, type M3Cell, type M3Move, type M3Swap, type M3Level } from "@/lib/m3";
 import { motionHealth } from "@/lib/motion/fps";
 import { haptic, useMotionPrefs } from "@/lib/motion/react";
 import { adjacent, animationQueue, sameCell, swipeDirection, swipeTarget, type AnimationFrame, type SwipeDirection } from "./m3Animation";
@@ -16,14 +16,15 @@ import "./m3.css";
 const t = copy.customer.m3;
 export interface M3Progress { moves: M3Move[]; score: number }
 interface Props {
+  level?: number; rules?: M3Level;
   tiers: TierView[]; seed: string; initialMoves?: M3Move[]; soundOn: boolean; reduced: boolean;
   onProgress: (p: M3Progress) => void; onOver: (p: M3Progress) => void; onShowResult?: () => void;
 }
 
-export function M3Board({ tiers, seed, initialMoves = [], soundOn, reduced, onProgress, onOver, onShowResult }: Props) {
+export function M3Board({ level, rules, tiers, seed, initialMoves = [], soundOn, reduced, onProgress, onOver, onShowResult }: Props) {
   const { degraded } = useMotionPrefs();
   const [game] = useState(() => {
-    const g = createM3Game({ seed, tiers });
+    const g = createM3Game({ seed, tiers, ...rules });
     initialMoves.forEach(m => g.swap(m.a, m.b));
     return g;
   });
@@ -163,10 +164,12 @@ export function M3Board({ tiers, seed, initialMoves = [], soundOn, reduced, onPr
   const view = frame ? ["refill", "special", "order", "shuffle", "over"].includes(frame.event.type) ? frame.after : frame.before : snap;
   const display = frame?.after ?? snap;
   return <div className={`m3-play ${quiet ? "m3-quiet" : ""}`} data-testid="m3-play" data-reduced={reduced} data-degraded={degraded}>
+    {level && <p className="font-display m-0 text-center text-lg" data-testid="m3-level">{fill(t.level, { n: String(level) })}</p>}
     <div className="m3-hud">
       <p>{t.movesLeft}<b className="font-num" data-testid="m3-moves">{display.movesLeft}</b></p>
-      <p>{t.score}<b className="font-num" data-testid="m3-score">{display.score}</b></p>
+      <p>{t.score}<b className="font-num"><span data-testid="m3-score">{display.score}</span>{rules && <span className="text-base text-c-grey"> / {rules.target}</span>}</b></p>
     </div>
+    {rules && <progress className="m3-level-progress" value={Math.min(display.score, rules.target)} max={rules.target} aria-label={t.target} data-testid="m3-target" />}
     <p className="m3-order-label">{t.orders}</p>
     <div className="m3-orders" data-testid="m3-orders">
       {view.orders.map((order, i) => <div key={i} className={`m3-order ${event?.type === "order" && event.index === i && event.action === "complete" ? "m3-order-done" : ""}`} data-testid={`m3-order-${i}`} data-have={order.have} data-tier={order.tier}>

@@ -1,7 +1,7 @@
 import { startTuRun, finishTuRun } from "@/server/tu";
 import { startM3Run, finishM3Run } from "@/server/m3";
 import { replayTu } from "@/lib/tu";
-import { replayM3 } from "@/lib/m3";
+import { replayM3, m3Level } from "@/lib/m3";
 import { randomTu } from "../support/tuBot";
 import { randomM3 } from "../support/m3Bot";
 import { enqueueGameWinner } from "@/server/gameWinner";
@@ -151,13 +151,14 @@ for (const game of ["TU", "M3"] as const) {
     await db.product.createMany({ data: [5, 6].map(n => ({ name: `Bread ${n}`, sortOrder: n,
       unitPriceCents: 100, capacityMode: "INDEPENDENT" as const, dailyLimit: 5, description: "" })) });
     const run = await (game === "TU" ? startTuRun : startM3Run)(db, { wechatId: "alice", nickname: "Alice" }, "ip", start);
-    const log = game === "TU" ? randomTu(run.seed, run.tiers).taps.slice(0, 6) : randomM3(run.seed, run.tiers).moves.slice(0, 6);
+    const rules = m3Level(weekKeyOf(start), 1);
+    const log = game === "TU" ? randomTu(run.seed, run.tiers).taps.slice(0, 6) : randomM3(run.seed, run.tiers, rules).moves;
     const score = game === "TU" ? replayTu(run.seed, run.tiers, log as Parameters<typeof replayTu>[2]).score
-      : replayM3(run.seed, run.tiers, log as Parameters<typeof replayM3>[2]).score;
+      : replayM3(run.seed, run.tiers, log as Parameters<typeof replayM3>[2], rules).score;
     const body = { runId: run.runId, log };
     await expect(progressRun(db, "BIG", body, now)).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(await progressRun(db, game, body, now)).toMatchObject({ score, live: true });
-    expect((await getLeaderboard(db, now, "ALICE", game))).toMatchObject({ myBest: score, top: [{ score, live: true }] });
+    expect((await getLeaderboard(db, now, "ALICE", game))).toMatchObject(game === "M3" ? { top: [] } : { myBest: score, top: [{ score, live: true }] });
     // Exact min-gap boundary accepted; JSONB canonicalization must preserve the prefix.
     expect(await progressRun(db, game, body, new Date(+now + 8000))).toMatchObject({ score });
     await expect(progressRun(db, game, { ...body, log: log.slice(0, 2) }, new Date(+now + 16000))).rejects.toMatchObject({ code: "VALIDATION" });
@@ -171,7 +172,9 @@ for (const game of ["TU", "M3"] as const) {
     await expect(progressRun(db, game, body, new Date(+now + 40000))).rejects.toMatchObject({ code: "VALIDATION" });
     await db.gameBan.deleteMany();
     await (game === "TU" ? finishTuRun : finishM3Run)(db, { runId: run.runId, [game === "TU" ? "taps" : "moves"]: log }, "ip", new Date(+now + 48000));
-    expect((await getLeaderboard(db, new Date(+now + 48000), null, game)).top[0]).toMatchObject({ score, live: false });
+    const board = await getLeaderboard(db, new Date(+now + 48000), null, game);
+    if (game === "M3" && score < rules.target) expect(board.top).toEqual([]);
+    else expect(board.top[0]).toMatchObject({ score: game === "M3" ? 1 : score, live: false });
     const old = await (game === "TU" ? startTuRun : startM3Run)(db, { wechatId: "old", nickname: "Old" }, "ip", start);
     await db.gameRun.update({ where: { id: old.runId }, data: { seed: "obsolete-version" } });
     await expect(progressRun(db, game, { runId: old.runId, log: [] }, now)).rejects.toMatchObject({ code: "VALIDATION" });

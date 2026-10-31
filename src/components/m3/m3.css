@@ -98,3 +98,5 @@
   .m3-play .m3-pop { animation-name:m3-fade-out !important; }
   .m3-play .m3-refill { animation-name:m3-record-fade !important; }
 }
+
+.m3-level-progress { width: 100%; height: 8px; accent-color: var(--c-ink); }

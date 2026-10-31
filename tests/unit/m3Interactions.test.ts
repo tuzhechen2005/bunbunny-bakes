@@ -4,7 +4,7 @@ import { M3Page } from "@/components/m3/M3Page";
 import { M3Board, type M3Progress } from "@/components/m3/M3Board";
 import { finishM3 } from "@/components/m3/m3Api";
 import { readM3Save, writeM3Save, type M3Save } from "@/components/m3/m3Save";
-import { createM3Game, legalM3Moves, type M3Move } from "@/lib/m3";
+import { createM3Game, legalM3Moves, m3Level, type M3Move } from "@/lib/m3";
 
 // Exercise component callbacks in Node; browser specs cover reconciliation, focus and layout.
 const hooks = vi.hoisted(() => {
@@ -76,13 +76,15 @@ function target(tree: ReactNode, id: string) {
 }
 const tiers = Array.from({ length: 6 }, (_, i) => ({ id: `t${i}`, radius: .1, points: 10, imageUrl: null, color: { bg: "var(--c-wash)", ink: "var(--c-ink)" } }));
 function completedSave(): M3Save {
-  const game = createM3Game({ seed: "save", tiers });
+  const rules = m3Level("2026-10-26", 1);
+  const selected = tiers.slice(0, rules.tierCount);
+  const game = createM3Game({ tiers: selected, ...rules });
   const moves: M3Move[] = [];
   while (!game.over) {
     const m = legalM3Moves(game.state())[0];
     game.swap(m.a, m.b); moves.push({ ...m, at: moves.length * 500 });
   }
-  return { v: 1, runId: "pending-run", seed: "save", tiers, moves, score: game.score, nickname: "baker", expiresAt: "2099-01-01" };
+  return { v: 1, level: 1, weekKey: "2026-10-26", runId: "pending-run", seed: rules.seed, tiers: selected, moves, score: game.score, nickname: "baker", expiresAt: "2099-01-01" };
 }
 beforeEach(() => {
   vi.useFakeTimers();
@@ -127,7 +129,7 @@ describe("M3 finish handoff", () => {
     expect(target(tree, "m3-retry")).toBeDefined();
     expect(readM3Save()).toEqual(saved);
     hooks.reset();
-    vi.mocked(finishM3).mockResolvedValueOnce({ ok: true, status: 200, data: { score: saved.score, best: saved.score, rank: 1, week: { start: "2026-11-30", end: "2026-12-06" } } });
+    vi.mocked(finishM3).mockResolvedValueOnce({ ok: true, status: 200, data: { level: 1, passed: true, score: saved.score, best: saved.score, rank: 1, week: { start: "2026-11-30", end: "2026-12-06" } } });
     tree = resume(); nodes(tree).find(p => p.onOver)!.onOver!(saved);
     await vi.runOnlyPendingTimersAsync(); hooks.render(M3Page);
     expect(finishM3).toHaveBeenLastCalledWith(saved.runId, saved.moves);

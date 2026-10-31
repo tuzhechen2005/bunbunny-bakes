@@ -186,7 +186,7 @@
 
 **GameBan**：被禁的微信号，`wechatId`、`reason`、`createdAt`。唯一性不区分大小写（数据库里 `lower("wechatId")` 的唯一索引，Prisma 里写不出来，只在迁移 SQL 里）；查询用 `mode: "insensitive"`。
 
-**M3（S2 / D135）**：迁移 `20261030200000_game_kind_m3` 只执行 `ALTER TYPE "GameKind" ADD VALUE 'M3'`，不重写已有局、奖励或奖品周。M3 复用 `GameRun` / `GameAward`：`seed` 带 `M3_ENGINE_VERSION`；`tiersSnapshot` 存开局时 BIG 非大面包的前六种配置，保留精确 id 顺序，少于六种不建局。`drops` 存 `[{ a: { r, c }, b: { r, c }, at }]`，`dropCount` 为交换步数（0–30），`playMs` 为末步客户端毫秒（空记录 0），`simSteps` 为空。`suspicious` 仅表示间隔中位数 < 400 ms，照常上榜。`weekKey`、隐藏、封禁、并发幂等和每游戏每周奖励规则同 TU。限流 key 为 `m3_start_ip:<ipHash>` / `m3_finish_ip:<ipHash>`，各每小时 60 次。S2 的大厅和随机奖品池仍只有 BIG/TU。
+**M3（S9 / D151、D154）**：每个 GameRun 是一次周关卡尝试。迁移 `20261031180000_game_levels` 增加可空 `level`（正整数）与 `passedAt`（服务器过关时间；有值必须有 level 和 finishedAt），以及按 game/week/lower(wechatId)/level 的已过关索引；旧局与其他游戏保持 NULL。开始时存 weekKey、level、v3 确定性 seed 和前 4/5/6 种面包快照（配置至少六种）。结束时从周号/关数推导规则并回放：成功写 passedAt，失败只写 finishedAt 与真实分数，部分日志不能结束。drops 保存交换日志、dropCount 为步数、playMs 为末步毫秒、simSteps 为空；中位间隔 <400 ms 标可疑。GameAward 继续指向已过关尝试；榜单 score DTO 表示关数，数据库 score 仍是局内分数。周榜平手按最早 passedAt，未完成和失败尝试不入榜；实时活动独立显示。
 
 **GamePrizeWeek**（D133）：`weekKey` 主键（America/Chicago 周一，`YYYY-MM-DD`）、`game`（`GameKind`）、`chosenBy`（`GamePrizeChosenBy` 枚举：`RANDOM` / `OWNER`）、`createdAt`（timestamptz，覆盖时保留）。首次请求该周时用 crypto 均匀选择已启用游戏，排除上周；全局事务 advisory lock 串行化周抽取与店主覆盖，主键保证每周只有一行。部署后补取缺失的已结束周时，也排除已经选好的下一周；如果两侧 OWNER 选择冲突，优先排除上一周。店主可以明确重复上周游戏，之后的自动抽取仍排除这个最终选择。
 

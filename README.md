@@ -118,3 +118,25 @@ sprites, with all shipped run assets capped at 1.5 MB. See [RUN client](docs/RUN
 
 R5 checks: `npx tsc --noEmit --incremental false`, `npm run lint`,
 `npx vitest run --configLoader runner --project unit`. No browser execution in this task.
+
+## 三连烤 weekly levels (S9)
+
+M3 uses engine v3 and D151 weekly levels. Apply `20261031180000_game_levels` with the usual
+Prisma migration deployment before releasing the app. `GameRun.level` / `passedAt` are nullable;
+other games and historical scores are preserved. Old v2 M3 saves/runs cannot resume.
+The shared level-board policy lives in `src/server/gameLevels.ts`; prize selection still uses
+`M3_PRIZE_FROM_WEEK`. See [engine rules and per-level bot pass rates](src/lib/m3/README.md).
+Over 100 fixed weeks: greedy L1 **97.0%**, L12 **50.0%**, L25 **3.0%**;
+every generated board has a replayable winning witness.
+
+```sh
+npx tsx scripts/m3-level-tune.mts 100
+npx tsc --noEmit
+npx eslint .
+npx vitest run --configLoader runner --project unit --maxWorkers 2
+TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_m3_levels_test \
+  npx vitest run --configLoader runner --project db
+```
+
+Only `_test` databases are allowed for DB checks. M3 Playwright specs cover next level, retry,
+autosave/resume, target HUD and v2 rejection; they were updated without launching browsers.

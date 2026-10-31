@@ -16,11 +16,11 @@ describe("M3 run helpers", () => {
     for (const seed of ["abcdef", "", "v1.", "v1.nohex"]) expect(m3SeedVersion(seed)).toBeNull();
   });
 
-  it("requires exactly six snapshot ids and preserves their exact order", () => {
+  it("requires four to six snapshot ids and preserves their exact order", () => {
     expect(M3_MIN_TIERS).toBe(6);
     const snapshot = [...tiers].reverse().map((t) => ({ ...t, name: "bread" }));
     expect(m3TiersFromSnapshot(snapshot)).toEqual([...tiers].reverse());
-    for (const bad of [null, {}, [], tiers.slice(0, 5), [...tiers, { id: "extra" }],
+    for (const bad of [null, {}, [], tiers.slice(0, 3), [...tiers, { id: "extra" }],
       [...tiers.slice(1), { id: "big" }], [...tiers.slice(1), { id: "" }],
       [...tiers.slice(1), { id: 1 }], [...tiers.slice(1), null], [...tiers.slice(1), tiers[1]]]) {
       expect(() => m3TiersFromSnapshot(bad)).toThrow("bad m3 tiers snapshot");

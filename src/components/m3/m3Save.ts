@@ -1,5 +1,5 @@
 // M3 autosave (D135/D142): this phone only; resume replays accepted moves.
-import { MAX_MOVES, M3_ENGINE_VERSION, replayM3, type M3Move } from "@/lib/m3";
+import { MAX_MOVES, M3_ENGINE_VERSION, replayM3, m3LevelRules, m3SeedVersion, type M3Move } from "@/lib/m3";
 import type { TierView } from "@/components/game/types";
 
 // Saves from another engine version cannot be replayed under the current rules.
@@ -7,6 +7,8 @@ export const M3_SAVE_KEY = `bb_m3_save_v${M3_ENGINE_VERSION}`;
 
 export interface M3Save {
   v: 1;
+  level: number;
+  weekKey: string;
   runId: string;
   seed: string;
   tiers: TierView[];
@@ -23,11 +25,14 @@ export function parseM3Save(raw: string | null, now = Date.now()): M3Save | null
     const s = JSON.parse(raw) as Partial<M3Save>;
     if (!s || s.v !== 1) return null;
     if (typeof s.runId !== "string" || !s.runId || typeof s.seed !== "string") return null;
-    if (!Array.isArray(s.tiers) || s.tiers.length !== 6 || !Array.isArray(s.moves) || s.moves.length > MAX_MOVES) return null;
+    if (!Array.isArray(s.tiers) || (s.tiers.length < 4 || s.tiers.length > 6) || !Array.isArray(s.moves) || s.moves.length > MAX_MOVES) return null;
     if (typeof s.expiresAt !== "string" || !(Date.parse(s.expiresAt) > now)) return null;
     if (typeof s.score !== "number" || typeof s.nickname !== "string") return null;
     if (!s.tiers.every(t => t && typeof t.id === "string" && typeof t.radius === "number" && typeof t.points === "number" && (t.imageUrl === null || typeof t.imageUrl === "string") && t.color && typeof t.color.bg === "string" && typeof t.color.ink === "string" && (t.name === undefined || typeof t.name === "string"))) return null;
-    if (replayM3(s.seed, s.tiers, s.moves).score !== s.score) return null;
+    if (typeof s.weekKey !== "string" || typeof s.level !== "number") return null;
+    const level = m3LevelRules(s.level);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s.weekKey) || m3SeedVersion(s.seed) !== M3_ENGINE_VERSION || s.tiers.length !== level.tierCount) return null;
+    if (replayM3(s.seed, s.tiers, s.moves, level).score !== s.score) return null;
     return s as M3Save;
   } catch {
     return null;

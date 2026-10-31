@@ -201,26 +201,19 @@
 
 **`GET /api/game/tu/leaderboard?wechatId=`** → 和 `/api/game/leaderboard` 同形状（`week, top, lastWinner, allTime, myBest?`），只算兔了个兔的局；`lastWinner` 看兔了个兔自己的 `GameAward`。
 
-### 兔兔三连烤（D135，S2，`/api/game/m3/**`，公开）
+### 兔兔三连烤（D151、D154，S9，`/api/game/m3/**`，公开）
 
-服务端 `src/server/m3.ts`，引擎 `src/lib/m3/`。昵称/微信校验、共用封禁名单、周一 Chicago 00:00 过期、隐藏成绩、幂等提交、脱敏周榜、👑 历史最高和奖励资格沿用 TU。三个成功响应均为 `Cache-Control: no-store`。S2 仅开放服务端和后台，**不加入大厅和随机奖品池**，公开页面与启用由 S3 完成。
+**`POST /start`** `{ wechatId, nickname, level? }` → `201 { runId, seed, tiers, expiresAt, weekKey, level, moves, target, tierCount }`。
+省略 level 时从服务器本周最高通过关数继续；指定 N>1 必须同一微信号（trim 后大小写不敏感）本周通过 N−1，否则 `422 VALIDATION`。每次创建独立 GameRun，可无限重试。配置仍需六种面包，快照只取该关前 4/5/6 种。`m3Level(weekKey, level)` 为全体玩家生成同一 v3 seed 与规则，无密钥。
 
-**`POST /api/game/m3/start`** `{ wechatId, nickname }` → `201 { runId, seed, tiers, expiresAt }`
+**`POST /finish`** `{ runId, moves: [{ a: { r, c }, b: { r, c }, at }] }` → `200 { score, level, passed, best, rank, week, personalBest, newRecord }`。
+从头按开局周和关数重新推导规则、检查 seed/种类、回放；分数达标即过关，否则步数耗尽为失败。尚未结束的日志、结束后的动作、非法交换、额外 move 字段、非法坐标/时间均 `422`，不关闭局。`score` 为该次分数；`best` / `personalBest` 为通过关数。首次 finish 原子写入结果和证据；只有过关写 `passedAt = 服务器时间`。重复提交返回首次结果。v2 或缺少关数的旧局返回过期提示，不能获得关数。
 
-- `tiers` 与 BIG 的 `TierView` 相同，按配置 `sortOrder` 取非大面包的前 6 种；沿用 BIG 的默认商品配置回退。少于 `M3_MIN_TIERS = 6` → `422 VALIDATION`「兔兔三连烤还没准备好，请稍后再来」，不建局；不使用引擎支持的 4/5 种模式参与排名。
-- 将这六种的完整有序配置保存为 `tiersSnapshot`；重放严格使用其中的六个 id，不重读、重排或重新截取当前配置。
-- `m3Seed` 生成 `v<M3_ENGINE_VERSION>.<32 位随机十六进制>`（当前版本 2）。未完成局缺少版本或版本不匹配 → finish `422 VALIDATION`「这一局已经过期，请重新开始」。
-- start 请求体 ≤ 4096 bytes；`m3_start_ip:<ipHash>` 每小时 60 次。
+**`POST /progress`** 沿用完整日志、前缀校验、8 秒节流、服务器回放和墙钟校验。只保存实时分数，不计通过、不解锁；排行榜的 live 标记表示该玩家正在挑战新的一关，名次保持已通过关数。
 
-**`POST /api/game/m3/finish`** `{ runId, moves: [{ a: { r, c }, b: { r, c }, at }] }` → `200 { score, best, rank, week, personalBest, newRecord }`
+**`GET /leaderboard?wechatId=`** → `{ week, top, lastWinner, allTime, myBest?, liveScores, nextLevel }`；也支持 `x-game-wechat`。所有榜单 `score` 字段表示关数。每人本周最高已过关数，平手按该关最早服务器 `passedAt`，再按 id；隐藏/封禁排除。`nextLevel` 按已验证通过记录计算，隐藏不撤销解锁。无通过记录不入榜。
 
-- 最多 `MAX_MOVES = 30` 步；`r,c` 为 0–7 整数，`at` 为非负安全整数毫秒（从开局算起），首步可为 0。每个 move 和坐标对象禁止额外字段。服务端从头 `replayM3`，忽略客户端分数；非法交换、无消除的交换、超限、非递增时间等 → `422 VALIDATION`，保持未完成。空记录、未玩完的记录也可计分。
-- 相邻步至少 `MIN_MOVE_GAP_MS = 150` ms，末步 `at` ≤ 真实经过时间 + 10000 ms。保存 `drops = moves`、`dropCount = moves.length`、`playMs = 末步 at`（空记录为 0），`simSteps` 留空。
-- `suspicious` 仅当相邻步间隔中位数 < `M3_SUSPICIOUS_MEDIAN_GAP_MS = 400` ms；不足两步为 false，正常完成 30 步不自动标记。可疑局仍上榜，由店主发奖前核查。
-- 已完成局返回第一次保存的结果；并发 finish 只有一次写入。BIG/TU 的 runId → `404 NOT_FOUND`，反向同理。
-- `m3_finish_ip:<ipHash>` 每小时 60 次；JSON 请求体上限 `ceil(MAX_MOVES × 60 bytes × 1.25) + 4096`，当前 **6346 bytes**；沿用 TU 的 `readGameJson` 检查 Content-Length 和解析前文本长度。
-
-**`GET /api/game/m3/leaderboard?wechatId=`** → `{ week, top, lastWinner, allTime, myBest? }`，与 TU 同形状；也支持 `x-game-wechat`。只查询 M3 成绩与奖励，每个微信号取最高，大小写不敏感，同分先完成优先；隐藏/封禁排除，公开微信号脱敏。
+其他契约不变：周一 Chicago 00:00 重置；微信号公开脱敏；成功响应 `no-store`；相邻动作至少 150 ms，末步时间不超服务器经过时间 + 10000 ms；间隔中位数 <400 ms 标可疑但仍上榜。start/finish 各 IP 每小时 60 次，start body ≤4096 bytes，finish body ≤6346 bytes、最多 30 个输入（实际该关更少）。奖池仍受 `M3_PRIZE_FROM_WEEK` 控制，赢家为关卡榜第一。共享关卡逻辑在 `src/server/gameLevels.ts`。
 
 ### POST /api/assistant（小小🐰，D117、D118）
 
