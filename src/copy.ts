@@ -386,6 +386,11 @@ export const copy = {
       level: "第 {n} 关", levels: "关数", wave: "波", coins: "金币", bread: "面包",
       target: "这波想偷", nextWave: "叫下一波", upgrade: "升级", sell: "卖出",
       towers: { rollingPin: "擀面杖", flourSifter: "筛粉器", whisk: "打蛋器", oven: "烤箱" },
+      branches: {
+        rollingPin: { a: "连击", b: "击退" }, flourSifter: { a: "更慢", b: "更大" },
+        whisk: { a: "大范围", b: "更快" }, oven: { a: "烧灼", b: "穿透" },
+      },
+      maxed: "满级", nextWaveLabel: "下一波", lastWave: "最后一波", boss: "大胃王鼠来了！",
       slot: "炮位 {n}", closePicker: "收起厨具", boardLabel: "面包防守小路",
       win: "守住了！", fail: "面包被偷走了", next: "下一关", retry: "再来一次",
       pause: "暂停", paused: "已暂停", resume: "继续", speedOne: "1×", speedTwo: "2×",

@@ -4,53 +4,40 @@ import { createTdGame, tdLevel } from '@/lib/td';
 
 afterEach(() => vi.unstubAllGlobals());
 
-function scene(reduced = false) {
+/** Any 2D context call is a no-op; drawImage calls are recorded. */
+function mockContext() {
   const drawImage = vi.fn();
-  const context = () => ({
-    drawImage: vi.fn(), fillRect: vi.fn(), beginPath: vi.fn(), roundRect: vi.fn(), clip: vi.fn(),
-    moveTo: vi.fn(), lineTo: vi.fn(), stroke: vi.fn(), fill: vi.fn(), arc: vi.fn(), ellipse: vi.fn(), setTransform: vi.fn(),
+  const target: Record<string | symbol, unknown> = { drawImage, globalAlpha: 1 };
+  const ctx = new Proxy(target, {
+    get: (o, k) => k in o ? o[k] : (o[k] = vi.fn(() => ({ addColorStop: vi.fn() }))),
+    set: (o, k, v) => { o[k] = v; return true; },
   });
-  const ctx = { ...context(), drawImage, globalAlpha: 1 };
-  vi.stubGlobal('document', { createElement: () => ({ getContext: () => context() }) });
-  vi.stubGlobal('getComputedStyle', () => ({ getPropertyValue: () => 'white' }));
-  const canvas = { width: 720, height: 1080, getContext: () => ctx } as unknown as HTMLCanvasElement;
-  const tiers = ['cheap', 'expensive'].map(id => ({ id, radius: .1, points: 1, imageUrl: null, color: { bg: 'white', ink: 'black' } }));
-  const render = createTdRenderer(canvas, 0, {}, tiers, [null, null], reduced);
-  const state = createTdGame({ level: tdLevel('2026-10-26', 1), tierCount: 2 }).state();
-  const draw = () => { drawImage.mockClear(); render(state); return drawImage.mock.calls.slice(1); };
-  return { ctx, state, draw };
+  return { ctx, drawImage };
 }
 
-it('lays ten separate rounded photo tiles on a tray and removes stolen tiles without shifting survivors', () => {
-  const { state, draw, ctx } = scene();
-  const initial = draw();
-  expect(initial).toHaveLength(10);
-  for (const tile of initial) {
-    const [, x, y, w, h] = tile;
-    expect(x).toBeGreaterThanOrEqual(0); expect(x + w).toBeLessThanOrEqual(720);
-    expect(y).toBeGreaterThanOrEqual(0); expect(y + h).toBeLessThanOrEqual(1080);
-    for (const other of initial) if (other !== tile) {
-      expect(x + w <= other[1] || other[1] + other[3] <= x || y + h <= other[2] || other[2] + other[4] <= y).toBe(true);
-    }
-  }
-  state.tick = 10; state.bread = 8; state.breadTiers.splice(0, 2);
-  expect(draw()).toHaveLength(10);
-  state.tick = 19;
-  expect(draw()[0][2]).toBeLessThan(initial[0][2]);
-  state.tick = 28;
-  expect(draw()).toEqual(initial.slice(2));
-  expect(ctx.globalAlpha).toBe(1);
-  state.tick = 40; state.bread = 1; state.breadTiers.splice(0, 7); draw();
-  state.tick = 58;
-  expect(draw()).toEqual(initial.slice(9));
+function scene() {
+  const main = mockContext();
+  vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => mockContext().ctx }) });
+  const canvas = { width: 720, height: 1080, getContext: () => main.ctx, getBoundingClientRect: () => ({ width: 360, height: 540 }) } as unknown as HTMLCanvasElement;
+  const tiers = ['cheap', 'expensive'].map(id => ({ id, radius: .1, points: 1, imageUrl: null, color: { bg: 'white', ink: 'black' } }));
+  const view = createTdRenderer(canvas, 0, {}, tiers, [null, null], false);
+  const state = createTdGame({ level: tdLevel('2026-10-26', 1), tierCount: 2 }).state();
+  return { view, state, drawImage: main.drawImage };
+}
+
+it('draws one photo token per remaining bread on the plate', () => {
+  const { view, state, drawImage } = scene();
+  view.draw(state, null, null);
+  // First call paints the cached background layer; the rest are pile tokens (no towers/pests yet).
+  expect(drawImage.mock.calls.length - 1).toBe(state.breadTiers.length);
+  drawImage.mockClear();
+  state.breadTiers.splice(0, 3);
+  view.draw(state, null, null);
+  expect(drawImage.mock.calls.length - 1).toBe(state.breadTiers.length);
 });
 
-it('fades theft without moving tiles in reduced motion and removes the final tile on terminal frames', () => {
-  const { state, draw } = scene(true);
-  const initial = draw();
-  state.tick = 10; state.bread = 9; state.breadTiers.shift(); draw();
-  state.tick = 19;
-  expect(draw()[0].slice(1)).toEqual(initial[0].slice(1));
-  state.bread = 0; state.breadTiers = []; state.over = true;
-  expect(draw()).toHaveLength(0);
+it('ignores unknown events and keeps drawing with a selection and preview', () => {
+  const { view, state } = scene();
+  view.ingest([{ type: 'kill', tick: 1, pest: 99, bounty: 5, x: 100, y: 100 }], state);
+  expect(() => view.draw(state, 0, 'oven')).not.toThrow();
 });

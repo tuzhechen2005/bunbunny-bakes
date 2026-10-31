@@ -1,22 +1,32 @@
 'use client';
-/* eslint-disable @next/next/no-img-element -- Owner TierView photos already have delivery URLs. */
-import { useEffect, useRef, useState } from 'react';
-import { createTdGame, TD_MAPS, MAX_INPUTS, towerStats, TOWER_KINDS, type TdInput, type TdState } from '@/lib/td';
+/* eslint-disable @next/next/no-img-element -- Static sprite files and owner photos. */
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createTdGame, TD_MAPS, MAX_INPUTS, WAVE_COUNT, towerStats, TOWER_KINDS, type TdInput, type TdState, type TowerKind, type TdBranch } from '@/lib/td';
 import { copy } from '@/copy';
 import { fill } from '@/components/customer/format';
 import { sound } from '@/components/game/sound';
 import { haptic } from '@/lib/motion/react';
 import { applyTdClientInput } from './tdInput';
-import { gameSecondary } from '@/components/game/GameChrome';
 import { createTdClock } from './tdClock';
 import { preloadTdArt } from './tdAssets';
-import { breadImages, createTdRenderer } from './tdRenderer';
+import { breadImages, createTdRenderer, type TdView } from './tdRenderer';
 import type { TdSave } from './tdSave';
 
 const t = copy.customer.td;
+const towerFile: Record<TowerKind, string> = { rollingPin: 'tower-pin', flourSifter: 'tower-sifter', whisk: 'tower-whisk', oven: 'tower-oven' };
+const PESTS = ['ant', 'mouse', 'sparrow', 'beetle', 'boss'] as const;
 export interface TdProgress { inputs: TdInput[]; endTick: number; score: number; passed: boolean }
-type Action = { type: 'place'; slot: number; tower: typeof TOWER_KINDS[number] } | { type: 'upgrade' | 'sell'; slot: number } | { type: 'callWave'; slot: -1 };
+type Action = { type: 'place'; slot: number; tower: TowerKind } | { type: 'upgrade'; slot: number; branch?: TdBranch } | { type: 'sell'; slot: number } | { type: 'callWave'; slot: -1 };
 interface Props { save: TdSave; paused: boolean; soundOn: boolean; reduced: boolean; onProgress: (p: TdProgress) => void; onOver: (p: TdProgress) => void }
+
+const hudKey = (s: TdState) => `${s.coins}|${s.wave}|${s.bread}|${s.towers.map(v => `${v.slot}${v.level}${v.branch ?? ''}`).join(',')}|${s.inputsAccepted}|${s.inputsRejected}|${s.nextWaveTick === null}|${s.over}|${s.nextWave?.index ?? -1}|${s.waveTargetTier}`;
+
+function BranchCard({ kind, branch, coins, onPick }: { kind: TowerKind; branch: TdBranch; coins: number; onPick: (b: TdBranch) => void }) {
+  const cost = towerStats(kind, 2, branch).cost;
+  return <button className={`td-card td-branch-${branch}`} data-testid={`td-upgrade-${branch}`} disabled={coins < cost} onClick={() => onPick(branch)}>
+    <span>{t.branches[kind][branch]}</span><b className="font-num">{cost}</b></button>;
+}
+
 export function TdBoard({ save, paused, soundOn, reduced, onProgress, onOver }: Props) {
   const [game] = useState(() => {
     const g = createTdGame({ seed: save.seed, tierCount: save.tiers.length });
@@ -27,19 +37,27 @@ export function TdBoard({ save, paused, soundOn, reduced, onProgress, onOver }: 
   const [hud, setHud] = useState(() => game.state());
   const [ready, setReady] = useState(false), [hidden, setHidden] = useState(false);
   const [selected, setSelected] = useState<number | null>(null), [speed, setSpeed] = useState<1 | 2>(1);
+  const [preview, setPreview] = useState<TowerKind | null>(null);
+  const [boss, setBoss] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null), wrapper = useRef<HTMLDivElement>(null);
   const state = useRef<TdState>(hud), inputs = useRef([...save.inputs]);
   const reported = useRef(false), action = useRef<(a: Action) => void>(() => {});
+  const view = useRef<TdView | null>(null);
+  const ui = useRef({ selected: null as number | null, preview: null as TowerKind | null });
+  useEffect(() => { ui.current = { selected, preview }; }, [selected, preview]);
   const settings = useRef({ soundOn, reduced });
   useEffect(() => { settings.current = { soundOn, reduced }; }, [soundOn, reduced]);
   useEffect(() => {
-    let alive = true, active = false, raf: number | null = null, timer: ReturnType<typeof setInterval> | null = null;
-    let render: ((s: TdState) => void) | null = null, lastSave = -1;
+    let alive = true, active = false, raf: number | null = null, lastSave = -1, lastKey = '', lastHud = 0;
     const publish = (force = false) => {
       const s = game.state(); state.current = s;
       if (wrapper.current) { wrapper.current.dataset.tick = String(s.tick); wrapper.current.dataset.state = s.over ? (s.passed ? 'won' : 'lost') : 'playing'; }
-      setHud(old => old.coins !== s.coins || old.wave !== s.wave || old.bread !== s.bread || old.towers.length !== s.towers.length
-        || old.inputsAccepted !== s.inputsAccepted || old.inputsRejected !== s.inputsRejected || old.nextWaveTick !== s.nextWaveTick || old.over !== s.over ? s : old);
+      const now = performance.now();
+      if (force || now - lastHud > 120) {
+        lastHud = now;
+        const key = hudKey(s);
+        if (key !== lastKey) { lastKey = key; setHud(s); }
+      }
       if (force || Math.floor(s.tick / 60) !== lastSave || s.over) {
         lastSave = Math.floor(s.tick / 60);
         const progress = { inputs: inputs.current, endTick: s.tick, score: s.wave, passed: s.passed };
@@ -47,77 +65,116 @@ export function TdBoard({ save, paused, soundOn, reduced, onProgress, onOver }: 
         if (s.over && !reported.current) { reported.current = true; if (settings.current.soundOn) sound.over(); onOver(progress); }
       }
     };
+    const advance = () => {
+      const events = game.step(clock.tick(performance.now()));
+      if (events.length) {
+        view.current?.ingest(events, game.state());
+        for (const e of events) {
+          if (e.type === 'kill' && settings.current.soundOn) sound.merge(1);
+          if (e.type === 'bossSpawn') { setBoss(true); setTimeout(() => setBoss(false), 1800); if (!settings.current.reduced) haptic(30); }
+          if (e.type === 'lose' && !settings.current.reduced) haptic(16);
+        }
+      }
+    };
     const stop = () => {
       active = false;
       if (raf !== null) cancelAnimationFrame(raf); raf = null;
-      if (timer !== null) clearInterval(timer); timer = null;
-      game.step(clock.pause(performance.now())); publish(true); render?.(state.current);
+      game.step(clock.pause(performance.now())); publish(true); view.current?.draw(state.current, ui.current.selected, ui.current.preview);
     };
-    // Rendering consumes the latest simulation snapshot and creates no arrays, objects or strings.
-    const frame = () => { if (!active) return; render!(state.current); raf = requestAnimationFrame(frame); };
-    const simulate = () => { game.step(clock.tick(performance.now())); publish(); if (game.over) stop(); };
+    // One rAF drives both simulation and drawing: motion is as smooth as the display.
+    const frame = () => {
+      if (!active) return;
+      advance(); publish();
+      view.current?.draw(state.current, ui.current.selected, ui.current.preview);
+      if (game.over) { stop(); return; }
+      raf = requestAnimationFrame(frame);
+    };
     const start = () => {
-      if (!alive || active || paused || document.hidden || game.over || !render) return;
-      active = true; clock.resume(performance.now()); timer = setInterval(simulate, 1000 / 30); raf = requestAnimationFrame(frame);
+      if (!alive || active || paused || document.hidden || game.over || !view.current) return;
+      active = true; clock.resume(performance.now()); raf = requestAnimationFrame(frame);
     };
     const visibility = () => { setHidden(document.hidden); if (document.hidden) stop(); else start(); };
-    const resize = () => {
-      const c = canvas.current; if (!c) return;
-      const rect = c.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
-      c.width = Math.max(1, Math.round(rect.width*dpr)); c.height = Math.max(1, Math.round(rect.height*dpr)); render?.(state.current);
-    };
+    const resize = () => { view.current?.resize(); view.current?.draw(state.current, ui.current.selected, ui.current.preview); };
     const observer = new ResizeObserver(resize); if (canvas.current) observer.observe(canvas.current);
     action.current = a => {
       if (!active || document.hidden || game.over || inputs.current.length >= MAX_INPUTS) return;
-      game.step(clock.tick(performance.now()));
+      advance();
       if (game.over) { publish(true); stop(); return; }
+      const before = game.state().events.length;
       const input = { ...a, tick: game.state().tick } as TdInput;
       // Retain replayable rejected attempts only up to the client safety margin.
       const accepted = applyTdClientInput(game, inputs.current, input);
-      if (accepted) { if (settings.current.soundOn) sound.drop(); if (!settings.current.reduced) haptic(8); }
-      publish(true); render?.(state.current);
+      if (accepted) {
+        const s = game.state(); view.current?.ingest(s.events.slice(before), s);
+        if (settings.current.soundOn) sound.drop(); if (!settings.current.reduced) haptic(8);
+      }
+      publish(true);
     };
     document.addEventListener('visibilitychange', visibility, true); window.addEventListener('pagehide', stop, true);
     void Promise.all([preloadTdArt(), breadImages(save.tiers)]).then(([art, photos]) => {
       if (!alive || !canvas.current) return;
-      render = createTdRenderer(canvas.current, state.current.map, art, save.tiers, photos, reduced);
+      view.current = createTdRenderer(canvas.current, state.current.map, art, save.tiers, photos, reduced);
       resize(); setReady(true); publish(true); start();
     });
     return () => {
-      alive = false; stop(); observer.disconnect(); action.current = () => {};
+      alive = false; stop(); observer.disconnect(); action.current = () => {}; view.current = null;
       document.removeEventListener('visibilitychange', visibility, true); window.removeEventListener('pagehide', stop, true);
     };
   }, [clock, game, onProgress, onOver, paused, reduced, save.tiers]);
+  // Redraw immediately when the selection changes while paused or idle.
+  useEffect(() => { view.current?.draw(state.current, selected, preview); }, [selected, preview]);
+
   const tower = selected === null ? undefined : hud.towers.find(v => v.slot === selected);
   const slots = TD_MAPS[hud.map].slots;
-  const point = selected === null ? null : slots[selected];
   const target = save.tiers[hud.waveTargetTier];
   const disabled = paused || hidden || hud.over || !ready || hud.inputsAccepted + hud.inputsRejected >= MAX_INPUTS;
+  const close = useCallback(() => { setSelected(null); setPreview(null); }, []);
+  const act = useCallback((a: Action) => { action.current(a); close(); }, [close]);
+  const next = hud.nextWave;
   return <section className="td-play">
     <div className="td-hud" aria-live="off">
-      <p>{t.levels}<b className="font-num" data-testid="td-level">{save.level}</b></p><p>{t.wave}<b className="font-num" data-testid="td-wave">{hud.wave}/5</b></p>
-      <p>{t.coins}<b className="font-num" data-testid="td-coins">{hud.coins}</b></p><p>{t.bread}<b className="font-num" data-testid="td-bread">{hud.bread}</b></p>
+      <p className="td-hud-level"><span>{t.levels}</span><b className="font-num" data-testid="td-level">{save.level}</b></p>
+      <div className="td-waves" aria-label={`${t.wave} ${hud.wave}/${WAVE_COUNT}`}>
+        <span className="td-sr" data-testid="td-wave">{hud.wave}/{WAVE_COUNT}</span>
+        {Array.from({ length: WAVE_COUNT }, (_, i) => <i key={i} className={i < hud.wave ? 'td-wave-done' : ''} aria-hidden="true" />)}
+      </div>
+      <p className="td-chip td-chip-coin"><i aria-hidden="true" /><b className="font-num" data-testid="td-coins">{hud.coins}</b></p>
+      <p className="td-chip td-chip-bread">{target?.imageUrl ? <img src={target.imageUrl} alt="" /> : <i aria-hidden="true" />}<b className="font-num" data-testid="td-bread">{hud.bread}</b></p>
     </div>
-    <div className="td-target"><span>{t.target}</span>{target?.imageUrl ? <img src={target.imageUrl} alt={target.name ?? ''} width={26} height={26} /> : <span aria-hidden="true">◒</span>}</div>
+    <div className="td-next" aria-label={t.nextWaveLabel}>
+      {next ? <>
+        <span>{t.nextWaveLabel}</span>
+        {PESTS.filter(k => next.counts[k] > 0).map(k => <span key={k} className="td-next-pest"><i className={`td-pest-icon td-pest-${k}`} aria-hidden="true" />×{next.counts[k]}</span>)}
+      </> : <span>{t.lastWave}</span>}
+    </div>
     <div className="td-field-wrap"><div className="td-field" ref={wrapper} data-testid="td-board" aria-label={t.boardLabel}>
       <canvas ref={canvas} aria-hidden="true" />
       {slots.map((slot, i) => <button key={i} type="button" className="td-slot" data-testid={`td-slot-${i}`} disabled={disabled}
-        style={{ left: `${slot.x/7.2}%`, top: `${slot.y/10.8}%` }} aria-label={fill(t.slot,{n:i+1})} aria-expanded={selected === i}
-        onClick={() => setSelected(selected === i ? null : i)} />)}
-      {point && !disabled && <div className={`td-picker ${tower ? 'td-picker-built' : ''}`} role="group" aria-label={fill(t.slot,{n:selected!+1})}
-        style={{ left: `clamp(96px, ${point.x/7.2}%, calc(100% - 96px))`, top: `clamp(96px, ${point.y/10.8}%, calc(100% - 96px))` }}>
+        style={{ left: `${slot.x / 7.2}%`, top: `${slot.y / 10.8}%` }} aria-label={fill(t.slot, { n: i + 1 })} aria-expanded={selected === i}
+        onClick={() => { if (selected === i) close(); else { setSelected(i); setPreview(null); } }} />)}
+      {boss && <p className="td-boss" role="status">{t.boss}</p>}
+      {selected !== null && !disabled && <div className={`td-tray${slots[selected].y > 620 ? " td-tray-top" : ""}`} role="group" aria-label={fill(t.slot, { n: selected + 1 })}>
         {tower ? <>
-          <button disabled={tower.level === 2 || hud.coins < towerStats(tower.kind, tower.level+1).cost} onClick={() => { action.current({type:'upgrade',slot:selected!}); setSelected(null); }} data-testid="td-upgrade">{t.upgrade}<b>{tower.level === 2 ? '—' : towerStats(tower.kind,tower.level+1).cost}</b></button>
-          <button onClick={() => { action.current({type:'sell',slot:selected!}); setSelected(null); }} data-testid="td-sell">{t.sell}<b>+{Math.floor(tower.spent/2)}</b></button>
-        </> : TOWER_KINDS.map(kind => <button key={kind} data-testid={`td-build-${kind}`} disabled={hud.coins < towerStats(kind).cost}
-          onClick={() => { action.current({type:'place',slot:selected!,tower:kind}); setSelected(null); }}>{t.towers[kind]}<b>{towerStats(kind).cost}</b></button>)}
-        <button className="td-picker-close" aria-label={t.closePicker} onClick={() => setSelected(null)}>×</button>
+          <div className="td-tray-head"><img src={`/brand/td/${towerFile[tower.kind]}-${tower.level}.webp`} alt="" /><b>{t.towers[tower.kind]}</b></div>
+          {tower.level === 0 && <button className="td-card" data-testid="td-upgrade" disabled={hud.coins < towerStats(tower.kind, 1).cost}
+            onClick={() => act({ type: 'upgrade', slot: selected })}><span>{t.upgrade}</span><b className="font-num">{towerStats(tower.kind, 1).cost}</b></button>}
+          {tower.level === 1 && <>
+            <BranchCard kind={tower.kind} branch="a" coins={hud.coins} onPick={b => act({ type: 'upgrade', slot: selected, branch: b })} />
+            <BranchCard kind={tower.kind} branch="b" coins={hud.coins} onPick={b => act({ type: 'upgrade', slot: selected, branch: b })} />
+          </>}
+          {tower.level === 2 && <button className="td-card" data-testid="td-upgrade" disabled><span>{t.maxed}</span><b>—</b></button>}
+          <button className="td-card td-sell" data-testid="td-sell" onClick={() => act({ type: 'sell', slot: selected })}><span>{t.sell}</span><b className="font-num">+{Math.floor(tower.spent / 2)}</b></button>
+        </> : TOWER_KINDS.map(kind => <button key={kind} className="td-card td-build" data-testid={`td-build-${kind}`} disabled={hud.coins < towerStats(kind).cost}
+          onPointerEnter={() => setPreview(kind)} onFocus={() => setPreview(kind)}
+          onClick={() => act({ type: 'place', slot: selected, tower: kind })}>
+          <img src={`/brand/td/${towerFile[kind]}-0.webp`} alt="" /><span>{t.towers[kind]}</span><b className="font-num">{towerStats(kind).cost}</b></button>)}
+        <button className="td-tray-close" aria-label={t.closePicker} onClick={close}>×</button>
       </div>}
       {(!ready || paused || hidden) && <p className="td-overlay" role="status">{!ready ? t.loading : t.paused}</p>}
     </div></div>
     <div className="td-controls">
-      <button className={gameSecondary} data-testid="td-speed" aria-pressed={speed === 2} disabled={disabled} onClick={() => { const value = speed === 1 ? 2 : 1; clock.speed(value, performance.now()); setSpeed(value); }}>{speed === 1 ? t.speedOne : t.speedTwo}</button>
-      <button className={gameSecondary} data-testid="td-call-wave" disabled={disabled || hud.nextWaveTick === null} onClick={() => action.current({type:'callWave',slot:-1})}>{t.nextWave}</button>
+      <button className="td-ctl" data-testid="td-speed" aria-pressed={speed === 2} disabled={disabled} onClick={() => { const value = speed === 1 ? 2 : 1; clock.speed(value, performance.now()); setSpeed(value); }}>{speed === 1 ? t.speedOne : t.speedTwo}</button>
+      <button className="td-ctl td-ctl-main" data-testid="td-call-wave" disabled={disabled || hud.nextWaveTick === null} onClick={() => action.current({ type: 'callWave', slot: -1 })}>{t.nextWave}</button>
     </div>
     {hud.inputsAccepted + hud.inputsRejected >= MAX_INPUTS && <p role="status">{t.inputLimit}</p>}
   </section>;

@@ -7,7 +7,7 @@ export type TdArt = Record<string, TdSprite | undefined>;
 export const TD_ASSET_NAMES = [
   'map-1', 'map-2', 'map-3', 'tower-pin-0', 'tower-pin-1', 'tower-pin-2',
   'tower-sifter-0', 'tower-sifter-1', 'tower-sifter-2', 'tower-whisk-0', 'tower-whisk-1', 'tower-whisk-2',
-  'tower-oven-0', 'tower-oven-1', 'tower-oven-2', 'pest-ant', 'pest-mouse', 'pest-sparrow', 'pest-beetle',
+  'tower-oven-0', 'tower-oven-1', 'tower-oven-2', 'pest-ant', 'pest-mouse', 'pest-sparrow', 'pest-beetle', 'pest-boss',
   'proj-pin', 'proj-whisk', 'proj-oven', 'fx-hit', 'slot',
 ] as const;
 let pending: Promise<TdArt> | null = null;

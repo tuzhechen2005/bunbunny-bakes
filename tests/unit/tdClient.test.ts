@@ -23,8 +23,8 @@ it('restores only canonical unexpired replayable saves, including completed retr
   const terminal=replayTd({seed,tierCount:1},[]);
   expect(parseTdSave(JSON.stringify({...save,endTick:terminal.tick,score:terminal.wave}),now)?.endTick).toBe(terminal.tick);
 });
-it('has the full D3 name contract and falls back when the manifest is absent', async () => {
-  expect(TD_ASSET_NAMES).toHaveLength(24);
+it('has the full D3 + boss name contract and falls back when the manifest is absent', async () => {
+  expect(TD_ASSET_NAMES).toHaveLength(25);
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:false}));
   expect(await preloadTdArt()).toEqual({});
 });
