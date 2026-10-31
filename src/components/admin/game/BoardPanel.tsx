@@ -60,7 +60,7 @@ const timeLabel = (iso: string) => timeFmt.format(new Date(iso)).replace(",", ""
 
 const chip = "inline-flex items-center rounded-full border border-line px-2 py-0.5 text-sm";
 
-export function BoardPanel({ game = "big" }: { game?: "big" | "tu" | "m3" | "grab" | "run" }) {
+export function BoardPanel({ game = "big" }: { game?: "big" | "tu" | "m3" | "grab" | "run" | "td" }) {
   // The query selects a game; absent means BIG. Bans are shared across all three.
   const q = game === "big" ? "" : `game=${game}`;
   const withGame = (path: string) => (q ? `${path}${path.includes("?") ? "&" : "?"}${q}` : path);
@@ -147,7 +147,7 @@ export function BoardPanel({ game = "big" }: { game?: "big" | "tu" | "m3" | "gra
                 <span className="text-lg font-semibold">{w.nickname}</span>{" "}
                 <span className="text-muted" data-testid="winner-wechat">{w.wechatId}</span>
               </div>
-              <span className="text-lg font-semibold">{game === "m3" && <small className="mr-2">{copy.customer.m3.levels}</small>}{w.score}</span>
+              <span className="text-lg font-semibold">{(game === "m3" || game === "td") && <small className="mr-2">{copy.customer.m3.levels}</small>}{w.score}</span>
             </div>
             <div className="mt-1">
               <span className={chip} data-testid="winner-ordered">{w.ordered ? t.ordered : t.notOrdered}</span>
@@ -218,14 +218,14 @@ export function BoardPanel({ game = "big" }: { game?: "big" | "tu" | "m3" | "gra
                     <span className="font-semibold">{r.nickname}</span>{" "}
                     <span className="text-muted" data-testid="run-wechat">{r.wechatId}</span>
                   </div>
-                  <span className="text-lg font-semibold" data-testid="run-score">{game === "m3" && <small className="mr-2">{copy.customer.m3.levels}</small>}{r.score}</span>
+                  <span className="text-lg font-semibold" data-testid="run-score">{(game === "m3" || game === "td") && <small className="mr-2">{copy.customer.m3.levels}</small>}{r.score}</span>
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted">
                   <span>{timeLabel(r.finishedAt ?? r.updatedAt ?? "")}</span>
                   <span className={chip}>{r.verified ? t.verified : t.unverified}</span>
                   {r.dropCount !== null && r.durationSec !== null ? (
                     <span data-testid="run-evidence">
-                      {fill(game === "m3" ? t.moves : t.drops, { n: r.dropCount })} · {fill(t.duration, { s: r.durationSec })}
+                      {fill((game === "m3" || game === "td") ? t.moves : t.drops, { n: r.dropCount })} · {fill(t.duration, { s: r.durationSec })}
                     </span>
                   ) : null}
                   <span className={chip} data-testid="run-ordered">{r.ordered ? t.ordered : t.notOrdered}</span>

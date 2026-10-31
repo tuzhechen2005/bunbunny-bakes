@@ -106,6 +106,7 @@ describe("hub and admin API", () => {
       { kind: "M3", name: "兔兔三连烤", href: "/game/m3", weekBest: null, live: false },
       { kind: "GRAB", name: "兔兔夹面包", href: "/game/grab", weekBest: null, live: false },
       { kind: "RUN", name: "兔兔跑酷", href: "/game/run", weekBest: null, live: false },
+      { kind: "TD", name: "保卫大面包！", href: "/game/td", weekBest: null, live: false },
     ] });
     expect(JSON.stringify(body)).not.toContain("private_");
     expect((await getGameHub(db, new Date("2026-11-02T06:00:00Z"))).games.every((g) => g.weekBest === null)).toBe(true);

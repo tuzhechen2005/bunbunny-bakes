@@ -1,3 +1,5 @@
+import { TD_ENGINE_VERSION, tdSeedVersion } from "@/lib/td";
+import { tdFinishSchema, verifyTdRun } from "./td";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import type { GameKind } from "@/lib/gameCatalog";
@@ -41,6 +43,7 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
   const run = await db.gameRun.findUniqueOrThrow({ where: { id: data.runId } });
   if (run.finishedAt) return { score: run.score, live: false };
   if (now >= runExpiresAt(run.startedAt)
+    || (game === "TD" && tdSeedVersion(run.seed) !== TD_ENGINE_VERSION)
     || (game === "TU" && tuSeedVersion(run.seed) !== TU_ENGINE_VERSION)
     || (game === "M3" && m3SeedVersion(run.seed) !== M3_ENGINE_VERSION)
     || (game === "GRAB" && grabSeedVersion(run.seed) !== GRAB_ENGINE_VERSION)
@@ -48,9 +51,9 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
     throw new AppError("VALIDATION", { message: copy.gameApi.runExpired });
   }
   if (await isBanned(db, run.wechatId)) throw new AppError("VALIDATION", { message: copy.gameApi.banned });
-  const field = game === "RUN" ? "inputs" : game === "BIG" ? "drops" : game === "TU" ? "taps" : game === "GRAB" ? "launches" : "moves";
+  const field = game === "TD" || game === "RUN" ? "inputs" : game === "BIG" ? "drops" : game === "TU" ? "taps" : game === "GRAB" ? "launches" : "moves";
   const inputBody = { runId: run.id, [field]: data.log, endTick: data.endTick };
-  const body = game === "RUN" ? parseGameInput(runFinishSchema, inputBody)
+  const body = game === "TD" ? parseGameInput(tdFinishSchema, inputBody) : game === "RUN" ? parseGameInput(runFinishSchema, inputBody)
     : game === "BIG" ? parseGameInput(finishSchema, inputBody)
     : game === "TU" ? parseGameInput(tuFinishSchema, inputBody)
     : game === "GRAB" ? parseGameInput(grabFinishSchema, inputBody)
@@ -60,7 +63,7 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
   if (Array.isArray(run.drops) && !samePrefix(run.drops, log)) {
     throw new AppError("VALIDATION", { message: copy.gameApi.badRun });
   }
-  const verified = "inputs" in body ? verifyRun(run, body, now)
+  const verified = "inputs" in body ? (game === "TD" ? verifyTdRun(run, parseGameInput(tdFinishSchema, inputBody), now) : verifyRun(run, parseGameInput(runFinishSchema, inputBody), now))
     : "drops" in body ? verifyBigRun(run, body, now)
     : "taps" in body ? verifyTuRun(run, body, now)
     : "launches" in body ? verifyGrabRun(run, body, now)
@@ -69,7 +72,7 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
   const updatedAt = run.updatedAt === null || run.score === null || verified.score > run.score ? now : run.updatedAt;
   const saved = await db.gameRun.updateMany({
     where: { id: run.id, finishedAt: null, progressAttemptAt: now },
-    data: { ...verified, updatedAt, weekKey: weekKeyOf(run.startedAt),
+    data: { score: verified.score, playMs: "playMs" in verified ? verified.playMs : undefined, simSteps: "simSteps" in verified ? verified.simSteps : undefined, suspicious: "suspicious" in verified ? verified.suspicious : undefined, updatedAt, weekKey: weekKeyOf(run.startedAt),
       drops: log, dropCount: log.length },
   });
   return { score: verified.score, live: saved.count > 0 };

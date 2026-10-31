@@ -4,7 +4,7 @@ import type { GameKind } from "@/lib/gameCatalog";
 export function GameIcon({ kind }: { kind: GameKind }) {
   return (
     <span className="grid size-14 shrink-0 place-items-center" aria-hidden="true">
-      {kind === "RUN" || kind === "M3" || kind === "GRAB" ? (
+      {kind === "TD" ? <svg viewBox="0 0 64 64" className="size-14" fill="none" stroke="currentColor" strokeWidth="3"><path d="M10 52h44M17 51V28h30v23M13 28l19-17 19 17M25 50V36h14v14" /><path d="M27 13V5m10 8V5M8 37h9m30 0h9" /></svg> : kind === "RUN" || kind === "M3" || kind === "GRAB" ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={kind === "RUN" ? "/brand/run.svg" : kind === "GRAB" ? "/brand/grab/icon.svg" : "/brand/m3.svg"} alt="" width={56} height={56} className="size-14" draggable={false} />
       ) : kind === "BIG" ? <Logo className="h-12 w-auto" /> : (

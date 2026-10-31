@@ -79,11 +79,11 @@ it("live progress preserves ties, enforces monotonic prefixes/time and finalizes
  await expect(finishRun(db,{runId:r.runId,inputs:[],endTick:0},IP,LATER)).rejects.toMatchObject({code:"VALIDATION"});
  await finishRun(db,full,IP,LATER);expect((await getRunLeaderboard(db,LATER)).top[0].live).toBe(false);
 });
-it("masks ids, groups identities, excludes hidden/banned and other games; hub has five games",async()=>{
+it("masks ids, groups identities, excludes hidden/banned and other games; hub has six games",async()=>{
  const insert=(wechatId:string,score:number,extra={})=>db.gameRun.create({data:{game:"RUN",seed:"s",tiersSnapshot:[],nickname:"N",wechatId,score,startedAt:T,finishedAt:T,weekKey:"2026-10-19",...extra}});
  await insert("wx_a",10);await insert("WX_A",20);await insert("wx_b",30,{hidden:true});await insert("wx_c",40);await insert("wx_big",100,{game:"BIG"});await db.gameBan.create({data:{wechatId:"WX_C"}});
  const b=await getRunLeaderboard(db,T,"wx_a");expect(b.top.map(r=>r.score)).toEqual([20]);expect(b.myBest).toBe(20);expect(JSON.stringify(b)).not.toContain('"wechatId"');
- expect((await getGameHub(db,T)).games.map(g=>g.kind)).toEqual(["BIG","TU","M3","GRAB","RUN"]);
+ expect((await getGameHub(db,T)).games.map(g=>g.kind)).toEqual(["BIG","TU","M3","GRAB","RUN","TD"]);
 });
 it("prize joins the following week without any tier prerequisite",async()=>{
  await expect(overridePrizeGame(db,"RUN",new Date("2026-12-06T18:00:00Z"))).rejects.toMatchObject({code:"VALIDATION"});

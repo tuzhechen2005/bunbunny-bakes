@@ -2,8 +2,7 @@
 
 `/game/run` follows GRAB's identity form, local save/resume/discard, quit/restart sheets,
 leaderboard/crown, sound preference, result verification/retry and prize line. RUN is always
-available: fixed art needs no configured bread tiers. The hub keeps two columns with RUN
-spanning the last row. Admin `?game=run`, shared bans, awards and winner email use the
+available: fixed art needs no configured bread tiers. The hub now keeps two columns and three rows alongside the sixth TD card (D155). Admin `?game=run`, shared bans, awards and winner email use the
 same machinery as the other games. All visible copy is in `src/copy.ts`.
 
 ## Rendering and input

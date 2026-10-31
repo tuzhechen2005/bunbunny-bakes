@@ -14,6 +14,7 @@ async function mockApi(page:Page) {
   {kind:"BIG",name:g.title,href:"/game",weekBest:1},{kind:"TU",name:copy.customer.tu.title,href:"/game/tu",weekBest:2},
   {kind:"M3",name:copy.customer.m3.title,href:"/game/m3",weekBest:3},{kind:"GRAB",name:copy.customer.grab.title,href:"/game/grab",weekBest:4},
   {kind:"RUN",name:t.title,href:"/game/run",weekBest:null},
+  {kind:"TD",name:copy.customer.td.title,href:"/game/td",weekBest:null},
  ]}}));
  await page.route("**/api/game/run/leaderboard**",r=>r.fulfill({json:BOARD}));
  await page.route("**/api/game/run/start",r=>{starts.push(r.request().postDataJSON());return r.fulfill({json:{runId:`run-${starts.length}`,seed:SEED,expiresAt:"2099-01-01T00:00:00Z"}});});
@@ -35,20 +36,19 @@ async function swipeLeft(page:Page) {
 }
 for(const width of [320,390])test.describe(`RUN ${width}px`,()=>{
  test.use({viewport:{width,height:800},hasTouch:true});
- test("five-game hub with compact full-width runner, menu, prize line and leaderboard",async({page})=>{
+ test("six-game hub with compact runner card, menu, prize line and leaderboard",async({page})=>{
   await mockApi(page);await page.goto("/game/hub");
   const runner=page.getByTestId("hub-game-run");
   await expect(runner.getByTestId("hub-prize")).toBeVisible();
   await page.evaluate(()=>document.fonts.ready);
-  const boxes=await Promise.all(["big","tu","m3","grab","run"].map(k=>page.getByTestId(`hub-game-${k}`).boundingBox()));
-  expect(boxes[0]!.y).toBe(boxes[1]!.y);expect(boxes[2]!.y).toBe(boxes[3]!.y);expect(boxes[4]!.y).toBeGreaterThan(boxes[3]!.y);expect(boxes[4]!.width).toBeGreaterThan(boxes[0]!.width*2);
-  expect(boxes[4]!.height).toBeGreaterThanOrEqual(boxes[0]!.height*.4);
-  expect(boxes[4]!.height).toBeLessThanOrEqual(boxes[0]!.height*.6);
+  const boxes=await Promise.all(["big","tu","m3","grab","run","td"].map(k=>page.getByTestId(`hub-game-${k}`).boundingBox()));
+  expect(boxes[0]!.y).toBe(boxes[1]!.y);expect(boxes[2]!.y).toBe(boxes[3]!.y);expect(boxes[4]!.y).toBeGreaterThan(boxes[3]!.y);expect(boxes[4]!.width).toBe(boxes[0]!.width);expect(boxes[4]!.y).toBe(boxes[5]!.y);
+  expect(boxes[4]!.height).toBeGreaterThanOrEqual(boxes[0]!.height*.9);
   const icon=runner.locator("img");
   await expect(icon).toHaveAttribute("src","/brand/run.svg");
   await expect(icon).toHaveJSProperty("naturalWidth",56);
   const iconBox=(await icon.boundingBox())!,titleBox=(await runner.getByRole("heading").boundingBox())!,bestBox=(await runner.getByTestId("hub-best").boundingBox())!;
-  expect(titleBox.x).toBeGreaterThan(iconBox.x+iconBox.width);
+  expect(titleBox.y).toBeGreaterThanOrEqual(iconBox.y+iconBox.height);
   expect(bestBox.x).toBe(titleBox.x);expect(bestBox.y).toBeGreaterThanOrEqual(titleBox.y+titleBox.height);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   await runner.click();await expect(page.getByRole("heading",{level:1})).toHaveText(t.title);

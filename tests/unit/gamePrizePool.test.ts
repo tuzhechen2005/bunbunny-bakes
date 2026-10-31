@@ -11,11 +11,11 @@ it("admits M3 only from its configured following week and with six bread tiers",
 it("GRAB joins only after its first production week and with at least three breads", () => {
   expect(eligiblePrizeGames("2026-12-06", 8)).not.toContain("GRAB");
   expect(eligiblePrizeGames(GRAB_PRIZE_FROM_WEEK, 2)).not.toContain("GRAB");
-  expect(eligiblePrizeGames(GRAB_PRIZE_FROM_WEEK, 3)).toEqual(["BIG", "TU", "GRAB", "RUN"]);
-  expect(eligiblePrizeGames(GRAB_PRIZE_FROM_WEEK, 8)).toEqual(["BIG", "TU", "M3", "GRAB", "RUN"]);
+  expect(eligiblePrizeGames(GRAB_PRIZE_FROM_WEEK, 3)).toEqual(["BIG", "TU", "GRAB", "RUN", "TD"]);
+  expect(eligiblePrizeGames(GRAB_PRIZE_FROM_WEEK, 8)).toEqual(["BIG", "TU", "M3", "GRAB", "RUN", "TD"]);
 });
 
 it("RUN is independent of bread tiers and joins only from its following week", () => {
   expect(eligiblePrizeGames("2026-12-06", 0)).not.toContain("RUN");
-  expect(eligiblePrizeGames(RUN_PRIZE_FROM_WEEK, 0)).toEqual(["BIG", "TU", "RUN"]);
+  expect(eligiblePrizeGames(RUN_PRIZE_FROM_WEEK, 0)).toEqual(["BIG", "TU", "RUN", "TD"]);
 });
