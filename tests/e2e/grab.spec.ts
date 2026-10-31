@@ -33,6 +33,60 @@ async function start(page:Page) {
  await expect(page.getByTestId("grab-board")).toBeVisible();
 }
 async function stored(page:Page) { return page.evaluate(key=>JSON.parse(localStorage.getItem(key)!),GRAB_SAVE_KEY); }
+for (const hasTouch of [true, false]) {
+ test.describe(`GRAB mouse hasTouch=${hasTouch}`, () => {
+  test.use({ hasTouch, isMobile: hasTouch, viewport: { width: 390, height: 800 } });
+  test("mouse click launches once, including after touch input", async ({ page }) => {
+   await mockApi(page); await page.clock.install(); await page.goto("/game/grab");
+   await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000)); await start(page);
+   const board = page.getByTestId("grab-board");
+   const box = (await board.boundingBox())!;
+   const x = box.x + box.width / 2, y = box.y + box.height / 2;
+   await page.mouse.click(x, y);
+   await expect(board).toHaveAttribute("data-launches", "1");
+   await expect(board).toHaveAttribute("data-phase", "extending");
+   await page.clock.runFor(2000);
+   await expect(board).toHaveAttribute("data-phase", "idle");
+   if (hasTouch) {
+    await page.touchscreen.tap(x, y);
+    await expect(board).toHaveAttribute("data-launches", "2");
+    await page.clock.runFor(8000);
+    await expect(board).toHaveAttribute("data-phase", "idle");
+   }
+   // Hold until the claw is idle: releasing must not launch again via click.
+   await page.mouse.move(x, y); await page.mouse.down();
+   const count = hasTouch ? 3 : 2;
+   await expect(board).toHaveAttribute("data-launches", String(count));
+   await page.clock.runFor(8000);
+   await expect(board).toHaveAttribute("data-phase", "idle");
+   await page.mouse.up();
+   await expect(board).toHaveAttribute("data-launches", String(count));
+   expect((await stored(page)).launches).toHaveLength(count);
+   await board.focus(); await page.keyboard.press("Enter");
+   await expect(board).toHaveAttribute("data-launches", String(count + 1));
+   await page.clock.runFor(8000);
+   await expect(board).toHaveAttribute("data-phase", "idle");
+   // A browser-delivered click without pointer events still works on hybrid devices.
+   await board.dispatchEvent("click", { detail: 1, button: 0 });
+   await expect(board).toHaveAttribute("data-launches", String(count + 2));
+  });
+  if (hasTouch) test("touch release does not relaunch after a long press", async ({ page }) => {
+   await mockApi(page); await page.clock.install(); await page.goto("/game/grab");
+   await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000)); await start(page);
+   const board = page.getByTestId("grab-board");
+   const pointer = { pointerId: 1, pointerType: "touch", isPrimary: true, button: 0 };
+   await board.dispatchEvent("pointerdown", pointer);
+   await expect(board).toHaveAttribute("data-launches", "1");
+   await page.clock.runFor(2000);
+   await expect(board).toHaveAttribute("data-phase", "idle");
+   await board.dispatchEvent("pointerup", pointer);
+   await page.clock.runFor(300);
+   await board.dispatchEvent("click", { detail: 1, button: 0 });
+   await expect(board).toHaveAttribute("data-launches", "1");
+   expect((await stored(page)).launches).toHaveLength(1);
+  });
+ });
+}
 for(const width of [320,390]) {
  test.describe(`GRAB ${width}px`,()=>{
   test.use({viewport:{width,height:800},hasTouch:true});
@@ -74,7 +128,7 @@ for(const width of [320,390]) {
     const tick = Number(await page.getByTestId("grab-board").getAttribute("data-tick"));
     const game = createGrabGame({seed:SEED,tiers:TIERS});
     (await stored(page)).launches.forEach((at:number)=>game.launch(at)); game.step(tick);
-    // V2's deep field has narrower hit windows after the first delivery.
+    // The deep field can have narrower hit windows after the first delivery.
     // Use the widest window's actual margin; still send exactly one input per launch.
     const target = aimGrabBread(game.state());
     await page.clock.runFor((target.tick-tick)*1000/TICKS_PER_SECOND);

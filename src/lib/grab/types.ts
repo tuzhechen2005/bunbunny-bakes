@@ -1,4 +1,4 @@
-export const GRAB_ENGINE_VERSION = 2;
+export const GRAB_ENGINE_VERSION = 3;
 export const MIN_TIERS = 3;
 export const TICKS_PER_SECOND = 60;
 export const RUN_TICKS = 60 * TICKS_PER_SECOND;
@@ -16,8 +16,8 @@ export const OVEN_Y = 80;
 export const FIELD_ITEMS = 8;
 export const REFILL_DELAY_TICKS = 30;
 export const SWING_PERIOD_TICKS = 300;
-export const EXTEND_SPEED = 26;
-export const EMPTY_REEL_SPEED = 96;
+export const EXTEND_SPEED = 14;
+export const EMPTY_REEL_SPEED = 14;
 
 export interface GrabTierInput { id: string }
 export type GrabKind = "bread" | "flour" | "butter" | "clock";

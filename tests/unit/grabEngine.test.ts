@@ -42,7 +42,7 @@ describe("grab engine", () => {
       expect(() => createGrabGame({ seed: "x", tiers: tiers(n) })).toThrow(RangeError);
       expect(() => replayGrab("x", tiers(n), [])).toThrow(RangeError);
     }
-    expect(GRAB_ENGINE_VERSION).toBe(2);
+    expect(GRAB_ENGINE_VERSION).toBe(3);
     expect(createGrabGame({ seed: "x", tiers: tiers(10) }).state().items).toHaveLength(8);
   });
 
@@ -106,9 +106,12 @@ describe("grab engine", () => {
     const s = g.state();
     expect(s.claw).toMatchObject({ phase: "reeling", angle: -70, held: null });
     expect(s.claw.length).toBe(fieldLength(-70));
+    // The shortest miss must stay readable: roughly 0.47 s each way at 60 Hz.
+    expect(s.tick).toBe(28);
     g.step(s.tick + 1);
     expect(g.state().claw.length).toBe(s.claw.length - EMPTY_REEL_SPEED);
     while (g.state().claw.phase !== "idle") g.step(g.state().tick + 1);
+    expect(g.state().tick - s.tick).toBe(28);
     expect(g.state().claw).toMatchObject({ angle: swingAngle(g.state().tick), length: 0 });
     expect([0, 1, 2, 3, 8].map(reelSpeed)).toEqual([17, 13, 9, 5, 2]);
   });

@@ -42,6 +42,7 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
   const reported = useRef(false);
   const active = useRef(false);
   const lastFeedback = useRef(-1);
+  const lastPointerEvent = useRef(-Infinity);
 
   const publish = useCallback((events: GrabEvent[], render = true) => {
     const state = game.state();
@@ -142,10 +143,18 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
     <div className="grab-field-frame" style={{ aspectRatio: `${FIELD_WIDTH} / ${FIELD_HEIGHT}`, "--grab-aspect": FIELD_WIDTH / FIELD_HEIGHT } as CSSProperties}>
     <GrabArt name="bunny" className="grab-bunny" />
     <button type="button" className="grab-board"
-      onPointerDown={e => { if (e.isPrimary && e.button === 0) launch(); }}
-      // Keyboard/assistive activation has no preceding pointerdown. Pointer-generated
-      // clicks are ignored even if a long press outlasts an entire grab.
-      onClick={e => { if (e.detail === 0) launch(); }} aria-label={t.boardLabel} data-testid="grab-board" data-tick={snap.tick} data-phase={snap.claw.phase} data-launches={snap.launchesAccepted}>
+      onPointerDown={e => {
+        lastPointerEvent.current = performance.now();
+        if (e.button === 0 && (e.pointerType === "mouse" || e.isPrimary)) launch();
+      }}
+      // Refresh at release too, so a long press cannot launch again when it ends.
+      onPointerUp={() => { lastPointerEvent.current = performance.now(); }}
+      onPointerCancel={() => { lastPointerEvent.current = performance.now(); }}
+      // Fall back to clicks when no pointer event was delivered, regardless of touch
+      // capability. Suppress the compatibility click following a pointer/touch input.
+      onClick={e => {
+        if (e.detail === 0 || performance.now() - lastPointerEvent.current > 500) launch();
+      }} aria-label={t.boardLabel} data-testid="grab-board" data-tick={snap.tick} data-phase={snap.claw.phase} data-launches={snap.launchesAccepted}>
       <BoardPaper />
       <GrabArt name="oven" className={`grab-oven${snap.tick - ovenTick < 30 ? " grab-oven-warm" : ""}`} />
       {snap.items.map(bread => item(bread))}

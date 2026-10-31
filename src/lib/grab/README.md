@@ -70,9 +70,13 @@ The engine supplies logical positions and animation events, not artwork or UI la
 - Field 720 × 1440, pivot `(360, 0)`, oven animation origin `(680, 80)`.
 - Idle angle follows a 300-tick triangular swing from −70° to +70° and back. Its phase is
   tied to the run's tick, including time spent reeling. A launch freezes the current angle.
-- Extension is 26 units/tick. Contact uses the first circle met by the swept tip at one-unit
+- Extension is 14 units/tick. Contact uses the first circle met by the swept tip at one-unit
   length resolution; array order breaks an exact tie. At a field edge an empty claw returns.
-- Empty return is 96 units/tick; held return is `max(2, 17 − 4 × weight)` units/tick.
+- Empty return is 14 units/tick; held return is `max(2, 17 − 4 × weight)` units/tick.
+  Even the shortest edge miss takes 28 ticks outward and 28 inward (about 0.93 seconds total).
+  Board input launches on primary pointer-down for touch/pen and left mouse presses, with a
+  click fallback independent of touch capability. A 500 ms window after pointer events
+  (including release) suppresses compatibility clicks; keyboard activation remains available.
 
 | Item | Radius | Weight | Return speed | Base points |
 | --- | ---: | ---: | ---: | ---: |
@@ -111,7 +115,7 @@ snapshot but earns nothing. There is no end bonus.
 
 `MAX_RUN_TICKS = 6000` is a conservative natural bound, not a gameplay timer cap. Every item
 contact is at least 433 units below the pivot. Each completed grab takes more than 32 ticks
-(at least 17 outward and 26 inward with the fastest held return). At time `T`, at most
+(at least 31 outward and 26 inward with the fastest held return). At time `T`, at most
 `9 + floor(T/32)` items can have spawned, including the initial eight and a pending grab.
 With one clock per 32-item batch, a run's duration `T` satisfies
 `T ≤ 3600 + 300 × ceil((9 + T/32)/32)`, which implies `T < 5636`. Thus stepping to 6000 always
@@ -134,7 +138,8 @@ The result is exactly `{ score, over, grabs, launchesAccepted }`.
 
 Configuration errors (fewer than 3 tiers) remain `RangeError`. Wall-clock plausibility and
 suspicious-rate checks live in `src/server/grab.ts` and `grabRules.ts`; this engine does not trust or read wall time.
-`GRAB_ENGINE_VERSION = 2` is exported. `grabSeed(randomHex)` embeds it in server-issued seeds;
+`GRAB_ENGINE_VERSION = 3` is exported. Version 3 slows extension and empty return; v1/v2 saves
+and server runs are rejected by the existing version guards. `grabSeed(randomHex)` embeds it in server-issued seeds;
 `grabSeedVersion(seed)` returns the encoded version or null for malformed/unversioned seeds. Bump it for any
 future rules/RNG/geometry change that changes the score of an existing seed and input log.
 
@@ -151,10 +156,11 @@ Reproduce with `npx tsx scripts/grab-tune.mts [seeds=200] [tiers=6] [seedPrefix=
 
 | Corpus | Random mean score | Greedy mean score | Ratio | Greedy mean grabs |
 | --- | ---: | ---: | ---: | ---: |
-| `grab-tune0…199`, 6 tiers | 1288.12 | 3056.53 | 42.14% | 18.750 |
-| `grab-check0…999`, 3 tiers | 1253.168 | 3007.19 | 41.67% | 18.887 |
+| `grab-tune0…199`, 6 tiers | 743.73 | 2729.27 | 27.25% | 16.115 |
+| `grab-check0…999`, 3 tiers | 768.804 | 2677.546 | 28.71% | 16.131 |
 
-The 200-seed unit regression requires a 40–60% score ratio and 15–20 mean completed greedy grabs.
+The 200-seed unit regression requires a 25–35% score ratio and 15–20 mean completed greedy grabs.
+Slower empty returns make random misses more costly, while aimed play retains the grab target.
 Other tests cover deterministic events and snapshots, chunked stepping, replay/live equality,
 bad logs, exact doneness/contact/delivery boundaries, clocks, timeout ties, refill separation,
 snapshot isolation and maximum-input replay cost. The performance check requests the full 6000-tick
