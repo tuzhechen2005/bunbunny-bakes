@@ -1,7 +1,7 @@
-export const TD_ENGINE_VERSION = 3;
+export const TD_ENGINE_VERSION = 4;
 export const TICKS_PER_SECOND = 60;
-export const FIELD_WIDTH = 720;
-export const FIELD_HEIGHT = 1080;
+export const FIELD_WIDTH = 1440;
+export const FIELD_HEIGHT = 810;
 /** Movement uses sixteenths of a field unit; drawing coordinates are integer field units. */
 export const SUBUNITS = 16;
 export const MAX_LEVEL_TICKS = 60 * 60 * 5;
@@ -11,7 +11,7 @@ export const START_BREAD = 10;
 export const WAVE_COUNT = 5;
 export const PREP_TICKS = 600;
 export const BREAD_ROLL_SPEED = 64;
-/** Frontend-drawn slot radius in logical field units (formerly 30). */
+/** A 21 CSS-pixel radius on a 720-pixel-wide landscape board. */
 export const TD_SLOT_RADIUS = 42;
 export type TdBranch = "a" | "b";
 
@@ -33,6 +33,7 @@ export type TdInput =
   | { tick: number; type: "callWave"; slot: -1 };
 export interface TdPest extends TdPestSpec, TdPoint {
   id: number; wave: number; distance: number; maxHp: number; slowed: boolean; heading: number; carrying: number; carriedTiers: number[]; returning: boolean;
+  flourUntil: number; flourDamage: number; flourTower: number; flourChip: number;
   burnUntil: number; burnTick: number; burnDamage: number; burnTower: number;
 }
 export interface TdTower extends TdPoint {

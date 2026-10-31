@@ -10,7 +10,7 @@ it('requires the branch exactly at tier two and rejects extra transport fields',
   expect(game.apply({ tick: 0, type: 'upgrade', slot: 0 })).toBe(false);
   expect(game.apply({ tick: 0, type: 'upgrade', slot: 0, branch: 'b' })).toBe(true);
   expect(game.state().towers[0]).toMatchObject({ tier: 2, level: 2, branch: 'b', target: null, lastAttackTick: null, cooldownProgress: 100 });
-  for (const input of [ { tick: 0, type: 'upgrade', slot: 0, branch: 'c' }, { tick: 0, type: 'sell', slot: 0, branch: 'a' }, { tick: 0, type: 'place', slot: 7, tower: 'oven' } ]) expect(validTdInput(input)).toBe(false);
+  for (const input of [ { tick: 0, type: 'upgrade', slot: 0, branch: 'c' }, { tick: 0, type: 'sell', slot: 0, branch: 'a' }, { tick: 0, type: 'place', slot: 11, tower: 'oven' } ]) expect(validTdInput(input)).toBe(false);
 });
 
 it('previews exact next-wave counts and puts exactly one boss in wave five', () => {
@@ -47,7 +47,7 @@ it('conserves bread through pickup, death, rollback and recovery, with detached 
     }
     if (!armed && state.pests.some(p => p.carrying)) {
       expect(state.over).toBe(false); expect(state.bread).toBe(START_BREAD);
-      for (const slot of [5, 6]) game.apply({ tick, type: 'place', slot, tower: 'oven' });
+      for (const slot of [9, 10]) game.apply({ tick, type: 'place', slot, tower: 'oven' });
       armed = true;
     }
     for (const p of state.pests) p.carriedTiers.push(999);

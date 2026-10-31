@@ -10,8 +10,9 @@ it('TD uses level ranking and its deployment prize gate', () => {
 });
 it('validates exact bounded action logs and tier snapshots', () => {
   const runId = crypto.randomUUID();
+  expect(tdFinishSchema.safeParse({ runId, inputs: [{ tick: 0, type: 'place', slot: 10, tower: 'oven' }], endTick: 60 }).success).toBe(true);
   expect(tdFinishSchema.safeParse({ runId, inputs: [{ tick: 0, type: 'callWave', slot: -1 }], endTick: 60 }).success).toBe(true);
-  for (const input of [{ tick: 0, type: 'place', slot: 10, tower: 'oven' }, { tick: 0, type: 'sell', slot: 1, tower: 'oven' }, { tick: 0, type: 'callWave', slot: 0 }]) {
+  for (const input of [{ tick: 0, type: 'place', slot: 11, tower: 'oven' }, { tick: 0, type: 'sell', slot: 1, tower: 'oven' }, { tick: 0, type: 'callWave', slot: 0 }]) {
     expect(tdFinishSchema.safeParse({ runId, inputs: [input], endTick: 60 }).success).toBe(false);
   }
   expect(tdFinishSchema.safeParse({ runId, inputs: [{ tick: 0, type: 'upgrade', slot: 0, branch: 'a' }], endTick: 60 }).success).toBe(true);

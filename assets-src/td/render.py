@@ -1,4 +1,4 @@
-"""D5: original procedural bakery clay models. Run inside Blender, not Python.
+"""D6: original procedural bakery clay models. Run inside Blender, not Python.
 
 Map surfaces are inverse-projected from the authoritative TD points, including
 their elevation, so the 55-degree camera cannot skew path/slot coordinates.
@@ -24,7 +24,7 @@ source = MAP_SOURCE.read_text()
 MAPS = [{"name": name, "path": json.loads(path), "slots": json.loads(slots)}
         for name, path, slots in re.findall(
             r'map\("([^"]+)",\s*(\[\[.*?\]\]),\s*(\[\[.*?\]\])\)', source, re.S)]
-assert len(MAPS) == 3 and all(len(m["slots"]) == 7 for m in MAPS)
+assert len(MAPS) == 3 and all(len(m["slots"]) == 11 for m in MAPS)
 SLOT_RADIUS = int(re.search(r"TD_SLOT_RADIUS = (\d+)", (ROOT.parents[1] / "src/lib/td/types.ts").read_text()).group(1))
 MAP_HASH = hashlib.sha256(MAP_SOURCE.read_bytes()).hexdigest()
 parser = argparse.ArgumentParser()
@@ -174,7 +174,7 @@ def projected(scene, point):
 
 def pixel_world(x, y, z=0):
     # Map camera has 100 px/metre. Elevation compensation keeps raised surfaces exact.
-    return ((x-360)/100, ((540-y)/100-z*COS)/SIN, z)
+    return ((x-720)/100, ((405-y)/100-z*COS)/SIN, z)
 
 
 def polygon_pixels(name, points, z, mat):
@@ -275,19 +275,19 @@ def prop(kind, x, y, scale=.55):
 
 def map_scene(index):
     data = MAPS[index]
-    polygon_pixels("Full background", [(-10, -10), (730, -10), (730, 1090), (-10, 1090)], -.025,
+    polygon_pixels("Full background", [(-10, -10), (1450, -10), (1450, 820), (-10, 820)], -.025,
                    ["kraft", "grout", "sage"][index])
     if index == 0:
         # Broad maple planks, discreet joints and inset grain; kitchen countertop.
-        for row in range(12):
+        for row in range(9):
             y = row*100-20
-            polygon_pixels("Maple counter board", [(0, y), (720, y), (720, y+98), (0, y+98)], -.02,
+            polygon_pixels("Maple counter board", [(0, y), (1440, y), (1440, y+98), (0, y+98)], -.02,
                            "plaster" if row % 3 else "tile")
-            for x in range(30+(row % 2)*90, 720, 180):
+            for x in range(30+(row % 2)*90, 1440, 180):
                 stroke_pixels("Short wood grain", [[x, y+30], [x+66, y+30]], .7, -.018, "tile")
     elif index == 1:
-        for row in range(13):
-            for col in range(9):
+        for row in range(10):
+            for col in range(17):
                 x, y = col*90-45, row*90-35
                 polygon_pixels("Shop ceramic tile", [(x+2, y+2), (x+88, y+2), (x+88, y+88), (x+2, y+88)], -.02,
                                "cream" if (row+col) % 2 else "tile")
@@ -296,11 +296,11 @@ def map_scene(index):
     else:
         rng = random.Random(152)
         for _ in range(350):
-            x, y = rng.uniform(0, 720), rng.uniform(0, 1080)
+            x, y = rng.uniform(0, 1440), rng.uniform(0, 810)
             if clearance(x, y, data) > 12:
                 disk_pixels("Garden clay pebble", x, y, rng.uniform(1.2, 3), -.019, "stone")
-        for y in (45, 340, 610, 880):
-            for x in (29, 695):
+        for y in (45, 300, 570, 760):
+            for x in (29, 1405):
                 if clearance(x, y, data) > 25:
                     prop("plant", x, y, .5)
     stroke_pixels("Path edge", data["path"], 86, .006, ["wood", "roof", "soil"][index])
@@ -308,8 +308,8 @@ def map_scene(index):
     # Deterministic sparse props, rejected near every route segment and slot.
     chosen = []
     kinds = ["bowl", "sack", "tray"] if index == 0 else ["plant", "sack", "tray"] if index == 1 else ["plant"]
-    for j, (x, y) in enumerate([(55, 55), (350, 60), (655, 65), (55, 285), (355, 335), (665, 590),
-                                (45, 520), (360, 760), (60, 800), (660, 1025), (340, 1025), (55, 1030)]):
+    for j, (x, y) in enumerate([(55, 55), (350, 60), (655, 65), (955, 60), (1350, 60), (55, 730),
+                                (355, 740), (660, 740), (960, 740), (1370, 740)]):
         if clearance(x, y, data) > 42:
             prop(kinds[j % len(kinds)], x, y, .9)
             chosen.append([x, y])
@@ -614,7 +614,7 @@ def render_asset(name, count, width, height, build, fps=0, loop=False, map_index
 
 
 for index in range(3):
-    render_asset(f"map-{index+1}", 1, 720, 1080, lambda f, i=index: map_scene(i), map_index=index)
+    render_asset(f"map-{index+1}", 1, 1440, 810, lambda f, i=index: map_scene(i), map_index=index)
 for kind in ("pin", "sifter", "whisk", "oven"):
     for tier in range(3):
         render_asset(f"tower-{kind}-{tier}", 1, 128, 144, lambda f, k=kind, t=tier: tower(k, t))
@@ -624,4 +624,4 @@ for kind in ("pin", "whisk", "oven"):
     render_asset(f"proj-{kind}", 1, 64, 64, lambda f, k=kind: projectile(k))
 render_asset("fx-hit", 4, 80, 80, puff, fps=16)
 render_asset("slot", 1, 80, 80, lambda f: slot())
-print("D5 rendering complete:", CACHE / "renders.json", flush=True)
+print("D6 rendering complete:", CACHE / "renders.json", flush=True)

@@ -21,7 +21,7 @@ function run(level: TdLevel, mode: "greedy" | "random") {
   };
   const strength = (slot: number, kind: TowerKind, tier: number, branch?: TdBranch) => {
     const stats = towerStats(kind, tier, branch);
-    return coverage(slot, kind, tier, branch) * (stats.damage * stats.strikes + stats.burn * 4) * (kind === "whisk" ? (stats.splash > 100 ? 4 : 3) : kind === "oven" ? (stats.pierce ? 1.8 : 0.8) : 1) / Math.max(1, stats.cooldown);
+    return coverage(slot, kind, tier, branch) * (stats.damage * stats.strikes + stats.burn * 4 + stats.chipDps * 3) * (kind === "whisk" ? (stats.splash > 100 ? 4 : 3) : kind === "oven" ? (stats.pierce ? 1.8 : 0.8) : 1) / Math.max(60 * Number(kind === "flourSifter"), stats.cooldown);
   };
   const values = map.slots.map((_, slot) => Object.fromEntries(TOWER_KINDS.map(kind => [kind,
     [0, 1, 2].map(tier => strength(slot, kind, tier)),
@@ -43,10 +43,10 @@ function run(level: TdLevel, mode: "greedy" | "random") {
         if (!tower) for (const kind of TOWER_KINDS) {
           let value = values[slot][kind][0];
           if (kind === "flourSifter") {
-            // Approximate the extra firing time for nearby ground-targeting towers.
-            value = state.towers.filter(t => t.kind !== "flourSifter" && distanceSquared(t, map.slots[slot]) < 240 ** 2)
-              .reduce((sum, t) => sum + values[t.slot][t.kind][t.level], 0) * 0.2;
-            if (state.towers.some(t => t.kind === "flourSifter")) value = 0;
+            // Extra firing time, discounted for air units and partial range overlap.
+            value += state.towers.filter(t => t.kind !== "flourSifter" && distanceSquared(t, map.slots[slot]) < 400 ** 2)
+              .reduce((sum, t) => sum + values[t.slot][t.kind][t.level], 0) * 0.25;
+            if (state.towers.some(t => t.kind === "flourSifter" && distanceSquared(t, map.slots[slot]) < 340 ** 2)) value = 0;
           }
           const cost = towerStats(kind).cost;
           candidates.push({ input: { tick: state.tick, type: "place", slot, tower: kind }, cost, value: value / cost });
@@ -60,8 +60,8 @@ function run(level: TdLevel, mode: "greedy" | "random") {
       }
       if (mode === "greedy") {
         candidates.sort((a, b) => b.value - a.value);
-        const best = candidates.find(c => c.cost <= state.coins);
-        if (!best || best.value <= 0) break;
+        const best = candidates[0];
+        if (!best || best.cost > state.coins || best.value <= 0) break;
         apply(best.input);
       } else {
         const affordable = candidates.filter(c => c.cost <= state.coins);

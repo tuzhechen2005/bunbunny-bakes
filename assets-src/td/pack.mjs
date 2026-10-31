@@ -33,7 +33,7 @@ const manifest = {
   coordinates: { origin: 'top-left', units: 'source pixels',
     anchor: 'projected ground origin; maps use top-left [0, 0]',
     draw: 'drawImage(sheet, ...rect, x-anchor[0]*scale, y-anchor[1]*scale, frameWidth*scale, frameHeight*scale)',
-    scale: '0.5 gives nominal CSS size at 2x; maps are 720x1080 logical pixels; use the same board scale for all art' },
+    scale: '0.5 gives nominal CSS size at 2x; maps are 1440x810 logical pixels; use the same board scale for all art' },
   assets: {},
 };
 const thumbs = new Map();
@@ -47,7 +47,7 @@ for (const [id, count] of Object.entries(expected)) {
   assert.deepEqual(spec.renderer, manifest.renderer, 'Use consistent renderer/samples for every asset');
   const [width, height] = spec.frameSize;
   if (isMap) {
-    assert.deepEqual([width, height], [720, 1080]);
+    assert.deepEqual([width, height], [1440, 810]);
     const data = maps[Number(id.slice(4))-1];
     assert.equal(spec.map.slotRadius, slotRadius);
     assert.equal(spec.map.sha256, sourceHash, `Stale map data: rerender ${id}`);
@@ -130,27 +130,29 @@ for (const asset of Object.values(manifest.assets)) {
 }
 
 // Offline contact sheet: all poses, tower tiers at 56px, clean maps and alignment inset.
-const W = 1500, H = 1760, review = [];
+const W = 1500, H = 1580, review = [];
 function label(text, x, y, size=19, color='#66523f') {
+  if (y >= 800) y -= 180;
   review.push({ input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${x}" y="${y}" fill="${color}" font-family="sans-serif" font-size="${size}">${text}</text></svg>`), left: 0, top: 0 });
 }
 async function thumb(id, frame, x, y, width, height) {
+  if (y >= 800) y -= 180;
   review.push({ input: await sharp(thumbs.get(`${id}:${frame}`)).resize(width, height,
     { fit: 'contain', background: '#00000000' }).png().toBuffer(), left: x, top: y });
 }
 label('BUNBUNNY / BAKERY DEFENSE', 32, 46, 30);
-label('D5 · Blender clay · 55° camera · 2x render + Lanczos · decoded WebP review', 32, 80, 18);
+label('D6 · Blender clay · 55° camera · 2x render + Lanczos · decoded WebP review', 32, 80, 18);
 for (let i = 0; i < 3; i++) {
   const x = 32+i*490;
   label(['01 / MAPLE KITCHEN COUNTER', '02 / TILED BAKERY SHOP', '03 / BACK HERB GARDEN'][i], x, 116, 18);
-  await thumb(`map-${i+1}`, 0, x, 134, 456, 684);
-  // A small exact overlay verifies route centerlines and all seven slot positions.
+  await thumb(`map-${i+1}`, 0, x, 134, 456, 257);
+  // A small exact overlay verifies route centerlines and all eleven slot positions.
   const data = maps[i];
-  const sx = 142/720, sy = 213/1080;
-  const overlay = `<svg width="142" height="213"><polyline points="${data.path.map(([px, py]) => `${px*sx},${py*sy}`).join(' ')}" fill="none" stroke="#d13c52" stroke-width="1.4"/>${data.slots.map(([px, py]) => `<circle cx="${px*sx}" cy="${py*sy}" r="${slotRadius*sx}" fill="none" stroke="#26636b" stroke-width="1"/>`).join('')}</svg>`;
-  const small = await sharp(thumbs.get(`map-${i+1}:0`)).resize(142, 213).composite([{ input: Buffer.from(overlay) }]).png().toBuffer();
-  review.push({ input: small, left: x+310, top: 836 });
-  label('Exact route + slots', x+310, 1070, 14);
+  const sx = 284/1440, sy = 160/810;
+  const overlay = `<svg width="284" height="160"><polyline points="${data.path.map(([px, py]) => `${px*sx},${py*sy}`).join(' ')}" fill="none" stroke="#d13c52" stroke-width="1.4"/>${data.slots.map(([px, py]) => `<circle cx="${px*sx}" cy="${py*sy}" r="${slotRadius*sx}" fill="none" stroke="#26636b" stroke-width="1"/>`).join('')}</svg>`;
+  const small = await sharp(thumbs.get(`map-${i+1}:0`)).resize(284, 160).composite([{ input: Buffer.from(overlay) }]).png().toBuffer();
+  review.push({ input: small, left: x+85, top: 430 });
+  label('Exact route + slots', x+85, 620, 14);
 }
 label('TOWERS / TIERS 0 · 1 · 2', 32, 858, 21);
 for (const [row, kind] of ['pin', 'sifter', 'whisk', 'oven'].entries()) {

@@ -35,13 +35,16 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
   const rng = createRng(seed);
   // Saturate physical tuning at L1000 to keep even MAX_SAFE_INTEGER levels bounded.
   const difficulty = Math.min(n - 1, 999);
-  const hpGrowth = 87 + Math.floor(Math.min(10, Math.max(0, difficulty - 9)) * 25 / 10);
+  const hpGrowth = 79 + Math.floor(Math.min(10, Math.max(0, difficulty - 9)) * 14 / 10);
+  // Front-load the jump into mixed swarms; taper that onboarding pressure as
+  // enemy count, movement speed and reduced bounties take over later.
+  const earlyPressure = n < 10 ? Math.floor(Math.min(difficulty, 2) * 454 * (10 - n) / 7) : 0;
   const pressure = 85 + rng.int(31);
   const kinds: PestKind[] = ["ant", "mouse"];
-  if (n >= 4) kinds.push("sparrow");
-  if (n >= 8) kinds.push("beetle");
+  if (n >= 3) kinds.push("sparrow");
+  if (n >= 3) kinds.push("beetle");
   const waves = Array.from({ length: WAVE_COUNT }, (_, wave) => {
-    const count = Math.min(96, 9 + difficulty + wave * 3 + rng.int(3));
+    const count = Math.min(96, 9 + Math.floor(difficulty * 1.5) + wave * 3 + rng.int(3));
     const result: TdWave = {
       interval: Math.max(18, 48 - Math.floor(difficulty / 2) - wave * 2),
       pests: Array.from({ length: count }, (_, index) => {
@@ -50,7 +53,8 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
         const b = PESTS[kind];
         return {
           ...b,
-          hp: Math.max(1, Math.floor(b.hp * (100 + difficulty * hpGrowth + wave * 12) * pressure / 10000)),
+          bounty: Math.max(3, b.bounty - Math.min(4, Math.floor(difficulty / 3))),
+          hp: Math.max(1, Math.floor(b.hp * (100 + difficulty * hpGrowth + earlyPressure + wave * 12) * pressure / 10000)),
           speed: Math.floor(b.speed * (100 + Math.min(150, difficulty * 3)) / 100),
         };
       }),
