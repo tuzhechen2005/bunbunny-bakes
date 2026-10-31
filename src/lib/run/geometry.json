@@ -28,7 +28,30 @@
       "front": 1000,
       "back": 1000,
       "height": 120
+    },
+    "ramp": {
+      "front": 2000,
+      "back": 2000,
+      "height": 2600
+    },
+    "van": {
+      "front": 9000,
+      "back": 9000,
+      "height": 2600
+    },
+    "truck": {
+      "front": 6000,
+      "back": 6000,
+      "height": 2600
     }
   },
-  "cameraHeight": 10000
+  "cameraHeight": 10000,
+  "gravity": 32,
+  "truckSpeed": 40,
+  "vanMinLength": 12000,
+  "vanMaxLength": 18000,
+  "vanLengthStep": 2000,
+  "roofBreadInset": 2000,
+  "roofBreadSpacing": 3000,
+  "collectHeightTolerance": 1800
 }

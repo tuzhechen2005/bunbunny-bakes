@@ -4,7 +4,7 @@ import {
   MAX_INPUTS, BASE_SPEED, CAP_SPEED, RAMP_TICKS, JUMP_TICKS, SLIDE_TICKS, runSpeed,
   LANE_CHANGE_TICKS, type RunInput, type RunEvent,
 } from "@/lib/run";
-import { goodRun, randomRun, perfectRun } from "../support/runBot";
+import { goodRun, casualRun, randomRun, perfectRun } from "../support/runBot";
 
 const result = (s: ReturnType<ReturnType<typeof createRunGame>["state"]>) => ({
   score: s.score, distance: s.distance, bread: s.bread, over: s.over, endTick: s.tick,
@@ -15,7 +15,7 @@ describe("run engine", () => {
     const g = createRunGame({ seed: "copy" });
     const twin = createRunGame({ seed: "copy" });
     const s = g.state();
-    expect(RUN_ENGINE_VERSION).toBe(4);
+    expect(RUN_ENGINE_VERSION).toBe(5);
     expect(s).toMatchObject({ tick: 0, distance: 0, score: 0, bread: 0, speed: BASE_SPEED, over: false, player: { lane: 1, pose: "run" } });
     s.objects[0].lane = 2; s.objects.pop(); s.player.lane = 2;
     s.powerUps.coffeeUntil = 999; s.events.push({ type: "over", tick: 0, reason: "limit" });
@@ -70,23 +70,24 @@ describe("run engine", () => {
   it("distinguishes skilled play with reaction delay from random swiping", () => {
     const good = [], random = [];
     for (let n = 0; n < 100; n++) {
-      good.push(goodRun(`tuning${n}`).endTick);
+      good.push(casualRun(`tuning${n}`).endTick);
       random.push(randomRun(`tuning${n}`).endTick);
     }
     good.sort((a, b) => a - b); random.sort((a, b) => a - b);
-    expect(good[50]).toBeGreaterThanOrEqual(180 * 60);
-    expect(good.every((t) => t === MAX_RUN_TICKS)).toBe(true); // R7 fixed-seed calibration.
+    expect(good[50]).toBeGreaterThanOrEqual(30 * 60);
+    expect(good[50]).toBeLessThanOrEqual(60 * 60);
+    expect(good.filter(t => t >= 30 * 60 && t <= 60 * 60).length).toBeGreaterThanOrEqual(80);
     expect(random[50]).toBeLessThan(20 * 60);
   }, 30_000);
 
-  it("pins version-four scoring and a nontrivial seeded run", () => {
+  it("pins version-five scoring and a nontrivial seeded run", () => {
     const run = goodRun("pinned");
     expect(replayRun("pinned", run.inputs, run.endTick)).toEqual({
-      score: 39700, distance: 27500186, bread: 1220, over: true, endTick: 54000,
+      score: 1404, distance: 944455, bread: 46, over: true, endTick: 2549,
     });
     expect(run.inputs.slice(0, 5)).toEqual([
-      { tick: 119, dir: "U" }, { tick: 256, dir: "U" }, { tick: 651, dir: "L" },
-      { tick: 784, dir: "U" }, { tick: 911, dir: "U" },
+      { tick: 122, dir: "D" }, { tick: 524, dir: "U" }, { tick: 777, dir: "L" },
+      { tick: 911, dir: "U" }, { tick: 1036, dir: "U" },
     ]);
   });
 
@@ -105,9 +106,14 @@ describe("run engine", () => {
     expect(game.state()).toEqual(before);
     game.step(MAX_RUN_TICKS);
     expect(result(game.state())).toEqual(result(run.state));
-    const start = performance.now();
-    expect(replayRun("input-cap", inputs, MAX_RUN_TICKS)).toEqual(result(run.state));
-    expect(performance.now() - start).toBeLessThan(100);
+    replayRun("input-cap", inputs, MAX_RUN_TICKS); // Warm validation and the capped-input path.
+    const timings = Array.from({ length: 3 }, () => {
+      const start = performance.now();
+      expect(replayRun("input-cap", inputs, MAX_RUN_TICKS)).toEqual(result(run.state));
+      return performance.now() - start;
+    }).sort((a, b) => a - b);
+    // Median excludes a single scheduler/GC interruption on a busy shared host.
+    expect(timings[1]).toBeLessThan(100);
   });
 
   it("replays a full 15-minute surviving log in under 100 ms", () => {
@@ -158,7 +164,7 @@ describe("run replay validation", () => {
 });
 
 it("reuses live frame storage while matching detached authoritative replay",()=>{
-  const seed='v4.live-frame', path=goodRun(seed,3600);
+  const seed='v5.live-frame', path=goodRun(seed,3600);
   const live=createRunGame({seed,realtime:true});
   const replay=createRunGame({seed});
   const first=live.frame(0),player=first.player,powers=first.powerUps,objects=first.objects;

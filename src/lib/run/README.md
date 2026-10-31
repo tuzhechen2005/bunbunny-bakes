@@ -1,172 +1,115 @@
-# Run engine — R7 / D157
+# Run engine — R8 / D160
 
-Pure TypeScript shared by client and server. Uses the existing seeded RNG in
-`../game/rng.ts`; simulation has no clock, global randomness, DOM, or framework imports.
-Version 4 retains D150 continuous overlap/clearance and R6 geometry, starts at
-320 mm/tick and ramps to 500 in 75 seconds. Seeds and saves use v4; v1/v2/v3
-unfinished runs and saves are rejected.
-This directory implements simulation and replay only; rendering, server ownership,
-wall-clock plausibility, persistence, leaderboard updates, and art are separate tasks.
+Pure deterministic TypeScript shared by replay and the client. `RUN_ENGINE_VERSION = 5`;
+new seeds and saves use `v5.`. Unfinished v1–v4 runs/saves are rejected, with existing
+scores unchanged. Rendering is a separate frontend task: its object/art mapping must
+add `ramp`, `van`, and `truck` and use the new elevation/geometry fields.
 
-## API
+## API and limits
 
-```ts
-import { createRunGame, replayRun, RUN_ENGINE_VERSION } from "@/lib/run";
+`createRunGame({seed})` exposes `input(tick, dir)`, `step(toTick)`, and detached `state()`.
+`replayRun(seed, inputs, endTick)` verifies the same simulation. `frame(toTick)` returns
+a borrowed pooled snapshot; realtime mode pre-generates the finite track. Do not retain
+borrowed frames. Reads never advance simulation or RNG.
 
-const game = createRunGame({ seed: "server-issued-seed" });
-game.input(0, "L");
-const events = game.step(60);
-const snapshot = game.state();
-const verified = replayRun("server-issued-seed", [{ tick: 0, dir: "L" }], 60);
-// { score, distance, bread, over, endTick }
-```
+Ticks are integers at 60 Hz. Input advances **through** its tick before applying the
+swipe: input on a collision tick is too late. Log all valid swipes, including no-ops,
+strictly increasing, at most one per tick. Caps remain 20,000 inputs and 54,000 ticks
+(15 minutes). Replay validates the entire log, exact entry shapes, bounds and ordering
+before simulation. Invalid logs throw `RunReplayError`; stepping an ended game is harmless.
+The returned endTick is the actual collision/current tick, not the requested tick.
+Server request-size and plausibility limits continue to derive from these caps.
 
-`RUN_ENGINE_VERSION = 4`. Store the version with the seed/log; changes to the rules,
-constants, PRNG consumption, or ordering require a version bump before ranked deployment.
-Restore a run by replaying its input prefix, then stepping to its saved tick. There is no
-mutable state injection API. Empty and unfinished prefixes are valid for D136 reporting.
+Snapshots expose speed, distance (integer mm), bread, score, over, powers and events.
+Score remains `floor(distance / 1000) + bread * 10`, including roof bread.
+Every object exposes `id`, `kind`, `lane`, relative centre `z`, `front` and `back`
+(nonnegative extents from that centre), and `height`, all in mm. Trucks additionally
+expose `speed` in mm/tick; collectibles expose `y` for their road/roof placement.
+Objects sort by current z then id. Roof bread can extend up to 9m beyond a chunk's
+nominal end; the following chunk's first object remains farther ahead.
 
-- `step(toTick)` advances to an absolute integer tick, stopping immediately at death or
-  the 54,000-tick (15-minute) limit. It returns detached events for that operation.
-- `input(tick, dir)` first advances **through** tick, then applies the swipe. A swipe at
-  a collision tick is too late. Tick zero is valid. Directions are `L/R/U/D`.
-- Log **every** valid swipe, including boundary, busy-action, or full-queue no-ops. Swipes
-  must be strictly increasing (at most one per tick); there can be at most 20,000.
-  The client must enforce the log cap rather than silently omit later swipes.
-- Backward steps, malformed/unsafe/noninteger/out-of-range ticks, invalid directions,
-  non-increasing input ticks, excess inputs, and input at/after game over throw
-  `RunReplayError`. A future input that encounters death advances to that death and throws.
-  Stepping an ended run forward is harmless and returns no events.
-- `replayRun` validates the entire log before simulation, including exact `{ tick, dir }`
-  entry shapes and `input.tick <= endTick`. Its returned `endTick` is the **actual**
-  terminal/current tick, which may precede the requested tick after a collision.
-- `state()` is detached and does not drain events or advance simulation/RNG. `events`
-  repeats the latest operation's events; consume either that array or the method return,
-  not both. Event batches depend on how calls are grouped; concatenated chronological
-  events and all simulation fields are identical regardless of step batching.
+`player.y` is integer feet height above the road. `surface` is `ground | roof`;
+ramps count as elevated support. During an airborne roof exit surface becomes ground
+while y falls toward zero. `pose`, progress (0..1000), laneChange and queuedLane retain
+their existing meanings. Lane occupancy switches at the 12-tick change's midpoint;
+one horizontal swipe may queue. Jump/slide last 42/36 ticks, cannot interrupt each
+other, and can overlap lane changes. Slides work on roofs. Falling cannot start a
+second midair jump.
 
-Snapshots contain:
+## Geometry and collision
 
-- `tick`, `distance` (integer **millimetres**), `bread`, `score`, `over`.
-- `speed` in integer millimetres/tick. Divide distance by 1000 for metres;
-  score is `floor(distance / 1000) + bread * 10`.
-- `player.lane`: 0 left, 1 centre, 2 right. Starts at 1. `pose` is
-  `run | jump | slide | lane-change`, with integer `progress` in 0..1000.
-  `laneChange` independently exposes `from`, `to`, and progress so movement can overlap
-  jumping/sliding. During a change, `lane` switches from source to target at the visual midpoint.
-  `queuedLane` is null or the one queued horizontal swipe.
-- `objects`: stable `id`, `lane`, `kind`, and relative forward `z` in millimetres,
-  sorted by z then id. Objects extend 90 metres ahead; obstacle rows remain visible until
-  1.4 metres behind the player so their full depth can pass. Collectibles vanish at crossing.
-- `powerUps`: exclusive absolute `magnetUntil`/`coffeeUntil` ticks and nonnegative
-  `magnetTicks`/`coffeeTicks` remaining. Until values retain the last expiry after ending.
-- Events: accepted action starts (including queued starts), collections with object ids,
-  power expiry, collision, and game over with `collision | limit` reason. Every event
-  carries its simulation tick. Queuing/ignored swipes do not emit an action-start event.
+`geometry.json` is the renderer/engine geometry contract. It contains all vehicle
+length bounds, roof/ramp heights, truck speed, gravity, existing obstacle dimensions,
+standing/sliding heights, jump apex (3600 mm), and projection constants.
 
-## Fixed-tick rules
+- Ramps are 4000 mm long and rise linearly from ground to 2600 mm. Their far end
+  meets the approaching face of a van, including ticks straddling that seam.
+- Parked vans are 12000–18000 mm long, 2600 mm high. Their front or side crashes
+  a ground player. A correctly timed jump clears the face and lands on the roof.
+- Trucks are 12000 mm long and 2600 mm high. On entering the 90m simulation window,
+  they move toward the player by `TRUCK_SPEED = 40` mm each tick, in addition to
+  player motion. Their roof can also be landed on. Movement activation is identical
+  in lazy replay and realtime pre-generation and independent of input/step batching.
+- Roof exits fall by integer gravity, increasing downward speed by 32 mm/tick each
+  tick. Jumps use the shared integer parabola relative to takeoff elevation; descending
+  feet land on a supporting roof. Equal-height roof-to-roof contact is safe.
+- Ground obstacles do not hit feet above their height. Existing ground jump/slide
+  rules retain the 160 mm depth inset and up to 120 mm height grace. Vehicle roofs
+  require actual 2600 mm clearance. Cart height remains 4400 mm.
+- Collision sweeps the full per-tick relative interval, including truck motion.
+  Coffee ignores collisions for 360 ticks and applies 3/2 speed; magnet lasts 480
+  ticks and attracts bread in all lanes and elevations. Recollecting refreshes expiry.
+  Ground pickups retain the existing jump/slide collection behavior. Roof bread
+  requires feet within 1800 mm of its elevation unless magnetized.
 
-| Rule | Version 4 value |
-| --- | --- |
-| Tick rate | 60 Hz |
-| Base / cap speed | 320 / 500 mm per tick (19.2 / 30 m/s) |
-| Ramp | `320 + floor(180 * min(tick, 4500) / 4500)` |
-| Coffee speed | `floor(baseSpeed * 3 / 2)`, maximum 750 mm/tick |
-| Jump / slide | 42 / 36 ticks |
-| One-lane change | 12 ticks, one extra horizontal swipe may queue |
-| Paper bag / coffee | 480 / 360 ticks (8 / 6 seconds) |
-| Chunk / obstacle row spacing | 135 / 45 metres |
-| Minimum reaction budget | 30 ticks (500 ms), 22.5 metres at maximum coffee speed |
-| Visible distance | 90 metres |
+## Patterns and tuning
 
-At tick t: expire powers/actions, finish a lane change and start its queued change, advance
-by that tick's speed, then process overlapping obstacles and crossed collectibles in z/id order. Collision uses
-a swept front/back interval every tick, so accelerated movement cannot skip hazards. Finally apply the time
-limit. A collision on the final tick takes precedence over the time-limit reason.
+Base speed is 320 mm/tick, rising to 500 over 4500 ticks; coffee caps at 750.
+The independent seeded track stream is `${seed}:run:track:v1` (the enclosing v5
+seed pins the new rules). Three 45m pattern centres form each 135m chunk.
 
-Jump/slide cannot interrupt or queue each other. Horizontal movement can overlap either.
-A lane change occupies only the source before its midpoint and only the target from the
-midpoint onward; collectibles use that same lane. Queue capacity is exactly one; additional
-horizontal swipes while full are ignored, including opposite-direction ones. A boundary
-swipe is a no-op, and a queued boundary swipe is checked when it starts.
+`RUN_PATTERNS` is a distance-weighted library: friendly street obstacles give way to
+45% ramp/van, 25% moving truck, 30% street obstacles in blocked lanes. The transition
+starts at 600m and reaches mature density at 1400m (roughly 60 seconds without coffee).
+Repeated van patterns make trains with approach ramps and roof bread lines. Long
+vehicle footprints make mature patterns denser and require consecutive lane changes.
+The reserved ground route remains clear; it changes at most one lane per mature row.
+Early rows keep two-lane choices and the old 30-tick reaction allowance. Powers occur
+only in the friendly section, so survival of mature patterns does not rely on coffee.
 
-Actions/powers starting at t end exclusively at t + duration. A power collected at t is
-available to later objects processed at that tick; coffee changes movement beginning with
-the next tick. On expiry, that tick's movement uses unboosted speed. Recollecting a power
-refreshes its expiry to `collectionTick + duration`, without stacking durations. Bag and
-coffee operate independently. Powers do not change jump/slide/lane-change durations.
+The route guarantee includes chunk boundaries and maximum coffee speed: an oncoming
+truck moves under 12m before passing the player, even at the slowest base speed.
+The worst mature free interval is 45m minus a 9m preceding rear and an 18m approaching
+truck envelope = 18m. At 750 mm/tick that leaves 24 ticks: 10 reaction ticks + a
+12-tick lane change + margin. Actual current speeds give more time. Early rows retain
+30 reaction ticks + two changes. Ramps and roof lines add optional routes/rewards.
 
-| Object kind | Rule |
-| --- | --- |
-| `cart` | Blocks the lane; jumping/sliding cannot clear it |
-| `flour` | 1.8 m high, 0.75 m front/back; jump above it throughout overlap |
-| `awning` | 2.2 m clearance, 0.9 m front/back; crouch underneath throughout overlap |
-| `puddle` | 0.12 m high, 1 m front/back; jump throughout overlap |
-| `bread` | Collect one bread at crossing in the occupied lane |
-| `paper-bag` | Collect in the occupied lane; magnet takes bread from all lanes at crossing |
-| `coffee` | Collect in the occupied lane; boost and ignore all obstacle collisions |
+Tests inspect 1,000 seeds × 12 chunks, execute early routes over 1,000 seeds, and run
+100 independent mature tracks for more than five minutes. `perfectRun` searches a
+120-tick time/lane graph using only public snapshots and swept lane occupancy; it
+never reads reserved-route metadata or depends on powers to bypass obstacles.
+`casualRun` (`goodRun` compatibility alias) samples at 10 Hz, waits 15 ticks, chooses
+randomly among apparently open lanes, and times jumps/slides from visible hazards.
+`randomRun` swipes random directions every 12–36 ticks.
 
-`geometry.json` supplies all obstacle dimensions, the 3.6 m jump peak, 3.4/1.1 m
-standing/sliding heights, and projection constants. `geometry.ts` supplies the integer
-parabolic lift and the crouch/stand transitions (18% at each end). Replay and renderer
-use the same functions. Collision insets each depth edge by 160 mm and grants up to 120 mm
-height grace, capped at one quarter of obstacle height. The cart spans 1.2 m in front and 1.4 m behind its centre. Blender reads the
-same dimensions and exports ground endpoints for the renderer; geometry tests prevent drift.
+100 fixed `tuning0..tuning99` seeds, seconds (sorted index floor(N*p)):
 
-The magnet does not attract power-ups. Jumping/sliding does not prevent bread or power
-collection. Any unprotected collision ends the run immediately with no extra life.
+| Bot | p10 | Median | p90 |
+| --- | ---: | ---: | ---: |
+| Casual | 32.52 | 40.68 | 52.85 |
 
-## Solvability and bounded generation
-
-`track.ts` uses the independent `${seed}:run:track:v1` RNG stream. Each chunk contains
-three rows of two seeded obstacle types and one entirely open lane, plus bread lines leading
-to that lane and occasional powers. The open lane can change by two lanes between rows.
-No hidden route metadata is exposed to rendering/bots. Generation depends on distance and
-seed, not current speed, frame cadence, state reads, or inputs.
-
-The worst case includes a coffee pickup and a two-lane crossing. At 750 mm/tick,
-45 metres minus the maximum 2.6 m combined front/back extents leaves 42.4 m:
-at least 30 ticks to react + 24 ticks to change lanes + 2 full ticks of margin. The same bound holds at spawn and across chunk boundaries.
-The 90-metre view contains the next row before the previous row is crossed. Thus a player
-can always choose the next open lane after crossing the previous row, without powers or
-jump/slide. All slower speeds have more time. This is a constructive guarantee, not rejection
-sampling or a probabilistic claim. Read-ahead generation and periodic removal of crossed
-objects bound server replay memory independently of total run length. The live client
-pre-generates the finite capped track so no chunk allocations run inside rAF.
-
-## Verification and bots
-
-Tests live in `tests/unit/run{Engine,Rules,Track}.test.ts`; bots in
-`tests/support/runBot.ts` inspect only public state.
-
-- `perfectRun`: follows each visible open lane immediately. Used for executable solvability
-  and full-duration replay benchmarks; it does not depend on invulnerability to clear rows.
-- `goodRun`: samples visible hazards at 10 Hz, reacts 15 ticks (250 ms) later, jumps/slides
-  matching hazards with their action midpoint aimed at the estimated centre crossing, and
-  chooses open lanes around carts. Its effective recognition range
-  is at most 21.5 metres / 44 movement ticks. It can be late on two-lane moves at high speed;
-  it never peeks at RNG, replays alternate futures, or deliberately injects a death.
-- `randomRun`: swipes a uniformly random direction every 12–36 ticks using a separate RNG.
-
-Version-4 calibration, 100 fixed `tuning0..tuning99` seeds (seconds, sorted index floor(N*p)):
-
-| Bot | p10 | Median | p90 | Collisions before 15 minutes |
-| --- | ---: | ---: | ---: | ---: |
-| Good | 900 | 900 | 900 | 0/100 |
-| Random | 2.28 | 2.30 | 8.35 | 100/100 |
-
-Tests check 1,000 seeds with 12 chunks each (36,000 rows), including boundary reachability
-at maximum boosted speed, and execute live paths over those seeds. Additional checks cover
-collision rules, exact power expiry, actions/queue limits, detached state/events, invalid
-logs, live/replay equivalence, fixed scoring/version vectors, and the forced 15-minute end.
-The warmed full 54,000-tick replay must stay within the 100 ms test budget. Run:
+Calibration checks require at least 80/100 casual deaths between 30 and 60 seconds.
+Full 15-minute perfect logs also exercise bounded replay, input caps and time-limit
+termination. The warmed capped-input replay median (three samples) must stay below
+100 ms; the ordinary full-run replay also retains its 100 ms check. Roof tests cover seams, front collisions, timed landings, slides, bread,
+falling and moving-truck batch/live equivalence. Existing queue, power, geometry,
+invalid-log, detached-state and seed/save/server checks remain in place.
 
 ```sh
 npx tsc --noEmit --incremental false
-npx eslint src/lib/run tests/support/runBot.ts tests/unit/run*.test.ts
-npx vitest run --configLoader runner --project unit
+npx eslint
+npx vitest run --configLoader runner --project unit --maxWorkers 1
+TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_run6_test npx vitest run --configLoader runner --project db
 ```
 
-The browser opts into `realtime: true` and calls `frame(tick)` for a borrowed, pooled view.
-It pre-generates the capped track at startup. Never retain that view across draws.
-`state()` and `step()` retain detached snapshot/event semantics for replay and tests.
+No browser checks are part of this backend task.

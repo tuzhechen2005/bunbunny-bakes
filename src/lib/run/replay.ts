@@ -8,9 +8,11 @@ export function replayRun(seed: string, inputs: readonly RunInput[], endTick: nu
   if (!validRunTick(endTick)) throw new RunReplayError("bad end tick");
   let previous = -1;
   for (const input of inputs) {
-    if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).sort().join(",") !== "dir,tick") {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
       throw new RunReplayError("bad input");
     }
+    const keys = Object.keys(input);
+    if (keys.length !== 2 || !keys.includes("tick") || !keys.includes("dir")) throw new RunReplayError("bad input");
     if (!validRunTick(input.tick)) throw new RunReplayError("bad input tick");
     if (!validRunDirection(input.dir)) throw new RunReplayError("bad input direction");
     if (input.tick <= previous) throw new RunReplayError("input ticks not increasing");

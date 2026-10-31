@@ -1,4 +1,4 @@
-import { clearsObstacle, overlapsObstacle, MAX_OBSTACLE_FRONT, MAX_OBSTACLE_BACK } from "./geometry";
+import { clearsObstacle, jumpLift, runGeometry, MAX_OBSTACLE_FRONT, MAX_OBSTACLE_BACK } from "./geometry";
 import { createRunTrack } from "./track";
 import {
   MAX_SPEED, BASE_SPEED, CAP_SPEED, RAMP_TICKS, MAX_RUN_TICKS, MAX_INPUTS, JUMP_TICKS,
@@ -8,12 +8,16 @@ import {
   type RunObstacleKind, type RunPlayer, type RunState,
 } from "./types";
 
+// A truck remains in storage for at most this many ticks at the slowest player
+// speed. Its displacement bounds the original-centre range needing collision work.
+const MAX_TRUCK_TRAVEL = (Math.ceil((VISIBLE_DISTANCE + MAX_OBSTACLE_BACK) / BASE_SPEED) + 1) * runGeometry.truckSpeed;
+
 export function runSpeed(tick: number, coffee = false): number {
   const base = BASE_SPEED + Math.floor((CAP_SPEED - BASE_SPEED) * Math.min(tick, RAMP_TICKS) / RAMP_TICKS);
   return coffee ? Math.floor(base * 3 / 2) : base;
 }
 export function isRunObstacle(kind: RunObject["kind"]): kind is RunObstacleKind {
-  return kind === "cart" || kind === "flour" || kind === "awning" || kind === "puddle";
+  return kind === "cart" || kind === "flour" || kind === "awning" || kind === "puddle" || kind === "ramp" || kind === "van" || kind === "truck";
 }
 export function validRunTick(tick: number): boolean {
   return Number.isSafeInteger(tick) && tick >= 0 && tick <= MAX_RUN_TICKS;
@@ -26,6 +30,16 @@ export function createRunGame({ seed, realtime = false }: { seed: string; realti
   const track = createRunTrack(seed);
   let tick = 0, distance = 0, bread = 0, over = false;
   let lane: RunLane = 1;
+  let y = 0, baseY = 0, fallSpeed = 0;
+  let surface: "ground" | "roof" = "ground";
+  const truckTravel = new Map<number, number>();
+  const position = (o: RunObject) => o.kind === "truck" ? o.z - (truckTravel.get(o.id) ?? 0) : o.z;
+  const front = (o: RunObject) => o.front;
+  const back = (o: RunObject) => o.back;
+  const height = (o: RunObject) => o.height;
+  const visible = (o: RunObject) => position(o) <= distance + VISIBLE_DISTANCE &&
+    (isRunObstacle(o.kind) ? position(o) + back(o) >= distance : position(o) > distance);
+  const snapshotObject = (o: RunObject): RunObject => ({...o, front:front(o),back:back(o),height:height(o),z:position(o)-distance});
   let action: "jump" | "slide" | null = null;
   let actionStart = 0, actionEnd = 0;
   let change: { from: RunLane; to: RunLane; start: number; end: number } | null = null;
@@ -45,7 +59,7 @@ export function createRunGame({ seed, realtime = false }: { seed: string; realti
     }
   }
   if(realtime) {
-    // At most 7,224 objects for the entire 15-minute capped run. Generate once
+    // Pre-generate the finite capped track once
     // before starting the clock so chunk creation/compaction never runs in rAF.
     while(generatedEnd < MAX_RUN_TICKS*MAX_SPEED+VISIBLE_DISTANCE) {
       const chunk=track.next();
@@ -53,9 +67,9 @@ export function createRunGame({ seed, realtime = false }: { seed: string; realti
       generatedEnd=chunk.end;
     }
   } else fill();
-  const liveObjects:RunObject[]=Array.from({length:64},()=>({id:0,lane:1,z:0,kind:'bread'}));
+  const liveObjects:RunObject[]=Array.from({length:64},()=>({id:0,lane:1,z:0,kind:'bread',front:0,back:0,height:0}));
   const liveChange={from:1,to:1,progress:0} as NonNullable<RunPlayer['laneChange']>;
-  const live:RunState={tick:0,player:{lane:1,pose:'run',progress:0,laneChange:null,queuedLane:null},
+  const live:RunState={tick:0,player:{y:0,surface:'ground',lane:1,pose:'run',progress:0,laneChange:null,queuedLane:null},
     objects:[],speed:BASE_SPEED,distance:0,bread:0,score:0,over:false,
     powerUps:{magnetUntil:0,coffeeUntil:0,magnetTicks:0,coffeeTicks:0},events:[]};
   // Separate pools keep event shapes identical to detached replay events.
@@ -114,28 +128,58 @@ export function createRunGame({ seed, realtime = false }: { seed: string; realti
       }
       const previousDistance = distance;
       distance += runSpeed(tick, coffeeUntil > tick);
-      // Keep obstacles through their back edge, checking every overlapping tick.
-      // Collectibles still fire only on their swept centre crossing, in z/id order.
-      for (let i = head; i < objects.length && objects[i].z <= distance + MAX_OBSTACLE_FRONT; i++) {
-        const obj = objects[i];
+      const activeEnd = distance + VISIBLE_DISTANCE;
+      for (let i = head; i < objects.length && objects[i].z <= activeEnd; i++) {
+        const o = objects[i];
+        if (o.kind === "truck") truckTravel.set(o.id, (truckTravel.get(o.id) ?? 0) + runGeometry.truckSpeed);
+      }
+      const collisionEnd = distance + MAX_OBSTACLE_FRONT + MAX_TRUCK_TRAVEL;
+      const previousY = y;
+      const lift = action === "jump" ? jumpLift(actionProgress()) : 0;
+      let support = 0;
+      for (let i = head; i < objects.length && objects[i].z <= collisionEnd; i++) {
+        const o = objects[i];
+        if (o.kind !== "ramp" && o.kind !== "van" && o.kind !== "truck") continue;
+        const z = position(o) - distance;
+        if (o.lane !== occupiedLane() || z > front(o) || z < -back(o) - (o.kind === "ramp" ? distance - previousDistance : 0)) continue;
+        if (o.kind === "ramp") support = Math.max(support, Math.min(height(o), Math.floor(height(o) * (front(o) - z) / (front(o) + back(o)))));
+        if ((o.kind === "van" || o.kind === "truck") && Math.max(previousY, baseY + lift) >= height(o)) support = Math.max(support, height(o));
+      }
+      if (action === "jump") {
+        y = baseY + lift;
+        if (y <= support) {
+          baseY = support; y = support; action = null; fallSpeed = 0;
+        }
+      } else if (support > 0 || baseY === 0) {
+        baseY = support; y = support; fallSpeed = 0;
+      } else {
+        fallSpeed += runGeometry.gravity;
+        baseY = Math.max(support, baseY - fallSpeed); y = baseY;
+      }
+      surface = support > 0 ? "roof" : "ground";
+      for (let i = head; i < objects.length && objects[i].z <= collisionEnd; i++) {
+        const obj = objects[i], z = position(obj) - distance;
+        const previousZ = z + distance - previousDistance + (obj.kind === "truck" ? runGeometry.truckSpeed : 0);
         if (isRunObstacle(obj.kind)) {
-          if (obj.lane !== occupiedLane() || coffeeUntil > tick ||
-              !overlapsObstacle(obj.kind, obj.z - previousDistance, obj.z - distance)) continue;
-          if (!clearsObstacle(obj.kind, action, actionProgress())) {
-            over = true;
-            collide(obj);
-            end("collision");
-            break;
+          if (obj.kind === "ramp" || obj.lane !== occupiedLane() || coffeeUntil > tick ||
+              z > front(obj) - runGeometry.edgeGrace || previousZ < -back(obj) + runGeometry.edgeGrace) continue;
+          const roof = obj.kind === "van" || obj.kind === "truck";
+          const clears = roof ? y >= height(obj) ||
+            (previousY >= height(obj) && z < -back(obj) + runGeometry.edgeGrace) : y >= height(obj) ||
+            (baseY === 0 && clearsObstacle(obj.kind, action, actionProgress()));
+          if (!clears) {
+            over = true; collide(obj); end("collision"); break;
           }
-        } else if (obj.z > previousDistance && obj.z <= distance &&
-                   (obj.lane === occupiedLane() || (obj.kind === "bread" && magnetUntil > tick))) {
+        } else if (previousZ > 0 && z <= 0 &&
+                   (obj.lane === occupiedLane() || (obj.kind === "bread" && magnetUntil > tick)) &&
+                   ((obj.y ?? 0) === 0 || Math.abs(y - (obj.y ?? 0)) < runGeometry.collectHeightTolerance || (obj.kind === "bread" && magnetUntil > tick))) {
           if (obj.kind === "bread") bread++;
           else if (obj.kind === "paper-bag") magnetUntil = tick + MAGNET_TICKS;
           else coffeeUntil = tick + COFFEE_TICKS;
           collect(obj);
         }
       }
-      while (head < objects.length && objects[head].z < distance - MAX_OBSTACLE_BACK) head++;
+      while (head < objects.length && objects[head].z < distance - MAX_OBSTACLE_BACK) { truckTravel.delete(objects[head].id); head++; }
       if (tick === MAX_RUN_TICKS && !over) {
         over = true;
         end("limit");
@@ -154,7 +198,7 @@ export function createRunGame({ seed, realtime = false }: { seed: string; realti
       progress: Math.floor((tick - change.start) * 1000 / LANE_CHANGE_TICKS),
     } : null;
     return {
-      lane: occupiedLane(), pose: action ?? (change ? "lane-change" : "run"),
+      y, surface, lane: occupiedLane(), pose: action ?? (change ? "lane-change" : "run"),
       progress: action ? actionProgress() : laneChange?.progress ?? 0,
       laneChange, queuedLane: queued,
     };
@@ -165,6 +209,7 @@ export function createRunGame({ seed, realtime = false }: { seed: string; realti
       if(!over){events.length=0;actionCount=0;advance(toTick);}
       live.tick=tick;live.distance=distance;live.bread=bread;live.over=over;
       live.speed=runSpeed(tick,coffeeUntil>tick);live.score=Math.floor(distance/UNITS_PER_METRE)+bread*10;
+      live.player.y=y;live.player.surface=surface;
       live.player.lane=occupiedLane();live.player.pose=action??(change?'lane-change':'run');
       if(change){liveChange.from=change.from;liveChange.to=change.to;liveChange.progress=Math.floor((tick-change.start)*1000/LANE_CHANGE_TICKS);}
       live.player.laneChange=change?liveChange:null;
@@ -174,12 +219,17 @@ export function createRunGame({ seed, realtime = false }: { seed: string; realti
       let count=0;
       for(let i=head;i<objects.length&&objects[i].z<=distance+VISIBLE_DISTANCE;i++) {
         const object=objects[i];
-        if(isRunObstacle(object.kind)?object.z+MAX_OBSTACLE_BACK<distance:object.z<=distance)continue;
-        const target=liveObjects[count];
-        target.id=object.id;target.lane=object.lane;target.kind=object.kind;target.z=object.z-distance;
+        if(!visible(object))continue;
+        const target=liveObjects[count] ?? (liveObjects[count] = {} as RunObject);
+        target.id=object.id;target.lane=object.lane;target.kind=object.kind;
+        target.z=position(object)-distance;target.front=front(object);target.back=back(object);target.height=height(object);
+        if(object.speed !== undefined) target.speed=object.speed;
+        if(object.y !== undefined) target.y=object.y;
+        if(object.speed === undefined) delete target.speed;
+        if(object.y === undefined) delete target.y;
         live.objects[count++]=target;
       }
-      live.objects.length=count;live.events=events;
+      live.objects.length=count;live.objects.sort((a,b)=>a.z-b.z||a.id-b.id);live.events=events;
       return live;
     },
     step(toTick) {
@@ -203,7 +253,8 @@ export function createRunGame({ seed, realtime = false }: { seed: string; realti
       if (dir === "L" || dir === "R") {
         if (change) { if (queued === null) queued = dir; }
         else startLane(dir);
-      } else if (!action) {
+      } else if (!action && (dir === "D" || y === 0 || surface === "roof")) {
+        if (dir === "U") baseY = y;
         action = dir === "U" ? "jump" : "slide";
         actionStart = tick;
         actionEnd = tick + (action === "jump" ? JUMP_TICKS : SLIDE_TICKS);
@@ -214,9 +265,7 @@ export function createRunGame({ seed, realtime = false }: { seed: string; realti
     state() {
       return {
         tick, player: player(),
-        objects: objects.slice(head).filter((o) => o.z <= distance + VISIBLE_DISTANCE &&
-          (isRunObstacle(o.kind) ? o.z + MAX_OBSTACLE_BACK >= distance : o.z > distance))
-          .map((o) => ({ ...o, z: o.z - distance })),
+        objects: objects.slice(head).filter(visible).map(snapshotObject).sort((a,b)=>a.z-b.z||a.id-b.id),
         speed: runSpeed(tick, coffeeUntil > tick), distance, bread,
         score: Math.floor(distance / UNITS_PER_METRE) + bread * 10, over,
         powerUps: { magnetUntil, coffeeUntil, magnetTicks: Math.max(0, magnetUntil - tick), coffeeTicks: Math.max(0, coffeeUntil - tick) },
