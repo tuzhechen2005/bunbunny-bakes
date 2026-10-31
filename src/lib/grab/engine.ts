@@ -8,9 +8,9 @@ import {
 } from "./types";
 
 const BREAD = {
-  S: { radius: 26, weight: 1, points: 100 },
-  M: { radius: 36, weight: 2, points: 180 },
-  L: { radius: 46, weight: 3, points: 300 },
+  S: { radius: 41, weight: 1, points: 100 },
+  M: { radius: 57, weight: 2, points: 180 },
+  L: { radius: 73, weight: 3, points: 300 },
 } as const;
 
 export function breadStage(age: number): GrabStage {
@@ -24,7 +24,7 @@ export function breadPoints(size: GrabSize, age: number): number {
 
 /** Monotonically slower with weight; all distances are integer field units per tick. */
 export function reelSpeed(weight: number): number {
-  return Math.max(1, 8 - weight * 2);
+  return Math.max(2, 17 - weight * 4);
 }
 
 interface LiveItem extends Omit<GrabItem, "age" | "stage"> { born: number; slot: number }
@@ -68,12 +68,12 @@ export function createGrabGame(opts: { seed: string; tiers: readonly GrabTierInp
     const kind = deck.pop()!;
     const size: GrabSize = kind === "bread" ? (["S", "M", "L"] as const)[rng.int(3)] : kind === "flour" ? "L" : "S";
     const tier = kind === "bread" ? rng.int(tierCount) : null;
-    const free = Array.from({ length: 15 }, (_, i) => i).filter((slot) => !items.some((item) => item.slot === slot));
+    const free = Array.from({ length: 20 }, (_, i) => i).filter((slot) => !items.some((item) => item.slot === slot));
     const slot = free[rng.int(free.length)];
     return {
       id: nextId++, kind, tier, size, slot, born: tick,
-      x: 70 + (slot % 5) * 145 + rng.int(45) - 22,
-      y: 280 + Math.trunc(slot / 5) * 128 + rng.int(33) - 16,
+      x: 90 + (slot % 4) * 180 + rng.int(29) - 14,
+      y: 522 + Math.trunc(slot / 4) * 207 + rng.int(33) - 16,
       radius: kind === "bread" ? BREAD[size].radius : kind === "flour" ? 44 : 25,
       weight: kind === "bread" ? BREAD[size].weight : kind === "flour" ? 8 : 0,
     };

@@ -2,12 +2,13 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { copy } from "../../src/copy";
-import { createGrabGame, replayGrab } from "../../src/lib/grab";
-import { GRAB_SAVE_KEY } from "../../src/components/grab/grabSave";
+import { createGrabGame, replayGrab, GRAB_ENGINE_VERSION, FIELD_WIDTH, FIELD_HEIGHT } from "../../src/lib/grab";
+import { firstContact, fieldLength, swingAngle } from "../../src/lib/grab/geometry";
 test.use({ browserName: "chromium" });
-import { chooseGrabWait, greedyGrab } from "../support/grabBot";
+import { GRAB_SAVE_KEY } from "../../src/components/grab/grabSave";
+import { greedyGrab } from "../support/grabBot";
 
-const SEED = "v1.abcdef0123456789";
+const SEED = `v${GRAB_ENGINE_VERSION}.abcdef0123456789`;
 const TIERS = Array.from({length:6},(_,i)=>({id:`t${i}`,name:`Bread ${i}`,radius:.1,points:10,imageUrl:`/api/images/mock/grab-${i}.jpg`,color:{bg:"#EFE7DA",ink:"#4A2723"}}));
 const PHOTO = readFileSync("tests/fixtures/bun.jpg");
 const BOARD = {liveScores:true,week:{start:"2026-12-07",end:"2026-12-13"},top:[],lastWinner:null,allTime:{nickname:"Baker",wechatMasked:"ba***er",score:9000}};
@@ -46,21 +47,54 @@ for(const width of [320,390]) {
    await page.getByTestId("grab-open-board").click();await expect(page.getByTestId("game-all-time")).toContainText("9000");await page.getByTestId("grab-board-close").click();
    await page.route("**/api/game/hub",r=>r.fulfill({json:{week:BOARD.week,prizeGame:"TU",games:[]}}));await page.reload();await expect(page.getByTestId("grab-prize-line")).toHaveCount(0);
   });
+  test("accepts a press before the deferred animation boot",async({page})=>{
+   await mockApi(page); await page.clock.install(); await page.goto("/game/grab");
+   await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
+   await start(page); // The board is mounted, but its setTimeout(boot, 0) has not run.
+   const box=(await page.getByTestId("grab-board").boundingBox())!;
+   await page.touchscreen.tap(box.x+box.width/2,box.y+box.height/2);
+   await expect(page.getByTestId("grab-board")).toHaveAttribute("data-phase","extending");
+   await expect(page.getByTestId("grab-board")).toHaveAttribute("data-launches","1");
+   expect((await stored(page)).launches).toEqual([0]);
+   await page.clock.runFor(100);
+   expect(Number(await page.getByTestId("grab-board").getAttribute("data-tick"))).toBeGreaterThan(0);
+  });
   test("start, aimed launch, delivery, live report and final sheet",async({page})=>{
    const api=await mockApi(page);await page.clock.install();await page.goto("/game/grab");await start(page);
    expect(api.starts).toEqual([{wechatId:"grab_fan",nickname:"Baker"}]);
-   const box=(await page.getByTestId("grab-board").boundingBox())!;expect(box.width/box.height).toBeCloseTo(720/600,1);
-   // Reconstruct the visible snapshot, aim with the same public-state bot, then let delivery complete.
-   for(let attempt=0;attempt<4 && Number(await page.getByTestId("grab-score").textContent())===0;attempt++) {
+   const box=(await page.getByTestId("grab-board").boundingBox())!;expect(box.width/box.height).toBeCloseTo(FIELD_WIDTH/FIELD_HEIGHT,1);
+   expect(box.y + box.height).toBeGreaterThan(780);
+   expect(box.y + box.height).toBeLessThanOrEqual(800);
+   for (const [index, input] of ["touch", "mouse"].entries()) {
     await page.clock.runFor(100);
-    const log=(await stored(page)).launches as number[];
-    const tick=Number(await page.getByTestId("grab-board").getAttribute("data-tick"));
-    const game=createGrabGame({seed:SEED,tiers:TIERS});log.forEach(t=>game.launch(t));game.step(tick);
-    await page.clock.runFor(chooseGrabWait(game.state())*1000/60);
-    await page.getByTestId("grab-board").click();await page.clock.runFor(7000);
+    const scoreBefore = Number(await page.getByTestId("grab-score").textContent());
+    const tick = Number(await page.getByTestId("grab-board").getAttribute("data-tick"));
+    const game = createGrabGame({seed:SEED,tiers:TIERS});
+    (await stored(page)).launches.forEach((at:number)=>game.launch(at)); game.step(tick);
+    // Aim at bread with a ±3 tick margin; no retry loop can hide a dropped input.
+    const items = game.state().items;
+    const target = Array.from({length:300},(_,i)=>tick+i+10).find(at=>
+     [-3,-2,-1,0,1,2,3].every(offset=>{
+      const angle=swingAngle(at+offset), hit=firstContact(angle,0,fieldLength(angle),items);
+      return hit && items[hit.index].kind === "bread";
+     }));
+    expect(target).toBeDefined();
+    await page.clock.runFor((target!-tick)*1000/60);
+    if (input === "touch") await page.getByTestId("grab-board").tap();
+    // The review used mouse.click at the field centre in a hasTouch context.
+    else await page.mouse.click(box.x+box.width/2,box.y+box.height/2);
+    await expect(page.getByTestId("grab-board")).toHaveAttribute("data-phase", "extending");
+    await expect(page.getByTestId("grab-board")).toHaveAttribute("data-launches", String(index+1));
+    expect((await stored(page)).launches).toHaveLength(index+1);
+    await page.clock.runFor(100);
+    const arm = await page.locator(".grab-arm-segment").boundingBox();
+    expect(arm!.height).toBeGreaterThan(0);
+    await page.getByTestId("grab-board").tap(); // Busy input must not cancel or enter the log.
+    expect((await stored(page)).launches).toHaveLength(index+1);
+    await page.clock.runFor(8000);
+    await expect(page.getByTestId("grab-board")).toHaveAttribute("data-phase", "idle");
+    expect(Number(await page.getByTestId("grab-score").textContent())).toBeGreaterThan(scoreBefore);
    }
-   await expect.poll(async()=>Number(await page.getByTestId("grab-score").textContent())).toBeGreaterThan(0);
-   expect((await stored(page)).launches.length).toBeGreaterThan(0);
    await page.clock.runFor(10000);await expect.poll(()=>api.reports.length).toBeGreaterThan(0);
    await page.clock.runFor(100000);await expect(page.getByTestId("grab-over-sheet")).toBeVisible();await expect(page.getByTestId("grab-confirmed")).toContainText(g.confirmed);
    expect(api.finishes).toHaveLength(1);expect(replayGrab(SEED,TIERS,api.finishes[0].launches,api.finishes[0].endTick).over).toBe(true);

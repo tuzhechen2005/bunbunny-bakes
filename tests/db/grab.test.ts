@@ -54,9 +54,11 @@ it("rejects bad replay logs, observation ticks, too many ignored launches and im
 it("expires on weekly reset and engine version mismatch for finish and progress", async () => {
  await tiers(); const r=await start();
  await expect(finishGrabRun(db,play(r),IP,new Date(r.expiresAt))).rejects.toMatchObject({message:copy.gameApi.runExpired});
- await db.gameRun.update({where:{id:r.runId},data:{seed:"v999.abcdef"}});
- await expect(finishGrabRun(db,play(r),IP,LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
- await expect(progressRun(db,"GRAB",{runId:r.runId,log:[],endTick:0},LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
+ for (const [index, seed] of ["v1.abcdef", "v999.abcdef"].entries()) {
+  await db.gameRun.update({where:{id:r.runId},data:{seed}});
+  await expect(finishGrabRun(db,play(r),IP,LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
+  await expect(progressRun(db,"GRAB",{runId:r.runId,log:[],endTick:0},new Date(+LATER + index * 10_000))).rejects.toMatchObject({message:copy.gameApi.runExpired});
+ }
 });
 it("flags rapid attempts without removing score from the board", async () => {
  await tiers(); const r=await start();const launches=[0,1,2,3];
@@ -109,7 +111,7 @@ it("accepts a clock-extended run using only the snapshot and active duration", a
  await tiers(); const r = await start();
  let extended = null;
  for (let i = 0; i < 40; i++) {
-  const seed = `v1.${i.toString(16).padStart(4, "0")}`;
+  const seed = `v${GRAB_ENGINE_VERSION}.${i.toString(16).padStart(4, "0")}`;
   const bot = greedyGrab(seed, r.tiers);
   if (bot.ticks > 3600) { extended = { seed, bot }; break; }
  }
