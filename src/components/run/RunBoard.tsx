@@ -38,10 +38,11 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
     const el=canvas.current;
     if(!el||!art) return;
     const {width:w,height:h}=el.getBoundingClientRect();
-    const dpr=Math.min(2,window.devicePixelRatio||1);
+    const dpr=window.devicePixelRatio||1;
     if(el.width!==Math.round(w*dpr)||el.height!==Math.round(h*dpr)) {el.width=Math.round(w*dpr);el.height=Math.round(h*dpr);}
     const ctx=el.getContext('2d');if(!ctx) return;
-    ctx.setTransform(dpr,0,0,dpr,0,0);
+    if(w<=0||h<=0)return;
+    ctx.setTransform(el.width/w,0,0,el.height/h,0,0);
     renderRun(ctx,art,game.state(),w,h,quiet,crashFrame.current);
   },[art,game,quiet]);
   useEffect(()=>{

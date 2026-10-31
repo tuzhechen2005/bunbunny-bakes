@@ -518,7 +518,7 @@ export function RunPage() {
   return (
     <Shell>
       {top}
-      <main className="relative flex flex-1 flex-col" style={{ minHeight: "calc(100svh - 56px)" }}>
+      <main className="run-stage relative flex flex-col">
         <RunBoard key={run.key} seed={run.seed} initialInputs={run.initialInputs} initialElapsedMs={run.initialElapsedMs} paused={dialog !== null || phase !== "playing"} soundOn={soundOn} reduced={reduced} onProgress={onProgress} onOver={onOver} onShowResult={phase === "over" ? () => setSheetOpen(true) : undefined} />
         {phase === "over" && !sheetOpen ? (
           <div
