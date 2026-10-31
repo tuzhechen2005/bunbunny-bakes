@@ -1,6 +1,7 @@
 import { createM3Game } from "./engine";
 import { validCell } from "./board";
-import { MAX_MOVES, MIN_MOVE_GAP_MS, type M3Move, type M3TierInput } from "./types";
+import { MAX_MOVES, MIN_MOVE_GAP_MS, M3_ENGINE_VERSION, type M3Move, type M3TierInput } from "./types";
+import { m3SeedVersion } from "./seed";
 
 export interface M3ReplayResult { score: number; over: boolean; moves: number }
 export class M3ReplayError extends Error {
@@ -9,6 +10,10 @@ export class M3ReplayError extends Error {
 
 /** Timestamps are safe integer milliseconds since start; first move may occur at zero. */
 export function replayM3(seed: string, tiers: readonly M3TierInput[], moves: readonly M3Move[]): M3ReplayResult {
+  // Local simulations may use arbitrary unversioned seeds. Persisted versioned runs must
+  // never be interpreted under different rules, even when their move log is still empty.
+  const version = m3SeedVersion(seed);
+  if (version !== null && version !== M3_ENGINE_VERSION) throw new M3ReplayError("incompatible engine version");
   if (!Array.isArray(moves)) throw new M3ReplayError("moves is not an array");
   // A 31st move is necessarily also after over; reject before simulating oversized input.
   if (moves.length > MAX_MOVES) throw new M3ReplayError("too many moves (move after game over)");

@@ -44,7 +44,7 @@ This includes invalid coordinates, identical/nonadjacent cells, a swap that crea
 or special combo, and swaps after game over. No live board injection or restore hook is exposed;
 restore by replaying accepted moves from the seed.
 
-## Rules and tie breaks (engine version 1)
+## Rules and tie breaks (engine version 2)
 
 - Initial boards have no matches and at least one legal move. Fill row-major, choosing a tier
   that cannot complete a horizontal/vertical triple; reject and regenerate a dead initial board.
@@ -69,12 +69,24 @@ restore by replaying accepted moves from the seed.
   into a pin and fires all those pins. The initiating big fires once. Conversion earns no
   creation bonus, and converted tiles keep their bread tier for order credit.
 - Big + big clears the entire board. Both fire once; other existing specials also fire once.
-- Gravity compacts each column downward without changing survivor order. Refill with ordinary
-  seeded bread, columns left-to-right and holes bottom-to-top. Resolve new matches until none
-  remain. Chain numbering starts at 1 for each accepted swap.
+- Gravity compacts every column downward without changing survivor order, before any refill
+  examines neighbours. Refill with ordinary seeded bread, columns left-to-right and holes
+  bottom-to-top. Each hole draws `rng.int(100) < REFILL_BIAS_PERCENT` (20%). On a hit,
+  inspect all six horizontal/vertical pairs around that hole for tiers completing a triple.
+  Pins count by their bread tier; big breads and empty cells never match. Deduplicate candidate
+  tiers and prefer the tier(s) most cleared in the just-resolved wave (the move's own context,
+  not active orders or hidden future RNG). Break ties among sorted tiers with the board RNG.
+  A miss, or no completing pair, draws a uniform tier. Both paths use only integer RNG draws.
+  Resolve new matches until none remain. Chain numbering starts at 1 for each accepted swap.
+- At **20 resolutions per move**, stop. If matches remain, replace the board with a fresh
+  match-free, playable board and emit `shuffle`, with no extra score, order credit or move cost.
+  This safety reset need not preserve tiles/specials. It prevents biased refill from looping.
 - If no legal move remains, Fisher–Yates shuffle the exact multiset (including specials) until
   it has no matches and at least one legal move. Emit one `shuffle`; no score, order credit, or
-  move cost. Shuffle also runs if necessary on the final board before `over`.
+  move cost. After 128 unsuccessful shuffle attempts, use a fresh board instead; impossible
+  multisets cannot loop forever. Initial generation also has 128 attempts, then a fixed
+  match-free board with a guaranteed legal swap. Shuffle also runs if necessary on the final
+  board before `over`.
 - Exactly **30 accepted moves**. Set `over` only after the final move's cascades settle.
 
 ## Scoring and orders
@@ -82,14 +94,16 @@ restore by replaying accepted moves from the seed.
 | Export | Final value | Meaning |
 | --- | ---: | --- |
 | `CELL_POINTS` | 10 | Per actually cleared cell, ordinary or special |
-| `ROLL_POINTS` | 40 | Bonus for creating a pin through a line |
-| `BIG_POINTS` | 100 | Bonus for creating a big bread through a line |
+| `ROLL_POINTS` | 100 | Bonus for creating a pin through a line |
+| `BIG_POINTS` | 200 | Bonus for creating a big bread through a line |
 | `MAX_CHAIN_MULTIPLIER` | 5 | Wave score = (clear points + creation bonuses) × min(chain, 5) |
-| `ORDER_MIN_NEED` / `ORDER_MAX_NEED` | 10 / 15 | Uniform inclusive quantity per new order |
-| `ORDER_POINTS_PER_TILE` | 20 | Completion bonus = need × 20 (200–300), not chain-multiplied |
+| `ORDER_MIN_NEED` / `ORDER_MAX_NEED` | 18 / 24 | Uniform inclusive quantity per new order |
+| `ORDER_POINTS_PER_TILE` | 20 | Completion bonus = need × 20 (360–480), not chain-multiplied |
+| `REFILL_BIAS_PERCENT` | 20 | Integer percentage chance per refill tile |
+| `MAX_CASCADE_STEPS` | 20 | Maximum scored resolutions per accepted move |
 | `MAX_MOVES` | 30 | Engine-enforced accepted-move cap |
 | `MIN_MOVE_GAP_MS` | 150 | Minimum gap between replay moves |
-| `M3_ENGINE_VERSION` | 1 | Pin this with saved/server runs |
+| `M3_ENGINE_VERSION` | 2 | Pin this with saved/server runs; v1 saves/runs are rejected |
 
 Orders use a separate `${seed}:m3:orders` RNG stream; board/refill/shuffle use
 `${seed}:m3:board`. New orders choose among the selected tiers, excluding the other active
@@ -113,6 +127,8 @@ in the same wave; that order can receive progress in the next cascade. New order
    column). Then `refill { tiles: [{ r, c, code }] }`, if nonempty.
 
 After all waves: optional `shuffle { board }` replaces the board, then optional `over`.
+At the cascade cap this replacement can follow a board still containing matches; consumers
+must apply the supplied board, not assume every shuffle preserves the old multiset.
 Events and state do not alias live internals. The events test reconstructs board, orders, score,
 move count, and specials through full games, including a real automatic reshuffle.
 
@@ -120,7 +136,10 @@ move count, and specials through full games, including a real automatic reshuffl
 
 `moves` contains only accepted swaps, `{ a: { r, c }, b: { r, c }, at }`. `at` is safe-integer
 milliseconds since start, nonnegative, strictly increasing, with gaps at least 150 ms. The first
-move may be at zero. Empty logs and unfinished prefixes are valid. `M3ReplayError` rejects
+move may be at zero. Empty logs and unfinished prefixes are valid. Versioned seeds must match
+`M3_ENGINE_VERSION`, even with an empty log; unversioned simulation seeds remain supported.
+The existing client save key follows the engine version and removes old keys on read.
+`M3ReplayError` rejects
 nonarrays, more than 30 moves (necessarily also a move after over), malformed entries or
 coordinates, invalid times, non-increasing times, short gaps, and illegal swaps. Because the
 only ending condition is move 30, every move-after-over log is caught by the length check.
@@ -135,12 +154,68 @@ clear/creation/completion score, without gravity, future refills, or future orde
 
 ## Tuning
 
+### S8 before (engine v1, measured before changing engine rules)
+
+`node --import tsx scripts/m3-tune.mts 300`: six tiers, seeds `m3-tune0..m3-tune299`,
+30 accepted moves per run (9,000 moves per bot). A clear/cascade step is one `match`
+event, including the initiating resolution; simultaneous matches count as one step.
+Random-tap baseline chooses uniformly among legal swaps (rejected taps cost no moves).
+
+| Bot | Mean clears/move | Moves with ≥3 steps | Mean score | Orders completed/run |
+| --- | ---: | ---: | ---: | ---: |
+| Random | 1.4620 | 9.9000% | 3255.5667 | 3.1400 |
+| Greedy | 1.5472 | 12.3444% | 4900.0667 | 5.2300 |
+
+Random/greedy mean score: **66.44%**. Maximum observed chain: random 9, greedy 8.
+
+### S8 after (engine v2)
+
+Selected **p = 20%**, order needs **18–24**, pin/big creation bonuses **100/200**.
+Cell points (10), chain multiplier cap (5), order points/tile (20), and 30-move limit stay
+unchanged. The S8 review prioritizes making orders easier in response to the owner's difficulty
+complaint. It replaces the previous 35–45 needs with 18–24 and targets about 2–3 greedy
+orders/run. The random/greedy score ratio is recorded without an acceptance target or further
+calibration. Transient big+pin conversions still earn no creation bonus. Greedy sees only the
+immediate visible board and cannot predict refill.
+
+The same command and same 300 seeds as "before" (9,000 accepted moves per bot):
+
+| Bot | Mean clears/move | Moves with ≥3 steps | Mean score | Orders completed/run |
+| --- | ---: | ---: | ---: | ---: |
+| Random | 1.7801 | 19.3111% | 5896.3333 | 2.2967 |
+| Greedy | 1.9060 | 23.0000% | 8961.4333 | 3.7900 |
+
+Random/greedy mean score: **65.80%**. Maximum observed chain: 10 for both bots.
+
+Expanded verification: `node --import tsx scripts/m3-tune.mts 1000`, seeds
+`m3-tune0..m3-tune999` (includes the paired sample; 30,000 moves per bot):
+
+| Bot | Mean clears/move | Moves with ≥3 steps | Mean score | Orders completed/run |
+| --- | ---: | ---: | ---: | ---: |
+| Random | 1.7656 | 19.0100% | 5802.5200 | 2.3120 |
+| Greedy | 1.9093 | 23.1133% | 9076.6400 | 3.8440 |
+
+Random/greedy mean score: **63.93%**. Maximum observed chain: random 11, greedy 12.
+No sampled six-tier run reached the 20-step cap; a separate forced-cap integration test
+exercises board replacement and live/replay equality. Cascades remain approximately the
+requested 1.8 / 25% (measured 1.91 / 23.11%). **Greedy orders exceed the approximate 2–3
+target:** the specified 18–24 needs produce 3.79 / 3.844 orders/run in the two samples.
+
+The 300-seed regression pins needs 18–24, creation bonuses 100/200, p=20%, and the measured
+3.79 greedy orders/run; this is a measurement regression, not a claim that the 2–3 goal was
+met. It retains the special-creation check, greedy clears/move 1.7–2.0, three-step moves
+22–28%, and no chain exceeding 20. Mean and median score-ratio requirements are removed.
+Replay is also checked against live at every prefix of a versioned v2 run, alongside
+full-state/event determinism and refreshed pinned vectors.
+
 Run `npx tsx scripts/m3-tune.mts 1000 [tierCount=6]`. Bots use an independent seeded tie-break
 stream and the same seeds `m3-tune0..m3-tune999`. Random chooses uniformly among legal swaps;
 greedy maximizes immediate visible-board score including order completion bonuses, then breaks
 ties randomly. It cannot see future RNG or simulate refills. Both play all 30 moves.
 Percentiles use sorted index `floor(N × p)` (zero-based). Specials/game counts earned line
 specials, excluding transient conversions; fired and converted counts are also printed.
+
+### Historical S1 calibration (v1, not the current constants)
 
 Two 1,000-seed scoring candidates were compared:
 
@@ -151,7 +226,7 @@ Two 1,000-seed scoring candidates were compared:
 
 The selected constants reward planning specials more clearly (49.8% median improvement over
 random vs 40.9% for the lower bonuses), with more special creation during greedy play.
-The 100-seed unit regression requires greedy median >1.35× random and >2× special creation.
+The original unit regression required greedy median >1.35× random and >2× special creation.
 
 | Bot, 1000 seeds / 6 tiers | Score p10 | p50 | p90 | Earned specials/game | Fired/game | Converted/game | Reshuffles/game |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -160,4 +235,4 @@ The 100-seed unit regression requires greedy median >1.35× random and >2× spec
 
 Tests cover 4/5/6 tiers, initialization, no-op rejections, full-game determinism and replay,
 replay validation, exact special fixtures and combos, orders and score accounting, event
-playback, reshuffling, greedy information limits, tuning bounds, and pinned version-1 vectors.
+playback, reshuffling, greedy information limits, tuning bounds, and pinned version-2 vectors.

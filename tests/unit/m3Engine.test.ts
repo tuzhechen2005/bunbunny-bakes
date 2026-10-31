@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createM3Game, hashM3State, replayM3, M3ReplayError, MAX_MOVES, MIN_MOVE_GAP_MS, M3_ENGINE_VERSION, legalM3Moves, type M3Move } from "@/lib/m3";
+import { createM3Game, hashM3State, replayM3, M3ReplayError, MAX_CASCADE_STEPS, MAX_MOVES, MIN_MOVE_GAP_MS, M3_ENGINE_VERSION, ORDER_MIN_NEED, ORDER_MAX_NEED, legalM3Moves, m3Seed, type M3Move } from "@/lib/m3";
 import { findMatches } from "@/lib/m3/board";
 import { randomM3, greedyM3 } from "../support/m3Bot";
 
@@ -9,7 +9,7 @@ describe("M3 engine", () => {
   it("uses the first six tiers, requires four, and exposes version/limits", () => {
     for (let n = 0; n < 4; n++) expect(() => createM3Game({ seed: "x", tiers: tiers(n) })).toThrow(RangeError);
     expect(createM3Game({ seed: "x", tiers: tiers(8) }).state()).toEqual(createM3Game({ seed: "x", tiers: tiers() }).state());
-    expect([MAX_MOVES, MIN_MOVE_GAP_MS, M3_ENGINE_VERSION]).toEqual([30, 150, 1]);
+    expect([MAX_MOVES, MIN_MOVE_GAP_MS, M3_ENGINE_VERSION, MAX_CASCADE_STEPS]).toEqual([30, 150, 2, 20]);
   });
 
   it.each([4, 5, 6])("starts with no matches and a legal move over 200 seeds (%i tiers)", (n) => {
@@ -54,7 +54,11 @@ describe("M3 engine", () => {
         expect(events).toEqual(twin.swap(m.a, m.b));
         expect(events[0].type).toBe("swap");
         for (const e of events) {
-          if (e.type === "match") { sum += e.points; if (e.chain > 1) cascades++; }
+          if (e.type === "match") {
+            sum += e.points;
+            expect(e.chain).toBeLessThanOrEqual(MAX_CASCADE_STEPS);
+            if (e.chain > 1) cascades++;
+          }
           if (e.type === "special" && e.action === "created") created++;
           if (e.type === "order" && e.action === "complete") { sum += e.order.points; completed++; }
         }
@@ -64,7 +68,7 @@ describe("M3 engine", () => {
         expect(findMatches(s.board)).toEqual([]);
         expect(s.orders[0].tier).not.toBe(s.orders[1].tier);
         for (const o of s.orders) {
-          expect(o.need).toBeGreaterThanOrEqual(10); expect(o.need).toBeLessThanOrEqual(15);
+          expect(o.need).toBeGreaterThanOrEqual(ORDER_MIN_NEED); expect(o.need).toBeLessThanOrEqual(ORDER_MAX_NEED);
           expect(o.have).toBeLessThan(o.need); expect(o.have).toBeGreaterThanOrEqual(0);
         }
         if (!s.over) expect(legalM3Moves(s).length).toBeGreaterThan(0);
@@ -80,17 +84,32 @@ describe("M3 engine", () => {
 
   it("pins an initial board and full greedy game", () => {
     const g = createM3Game({ seed: "pinned", tiers: tiers() });
-    expect(hashM3State(g.state())).toMatchInlineSnapshot(`"1f7967a9"`);
+    expect(hashM3State(g.state())).toMatchInlineSnapshot(`"140431aa"`);
     const run = greedyM3("pinned", tiers());
     for (const m of run.moves) g.swap(m.a, m.b);
     expect({ score: run.score, specials: run.specials, reshuffles: run.reshuffles, hash: hashM3State(g.state()) }).toMatchInlineSnapshot(`
       {
-        "hash": "0f7746e1",
+        "hash": "d512857e",
         "reshuffles": 0,
-        "score": 8420,
-        "specials": 12,
+        "score": 6620,
+        "specials": 13,
       }
     `);
+  });
+
+  it("replay equals live at every prefix with v2 biased refill and multi-step cascades", () => {
+    const seed = m3Seed("cafe2026");
+    const run = greedyM3(seed, tiers());
+    const live = createM3Game({ seed, tiers: tiers() });
+    let longCascades = 0;
+    for (const [i, move] of run.moves.entries()) {
+      const events = live.swap(move.a, move.b)!;
+      if (events.filter((e) => e.type === "match").length >= 3) longCascades++;
+      expect(replayM3(seed, tiers(), run.moves.slice(0, i + 1))).toEqual({
+        score: live.score, over: live.over, moves: live.moves,
+      });
+    }
+    expect(longCascades).toBeGreaterThan(0);
   });
 });
 
