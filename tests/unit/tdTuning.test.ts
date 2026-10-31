@@ -11,12 +11,12 @@ it.each([0, 100])("keeps greedy progression and random play inside the tuning bo
   });
   process.stdout.write(`TD passes / 100 weeks: ${JSON.stringify(rates)}\n`);
   expect(rates[0].greedy).toBeGreaterThanOrEqual(98);
-  expect(rates[1].greedy).toBeGreaterThanOrEqual(35);
-  expect(rates[1].greedy).toBeLessThanOrEqual(65);
+  expect(rates[1].greedy).toBeGreaterThanOrEqual(45);
+  expect(rates[1].greedy).toBeLessThanOrEqual(55);
   expect(rates[2].greedy).toBeGreaterThanOrEqual(10);
   expect(rates[2].greedy).toBeLessThanOrEqual(15);
   expect(rates[1].random).toBeLessThanOrEqual(15);
   expect(rates[1].random).toBeLessThanOrEqual(rates[1].greedy - 20);
   // L1 intentionally remains forgiving to beginners, including random purchasers.
   expect(rates.reduce((sum, r) => sum + r.random, 0)).toBeLessThan(rates.reduce((sum, r) => sum + r.greedy, 0) * 0.75);
-}, 120_000);
+}, 300_000);

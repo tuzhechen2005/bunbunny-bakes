@@ -1,4 +1,4 @@
-"""D3: original procedural bakery clay models. Run inside Blender, not Python.
+"""D5: original procedural bakery clay models. Run inside Blender, not Python.
 
 Map surfaces are inverse-projected from the authoritative TD points, including
 their elevation, so the 55-degree camera cannot skew path/slot coordinates.
@@ -24,7 +24,8 @@ source = MAP_SOURCE.read_text()
 MAPS = [{"name": name, "path": json.loads(path), "slots": json.loads(slots)}
         for name, path, slots in re.findall(
             r'map\("([^"]+)",\s*(\[\[.*?\]\]),\s*(\[\[.*?\]\])\)', source, re.S)]
-assert len(MAPS) == 3 and all(len(m["slots"]) == 10 for m in MAPS)
+assert len(MAPS) == 3 and all(len(m["slots"]) == 7 for m in MAPS)
+SLOT_RADIUS = int(re.search(r"TD_SLOT_RADIUS = (\d+)", (ROOT.parents[1] / "src/lib/td/types.ts").read_text()).group(1))
 MAP_HASH = hashlib.sha256(MAP_SOURCE.read_bytes()).hexdigest()
 parser = argparse.ArgumentParser()
 parser.add_argument("--only", default="")
@@ -227,7 +228,7 @@ def stroke_pixels(name, path, width, z, mat):
 
 
 def clearance(x, y, data):
-    distances = [math.hypot(x-sx, y-sy)-45 for sx, sy in data["slots"]]
+    distances = [math.hypot(x-sx, y-sy)-(SLOT_RADIUS+15) for sx, sy in data["slots"]]
     for a, b in zip(data["path"], data["path"][1:]):
         dx, dy = b[0]-a[0], b[1]-a[1]
         t = max(0, min(1, ((x-a[0])*dx+(y-a[1])*dy)/(dx*dx+dy*dy)))
@@ -304,12 +305,6 @@ def map_scene(index):
                     prop("plant", x, y, .5)
     stroke_pixels("Path edge", data["path"], 86, .006, ["wood", "roof", "soil"][index])
     stroke_pixels("Continuous walkable path", data["path"], 74, .012, ["cream", "plaster", "tile"][index])
-    # Slot pads are centered in screen space, with a narrow softly colored rim.
-    for x, y in data["slots"]:
-        disk_pixels("Slot rim", x, y, 30, .022, ["kraft", "stone", "leaf"][index])
-        disk_pixels("Subtle slot pad", x, y, 27.5, .024, ["tile", "cream", "sage"][index])
-        for dx, dy in ((-19, 0), (19, 0), (0, -19), (0, 19)):
-            disk_pixels("Slot mounting dot", x+dx, y+dy, 1.6, .025, "plaster")
     # Deterministic sparse props, rejected near every route segment and slot.
     chosen = []
     kinds = ["bowl", "sack", "tray"] if index == 0 else ["plant", "sack", "tray"] if index == 1 else ["plant"]
@@ -437,6 +432,17 @@ def pest(kind, frame):
                  (.57, side*(.24+.02*math.sin(phase)), .48)], .019, "dark")
             ball("Insect eye", (.42, side*.13, .35+bob), (.04, .025, .045), "dark")
             ball("Eye glint", (.44, side*.14, .37+bob), (.013, .01, .014), "cream")
+    elif kind == "boss":
+        before = set(bpy.data.objects)
+        pest("mouse", frame)
+        for obj in set(bpy.data.objects) - before:
+            obj.location.x *= 1.3
+            obj.location.y *= 1.65
+            obj.location.z *= 1.35
+            obj.scale.x *= 1.3
+            obj.scale.y *= 1.65
+            obj.scale.z *= 1.35
+        ball("Big round boss belly", (-.13, 0, .38), (.49, .39, .35), "mouse")
     elif kind == "mouse":
         tube("Curled pink tail", [(-.35, 0, .20), (-.59, .03, .13), (-.67, .26, .09),
              (-.52, .38+.04*math.sin(phase), .08)], .028, "pink")
@@ -578,7 +584,7 @@ def render_asset(name, count, width, height, build, fps=0, loop=False, map_index
                          "samples": args.samples, "supersample": 2, "downsample": "Lanczos3"}, "frames": []}
     if is_map:
         spec["map"] = {**MAPS[map_index], "source": "src/lib/td/maps.ts", "sha256": MAP_HASH,
-                       "pathWidth": 74, "slotRadius": 30, "breadClearance": 115}
+                       "pathWidth": 74, "slotRadius": SLOT_RADIUS, "breadClearance": 115}
     if name.startswith("pest-"):
         spec["facing"] = {"mode": "rotate", "defaultDirection": "right", "radians": "atan2(dy, dx)",
                           "pivot": "frame.anchor", "shadow": "baked; rotates with sprite"}
@@ -612,10 +618,10 @@ for index in range(3):
 for kind in ("pin", "sifter", "whisk", "oven"):
     for tier in range(3):
         render_asset(f"tower-{kind}-{tier}", 1, 128, 144, lambda f, k=kind, t=tier: tower(k, t))
-for kind in ("ant", "mouse", "sparrow", "beetle"):
+for kind in ("ant", "mouse", "sparrow", "beetle", "boss"):
     render_asset(f"pest-{kind}", 4, 112, 112, lambda f, k=kind: pest(k, f), fps=10 if kind == "sparrow" else 8, loop=True)
 for kind in ("pin", "whisk", "oven"):
     render_asset(f"proj-{kind}", 1, 64, 64, lambda f, k=kind: projectile(k))
 render_asset("fx-hit", 4, 80, 80, puff, fps=16)
 render_asset("slot", 1, 80, 80, lambda f: slot())
-print("D3 rendering complete:", CACHE / "renders.json", flush=True)
+print("D5 rendering complete:", CACHE / "renders.json", flush=True)

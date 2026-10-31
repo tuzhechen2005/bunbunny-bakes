@@ -1,4 +1,4 @@
-# Bakery defense artwork — D3 / D152
+# Bakery defense artwork — D5 / D152
 
 Original procedural Blender clay models, without downloaded models, textures, fonts,
 or runtime 3D. The palette, AgX +0.6 EV, warm sun, cool ambient fill and matte clay
@@ -61,18 +61,19 @@ Additional `map` and `facing` metadata describe alignment and rotation.
 
 | IDs | Frames each | Source frame size | Playback |
 | --- | ---: | --- | --- |
-| `map-1`, `map-2`, `map-3` | 1 | 720 × 1080 | static, opaque, path and subtle slot pads included |
+| `map-1`, `map-2`, `map-3` | 1 | 720 × 1080 | static, opaque, path only; slots drawn by frontend |
 | `tower-pin-0..2` | 1 | 128 × 144 | maple pin → brass reinforced pin → double roller |
 | `tower-sifter-0..2` | 1 | 128 × 144 | sieve cup → hand crank → stacked flour chamber |
 | `tower-whisk-0..2` | 1 | 128 × 144 | single whisk → twin whisk → brass stand mixer |
 | `tower-oven-0..2` | 1 | 128 × 144 | clay oven → chimney → reinforced double chamber |
 | `pest-ant`, `pest-mouse`, `pest-beetle` | 4 | 112 × 112 | 8 fps loop |
+| `pest-boss` | 4 | 112 × 112 | 8 fps loop; big round clay mouse, faces right |
 | `pest-sparrow` | 4 | 112 × 112 | 10 fps wing cycle, airborne with ground shadow |
 | `proj-pin`, `proj-whisk`, `proj-oven` | 1 | 64 × 64 | static; optional runtime spin |
 | `fx-hit` | 4 | 80 × 80 | 16 fps, play once and remove |
 | `slot` | 1 | 80 × 80 | static optional placement overlay |
 
-There are 24 atlases / 39 frames. Coordinates are **top-left source pixels**, with
+There are 25 atlases / 43 frames. Coordinates are **top-left source pixels**, with
 untrimmed row-major frames. `contentBounds` is local to its frame, not atlas space.
 An anchor is the projected world ground origin, fixed over the animation; do not
 recenter to the alpha bounds or the character will wobble while animating.
@@ -106,14 +107,14 @@ ctx.restore();
 
 D2's loader should fetch `/brand/td/manifest.json`, decode `baseUrl + asset.file`, and
 retain its placeholder path if manifest/image loading fails. This art-only task does
-not change the runtime loader or other TypeScript. Do not draw a second path or second
-set of static pads over these full map backgrounds. `slot` is available for selection
-or placement UI if desired.
+not change the runtime loader or other TypeScript. Do not draw a second path over these full map backgrounds. Draw all seven slots in
+the frontend; `slot` remains available as a placement overlay. Carried bread is drawn
+with owner photos by the frontend; no carried-bread marker is included.
 
 ## Exact map alignment
 
 `render.py` reads **`src/lib/td/maps.ts` directly**. It parses all three literal map
-calls and fails if they are absent or no longer have ten slots; coordinates are never
+calls and fails if they are absent or no longer have seven slots; coordinates are never
 copied into source art. Map order is engine order:
 
 1. Cooling rack → maple kitchen counter, mixing bowl and cooling trays.
@@ -128,8 +129,7 @@ The final manifest records these checks and the SHA-256 of the actual map source
 
 The route is one continuous 74px-wide surface with an 86px outer border. Its straight
 centerlines and orthogonal bends follow the engine exactly. Only the outside edges
-of corners are rounded; the centerline is never smoothed. All ten 30px-radius pads
-are baked at the exact slot coordinates. Props reject path and slot clearances, and
+of corners are rounded; the centerline is never smoothed. Seven 42-unit-radius slot clearances remain in manifest metadata for alignment, but no pads are baked. Props reject path and slot clearances, and
 the final 115px-radius endpoint apron stays empty for the game's bread pile. There is
 **no baked bread**. Endpoints lie on the bottom image edge as defined by the engine;
 the art does not relocate them inward.
@@ -151,11 +151,11 @@ tier both enlarged and at 56px frame width, every pest pose, projectiles and hit
 Review it with a local image viewer; no browser or application server is needed.
 The preview and source/cache files are not included in the runtime download budget.
 
-Verified shipped total: **218,358 bytes**, including the manifest (24 atlases,
-39 frames). The offline preview was inspected after WebP encoding; all tower tiers,
+Verified shipped total: **220,860 bytes**, including the manifest (25 atlases,
+43 frames). The offline preview was inspected after WebP encoding; all tower tiers,
 pest poses, path/slot overlays and transparency margins pass review.
 
-No TypeScript is touched, so the conditional TS compiler/unit-test requirement does
-not apply. Validation passed: Blender projection assertions, packer checks, Python
-and JavaScript syntax, ESLint on `pack.mjs`, and independent corridor-width checks
-for left/right turns, reversed routes and straight paths. No browsers or commits.
+D5 rerendered all three backgrounds and added the boss using Docker Blender. The
+packer and decoded contact sheet verify seven slot clearances, no baked pads, four
+unique right-facing boss poses, unclipped alpha, unchanged version-3 manifest format,
+and the public size budget. No browser or carried-bread marker is used.

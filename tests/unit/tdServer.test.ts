@@ -14,6 +14,8 @@ it('validates exact bounded action logs and tier snapshots', () => {
   for (const input of [{ tick: 0, type: 'place', slot: 10, tower: 'oven' }, { tick: 0, type: 'sell', slot: 1, tower: 'oven' }, { tick: 0, type: 'callWave', slot: 0 }]) {
     expect(tdFinishSchema.safeParse({ runId, inputs: [input], endTick: 60 }).success).toBe(false);
   }
+  expect(tdFinishSchema.safeParse({ runId, inputs: [{ tick: 0, type: 'upgrade', slot: 0, branch: 'a' }], endTick: 60 }).success).toBe(true);
+  expect(tdFinishSchema.safeParse({ runId, inputs: [{ tick: 0, type: 'upgrade', slot: 0, branch: 'c' }], endTick: 60 }).success).toBe(false);
   expect(tdTierCount([{ id: 'bread' }])).toBe(1);
   expect(() => tdTierCount([])).toThrow();
 });
