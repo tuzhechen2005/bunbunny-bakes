@@ -209,7 +209,7 @@
 
 - `tiers` 与 BIG 的 `TierView` 相同，按配置 `sortOrder` 取非大面包的前 6 种；沿用 BIG 的默认商品配置回退。少于 `M3_MIN_TIERS = 6` → `422 VALIDATION`「兔兔三连烤还没准备好，请稍后再来」，不建局；不使用引擎支持的 4/5 种模式参与排名。
 - 将这六种的完整有序配置保存为 `tiersSnapshot`；重放严格使用其中的六个 id，不重读、重排或重新截取当前配置。
-- `m3Seed` 生成 `v<M3_ENGINE_VERSION>.<32 位随机十六进制>`（当前版本 1）。未完成局缺少版本或版本不匹配 → finish `422 VALIDATION`「这一局已经过期，请重新开始」。
+- `m3Seed` 生成 `v<M3_ENGINE_VERSION>.<32 位随机十六进制>`（当前版本 2）。未完成局缺少版本或版本不匹配 → finish `422 VALIDATION`「这一局已经过期，请重新开始」。
 - start 请求体 ≤ 4096 bytes；`m3_start_ip:<ipHash>` 每小时 60 次。
 
 **`POST /api/game/m3/finish`** `{ runId, moves: [{ a: { r, c }, b: { r, c }, at }] }` → `200 { score, best, rank, week, personalBest, newRecord }`

@@ -1,7 +1,7 @@
 import { createRng } from "../game/rng";
-import { copyBoard, initialBoard, kindOf, legalSwaps, planSwap, planWave, reshuffle, tierOf, type Wave } from "./board";
+import { copyBoard, initialBoard, kindOf, legalSwaps, planSwap, planWave, refillTier, reshuffle, tierOf, type Wave } from "./board";
 import {
-  BOARD_SIZE, EMPTY, MAX_CHAIN_MULTIPLIER, MAX_MOVES, MAX_TIERS, MIN_TIERS,
+  BOARD_SIZE, EMPTY, MAX_CASCADE_STEPS, MAX_CHAIN_MULTIPLIER, MAX_MOVES, MAX_TIERS, MIN_TIERS,
   ORDER_MAX_NEED, ORDER_MIN_NEED, ORDER_POINTS_PER_TILE, ROLL_BASE,
   type M3Cell, type M3Event, type M3Game, type M3Order, type M3Special, type M3State, type M3Swap, type M3TierInput,
 } from "./types";
@@ -92,9 +92,13 @@ export function createM3Game(opts: { seed: string; tiers: readonly M3TierInput[]
         }
         dest--;
       }
-      // Column order left-to-right, refill bottom-to-top: part of the v1 replay contract.
-      for (let r = dest; r >= 0; r--) {
-        const code = rng.int(n);
+    }
+    // Finish all gravity first so candidates never rely on neighbours about to fall.
+    // Column order left-to-right, refill bottom-to-top: part of the v2 replay contract.
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      for (let r = BOARD_SIZE - 1; r >= 0; r--) {
+        if (board[r][c] !== EMPTY) continue;
+        const code = refillTier(board, { r, c }, n, rng, counts);
         board[r][c] = code;
         refills.push({ r, c, code });
       }
@@ -112,12 +116,17 @@ export function createM3Game(opts: { seed: string; tiers: readonly M3TierInput[]
     const events: M3Event[] = [{ type: "swap", a: { ...a }, b: { ...b } }];
     let wave: Wave | null = plan.wave;
     let chain = 1;
-    while (wave) {
+    while (wave && chain <= MAX_CASCADE_STEPS) {
       resolve(wave, chain++, events);
       wave = planWave(board);
     }
-    if (!legalSwaps(board, true).length) {
-      board = reshuffle(board, rng);
+    if (wave) {
+      // Stop a pathological chain without extra score/order credit. A fresh settled board
+      // avoids asking multiset-preserving shuffle to solve an impossible tier distribution.
+      board = initialBoard(n, rng);
+      events.push({ type: "shuffle", board: copyBoard(board) });
+    } else if (!legalSwaps(board, true).length) {
+      board = reshuffle(board, rng, n);
       events.push({ type: "shuffle", board: copyBoard(board) });
     }
     if (moves === MAX_MOVES) events.push({ type: "over" });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  BIG_BASE, CELL_POINTS, EMPTY, MAX_CHAIN_MULTIPLIER, ROLL_BASE,
+  BIG_BASE, CELL_POINTS, EMPTY, MAX_CASCADE_STEPS, MAX_CHAIN_MULTIPLIER, ROLL_BASE,
   createM3Game, immediateM3Score, legalM3Moves, tierOf, type M3State,
 } from "@/lib/m3";
 import { findMatches, planSwap } from "@/lib/m3/board";
@@ -10,7 +10,7 @@ const tiers = Array.from({ length: 6 }, (_, i) => ({ id: `t${i}` }));
 
 it("reconstructs every board/order/score change from events, including gravity and shuffle", () => {
   let shuffles = 0, orderHits = 0, specials = 0;
-  for (const seed of ["m3-tune87", "pinned", "events1", "events2"]) {
+  for (const seed of ["m3-tune15", "pinned", "events1", "events2"]) {
     for (const bot of [randomM3, greedyM3]) {
       const run = bot(seed, tiers);
       const game = createM3Game({ seed, tiers });
@@ -65,8 +65,10 @@ it("reconstructs every board/order/score change from events, including gravity a
               view.board[p.r][p.c] = p.code;
             }
           } else if (e.type === "shuffle") {
-            expect(legalM3Moves({ ...view, over: false })).toEqual([]);
-            expect(e.board.flat().sort()).toEqual(view.board.flat().sort());
+            if (chain < MAX_CASCADE_STEPS) {
+              expect(legalM3Moves({ ...view, over: false })).toEqual([]);
+              expect(e.board.flat().sort()).toEqual(view.board.flat().sort());
+            }
             expect(findMatches(e.board)).toEqual([]);
             view.board = e.board.map((r) => [...r]);
             shuffles++;

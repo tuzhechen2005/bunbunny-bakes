@@ -1,7 +1,7 @@
 // Pure board rules shared by live resolution and visible-board move evaluation.
 import type { Rng } from "../game/rng";
 import {
-  BIG_BASE, BIG_POINTS, BOARD_SIZE, CELL_POINTS, EMPTY, MAX_TIERS, ROLL_BASE, ROLL_POINTS,
+  BIG_BASE, BIG_POINTS, BOARD_SIZE, CELL_POINTS, EMPTY, MAX_TIERS, REFILL_BIAS_PERCENT, ROLL_BASE, ROLL_POINTS,
   type M3Cell, type M3Placement, type M3Swap,
 } from "./types";
 
@@ -11,6 +11,30 @@ export const kindOf = (code: number): "roll" | "big" => code >= BIG_BASE ? "big"
 const key = (p: M3Cell) => p.r * BOARD_SIZE + p.c;
 const cell = (i: number): M3Cell => ({ r: Math.floor(i / BOARD_SIZE), c: i % BOARD_SIZE });
 const matchTier = (code: number) => code >= BIG_BASE ? -1 : tierOf(code);
+
+/** Bias only toward triples containing this hole, using the just-resolved wave's tier counts.
+ * Scan all six pairs after gravity. Deduplicate tiers, prefer the strongest local context,
+ * then break ties with the board RNG. One integer chance draw per new tile, even with no pair.
+ */
+export function refillTier(board: readonly number[][], p: M3Cell, n: number, rng: Rng, counts: readonly number[]): number {
+  if (rng.int(100) < REFILL_BIAS_PERCENT) {
+    const candidates = new Set<number>();
+    for (const [dr, dc] of [[0, 1], [1, 0]]) for (const [a, b] of [[-2, -1], [-1, 1], [1, 2]]) {
+      const first = { r: p.r + dr * a, c: p.c + dc * a };
+      const second = { r: p.r + dr * b, c: p.c + dc * b };
+      if (!validCell(first) || !validCell(second)) continue;
+      const tier = matchTier(board[first.r][first.c]);
+      if (tier < 0 || tier >= n || matchTier(board[second.r][second.c]) !== tier) continue;
+      candidates.add(tier);
+    }
+    if (candidates.size) {
+      const best = Math.max(...[...candidates].map((tier) => counts[tier] ?? 0));
+      const pool = [...candidates].filter((tier) => (counts[tier] ?? 0) === best).sort((a, b) => a - b);
+      return pool[rng.int(pool.length)];
+    }
+  }
+  return rng.int(n);
+}
 export function validCell(p: unknown): p is M3Cell {
   if (!p || typeof p !== "object") return false;
   const { r, c } = p as M3Cell;
@@ -191,7 +215,7 @@ export function legalSwaps(board: readonly number[][], firstOnly = false): M3Swa
 
 /** Generate without triples; rejecting dead boards consumes only the board RNG stream. */
 export function initialBoard(n: number, rng: Rng): number[][] {
-  for (;;) {
+  for (let attempt = 0; attempt < 128; attempt++) {
     const board = Array.from({ length: BOARD_SIZE }, () => Array<number>(BOARD_SIZE).fill(EMPTY));
     for (let r = 0; r < BOARD_SIZE; r++) for (let c = 0; c < BOARD_SIZE; c++) {
       const pool = Array.from({ length: n }, (_, i) => i).filter((t) =>
@@ -201,12 +225,18 @@ export function initialBoard(n: number, rng: Rng): number[][] {
     }
     if (legalSwaps(board, true).length) return board;
   }
+  // A deterministic, match-free fallback with a guaranteed swap at (0,1) <-> (1,1).
+  // This also bounds board generation for degenerate RNG streams.
+  const board = Array.from({ length: BOARD_SIZE }, (_, r) => Array.from({ length: BOARD_SIZE }, (_, c) => (r + c) % n));
+  board[0][2] = 0;
+  board[1][1] = 0;
+  return board;
 }
 
-/** Preserve every tile, including specials; no score, orders, or move cost. */
-export function reshuffle(board: readonly number[][], rng: Rng): number[][] {
+/** Preserve every tile if possible; bounded retries then a fresh board, with no credit/cost. */
+export function reshuffle(board: readonly number[][], rng: Rng, n = MAX_TIERS): number[][] {
   const codes = board.flat();
-  for (;;) {
+  for (let attempt = 0; attempt < 128; attempt++) {
     for (let i = codes.length - 1; i > 0; i--) {
       const j = rng.int(i + 1);
       [codes[i], codes[j]] = [codes[j], codes[i]];
@@ -214,4 +244,5 @@ export function reshuffle(board: readonly number[][], rng: Rng): number[][] {
     const next = Array.from({ length: BOARD_SIZE }, (_, r) => codes.slice(r * BOARD_SIZE, (r + 1) * BOARD_SIZE));
     if (!findMatches(next).length && legalSwaps(next, true).length) return next;
   }
+  return initialBoard(n, rng);
 }

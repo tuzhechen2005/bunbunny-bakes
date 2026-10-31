@@ -379,10 +379,9 @@ describe("M3 start and replay", () => {
   it("rejects missing, old and future seed versions before replay", async () => {
     await createM3Tiers();
     const r = await start();
-    for (const seed of ["abcdef", "v0.abcdef", `v${M3_ENGINE_VERSION + 1}.abcdef`]) {
+    for (const seed of ["abcdef", "v0.abcdef", "v1.abcdef", `v${M3_ENGINE_VERSION + 1}.abcdef`]) {
       await db.gameRun.update({ where: { id: r.runId }, data: { seed } });
-      const bot = play({ ...r, seed });
-      await expect(finishM3Run(db, { runId: r.runId, moves: bot.moves }, IP, LATER)).rejects.toMatchObject({ code: "VALIDATION", message: copy.gameApi.runExpired });
+      await expect(finishM3Run(db, { runId: r.runId, moves: [] }, IP, LATER)).rejects.toMatchObject({ code: "VALIDATION", message: copy.gameApi.runExpired });
       expect((await db.gameRun.findUniqueOrThrow({ where: { id: r.runId } })).finishedAt).toBeNull();
     }
     await db.gameRun.update({ where: { id: r.runId }, data: { seed: m3Seed("abcdef") } });
