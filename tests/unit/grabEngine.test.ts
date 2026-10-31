@@ -37,12 +37,12 @@ function fixture(
 }
 
 describe("grab engine", () => {
-  it("requires at least three tiers and exports version 1", () => {
+  it("requires at least three tiers and exports the revised replay version", () => {
     for (let n = 0; n < 3; n++) {
       expect(() => createGrabGame({ seed: "x", tiers: tiers(n) })).toThrow(RangeError);
       expect(() => replayGrab("x", tiers(n), [])).toThrow(RangeError);
     }
-    expect(GRAB_ENGINE_VERSION).toBe(1);
+    expect(GRAB_ENGINE_VERSION).toBe(2);
     expect(createGrabGame({ seed: "x", tiers: tiers(10) }).state().items).toHaveLength(8);
   });
 
@@ -73,7 +73,7 @@ describe("grab engine", () => {
       expect(s.items).toHaveLength(8);
       for (const a of s.items) {
         expect([a.x, a.y, a.radius, a.age, a.weight].every(Number.isSafeInteger)).toBe(true);
-        expect(a.y - a.radius).toBeGreaterThanOrEqual(218);
+        expect(a.y - a.radius).toBeGreaterThanOrEqual(FIELD_HEIGHT * .3);
         expect(a.x - a.radius).toBeGreaterThanOrEqual(0);
         expect(a.x + a.radius).toBeLessThanOrEqual(FIELD_WIDTH);
         expect(a.y + a.radius).toBeLessThanOrEqual(FIELD_HEIGHT);
@@ -82,6 +82,15 @@ describe("grab engine", () => {
           expect((a.x - b.x) ** 2 + (a.y - b.y) ** 2).toBeGreaterThan((a.radius + b.radius) ** 2);
         }
       }
+    }
+  });
+
+  it("spreads enlarged bread across the lower 70%", () => {
+    const items = Array.from({ length: 200 }, (_, i) => createGrabGame({ seed: `spread${i}`, tiers: tiers() }).state().items).flat();
+    expect(Math.min(...items.map(i => i.y - i.radius))).toBeLessThan(FIELD_HEIGHT * .35);
+    expect(Math.max(...items.map(i => i.y + i.radius))).toBeGreaterThan(FIELD_HEIGHT * .95);
+    for (const item of items.filter(i => i.kind === "bread")) {
+      expect(item.radius).toBe({ S: 41, M: 57, L: 73 }[item.size]);
     }
   });
 
@@ -101,7 +110,7 @@ describe("grab engine", () => {
     expect(g.state().claw.length).toBe(s.claw.length - EMPTY_REEL_SPEED);
     while (g.state().claw.phase !== "idle") g.step(g.state().tick + 1);
     expect(g.state().claw).toMatchObject({ angle: swingAngle(g.state().tick), length: 0 });
-    expect([0, 1, 2, 3, 8].map(reelSpeed)).toEqual([8, 6, 4, 2, 1]);
+    expect([0, 1, 2, 3, 8].map(reelSpeed)).toEqual([17, 13, 9, 5, 2]);
   });
 
   it("hits the first item along the tip path rather than the first array entry", () => {
@@ -237,7 +246,7 @@ describe("grab engine", () => {
         expect(state.items.length).toBeLessThanOrEqual(8);
         for (const a of state.items) {
           expect(a.x - a.radius >= 0 && a.x + a.radius <= FIELD_WIDTH).toBe(true);
-          expect(a.y - a.radius >= 218 && a.y + a.radius <= FIELD_HEIGHT).toBe(true);
+          expect(a.y - a.radius >= FIELD_HEIGHT * .3 && a.y + a.radius <= FIELD_HEIGHT).toBe(true);
           for (const b of state.items) if (a.id !== b.id) {
             expect((a.x - b.x) ** 2 + (a.y - b.y) ** 2).toBeGreaterThan((a.radius + b.radius) ** 2);
           }

@@ -67,21 +67,21 @@ The engine supplies logical positions and animation events, not artwork or UI la
 
 ## Rules and tuning constants
 
-- Field 720 × 600, pivot `(360, 0)`, oven animation origin `(680, 80)`.
+- Field 720 × 1440, pivot `(360, 0)`, oven animation origin `(680, 80)`.
 - Idle angle follows a 300-tick triangular swing from −70° to +70° and back. Its phase is
   tied to the run's tick, including time spent reeling. A launch freezes the current angle.
-- Extension is 12 units/tick. Contact uses the first circle met by the swept tip at one-unit
+- Extension is 26 units/tick. Contact uses the first circle met by the swept tip at one-unit
   length resolution; array order breaks an exact tie. At a field edge an empty claw returns.
-- Empty return is 30 units/tick; held return is `max(1, 8 − 2 × weight)` units/tick.
+- Empty return is 96 units/tick; held return is `max(2, 17 − 4 × weight)` units/tick.
 
 | Item | Radius | Weight | Return speed | Base points |
 | --- | ---: | ---: | ---: | ---: |
-| Bread S | 26 | 1 | 6 | 100 |
-| Bread M | 36 | 2 | 4 | 180 |
-| Bread L | 46 | 3 | 2 | 300 |
-| Flour | 44 | 8 | 1 | 20 |
-| Butter | 25 | 0 | 8 | 20 |
-| Clock | 25 | 0 | 8 | 0 (+300 ticks) |
+| Bread S | 41 | 1 | 13 | 100 |
+| Bread M | 57 | 2 | 9 | 180 |
+| Bread L | 73 | 3 | 5 | 300 |
+| Flour | 44 | 8 | 2 | 20 |
+| Butter | 25 | 0 | 17 | 20 |
+| Clock | 25 | 0 | 17 | 0 (+300 ticks) |
 
 Bread points are based on age **at contact**: ages 0–239 ticks are raw ×0.5; 240–540 inclusive
 are perfect ×1.5; 541+ are burnt ×0.3. Thus exactly 4 seconds is perfect, exactly 9 seconds
@@ -90,9 +90,12 @@ so all awards are exact integers. `breadStage`, `breadPoints`, and `reelSpeed` a
 pure helpers. Non-breads are unaffected by age.
 
 Eight initial items start at age zero. Each contact schedules one replacement 30 ticks later,
-even if the caught item is still returning. Slots are chosen from a seeded 5 × 3 lower-field
-lattice with independent seeded x/y jitter (±22/±16 units). The spacing guarantees non-overlap
-without retry loops, including at the largest radius. A refill may reuse the vacated slot;
+even if the caught item is still returning. Slots are chosen from a seeded 4 × 5 lower-field
+lattice with independent seeded x/y jitter (±14/±16 units). The spacing guarantees non-overlap
+without retry loops, including at the largest radius. Column centres are 90/270/450/630;
+row centres are 522/729/936/1143/1350. Item bounds span y=433…1439 (the lower 70%).
+Bread radii are about 1.58× v1; the height-fitted phone board is narrower, giving approximately
+1.35× the previous photo dimensions on a 390×844 screen. Visual diameters and hitboxes match. A refill may reuse the vacated slot;
 the held item is no longer a field obstacle. Item ids never repeat.
 
 The oven draws shuffled 32-item batches: 23 breads, 7 butter, 1 flour, 1 clock. Bread size and
@@ -107,8 +110,8 @@ snapshot but earns nothing. There is no end bonus.
 ### Finite replay bound
 
 `MAX_RUN_TICKS = 6000` is a conservative natural bound, not a gameplay timer cap. Every item
-contact is at least 218 units below the pivot. Each completed grab takes more than 32 ticks
-(19 outward and at least 28 inward with the fastest held return). At time `T`, at most
+contact is at least 433 units below the pivot. Each completed grab takes more than 32 ticks
+(at least 17 outward and 26 inward with the fastest held return). At time `T`, at most
 `9 + floor(T/32)` items can have spawned, including the initial eight and a pending grab.
 With one clock per 32-item batch, a run's duration `T` satisfies
 `T ≤ 3600 + 300 × ceil((9 + T/32)/32)`, which implies `T < 5636`. Thus stepping to 6000 always
@@ -131,7 +134,7 @@ The result is exactly `{ score, over, grabs, launchesAccepted }`.
 
 Configuration errors (fewer than 3 tiers) remain `RangeError`. Wall-clock plausibility and
 suspicious-rate checks live in `src/server/grab.ts` and `grabRules.ts`; this engine does not trust or read wall time.
-`GRAB_ENGINE_VERSION = 1` is exported. `grabSeed(randomHex)` embeds it in server-issued seeds;
+`GRAB_ENGINE_VERSION = 2` is exported. `grabSeed(randomHex)` embeds it in server-issued seeds;
 `grabSeedVersion(seed)` returns the encoded version or null for malformed/unversioned seeds. Bump it for any
 future rules/RNG/geometry change that changes the score of an existing seed and input log.
 
@@ -148,8 +151,8 @@ Reproduce with `npx tsx scripts/grab-tune.mts [seeds=200] [tiers=6] [seedPrefix=
 
 | Corpus | Random mean score | Greedy mean score | Ratio | Greedy mean grabs |
 | --- | ---: | ---: | ---: | ---: |
-| `grab-tune0…199`, 6 tiers | 1336.83 | 3024.81 | 44.20% | 18.395 |
-| `grab-check0…999`, 3 tiers | 1239.81 | 3037.642 | 40.81% | 18.689 |
+| `grab-tune0…199`, 6 tiers | 1288.12 | 3056.53 | 42.14% | 18.750 |
+| `grab-check0…999`, 3 tiers | 1253.168 | 3007.19 | 41.67% | 18.887 |
 
 The 200-seed unit regression requires a 40–60% score ratio and 15–20 mean completed greedy grabs.
 Other tests cover deterministic events and snapshots, chunked stepping, replay/live equality,

@@ -6,7 +6,7 @@ import { fill } from "@/components/customer/format";
 import type { TierView } from "@/components/game/types";
 import { sound } from "@/components/game/sound";
 import { haptic, useMotionPrefs } from "@/lib/motion/react";
-import { createGrabGame, type GrabEvent, type GrabItem } from "@/lib/grab";
+import { createGrabGame, FIELD_WIDTH, FIELD_HEIGHT, OVEN_X, OVEN_Y, type GrabEvent, type GrabItem } from "@/lib/grab";
 import { BoardPaper } from "@/components/m3/M3Art";
 import { GrabArt, GrabFace } from "./GrabArt";
 import { createGrabClock, elapsedTick } from "./grabClock";
@@ -111,7 +111,10 @@ export function GrabBoard({ seed, tiers, initialLaunches = [], initialElapsedMs 
 
   const launch = () => {
     if (game.over) { onShowResult?.(); return; }
-    if (!active.current || paused || document.hidden) return;
+    if (paused || document.hidden) return;
+    // A press can arrive before the deferred first frame (or during an effect restart).
+    // Eligibility depends on gameplay state, never on whether rAF has booted yet.
+    clock.resume(performance.now());
     const tick = elapsedTick(clock.read(performance.now()));
     const events = game.step(tick);
     // Busy taps have no gameplay effect; omit them from the canonical client log.
@@ -121,7 +124,7 @@ export function GrabBoard({ seed, tiers, initialLaunches = [], initialElapsedMs 
     publish(events);
   };
   const item = (bread: GrabItem, held = false) => <span key={bread.id} className={`grab-item${held ? " grab-held" : snap.tick - bread.age > 0 && bread.age < 18 ? " grab-refill" : ""}`} data-kind={bread.kind} data-stage={bread.stage}
-    style={{ left: `${bread.x / 720 * 100}%`, top: `${bread.y / 600 * 100}%`, width: `${bread.radius * 2 / 720 * 100}%`, height: `${bread.radius * 2 / 600 * 100}%`, "--from-x": `${(680 - bread.x) / (bread.radius * 2) * 100}%`, "--from-y": `${(80 - bread.y) / (bread.radius * 2) * 100}%` } as CSSProperties}>
+    style={{ left: `${bread.x / FIELD_WIDTH * 100}%`, top: `${bread.y / FIELD_HEIGHT * 100}%`, width: `${bread.radius * 2 / FIELD_WIDTH * 100}%`, height: `${bread.radius * 2 / FIELD_HEIGHT * 100}%`, "--from-x": `${(OVEN_X - bread.x) / (bread.radius * 2) * 100}%`, "--from-y": `${(OVEN_Y - bread.y) / (bread.radius * 2) * 100}%` } as CSSProperties}>
     <GrabFace item={bread} tiers={tiers} />
   </span>;
   return <section className={`grab-play${quiet ? " grab-quiet" : ""}${paused || hidden || snap.over ? " grab-still" : ""}`}>
@@ -129,12 +132,19 @@ export function GrabBoard({ seed, tiers, initialLaunches = [], initialElapsedMs 
       <p>{t.timer}<b className="font-num" data-testid="grab-timer">{Math.ceil(snap.timeLeft / 60)}</b></p>
       <p>{t.score}<b className="font-num" data-testid="grab-score">{snap.score}</b></p>
     </div>
-    <div className="grab-bakery" aria-hidden="true"><GrabArt name="bunny" className="grab-bunny" /></div>
-    <button type="button" className="grab-board" onClick={launch} aria-label={t.boardLabel} data-testid="grab-board" data-tick={snap.tick} data-phase={snap.claw.phase}>
+    <div className="grab-bakery" aria-hidden="true" />
+    <div className="grab-field-space">
+    <div className="grab-field-frame" style={{ aspectRatio: `${FIELD_WIDTH} / ${FIELD_HEIGHT}`, "--grab-aspect": FIELD_WIDTH / FIELD_HEIGHT } as CSSProperties}>
+    <GrabArt name="bunny" className="grab-bunny" />
+    <button type="button" className="grab-board"
+      onPointerDown={e => { if (e.isPrimary && e.button === 0) launch(); }}
+      // Keyboard/assistive activation has no preceding pointerdown. Pointer-generated
+      // clicks are ignored even if a long press outlasts an entire grab.
+      onClick={e => { if (e.detail === 0) launch(); }} aria-label={t.boardLabel} data-testid="grab-board" data-tick={snap.tick} data-phase={snap.claw.phase} data-launches={snap.launchesAccepted}>
       <BoardPaper />
       <GrabArt name="oven" className={`grab-oven${snap.tick - ovenTick < 30 ? " grab-oven-warm" : ""}`} />
       {snap.items.map(bread => item(bread))}
-      <span className="grab-arm" style={{ transform: `rotate(${-snap.claw.angle}deg)`, height: `${snap.claw.length / 600 * 100}%` }}>
+      <span className="grab-arm" style={{ transform: `rotate(${-snap.claw.angle}deg)`, height: `${snap.claw.length / FIELD_HEIGHT * 100}%` }}>
         <GrabArt name="arm" className="grab-arm-segment" />
         <GrabArt name="tongs" className="grab-tongs" />
       </span>
@@ -143,6 +153,8 @@ export function GrabBoard({ seed, tiers, initialLaunches = [], initialElapsedMs 
         {e.bonusTicks ? t.bonus : fill(t.reward, { n: e.points })}
       </span>)}
     </button>
+    </div>
+    </div>
     {paused && !snap.over && <p className="grab-paused" role="status">{t.paused}</p>}
   </section>;
 }

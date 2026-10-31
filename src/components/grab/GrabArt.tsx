@@ -17,6 +17,7 @@ export function GrabFace({ item, tiers }: { item: GrabItem; tiers: TierView[] })
       // eslint-disable-next-line @next/next/no-img-element
       <img src={photoUrl(tier.imageUrl, 256)} alt="" draggable={false} onError={() => setBroken(true)} />
     ) : <GrabArt name={item.kind} />}
+    {item.stage === "perfect" && <GrabArt name="sparkle" className="grab-sparkle" />}
   </span>;
 }
 export function GrabRules() {

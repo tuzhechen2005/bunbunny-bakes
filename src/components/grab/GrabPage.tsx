@@ -507,7 +507,7 @@ export function GrabPage() {
   return (
     <Shell>
       {top}
-      <main className="relative flex flex-1 flex-col" style={{ minHeight: "calc(100svh - 56px)" }}>
+      <main className="grab-main">
         <GrabBoard key={run.key} tiers={run.tiers} seed={run.seed} initialLaunches={run.initialLaunches} initialElapsedMs={run.initialElapsedMs} paused={dialog !== null || phase !== "playing"} soundOn={soundOn} reduced={reduced} onProgress={onProgress} onOver={onOver} onShowResult={phase === "over" ? () => setSheetOpen(true) : undefined} />
         {phase === "over" && !sheetOpen ? (
           <div
