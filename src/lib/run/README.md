@@ -1,9 +1,10 @@
-# Run engine — R6 / D153
+# Run engine — R7 / D157
 
 Pure TypeScript shared by client and server. Uses the existing seeded RNG in
 `../game/rng.ts`; simulation has no clock, global randomness, DOM, or framework imports.
-Version 3 retains D150 continuous overlap/clearance and changes cart height to 4.4 m
-with the R6 pinhole camera. Seeds and saves use v3; old unfinished runs are rejected.
+Version 4 retains D150 continuous overlap/clearance and R6 geometry, starts at
+320 mm/tick and ramps to 500 in 75 seconds. Seeds and saves use v4; v1/v2/v3
+unfinished runs and saves are rejected.
 This directory implements simulation and replay only; rendering, server ownership,
 wall-clock plausibility, persistence, leaderboard updates, and art are separate tasks.
 
@@ -20,7 +21,7 @@ const verified = replayRun("server-issued-seed", [{ tick: 0, dir: "L" }], 60);
 // { score, distance, bread, over, endTick }
 ```
 
-`RUN_ENGINE_VERSION = 3`. Store the version with the seed/log; changes to the rules,
+`RUN_ENGINE_VERSION = 4`. Store the version with the seed/log; changes to the rules,
 constants, PRNG consumption, or ordering require a version bump before ranked deployment.
 Restore a run by replaying its input prefix, then stepping to its saved tick. There is no
 mutable state injection API. Empty and unfinished prefixes are valid for D136 reporting.
@@ -65,11 +66,11 @@ Snapshots contain:
 
 ## Fixed-tick rules
 
-| Rule | Version 3 value |
+| Rule | Version 4 value |
 | --- | --- |
 | Tick rate | 60 Hz |
-| Base / cap speed | 200 / 500 mm per tick (12 / 30 m/s) |
-| Ramp | `200 + floor(300 * min(tick, 7200) / 7200)` |
+| Base / cap speed | 320 / 500 mm per tick (19.2 / 30 m/s) |
+| Ramp | `320 + floor(180 * min(tick, 4500) / 4500)` |
 | Coffee speed | `floor(baseSpeed * 3 / 2)`, maximum 750 mm/tick |
 | Jump / slide | 42 / 36 ticks |
 | One-lane change | 12 ticks, one extra horizontal swipe may queue |
@@ -147,12 +148,12 @@ Tests live in `tests/unit/run{Engine,Rules,Track}.test.ts`; bots in
   it never peeks at RNG, replays alternate futures, or deliberately injects a death.
 - `randomRun`: swipes a uniformly random direction every 12–36 ticks using a separate RNG.
 
-Version-2 calibration, 100 fixed `tuning0..tuning99` seeds (seconds, sorted index floor(N*p)):
+Version-4 calibration, 100 fixed `tuning0..tuning99` seeds (seconds, sorted index floor(N*p)):
 
 | Bot | p10 | Median | p90 | Collisions before 15 minutes |
 | --- | ---: | ---: | ---: | ---: |
-| Good | 900 | 900 | 900 | 5/100 |
-| Random | 3.60 | 3.63 | 10.53 | 100/100 |
+| Good | 900 | 900 | 900 | 0/100 |
+| Random | 2.28 | 2.30 | 8.35 | 100/100 |
 
 Tests check 1,000 seeds with 12 chunks each (36,000 rows), including boundary reachability
 at maximum boosted speed, and execute live paths over those seeds. Additional checks cover

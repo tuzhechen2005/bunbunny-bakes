@@ -1,4 +1,4 @@
-# RUN client / server (R6, D146 / D150 / D153)
+# RUN client / server (R7, D146 / D150 / D153 / D157 / D158)
 
 `/game/run` follows GRAB's identity form, local save/resume/discard, quit/restart sheets,
 leaderboard/crown, sound preference, result verification/retry and prize line. RUN is always
@@ -6,6 +6,10 @@ available: fixed art needs no configured bread tiers. The hub now keeps two colu
 same machinery as the other games. All visible copy is in `src/copy.ts`.
 
 ## Rendering and input
+
+D158 assigns the WebGL rewrite to Claude: game page only, running only during play,
+with Canvas 2D fallback when unavailable. Home and other customer pages remain
+without WebGL. The following describes the existing R6 Canvas renderer.
 
 The Canvas 2D renderer uses `public/brand/run/manifest.json` rectangles and ground
 anchors. The courier is modeled straight along +Y: the camera sees its back, tail,
@@ -49,7 +53,11 @@ keys share the same path. Boundary/busy inputs remain in the log; same-tick dupl
 inputs after MAX_INPUTS are blocked before engine submission, with a visible cap notice. `data-lane`, `data-state` and
 `data-tick` on the wrapper expose the real simulation to tests, with no testing bypass.
 
-## Geometry and timing (engine v3)
+## Geometry and timing (engine v4)
+
+R7 starts at 320 mm/tick (19.2 m/s), ramps over 75 seconds (4,500 ticks) to
+500 mm/tick (30 m/s), and retains coffee ×1.5 (maximum 750 mm/tick).
+The 30-tick reaction budget and track spacing are unchanged.
 
 `src/lib/run/geometry.json` is shared by replay, Canvas and Blender. One continuous
 pinhole uses `scale = 24000 / (24000 + z)` and its exact inverse throughout the street.
@@ -88,7 +96,7 @@ and terminal tick, removes old versions, and rejects expired/malformed saves. Ev
 input and each elapsed second checkpoints; hiding/exit/finish captures the exact current tick.
 Completed saves remain until server acknowledgment and retry the same run after a reload.
 
-Engine v3 seeds use `v3.`; v1/v2 unfinished runs and local saves are rejected rather than
+Engine v4 seeds use `v4.`; v1/v2/v3 unfinished runs and local saves are rejected rather than
 reinterpreted. Finished stored scores remain unchanged. The save payload schema is still
 `v: 1`; the storage key and seed carry the engine version.
 

@@ -15,7 +15,7 @@ describe("run engine", () => {
     const g = createRunGame({ seed: "copy" });
     const twin = createRunGame({ seed: "copy" });
     const s = g.state();
-    expect(RUN_ENGINE_VERSION).toBe(3);
+    expect(RUN_ENGINE_VERSION).toBe(4);
     expect(s).toMatchObject({ tick: 0, distance: 0, score: 0, bread: 0, speed: BASE_SPEED, over: false, player: { lane: 1, pose: "run" } });
     s.objects[0].lane = 2; s.objects.pop(); s.player.lane = 2;
     s.powerUps.coffeeUntil = 999; s.events.push({ type: "over", tick: 0, reason: "limit" });
@@ -75,18 +75,18 @@ describe("run engine", () => {
     }
     good.sort((a, b) => a - b); random.sort((a, b) => a - b);
     expect(good[50]).toBeGreaterThanOrEqual(180 * 60);
-    expect(good.some((t) => t < MAX_RUN_TICKS)).toBe(true);
+    expect(good.every((t) => t === MAX_RUN_TICKS)).toBe(true); // R7 fixed-seed calibration.
     expect(random[50]).toBeLessThan(20 * 60);
   }, 30_000);
 
-  it("pins version-three scoring and a nontrivial seeded run", () => {
+  it("pins version-four scoring and a nontrivial seeded run", () => {
     const run = goodRun("pinned");
     expect(replayRun("pinned", run.inputs, run.endTick)).toEqual({
-      score: 38665, distance: 26775270, bread: 1189, over: true, endTick: 54000,
+      score: 39700, distance: 27500186, bread: 1220, over: true, endTick: 54000,
     });
     expect(run.inputs.slice(0, 5)).toEqual([
-      { tick: 200, dir: "U" }, { tick: 411, dir: "U" }, { tick: 993, dir: "L" },
-      { tick: 1181, dir: "U" }, { tick: 1359, dir: "U" },
+      { tick: 119, dir: "U" }, { tick: 256, dir: "U" }, { tick: 651, dir: "L" },
+      { tick: 784, dir: "U" }, { tick: 911, dir: "U" },
     ]);
   });
 
@@ -158,7 +158,7 @@ describe("run replay validation", () => {
 });
 
 it("reuses live frame storage while matching detached authoritative replay",()=>{
-  const seed='v3.live-frame', path=goodRun(seed,3600);
+  const seed='v4.live-frame', path=goodRun(seed,3600);
   const live=createRunGame({seed,realtime:true});
   const replay=createRunGame({seed});
   const first=live.frame(0),player=first.player,powers=first.powerUps,objects=first.objects;

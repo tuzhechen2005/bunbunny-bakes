@@ -149,9 +149,10 @@ describe("run power-ups and timing", () => {
     expect(until).toBeLessThan(oldUntil + duration);
   });
 
-  it("caps the base speed at two minutes, with no floating point accumulation", () => {
-    expect(runSpeed(0)).toBe(200);
-    expect(runSpeed(RAMP_TICKS / 2)).toBe(350);
+  it("caps the base speed at 75 seconds, with no floating point accumulation", () => {
+    expect(RAMP_TICKS).toBe(75 * 60);
+    expect(runSpeed(0)).toBe(320);
+    expect(runSpeed(RAMP_TICKS / 2)).toBe(410);
     expect(runSpeed(RAMP_TICKS - 1)).toBe(CAP_SPEED - 1);
     expect(runSpeed(RAMP_TICKS)).toBe(CAP_SPEED);
     expect(runSpeed(RAMP_TICKS * 2)).toBe(CAP_SPEED);
