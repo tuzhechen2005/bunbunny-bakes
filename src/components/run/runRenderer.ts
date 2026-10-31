@@ -1,7 +1,7 @@
 import { isRunObstacle, type RunState, type RunObjectKind } from "@/lib/run";
 import { manifest, type AssetName, type RunArt } from "./runAssets";
 import { runGeometry, jumpLift, slideBodyHeight, worldHeightPixels, projectionDepth, projectionZ } from "@/lib/run/geometry";
-const objectArt: Record<RunObjectKind, AssetName> = { cart:"bread-cart", flour:"flour-sacks", awning:"shop-awning", puddle:"puddle", bread:"loaf-spin", "paper-bag":"paper-bag", coffee:"coffee-cup" };
+const objectArt: Record<RunObjectKind, AssetName> = { cart:"bread-cart", flour:"flour-sacks", awning:"shop-awning", puddle:"puddle", bread:"loaf-spin", "paper-bag":"paper-bag", coffee:"coffee-cup", ramp:"bread-cart", van:"bread-cart", truck:"bread-cart" };
 const mod=(n:number,d:number)=>((n%d)+d)%d;
 const FACADE_LENGTH=15000, FACADE_HEIGHT=12500;
 const MIP_STEP=Math.SQRT1_2;

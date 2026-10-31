@@ -128,6 +128,13 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
       y = .45 + Math.sin((s.tick + o.id * 13) * .12) * .1; entry.o.rotation.y = s.tick * .04;
     }
     entry.o.position.set(x, y, z);
+    // Vans/trucks/ramps stretch along Z to the engine footprint (models are 6 m / 2 m long).
+    const kind0: string = o.kind;
+    if (kind0 === "van" || kind0 === "truck" || kind0 === "ramp") {
+      const len = (o.front + o.back) * MM, model = kind0 === "ramp" ? 2 : 6;
+      entry.o.scale.set(1, 2600 * MM / 1.3, len / model); // engine roof 2600 mm vs model roof 1.3 m
+      entry.o.position.z = z + (o.back - o.front) * MM / 2;
+    }
     const kind: string = o.kind; // v5 adds ramp/van/truck
     const big = kind === "cart" || kind === "van" || kind === "truck";
     entry.shadow.visible = kind !== "puddle" && kind !== "ramp";

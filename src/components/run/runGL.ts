@@ -218,7 +218,8 @@ export function createRunGL(canvas: HTMLCanvasElement, art: RunArt): RunView | n
       case "cart": shadow(x, z, LANE * .95, 2.6, .9); billboard("bread-cart", manifest.assets["bread-cart"].frames[0], x, 0, z, SIZES.cart[0], SIZES.cart[1]); return;
       case "flour": shadow(x, z, LANE * .8, 1.4, .8); billboard("flour-sacks", manifest.assets["flour-sacks"].frames[0], x, 0, z, SIZES.flour[0], SIZES.flour[1]); return;
       case "awning": shadow(x, z, LANE * .95, 1.2, .5); billboard("shop-awning", manifest.assets["shop-awning"].frames[0], x, 0, z, SIZES.awning[0], SIZES.awning[1]); return;
-      case "puddle": return; // ground pass
+      case "van": case "truck": shadow(x, z, LANE * .95, 2.6, .9); billboard("bread-cart", manifest.assets["bread-cart"].frames[0], x, 0, z, SIZES.cart[0], SIZES.cart[1]); return;
+      case "puddle": case "ramp": return; // ground pass / not drawn in the sprite fallback
     }
   }
 
