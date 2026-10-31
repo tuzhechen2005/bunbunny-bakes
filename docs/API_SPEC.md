@@ -394,3 +394,23 @@ IP 哈希规则与 M3 相同。主动暂停的时间不计入 endTick；有效�
 后台所有游戏接口支持 `?game=grab`，奖池覆盖支持 `{ game: "GRAB" }`。
 `GRAB_PRIZE_FROM_WEEK = "2026-12-07"` 是 **PRE-DEPLOY 占位**，部署前改成实际首周之后的芝加哥周一；
 不到日期或不足 3 档时不能抽中或被店主覆盖选中。既有周抽签仍保持稳定。
+
+### RUN — 兔兔跑酷（D146）
+
+- `POST /api/game/run/start`: same `{wechatId,nickname}` validation, bans and IP-hash start rate
+  limit as GRAB. Always available; returns `{runId,seed,expiresAt}` with no tiers. Seed embeds
+  `RUN_ENGINE_VERSION`; the run expires at the shared weekly reset.
+- `POST /api/game/run/finish`: `{runId,inputs:{tick,dir}[],endTick}`. `dir` is `L|R|U|D`, input
+  ticks are strictly increasing integers in 0..54,000, at most engine `MAX_INPUTS` (20,000).
+  Entries have exactly those two fields. End tick is an integer in 0..54,000 and must equal the
+  replay's actual tick. Body byte limit is derived from maximum serialized entries plus 25%
+  headroom and 4 KiB. Server replays from scratch and returns the common finish result/crown.
+  First finish wins; repeated finish returns the stored result. Wrong-game ids return 404.
+- `POST /api/game/run/progress`: `{runId,log:inputs,endTick}`; same body limit, replay, version,
+  expiry, ban, prefix/time monotonicity and D136/D143 throttle/tie checks as finish/shared games.
+- `GET /api/game/run/leaderboard`: common masked weekly board, optional `wechatId` or
+  `x-game-wechat`, personal best, all-time crown and live flags. All successful routes no-store.
+- Admin game endpoints accept `?game=run`. RUN joins the shared five-game hub and winner email.
+  `RUN_PRIZE_FROM_WEEK` gates prize selection independently of configured bread tiers.
+
+See [RUN_CLIENT.md](RUN_CLIENT.md) for the deployment date placeholder and browser checks.

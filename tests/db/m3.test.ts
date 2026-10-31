@@ -442,7 +442,7 @@ describe("M3 start and replay", () => {
 
   it("includes M3 in the hub while the prize pool follows its launch gate", async () => {
     const hub = await getGameHub(db, T);
-    expect(hub.games.map((g) => g.kind)).toEqual(["BIG", "TU", "M3", "GRAB"]);
+    expect(hub.games.map((g) => g.kind)).toEqual(["BIG", "TU", "M3", "GRAB", "RUN"]);
     expect(["BIG", "TU"]).toContain(hub.prizeGame);
   });
 });

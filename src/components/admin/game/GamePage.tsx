@@ -11,7 +11,7 @@ const t = copy.admin.game;
 
 export function GamePage() {
   const [tab, setTab] = useState<"board" | "tiers">("board");
-  const [game, setGame] = useState<"big" | "tu" | "m3" | "grab">("big");
+  const [game, setGame] = useState<"big" | "tu" | "m3" | "grab" | "run">("big");
   const tabs = [
     { id: "board", label: t.tabBoard },
     { id: "tiers", label: t.tabTiers },
@@ -43,7 +43,7 @@ export function GamePage() {
         {tab === "board" ? (
           <>
             <div role="radiogroup" aria-label={t.gameSwitch} className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4" data-testid="game-switch">
-              {([["big", t.gameBig], ["tu", t.gameTu], ["m3", t.gameM3], ["grab", t.gameGrab]] as const).map(([id, label]) => (
+              {([["big", t.gameBig], ["tu", t.gameTu], ["m3", t.gameM3], ["grab", t.gameGrab], ["run", t.gameRun]] as const).map(([id, label]) => (
                 <button
                   key={id}
                   type="button"

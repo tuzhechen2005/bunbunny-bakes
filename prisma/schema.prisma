@@ -357,6 +357,7 @@ enum GameKind {
   TU
   M3
   GRAB
+  RUN
 }
 
 enum GamePrizeChosenBy {

@@ -284,3 +284,14 @@ GRAB 共用这些表及禁止上榜名单；后台与冠军邮件按 game 隔离
 数据库测试：`tests/db/grab.test.ts`、`grab.admin.test.ts`、`migration.grab.test.ts`，覆盖真实
 Postgres 迁移保留、重放/墙钟限制、版本/周过期、少于三档、并发幂等、实时榜单、后台和邮件。
 只使用名字以 `_test` 结尾的数据库；本任务独立库为 `bunbunny_grab2_test`。
+
+### RUN additive migration (D146)
+
+`20261031130000_game_kind_run` adds `RUN` to `GameKind` after GRAB, without changing existing
+runs, awards or prize weeks. RUN uses `GameRun` with empty `tiersSnapshot`, versioned random
+seed, canonical `{tick,dir}[]` in `drops`, input length in `dropCount`, active end tick converted
+to rounded milliseconds in `playMs`, and replay-derived `score`. No client score is trusted.
+The end tick is recoverable as `round(playMs*60/1000)`. `suspicious` flags median gaps below
+120 ms or active duration over ten minutes, without excluding ranking. Existing live progress,
+retention, shared bans and `(game,weekKey)` award behavior apply unchanged. Winner notifications
+resolve RUN through the selected historical `GamePrizeWeek`. No tier configuration is required.
