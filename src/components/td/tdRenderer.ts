@@ -1,8 +1,8 @@
-import { TD_MAPS, TD_SLOT_RADIUS, towerStats, type TdEvent, type TdState, type TowerKind, type PestKind } from '@/lib/td';
+import { FIELD_WIDTH as W, FIELD_HEIGHT as H, TD_MAPS, TD_SLOT_RADIUS, towerStats, type TdEvent, type TdState, type TowerKind, type PestKind } from '@/lib/td';
 import type { TierView } from '@/components/game/types';
 import type { TdArt, TdSprite } from './tdAssets';
 
-// Canvas 2D in field units (720×1080). Static map + slots are cached; the frame loop
+// Canvas 2D in field units (FIELD_WIDTH×FIELD_HEIGHT). Static map + slots are cached; the frame loop
 // reuses a fixed effect pool and never allocates. Game art colours live here, like SVG art.
 const towerNames: Record<TowerKind, string> = { rollingPin: 'tower-pin', flourSifter: 'tower-sifter', whisk: 'tower-whisk', oven: 'tower-oven' };
 const pestNames: Record<PestKind, string> = { ant: 'pest-ant', mouse: 'pest-mouse', sparrow: 'pest-sparrow', beetle: 'pest-beetle' };
@@ -25,20 +25,23 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
   const ctx = canvas.getContext('2d')!;
   const map = TD_MAPS[mapIndex], last = map.path[map.path.length - 1];
   // The path exits the board; the plate sits just inside so the whole pile stays visible.
-  const end = { x: Math.max(110, Math.min(610, last.x)), y: Math.min(last.y, 1080) - 86 };
-  const layer = document.createElement('canvas'); layer.width = 720; layer.height = 1080;
+  const inside = (v: number, max: number) => Math.max(110, Math.min(max - 110, v));
+  // Portrait maps exit at the bottom, landscape maps on the right: step back inside along the last segment.
+  const prev = map.path[map.path.length - 2] ?? last, len = Math.hypot(last.x - prev.x, last.y - prev.y) || 1;
+  const end = { x: inside(last.x - (last.x - prev.x) / len * 86, W), y: inside(last.y - (last.y - prev.y) / len * 86, H) };
+  const layer = document.createElement('canvas'); layer.width = W; layer.height = H;
   const bg = layer.getContext('2d')!;
-  bg.fillStyle = '#e9dcc6'; bg.fillRect(0, 0, 720, 1080);
+  bg.fillStyle = '#e9dcc6'; bg.fillRect(0, 0, W, H);
   const background = art[`map-${mapIndex + 1}`];
-  if (background) { const r = background.asset.frames[0].rect; bg.drawImage(background.image, r[0], r[1], r[2], r[3], 0, 0, 720, 1080); }
+  if (background) { const r = background.asset.frames[0].rect; bg.drawImage(background.image, r[0], r[1], r[2], r[3], 0, 0, W, H); }
   else {
     bg.strokeStyle = '#d6c3a5'; bg.lineWidth = 56; bg.lineJoin = 'round'; bg.lineCap = 'round'; bg.beginPath();
     bg.moveTo(map.path[0].x, map.path[0].y); for (let i = 1; i < map.path.length; i++) bg.lineTo(map.path[i].x, map.path[i].y); bg.stroke();
   }
   // Soft vignette makes the board read as a lit tabletop.
-  const vig = bg.createRadialGradient(360, 470, 260, 360, 540, 720);
+  const vig = bg.createRadialGradient(W / 2, H * .44, Math.min(W, H) * .36, W / 2, H / 2, Math.max(W, H) * .67);
   vig.addColorStop(0, 'rgba(60,30,10,0)'); vig.addColorStop(1, 'rgba(60,30,10,.28)');
-  bg.fillStyle = vig; bg.fillRect(0, 0, 720, 1080);
+  bg.fillStyle = vig; bg.fillRect(0, 0, W, H);
   // Slot pads: stone discs with a dashed rim, drawn by the frontend (no baked pads).
   for (const slot of map.slots) {
     bg.save(); bg.translate(slot.x, slot.y); bg.scale(1, .82);
@@ -105,7 +108,7 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
 
   function draw(s: TdState, selected: number | null, preview: TowerKind | null) {
     const tick = s.tick;
-    ctx.setTransform(canvas.width / 720, 0, 0, canvas.height / 1080, 0, 0);
+    ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
     if (tick < shakeUntil) { const m = (shakeUntil - tick) / 24 * 7; ctx.translate(Math.sin(tick * 1.9) * m, Math.cos(tick * 2.3) * m); }
     ctx.drawImage(layer, 0, 0);
 
@@ -238,7 +241,7 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
       }
     }
     if (!reduced && tick - bossAt < 90) {
-      ctx.globalAlpha = Math.min(1, (90 - (tick - bossAt)) / 20) * .22; ctx.fillStyle = '#e0583e'; ctx.fillRect(0, 0, 720, 1080); ctx.globalAlpha = 1;
+      ctx.globalAlpha = Math.min(1, (90 - (tick - bossAt)) / 20) * .22; ctx.fillStyle = '#e0583e'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
     }
   }
 

@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element -- Static sprite files and owner photos. */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createTdGame, TD_MAPS, MAX_INPUTS, WAVE_COUNT, towerStats, TOWER_KINDS, type TdInput, type TdState, type TowerKind, type TdBranch } from '@/lib/td';
+import { createTdGame, FIELD_WIDTH, FIELD_HEIGHT, TD_MAPS, TD_SLOT_RADIUS, MAX_INPUTS, WAVE_COUNT, towerStats, TOWER_KINDS, type TdInput, type TdState, type TowerKind, type TdBranch } from '@/lib/td';
 import { copy } from '@/copy';
 import { fill } from '@/components/customer/format';
 import { sound } from '@/components/game/sound';
@@ -147,13 +147,13 @@ export function TdBoard({ save, paused, soundOn, reduced, onProgress, onOver }: 
         {PESTS.filter(k => next.counts[k] > 0).map(k => <span key={k} className="td-next-pest"><i className={`td-pest-icon td-pest-${k}`} aria-hidden="true" />×{next.counts[k]}</span>)}
       </> : <span>{t.lastWave}</span>}
     </div>
-    <div className="td-field-wrap"><div className="td-field" ref={wrapper} data-testid="td-board" aria-label={t.boardLabel}>
+    <div className="td-field-wrap"><div className="td-field" style={{ aspectRatio: `${FIELD_WIDTH} / ${FIELD_HEIGHT}` }} ref={wrapper} data-testid="td-board" aria-label={t.boardLabel}>
       <canvas ref={canvas} aria-hidden="true" />
       {slots.map((slot, i) => <button key={i} type="button" className="td-slot" data-testid={`td-slot-${i}`} disabled={disabled}
-        style={{ left: `${slot.x / 7.2}%`, top: `${slot.y / 10.8}%` }} aria-label={fill(t.slot, { n: i + 1 })} aria-expanded={selected === i}
+        style={{ left: `${slot.x / FIELD_WIDTH * 100}%`, top: `${slot.y / FIELD_HEIGHT * 100}%`, width: `${TD_SLOT_RADIUS * 2.3 / FIELD_WIDTH * 100}%` }} aria-label={fill(t.slot, { n: i + 1 })} aria-expanded={selected === i}
         onClick={() => { if (selected === i) close(); else { setSelected(i); setPreview(null); } }} />)}
       {boss && <p className="td-boss" role="status">{t.boss}</p>}
-      {selected !== null && !disabled && <div className={`td-tray${slots[selected].y > 620 ? " td-tray-top" : ""}`} role="group" aria-label={fill(t.slot, { n: selected + 1 })}>
+      {selected !== null && !disabled && <div className={`td-tray${slots[selected].y > FIELD_HEIGHT * .57 ? " td-tray-top" : ""}`} role="group" aria-label={fill(t.slot, { n: selected + 1 })}>
         {tower ? <>
           <div className="td-tray-head"><img src={`/brand/td/${towerFile[tower.kind]}-${tower.level}.webp`} alt="" /><b>{t.towers[tower.kind]}</b></div>
           {tower.level === 0 && <button className="td-card" data-testid="td-upgrade" disabled={hud.coins < towerStats(tower.kind, 1).cost}
