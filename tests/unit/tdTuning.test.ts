@@ -24,3 +24,10 @@ it.each([0, 100])("keeps landscape progression and random play inside the tuning
   for (const rate of rates.slice(1)) expect(rate.random).toBeLessThanOrEqual(3);
   for (const rate of rates) expect(rate.sifters).toBeGreaterThanOrEqual(90);
 }, 600_000);
+
+
+it("keeps random purchases near zero from the mouse lesson onward", () => {
+  const passes = tdBotWeeks(100).filter(week => randomTd(tdLevel(week, 2)).state.passed).length;
+  process.stdout.write(`TD L2 random passes / 100 weeks: ${passes}\n`);
+  expect(passes).toBeLessThanOrEqual(3);
+}, 120_000);

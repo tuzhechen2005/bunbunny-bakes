@@ -1,7 +1,7 @@
-# Run engine — R8 / D160
+# Run engine — L1 / engine v6
 
-Pure deterministic TypeScript shared by replay and the client. `RUN_ENGINE_VERSION = 5`;
-new seeds and saves use `v5.`. Unfinished v1–v4 runs/saves are rejected, with existing
+Pure deterministic TypeScript shared by replay and the client. `RUN_ENGINE_VERSION = 6`;
+new seeds and saves use `v6.`. Unfinished v1–v5 runs/saves are rejected, with existing
 scores unchanged. Rendering is a separate frontend task: its object/art mapping must
 add `ramp`, `van`, and `truck` and use the new elevation/geometry fields.
 
@@ -65,11 +65,12 @@ standing/sliding heights, jump apex (3600 mm), and projection constants.
 ## Patterns and tuning
 
 Base speed is 320 mm/tick, rising to 500 over 4500 ticks; coffee caps at 750.
-The independent seeded track stream is `${seed}:run:track:v1` (the enclosing v5
+The independent seeded track stream is `${seed}:run:track:v1` (the enclosing v6
 seed pins the new rules). Three 45m pattern centres form each 135m chunk.
 
 `RUN_PATTERNS` is a distance-weighted library: friendly street obstacles give way to
-45% ramp/van, 25% moving truck, 30% street obstacles in blocked lanes. The transition
+base draws of 45% ramp/van, 25% moving truck, 30% street obstacles in blocked lanes.
+The phrase rules below override calm approaches and truck-free exits. The transition
 starts at 600m and reaches mature density at 1400m (roughly 60 seconds without coffee).
 Repeated van patterns make trains with approach ramps and roof bread lines. Long
 vehicle footprints make mature patterns denser and require consecutive lane changes.
@@ -96,7 +97,7 @@ randomly among apparently open lanes, and times jumps/slides from visible hazard
 
 | Bot | p10 | Median | p90 |
 | --- | ---: | ---: | ---: |
-| Casual | 32.52 | 40.68 | 52.85 |
+| Casual | 34.18 | 44.27 | 70.50 |
 
 Calibration checks require at least 80/100 casual deaths between 30 and 60 seconds.
 Full 15-minute perfect logs also exercise bounded replay, input caps and time-limit
@@ -113,3 +114,22 @@ TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_run6_te
 ```
 
 No browser checks are part of this backend task.
+
+
+## L1 authored track phrases and early-input regression
+
+After the 600m introduction, three-row phrases alternate calm approaches and
+vehicle bursts. Every other phrase opens with street obstacles, the middle row
+allows oncoming trucks, and the exit keeps the middle row's open lane and converts
+truck draws into ramped vans. A three-loaf reward follows that exit. Each van still
+has a contiguous 4m approach ramp and a roof-height bread line. Ground bread
+identifies the safe lane; side loaves appear only alongside an early paper bag.
+The truck visibility window stays 90m and the reserved-lane/reaction-distance proof
+still covers its full movement envelope, including maximum coffee speed.
+
+The reported tick-six regression is not a v5 collision or input rule: both left
+and right inputs on `v5.abcdef0123456789` work in lazy and realtime engines, complete
+by tick 18, and survive replay/resume. The page gates input on asynchronous renderer
+readiness. The e2e fixture now advances its installed clock while waiting for a
+positive simulation tick before sending a gesture. Unit tests reproduce both old
+and new seeds at ticks 6, 21 and 27; no browser was used for this work.

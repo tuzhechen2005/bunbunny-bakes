@@ -35,7 +35,7 @@ it('previews exact next-wave counts and puts exactly one boss in wave five', () 
 it('conserves bread through pickup, death, rollback and recovery, with detached snapshots', () => {
   const game = createTdGame({ level: tdLevel('2026-10-26', 1) });
   const events: TdEvent[] = [];
-  let armed = false;
+  let armed = false, disarmed = false;
   for (let tick = 1; tick <= MAX_LEVEL_TICKS && !game.over; tick++) {
     const before = game.state();
     events.push(...game.step(tick));
@@ -47,8 +47,13 @@ it('conserves bread through pickup, death, rollback and recovery, with detached 
     }
     if (!armed && state.pests.some(p => p.carrying)) {
       expect(state.over).toBe(false); expect(state.bread).toBe(START_BREAD);
-      for (const slot of [9, 10]) game.apply({ tick, type: 'place', slot, tower: 'oven' });
+      for (const slot of [9, 5]) game.apply({ tick, type: 'place', slot, tower: 'oven' });
       armed = true;
+    }
+    // After proving recovery, remove the guards to exercise actual loss too.
+    if (armed && !disarmed && events.some(e => e.type === 'recover')) {
+      for (const slot of [9, 5]) game.apply({ tick, type: 'sell', slot });
+      disarmed = true;
     }
     for (const p of state.pests) p.carriedTiers.push(999);
     for (const b of state.dropped) b.tier = 999;

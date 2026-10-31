@@ -40,21 +40,46 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
   // enemy count, movement speed and reduced bounties take over later.
   const earlyPressure = n < 10 ? Math.floor(Math.min(difficulty, 2) * 454 * (10 - n) / 7) : 0;
   const pressure = 85 + rng.int(31);
-  const kinds: PestKind[] = ["ant", "mouse"];
-  if (n >= 3) kinds.push("sparrow");
-  if (n >= 3) kinds.push("beetle");
+  // Compensate for the curriculum's species and the rotation's firing windows.
+  // Interpolate anchors so adjacent levels do not acquire arbitrary HP cliffs.
+  const anchors = [
+    [1, 100], [2, 110], [3, 130], [4, 120], // S: learn each threat.
+    [5, 135], [8, 150], // Loop: introduce shells, then build pressure.
+    [9, 96], [10, 93], [11, 90], [12, 95], // Shorter switchback firing windows.
+    [13, 130], [16, 130], // Returning to the S must not reset difficulty.
+    [17, 110], [18, 116], [20, 116], // Loop reprise; economy now funds combos.
+  ];
+  const upper = anchors.findIndex(([level]) => level >= n);
+  const highIndex = upper < 0 ? anchors.length - 1 : upper;
+  const hi = anchors[highIndex];
+  const lo = anchors[Math.max(0, upper < 0 ? highIndex : highIndex - 1)];
+  const layoutPressure = hi[0] === lo[0] ? hi[1]
+    : lo[1] + Math.floor((hi[1] - lo[1]) * (n - lo[0]) / (hi[0] - lo[0]));
+  const kinds: PestKind[] = n === 1 ? ["ant"] : n === 2 ? ["mouse"] : ["ant", "mouse"];
+  if (n >= 4) kinds.push("sparrow");
+  if (n >= 5) kinds.push("beetle");
   const waves = Array.from({ length: WAVE_COUNT }, (_, wave) => {
-    const count = Math.min(96, 9 + Math.floor(difficulty * 1.5) + wave * 3 + rng.int(3));
+    // Five beats: demonstration, pressure, combination, recovery, finale.
+    const count = Math.min(96, 9 + Math.floor(difficulty * 1.5) + [0, 3, 6, 2, 12][wave] + rng.int(3));
     const result: TdWave = {
-      interval: Math.max(18, 48 - Math.floor(difficulty / 2) - wave * 2),
+      interval: Math.max(18, [54, 44, 40, 60, 38][wave] - Math.floor(difficulty / 2)),
       pests: Array.from({ length: count }, (_, index) => {
         // Guarantee new kinds are visible, even in an unusually skewed weekly draw.
-        const kind = index < kinds.length ? kinds[index] : kinds[rng.int(kinds.length)];
+        const draw = rng.int(kinds.length);
+        // Open with the lesson, then alternate short readable squads. Later
+        // finales interleave speed and armor instead of one homogeneous train.
+        const kind = index < kinds.length ? kinds[index]
+          : wave === 0 ? kinds[Math.floor(index / 3) % kinds.length]
+          : wave === 2 || wave === 4 ? kinds[index % kinds.length] : kinds[draw];
         const b = PESTS[kind];
         return {
           ...b,
+          // Harden shells gradually after their L5 introduction. Low-health,
+          // high-armor beetles counter double pins; oven bursts and flour chip
+          // remain efficient while fast, unarmored escorts punish oven-only play.
+          armor: kind === 'beetle' ? Math.min(54, 6 + Math.max(0, n - 5) * 10) : b.armor,
           bounty: Math.max(3, b.bounty - Math.min(4, Math.floor(difficulty / 3))),
-          hp: Math.max(1, Math.floor(b.hp * (100 + difficulty * hpGrowth + earlyPressure + wave * 12) * pressure / 10000)),
+          hp: Math.max(1, Math.floor(b.hp * (100 + difficulty * hpGrowth + earlyPressure + wave * 12) * pressure * layoutPressure * (kind === 'beetle' ? 20 : 100) / 100000000)),
           speed: Math.floor(b.speed * (100 + Math.min(150, difficulty * 3)) / 100),
         };
       }),
@@ -66,8 +91,8 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
     return result;
   });
   // Late levels need a viable opening defense before bounty income can sustain upgrades.
-  // Keep L1–L10 unchanged; ramp through L20, then let the original pest curve keep growing.
-  const startCoins = 300 + Math.min(10, Math.max(0, difficulty - 9)) * 102;
+  // The first switchback needs an opening combo; taper that bridge as late income ramps.
+  const startCoins = 300 + Math.max(0, 100 - Math.abs(n - 10) * 20) + Math.min(10, Math.max(0, difficulty - 9)) * 102;
   return { seed, weekKey, number: n, map: Math.floor((n - 1) / 4) % 3, startCoins, waves };
 }
 

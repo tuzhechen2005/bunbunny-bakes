@@ -1,4 +1,4 @@
-export const RUN_ENGINE_VERSION = 5;
+export const RUN_ENGINE_VERSION = 6;
 export const TICK_RATE = 60;
 export const UNITS_PER_METRE = 1000;
 export const MAX_RUN_TICKS = 15 * 60 * TICK_RATE;

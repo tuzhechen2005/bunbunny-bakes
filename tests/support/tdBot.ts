@@ -5,7 +5,7 @@ import {
 } from "../../src/lib/td";
 
 /** Public geometry/stats only; no future waves, RNG state, or private engine injection. */
-function run(level: TdLevel, mode: "greedy" | "random") {
+function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind) {
   const game = createTdGame({ level });
   const rng = createRng(`${level.seed}:td-bot`);
   const map = TD_MAPS[level.map];
@@ -41,6 +41,7 @@ function run(level: TdLevel, mode: "greedy" | "random") {
       for (let slot = 0; slot < map.slots.length; slot++) {
         const tower = state.towers.find(t => t.slot === slot);
         if (!tower) for (const kind of TOWER_KINDS) {
+          if (onlyKind && kind !== onlyKind) continue;
           let value = values[slot][kind][0];
           if (kind === "flourSifter") {
             // Extra firing time, discounted for air units and partial range overlap.
@@ -81,6 +82,7 @@ function run(level: TdLevel, mode: "greedy" | "random") {
 }
 
 export const greedyTd = (level: TdLevel) => run(level, "greedy");
+export const singleTowerTd = (level: TdLevel, kind: TowerKind) => run(level, "greedy", kind);
 export const randomTd = (level: TdLevel) => run(level, "random");
 
 /** Disjoint windows can be used for tuning and held-out validation. */

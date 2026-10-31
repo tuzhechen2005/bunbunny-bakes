@@ -10,9 +10,9 @@ const level = () => tdLevel("2026-10-26", 1);
 
 describe("TD deterministic level and geometry", () => {
   it("pins the version and generates five shared weekly waves", () => {
-    expect(TD_ENGINE_VERSION).toBe(4);
+    expect(TD_ENGINE_VERSION).toBe(5);
     expect(tdSeedVersion(level().seed)).toBe(TD_ENGINE_VERSION);
-    expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([300, 300, 402, 1320, 1320]);
+    expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([300, 400, 482, 1320, 1320]);
     expect(level()).toEqual(level());
     expect(level().waves).toHaveLength(5);
     expect(tdLevel("2026-11-02", 1).waves).not.toEqual(level().waves);
@@ -20,8 +20,8 @@ describe("TD deterministic level and geometry", () => {
       const l = tdLevel("2026-10-26", n);
       expect(l.map).toBe(Math.floor((n - 1) / 4) % 3);
       const kinds = l.waves.flatMap(w => w.pests.map(p => p.kind));
-      expect(kinds.includes("sparrow")).toBe(n >= 3);
-      expect(kinds.includes("beetle")).toBe(n >= 3);
+      expect(kinds.includes("sparrow")).toBe(n >= 4);
+      expect(kinds.includes("beetle")).toBe(n >= 5);
     }
   });
 
@@ -30,7 +30,7 @@ describe("TD deterministic level and geometry", () => {
       expect(() => tdLevel(week, 1)).toThrow();
     }
     for (const n of [0, -1, 1.1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) expect(() => tdLevel("2026-10-26", n)).toThrow();
-    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
+    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v4.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
       expect(() => createTdGame({ seed })).toThrow();
     }
     for (const tierCount of [0, 101, 1.5, NaN]) expect(() => createTdGame({ level: level(), tierCount })).toThrow();
@@ -48,7 +48,7 @@ describe("TD deterministic level and geometry", () => {
       expect(map.path[0].x).toBe(0);
       expect(pathLength(map) / SUBUNITS).toBeGreaterThan(2800);
       const plate = map.path.at(-1)!;
-      expect(plate.x).toBeGreaterThan(1100);
+      expect(plate.x).toBeGreaterThan(115);
       expect(plate.x + 115).toBeLessThan(FIELD_WIDTH);
       expect(plate.y).toBeGreaterThan(115);
       expect(plate.y + 115).toBeLessThan(FIELD_HEIGHT);
@@ -290,7 +290,7 @@ describe("TD combat and waves", () => {
     armor.apply({ tick: 0, type: "callWave", slot: -1 });
     const armoredEvents = armor.step(MAX_LEVEL_TICKS);
     const beetles = new Set(armoredEvents.filter(e => e.type === "spawn" && e.kind === "beetle").map(e => (e as Extract<TdEvent, { type: "spawn" }>).pest));
-    expect(armoredEvents.some(e => e.type === "hit" && beetles.has(e.pest) && e.damage === towerStats("rollingPin", 2).damage - 6)).toBe(true);
+    expect(armoredEvents.some(e => e.type === "hit" && beetles.has(e.pest) && e.damage === towerStats("rollingPin", 2).damage - 36)).toBe(true);
   });
 
   it("passes only after all five waves clear, and keeps all numeric snapshot fields integer", () => {

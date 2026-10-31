@@ -56,7 +56,7 @@ it('a boss takes three highest tiers, drops the whole stack, and dropped bread i
   const arrival = Math.ceil(pathLength(TD_MAPS[0]) / spec.speed);
   game.step(arrival);
   expect(game.state().pests[0]).toMatchObject({ carrying: 3, carriedTiers: [9, 8, 7], returning: true });
-  game.apply({ tick: arrival, type: 'place', slot: 10, tower: 'oven' });
+  game.apply({ tick: arrival, type: 'place', slot: 9, tower: 'oven' });
   const events: TdEvent[] = [];
   for (let tick = arrival + 1; tick < 500; tick++) {
     events.push(...game.step(tick));
@@ -110,9 +110,10 @@ it.each([0, 1, 2])('sifter tier %i deals 6/10/16 DPS through armor and never hit
   if (tier > 0) game.apply({ tick: 0, type: 'upgrade', slot: 0 });
   if (tier > 1) game.apply({ tick: 0, type: 'upgrade', slot: 0, branch: 'b' });
   game.apply({ tick: 0, type: 'callWave', slot: -1 });
-  game.step(600);
+  // The slow-moving fixture reaches the redesigned first aura by tick 1200.
+  game.step(1200);
   const before = game.state().pests;
-  game.step(660);
+  game.step(1260);
   const after = game.state().pests;
   expect(before[0].hp - after[0].hp).toBe([6, 10, 16][tier]);
   expect(after[1]).toMatchObject({ hp: 10000, slowed: false });

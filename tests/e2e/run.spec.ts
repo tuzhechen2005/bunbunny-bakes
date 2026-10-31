@@ -4,7 +4,7 @@ import { copy } from "../../src/copy";
 import { replayRun, type RunInput } from "../../src/lib/run";
 import { RUN_SAVE_KEY } from "../../src/components/run/runSave";
 import { perfectRun } from "../support/runBot";
-const SEED="v5.abcdef0123456789", g=copy.customer.game, t=copy.customer.run;
+const SEED="v6.abcdef0123456789", g=copy.customer.game, t=copy.customer.run;
 const BOARD={liveScores:true,week:{start:"2026-12-07",end:"2026-12-13"},top:[],lastWinner:null,allTime:{nickname:"Baker",wechatMasked:"ba***er",score:9000}};
 interface Log {runId:string;inputs:RunInput[];endTick:number}
 async function mockApi(page:Page) {
@@ -24,7 +24,18 @@ async function mockApi(page:Page) {
 }
 async function start(page:Page) {
  await page.getByTestId("run-menu-start").click();await page.getByTestId("run-wechat").fill("runner");await page.getByTestId("run-nickname").fill("Baker");await page.getByTestId("run-start").click();
- await expect(page.getByTestId("run-board")).toBeVisible();
+ await waitForRunning(page);
+}
+async function waitForRunning(page:Page) {
+ const board=page.getByTestId("run-board");
+ await expect(board).toBeVisible();
+ // A visible board can still be loading its renderer and reject input.
+ await expect(board.getByText(t.loading,{exact:true})).toBeHidden({timeout:15000});
+ const previous=Number(await board.getAttribute("data-tick"));
+ await expect.poll(async()=>{
+  await page.clock.runFor(100);
+  return Number(await board.getAttribute("data-tick"));
+ }).toBeGreaterThan(previous);
 }
 async function swipeLeft(page:Page) {
  const board=page.getByTestId("run-board");
@@ -74,7 +85,7 @@ for(const width of [320,390])test.describe(`RUN ${width}px`,()=>{
   await page.keyboard.press("ArrowRight");await page.clock.runFor(250);await expect(page.getByTestId("run-board")).toHaveAttribute("data-lane","2");
   await page.getByTestId("run-exit").click();await page.clock.runFor(100);await expect(page.getByTestId("run-exit-sheet")).toBeVisible();
   const tick=await page.getByTestId("run-board").getAttribute("data-tick");await page.clock.runFor(5000);await expect(page.getByTestId("run-board")).toHaveAttribute("data-tick",tick!);
-  await page.getByTestId("run-exit-save").click();await page.clock.runFor(1000);await expect(page.getByTestId("run-resume")).toBeVisible();await page.reload();await page.getByTestId("run-resume").click();await expect(page.getByTestId("run-board")).toBeVisible();expect(api.starts).toHaveLength(1);
+  await page.getByTestId("run-exit-save").click();await page.clock.runFor(1000);await expect(page.getByTestId("run-resume")).toBeVisible();await page.reload();await page.getByTestId("run-resume").click();await waitForRunning(page);expect(api.starts).toHaveLength(1);
   await page.clock.runFor(100);await page.evaluate(()=>{Object.defineProperty(document,"hidden",{configurable:true,value:true});document.dispatchEvent(new Event("visibilitychange"));});
   const hidden=await page.getByTestId("run-board").getAttribute("data-tick");await page.clock.runFor(10000);await expect(page.getByTestId("run-board")).toHaveAttribute("data-tick",hidden!);
   await page.evaluate(()=>{Object.defineProperty(document,"hidden",{configurable:true,value:false});document.dispatchEvent(new Event("visibilitychange"));});await page.clock.runFor(250);
@@ -86,7 +97,7 @@ for(const width of [320,390])test.describe(`RUN ${width}px`,()=>{
   const api=await mockApi(page),bot=perfectRun(SEED,1800);
   await page.addInitScript(({key,save})=>{if(!sessionStorage.getItem("seeded")){localStorage.setItem(key,JSON.stringify(save));sessionStorage.setItem("seeded","1");}},{key:RUN_SAVE_KEY,save:{v:1,runId:"saved-run",seed:SEED,inputs:bot.inputs,elapsedMs:bot.endTick*1000/60,score:bot.state.score,nickname:"Baker",expiresAt:"2099-01-01T00:00:00Z"}});
   await page.route("**/api/game/run/finish",r=>r.fulfill({status:503,json:{error:"INTERNAL",message:g.submitFailed}}));
-  await page.clock.install();await page.goto("/game/run");await page.getByTestId("run-resume").click();await expect(page.getByTestId("run-board")).toBeVisible();await page.clock.runFor(100);
+  await page.clock.install();await page.goto("/game/run");await page.getByTestId("run-resume").click();await waitForRunning(page);await page.clock.runFor(100);
   await page.evaluate(()=>{Object.defineProperty(document,"hidden",{configurable:true,value:true});document.dispatchEvent(new Event("visibilitychange"));});
   await page.clock.runFor(11000);await expect.poll(()=>api.reports.length).toBeGreaterThan(0);
   expect(api.reports[0].endTick).toBeGreaterThanOrEqual(bot.endTick);

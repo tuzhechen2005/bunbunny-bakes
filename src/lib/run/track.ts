@@ -1,6 +1,6 @@
 import { runGeometry, TRUCK_SPEED } from "./geometry";
 import { createRng } from "../game/rng";
-import { LANES, ROW_GAP, type RunObject, type RunObstacleKind } from "./types";
+import { LANES, ROW_GAP, type RunLane, type RunObject, type RunObstacleKind } from "./types";
 
 export interface RunChunk { index: number; start: number; end: number; objects: RunObject[] }
 const OBSTACLES: readonly RunObstacleKind[] = ["cart", "flour", "awning", "puddle"];
@@ -20,7 +20,7 @@ export function createRunTrack(seed: string): { next(): RunChunk } {
   const rng = createRng(`${seed}:run:track:v1`);
   let index = 0;
   let id = 0;
-  let previousOpen = 1;
+  let previousOpen: RunLane = 1;
   return {
     next() {
       const start = index * ROW_GAP * 3;
@@ -29,7 +29,10 @@ export function createRunTrack(seed: string): { next(): RunChunk } {
         const z = start + row * ROW_GAP;
         const hard = Math.min(1, Math.max(0, (z - 600_000) / 800_000));
         const choices = LANES.filter(l => Math.abs(l - previousOpen) <= 1);
-        const open = hard > 0 ? choices[rng.int(choices.length)] : LANES[rng.int(3)];
+        const drawnOpen = hard > 0 ? choices[rng.int(choices.length)] : LANES[rng.int(3)];
+        // Each mature phrase: hold a readable approach, move one lane in the
+        // burst, then hold the exit for the reward. Never reverse twice blindly.
+        const open = hard > 0 && row === 3 ? previousOpen : drawnOpen;
         previousOpen = open;
         const add = (lane: typeof open, at: number, kind: RunObject["kind"], y = 0, length?: number) => {
           const shape = kind in runGeometry.obstacles ? runGeometry.obstacles[kind as RunObstacleKind] : { front: 0, back: 0, height: 0 };
@@ -40,26 +43,33 @@ export function createRunTrack(seed: string): { next(): RunChunk } {
           // Weighted library: ordinary pairs, ramp/van trains, and oncoming trucks.
           const roll = rng.int(100);
           let cumulative = 0;
-          const pattern = RUN_PATTERNS.find(p => {
+          const drawnPattern = RUN_PATTERNS.find(p => {
             cumulative += p.friendly + (p.mature - p.friendly) * hard;
             return roll < cumulative;
           })!;
-          if (pattern.kind === "van") {
+          // A calm street approach introduces the phrase. The burst may have
+          // trucks; the exit uses ramped vans, never a surprise oncoming truck.
+          const pattern = hard > 0 && row === 1 && index % 2 === 0 ? "street"
+            : row === 3 && drawnPattern.kind === "truck" ? "van" : drawnPattern.kind;
+          if (pattern === "van") {
             const length = runGeometry.vanMinLength + runGeometry.vanLengthStep * rng.int(1 + (runGeometry.vanMaxLength - runGeometry.vanMinLength) / runGeometry.vanLengthStep);
             add(lane, z, "van", 0, length);
             add(lane, z - length / 2 - runGeometry.obstacles.ramp.back, "ramp");
             for (let offset = -length / 2 + runGeometry.roofBreadInset; offset < length / 2; offset += runGeometry.roofBreadSpacing) add(lane, z + offset, "bread", runGeometry.obstacles.van.height);
-          } else if (pattern.kind === "truck") add(lane, z, "truck");
+          } else if (pattern === "truck") add(lane, z, "truck");
           else add(lane, z, OBSTACLES[rng.int(4)]);
         }
         // A visible bread line leads into the open lane; the side loaves reward a bag.
         for (const offset of [18_000, 12_000, 6_000]) {
           add(open, z - offset, "bread");
         }
-        for (const lane of LANES) {
+        const power = rng.int(24);
+        // Side loaves accompany a magnet; the main line always names the safe
+        // route. Roof lines begin after their approach ramp.
+        if (hard === 0 && power === 0) for (const lane of LANES) {
           if (lane !== open) add(lane, z - 12_000, "bread");
         }
-        const power = rng.int(24);
+        if (hard > 0 && row === 3) for (const offset of [0, -4_000, -8_000]) add(open, z - offset, "bread");
         if (power < 2 && hard === 0) add(open, z - 24_000, power === 0 ? "paper-bag" : "coffee");
       }
       objects.sort((a, b) => a.z - b.z || a.id - b.id);

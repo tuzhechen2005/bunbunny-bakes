@@ -53,7 +53,7 @@ it("rejects malformed and excessive logs, impossible wall time, post-crash time 
 it("permits pauses until expiry and rejects engine version mismatch",async()=>{
  const r=await start();await expect(finishRun(db,play(r),IP,new Date(r.expiresAt))).rejects.toMatchObject({message:copy.gameApi.runExpired});
  await expect(progressRun(db,"RUN",{runId:r.runId,log:[],endTick:0},new Date(r.expiresAt))).rejects.toMatchObject({message:copy.gameApi.runExpired});
- for (const seed of ["v1.abcdef", "v2.abcdef", "v3.abcdef", "v4.abcdef", "v999.abcdef"]) {
+ for (const seed of ["v1.abcdef", "v2.abcdef", "v3.abcdef", "v4.abcdef", "v5.abcdef", "v999.abcdef"]) {
  await db.gameRun.update({where:{id:r.runId},data:{seed,progressAttemptAt:null}});
  await expect(finishRun(db,play(r),IP,LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
  await expect(progressRun(db,"RUN",{runId:r.runId,log:[],endTick:0},LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});

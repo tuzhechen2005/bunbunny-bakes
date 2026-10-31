@@ -1,4 +1,4 @@
-# Bakery defense artwork — D6 / D152
+# Bakery defense artwork — L1 level design
 
 Original procedural Blender clay models, without downloaded models, textures, fonts,
 or runtime 3D. The palette, AgX +0.6 EV, warm sun, cool ambient fill and matte clay
@@ -131,7 +131,7 @@ The route is one continuous 74px-wide surface with an 86px outer border. Its str
 centerlines and orthogonal bends follow the engine exactly. Only the outside edges
 of corners are rounded; the centerline is never smoothed. Eleven 42-unit-radius slot clearances remain in manifest metadata for alignment, but no pads are baked. Props reject path and slot clearances, and
 the final 115px-radius endpoint apron stays empty for the game's bread pile. There is
-**no baked bread**. Routes enter the left edge and end near the right side with the entire 115px-radius
+**no baked bread**. Routes enter the left edge and end in the interior with the entire 115px-radius
 plate clearance inside the board. No plate is baked into the background.
 
 Changing `maps.ts` requires rerendering **all three maps**. The packer refuses stale
@@ -151,12 +151,27 @@ tier both enlarged and at 56px frame width, every pest pose, projectiles and hit
 Review it with a local image viewer; no browser or application server is needed.
 The preview and source/cache files are not included in the runtime download budget.
 
-Verified shipped total: **232,482 bytes**, including the manifest (25 atlases,
+Verified shipped total: **235,633 bytes**, including the manifest (25 atlases,
 43 frames). The offline preview was inspected after WebP encoding; all tower tiers,
 pest poses, path/slot overlays and transparency margins pass review.
 
-D6 rerendered all three landscape backgrounds using Docker Blender; the existing
+L1 rerendered all three landscape backgrounds using Docker Blender; the existing
 boss and other sprite models are retained. The
 packer and decoded contact sheet verify eleven slot clearances, no baked pads, four
 unique right-facing boss poses, unclipped alpha, unchanged version-3 manifest format,
 and the public size budget. No browser or carried-bread marker is used.
+
+
+## L1 layout review
+
+The backgrounds have been rerendered with Docker Blender from the v5 route and
+slot coordinates. The preview overlays show numbered slots and the actual plate
+center (40 units back along the last segment). No slot pads or plates are baked.
+
+![Cooling rack: wide S](map-1-overview.svg)
+![Dough folds: inward loop](map-2-overview.svg)
+![Proofing walk: long switchback](map-3-overview.svg)
+
+See `src/lib/td/README.md` for each numbered slot's tactical role. The geometry
+regression checks pairwise spacing, board clearance, path-edge clearance, shortest
+tower reach, nonintersecting segments, and the stepped-back plate's exclusion zone.
