@@ -47,6 +47,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
   const crashFrame=useRef<number|null>(initialState.over?2:null);
   const surface=useRef<RunView|null>(null);
   const [webgl,setWebgl]=useState(false);
+  const [viewReady,setViewReady]=useState(false);
   const draw=useCallback(()=>{
     surface.current?.draw(state.current,quiet,crashFrame.current);
   },[quiet]);
@@ -60,18 +61,24 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
   useEffect(()=>{
     const el=canvas.current;
     if(!el||!art)return;
-    const view=createRunView(el,art);
-    surface.current=view;setWebgl(view.webgl);
+    let alive=true,view:RunView|null=null;
     // Layout and backing-store allocation belong to resize, never the animation loop.
     const resize=()=>{
       const {width:w,height:h}=el.getBoundingClientRect();
-      if(w<=0||h<=0)return;
+      if(w<=0||h<=0||!view)return;
       view.resize(w,h,Math.min(2,window.devicePixelRatio||1));drawRef.current();
     };
     const observer=new ResizeObserver(resize);
     observer.observe(el);window.addEventListener('resize',resize);
-    resize();
-    return ()=>{observer.disconnect();window.removeEventListener('resize',resize);surface.current=null;view.dispose();};
+    // Real 3D first (loaded on demand); the sprite renderers stay as fallbacks.
+    void (async()=>{
+      let made:RunView&{webgl:boolean};
+      try{const {createRunThree}=await import('./runThree');made=await createRunThree(el);}
+      catch{made=createRunView(el,art);}
+      if(!alive){made.dispose();return;}
+      view=made;surface.current=made;setWebgl(made.webgl);resize();setViewReady(true);
+    })();
+    return ()=>{alive=false;observer.disconnect();window.removeEventListener('resize',resize);surface.current=null;view?.dispose();setViewReady(false);};
   },[art]);
   const publish=useCallback((events:RunEvent[],force=false,render=true,snapshot?:RunState)=>{
     const s=snapshot??game.state();state.current=s;
@@ -129,7 +136,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
       else {active.current=false;raf.current=null;clock.pause(now);}
     };
     const start=()=>{
-      if(!art||paused||document.hidden||state.current.over||active.current)return;
+      if(!viewReady||paused||document.hidden||state.current.over||active.current)return;
       frames=0;fpsStart=0;active.current=true;clock.resume(performance.now());raf.current=requestAnimationFrame(frame);
     };
     const visibility=()=>{setHidden(document.hidden);if(document.hidden)stop();else start();};
@@ -153,7 +160,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
       publish(game.step(elapsedTick(clock.pause(performance.now()))),true,false);
       document.removeEventListener('visibilitychange',visibility,true);window.removeEventListener('pagehide',stop,true);
     };
-  },[art,clock,game,paused,publish,draw,soundOn,quiet]);
+  },[viewReady,clock,game,paused,publish,draw,soundOn,quiet]);
   // Three finite draws after collision, never an over-state rAF loop. Hiding cancels them.
   useEffect(()=>{
     if(!hud.over||hidden)return;
@@ -205,7 +212,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
     <div ref={wrapper} className={`run-board${webgl?" run-board-gl":""}`} role="application" aria-label={t.boardLabel} tabIndex={0} onClick={()=>{if(state.current.over)onShowResult?.();}} data-testid="run-board" >
       <canvas ref={canvas} aria-hidden="true" />
       <output ref={fps} hidden className="run-fps" aria-hidden="true" />
-      {!art&&<p className="run-overlay" role="status">{t.loading}</p>}
+      {!viewReady&&<p className="run-overlay" role="status">{t.loading}</p>}
       {capped&&!hud.over&&<p className="run-input-limit" role="status">{t.inputLimit}</p>}
       {(paused||hidden)&&!hud.over&&<p className="run-overlay" role="status">{t.paused}</p>}
     </div>
