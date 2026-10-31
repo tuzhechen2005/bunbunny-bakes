@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "baseUrl": "/brand/run/",
   "pixelRatio": 2,
   "colorSpace": "srgb",
@@ -10,10 +10,10 @@
   "camera": {
     "projection": "orthographic",
     "azimuthDegrees": 0,
-    "elevationDegrees": 36.869898,
+    "elevationDegrees": 22.619865,
     "forwardAxis": "+Y",
     "screenRightAxis": "+X",
-    "bunnyYawDegrees": -28
+    "bunnyYawDegrees": 0
   },
   "coordinates": {
     "origin": "top-left",
@@ -37,7 +37,7 @@
       "loop": true,
       "anchor": [
         128,
-        260
+        264
       ],
       "frames": [
         {
@@ -49,13 +49,13 @@
           ],
           "anchor": [
             128,
-            260
+            264
           ],
           "contentBounds": [
-            69,
-            35,
-            115,
-            225
+            81,
+            27,
+            94,
+            237
           ]
         },
         {
@@ -67,13 +67,13 @@
           ],
           "anchor": [
             128,
-            261
+            265
           ],
           "contentBounds": [
-            69,
-            34,
-            115,
-            227
+            81,
+            25,
+            94,
+            240
           ]
         },
         {
@@ -85,13 +85,13 @@
           ],
           "anchor": [
             128,
-            261
+            264
           ],
           "contentBounds": [
-            69,
-            35,
-            115,
-            226
+            81,
+            24,
+            94,
+            240
           ]
         },
         {
@@ -103,13 +103,13 @@
           ],
           "anchor": [
             128,
-            261
+            265
           ],
           "contentBounds": [
-            69,
-            39,
-            115,
-            222
+            81,
+            25,
+            94,
+            240
           ]
         },
         {
@@ -121,13 +121,13 @@
           ],
           "anchor": [
             128,
-            260
+            264
           ],
           "contentBounds": [
-            69,
-            41,
-            115,
-            219
+            81,
+            27,
+            94,
+            237
           ]
         },
         {
@@ -139,13 +139,13 @@
           ],
           "anchor": [
             128,
-            248
+            265
           ],
           "contentBounds": [
-            69,
-            36,
-            115,
-            212
+            81,
+            23,
+            94,
+            242
           ]
         },
         {
@@ -157,13 +157,13 @@
           ],
           "anchor": [
             128,
-            248
+            264
           ],
           "contentBounds": [
-            69,
-            30,
-            115,
-            218
+            81,
+            21,
+            94,
+            243
           ]
         },
         {
@@ -175,17 +175,17 @@
           ],
           "anchor": [
             128,
-            248
+            265
           ],
           "contentBounds": [
-            69,
-            31,
-            115,
-            217
+            81,
+            23,
+            94,
+            242
           ]
         }
       ],
-      "bytes": 53140
+      "bytes": 54522
     },
     "bunny-jump": {
       "file": "bunny-jump.webp",
@@ -201,7 +201,7 @@
       "loop": false,
       "anchor": [
         128,
-        254
+        260
       ],
       "frames": [
         {
@@ -213,13 +213,13 @@
           ],
           "anchor": [
             128,
-            254
+            260
           ],
           "contentBounds": [
-            75,
-            23,
-            117,
-            231
+            82,
+            19,
+            92,
+            241
           ]
         },
         {
@@ -231,13 +231,13 @@
           ],
           "anchor": [
             128,
-            264
+            270
           ],
           "contentBounds": [
-            78,
+            82,
             14,
-            120,
-            250
+            92,
+            256
           ]
         },
         {
@@ -249,17 +249,17 @@
           ],
           "anchor": [
             128,
-            257
+            271
           ],
           "contentBounds": [
-            62,
-            57,
-            118,
-            200
+            82,
+            44,
+            92,
+            227
           ]
         }
       ],
-      "bytes": 23500,
+      "bytes": 22438,
       "frameLabels": [
         "takeoff",
         "airborne",
@@ -280,7 +280,7 @@
       "loop": true,
       "anchor": [
         128,
-        275
+        277
       ],
       "frames": [
         {
@@ -292,13 +292,13 @@
           ],
           "anchor": [
             128,
-            275
+            277
           ],
           "contentBounds": [
-            96,
-            86,
-            143,
-            189
+            81,
+            98,
+            94,
+            179
           ]
         },
         {
@@ -310,17 +310,17 @@
           ],
           "anchor": [
             128,
-            276
+            279
           ],
           "contentBounds": [
-            97,
-            89,
-            144,
-            187
+            81,
+            104,
+            94,
+            175
           ]
         }
       ],
-      "bytes": 14574,
+      "bytes": 11912,
       "frameLabels": [
         "enter",
         "hold"
@@ -340,7 +340,7 @@
       "loop": false,
       "anchor": [
         128,
-        253
+        271
       ],
       "frames": [
         {
@@ -352,13 +352,13 @@
           ],
           "anchor": [
             128,
-            253
+            271
           ],
           "contentBounds": [
-            37,
-            41,
-            132,
-            212
+            33,
+            32,
+            130,
+            239
           ]
         },
         {
@@ -370,17 +370,17 @@
           ],
           "anchor": [
             128,
-            273
+            275
           ],
           "contentBounds": [
-            80,
-            59,
-            130,
-            214
+            96,
+            32,
+            127,
+            243
           ]
         }
       ],
-      "bytes": 15896,
+      "bytes": 16164,
       "frameLabels": [
         "left",
         "right"
@@ -416,9 +416,9 @@
           ],
           "contentBounds": [
             61,
-            60,
-            99,
-            189
+            50,
+            89,
+            199
           ]
         },
         {
@@ -430,13 +430,13 @@
           ],
           "anchor": [
             92.878,
-            251
+            256
           ],
           "contentBounds": [
-            75,
-            76,
-            126,
-            175
+            64,
+            68,
+            107,
+            188
           ]
         },
         {
@@ -448,17 +448,17 @@
           ],
           "anchor": [
             92.878,
-            262
+            269
           ],
           "contentBounds": [
-            79,
+            64,
             140,
-            140,
-            122
+            115,
+            129
           ]
         }
       ],
-      "bytes": 18230,
+      "bytes": 17646,
       "frameLabels": [
         "impact",
         "tumble",
@@ -474,29 +474,29 @@
       "frameCount": 1,
       "columns": 1,
       "rows": 1,
-      "pixelsPerMetre": 47.407407407407405,
+      "pixelsPerMetre": 39.38461538461539,
       "geometry": {
         "front": 1200,
         "back": 1400,
-        "height": 2700
+        "height": 4400
       },
       "groundFront": [
         160,
-        259.556
+        273.609
       ],
       "groundBack": [
         160,
-        167.111
+        224.379
       ],
       "heightTop": [
         160,
-        88.889
+        50.935
       ],
       "fps": 0,
       "loop": false,
       "anchor": [
         160,
-        216.889
+        250.888
       ],
       "frames": [
         {
@@ -508,17 +508,17 @@
           ],
           "anchor": [
             160,
-            216.889
+            250.888
           ],
           "contentBounds": [
-            94,
-            45,
-            132,
-            205
+            51,
+            32,
+            218,
+            235
           ]
         }
       ],
-      "bytes": 7280
+      "bytes": 9206
     },
     "flour-sacks": {
       "file": "flour-sacks.webp",
@@ -537,21 +537,21 @@
       },
       "groundFront": [
         144,
-        227.446
+        223.243
       ],
       "groundBack": [
         144,
-        160.985
+        180.639
       ],
       "heightTop": [
         144,
-        87.877
+        79.243
       ],
       "fps": 0,
       "loop": false,
       "anchor": [
         144,
-        194.216
+        201.941
       ],
       "frames": [
         {
@@ -563,17 +563,17 @@
           ],
           "anchor": [
             144,
-            194.216
+            201.941
           ],
           "contentBounds": [
             59,
-            82,
+            77,
             168,
-            126
+            132
           ]
         }
       ],
-      "bytes": 5422
+      "bytes": 5766
     },
     "shop-awning": {
       "file": "shop-awning.webp",
@@ -593,21 +593,21 @@
       },
       "groundFront": [
         192,
-        321.862
+        322.506
       ],
       "groundBack": [
         192,
-        246.458
+        274.171
       ],
       "heightTop": [
         192,
-        83.084
+        66.327
       ],
       "fps": 0,
       "loop": false,
       "anchor": [
         192,
-        284.16
+        298.338
       ],
       "frames": [
         {
@@ -619,17 +619,17 @@
           ],
           "anchor": [
             192,
-            284.16
+            298.338
           ],
           "contentBounds": [
             101,
-            58,
+            51,
             182,
-            205
+            234
           ]
         }
       ],
-      "bytes": 5698
+      "bytes": 6588
     },
     "puddle": {
       "file": "puddle.webp",
@@ -648,15 +648,15 @@
       },
       "groundFront": [
         160,
-        152.471
+        132.199
       ],
       "groundBack": [
         160,
-        39.53
+        59.801
       ],
       "heightTop": [
         160,
-        86.965
+        85.575
       ],
       "fps": 0,
       "loop": false,
@@ -678,13 +678,13 @@
           ],
           "contentBounds": [
             31,
-            32,
+            50,
             264,
-            120
+            82
           ]
         }
       ],
-      "bytes": 6008
+      "bytes": 5434
     },
     "loaf-spin": {
       "file": "loaf-spin.webp",
@@ -700,7 +700,7 @@
       "loop": true,
       "anchor": [
         64,
-        90.686
+        94.791
       ],
       "frames": [
         {
@@ -712,13 +712,13 @@
           ],
           "anchor": [
             64,
-            90.686
+            94.791
           ],
           "contentBounds": [
             30,
-            27,
+            29,
             68,
-            76
+            66
           ]
         },
         {
@@ -730,13 +730,13 @@
           ],
           "anchor": [
             64,
-            90.686
+            94.791
           ],
           "contentBounds": [
             17,
-            29,
+            33,
             94,
-            67
+            59
           ]
         },
         {
@@ -748,13 +748,13 @@
           ],
           "anchor": [
             64,
-            90.686
+            94.791
           ],
           "contentBounds": [
             17,
             33,
             94,
-            63
+            59
           ]
         },
         {
@@ -766,13 +766,13 @@
           ],
           "anchor": [
             64,
-            90.686
+            94.791
           ],
           "contentBounds": [
             30,
-            27,
+            29,
             68,
-            76
+            66
           ]
         },
         {
@@ -784,13 +784,13 @@
           ],
           "anchor": [
             64,
-            90.686
+            94.791
           ],
           "contentBounds": [
             17,
-            30,
+            33,
             94,
-            66
+            59
           ]
         },
         {
@@ -802,17 +802,17 @@
           ],
           "anchor": [
             64,
-            90.686
+            94.791
           ],
           "contentBounds": [
             17,
-            32,
+            33,
             94,
-            64
+            59
           ]
         }
       ],
-      "bytes": 15574
+      "bytes": 14336
     },
     "paper-bag": {
       "file": "paper-bag.webp",
@@ -828,7 +828,7 @@
       "loop": false,
       "anchor": [
         96,
-        175.716
+        185.518
       ],
       "frames": [
         {
@@ -840,17 +840,17 @@
           ],
           "anchor": [
             96,
-            175.716
+            185.518
           ],
           "contentBounds": [
             50,
-            47,
+            41,
             90,
-            142
+            151
           ]
         }
       ],
-      "bytes": 4904
+      "bytes": 4706
     },
     "coffee-cup": {
       "file": "coffee-cup.webp",
@@ -866,7 +866,7 @@
       "loop": false,
       "anchor": [
         96,
-        181.689
+        192.41
       ],
       "frames": [
         {
@@ -878,17 +878,17 @@
           ],
           "anchor": [
             96,
-            181.689
+            192.41
           ],
           "contentBounds": [
             45,
-            37,
+            27,
             102,
-            153
+            164
           ]
         }
       ],
-      "bytes": 6108
+      "bytes": 6028
     },
     "road-stone": {
       "file": "road-stone.webp",
@@ -933,159 +933,159 @@
     "shops-left": {
       "file": "shops-left.webp",
       "frameSize": [
-        384,
-        512
+        600,
+        500
       ],
       "frameCount": 3,
       "columns": 3,
       "rows": 1,
-      "pixelsPerMetre": 55.35135135135135,
+      "pixelsPerMetre": 80,
       "fps": 0,
       "loop": false,
       "anchor": [
-        192,
-        300.281
+        300,
+        500
       ],
       "frames": [
         {
           "rect": [
             0,
             0,
-            384,
-            512
+            600,
+            500
           ],
           "anchor": [
-            192,
-            300.281
+            300,
+            500
           ],
           "contentBounds": [
-            54,
-            102,
-            276,
-            329
+            0,
+            0,
+            600,
+            500
           ]
         },
         {
           "rect": [
-            384,
+            600,
             0,
-            384,
-            512
+            600,
+            500
           ],
           "anchor": [
-            192,
-            300.281
+            300,
+            500
           ],
           "contentBounds": [
-            54,
-            102,
-            276,
-            329
+            0,
+            0,
+            600,
+            500
           ]
         },
         {
           "rect": [
-            768,
+            1200,
             0,
-            384,
-            512
+            600,
+            500
           ],
           "anchor": [
-            192,
-            300.281
+            300,
+            500
           ],
           "contentBounds": [
-            54,
-            102,
-            276,
-            329
+            0,
+            0,
+            600,
+            500
           ]
         }
       ],
-      "bytes": 40612,
+      "bytes": 37730,
       "frameLabels": [
-        "butter",
-        "sage",
-        "rose"
+        "bakery",
+        "cafe",
+        "flowers"
       ]
     },
     "shops-right": {
       "file": "shops-right.webp",
       "frameSize": [
-        384,
-        512
+        600,
+        500
       ],
       "frameCount": 3,
       "columns": 3,
       "rows": 1,
-      "pixelsPerMetre": 55.35135135135135,
+      "pixelsPerMetre": 80,
       "fps": 0,
       "loop": false,
       "anchor": [
-        192,
-        300.281
+        300,
+        500
       ],
       "frames": [
         {
           "rect": [
             0,
             0,
-            384,
-            512
+            600,
+            500
           ],
           "anchor": [
-            192,
-            300.281
+            300,
+            500
           ],
           "contentBounds": [
-            54,
-            104,
-            276,
-            327
+            0,
+            0,
+            600,
+            500
           ]
         },
         {
           "rect": [
-            384,
+            600,
             0,
-            384,
-            512
+            600,
+            500
           ],
           "anchor": [
-            192,
-            300.281
+            300,
+            500
           ],
           "contentBounds": [
-            54,
-            104,
-            276,
-            327
+            0,
+            0,
+            600,
+            500
           ]
         },
         {
           "rect": [
-            768,
+            1200,
             0,
-            384,
-            512
+            600,
+            500
           ],
           "anchor": [
-            192,
-            300.281
+            300,
+            500
           ],
           "contentBounds": [
-            54,
-            104,
-            276,
-            327
+            0,
+            0,
+            600,
+            500
           ]
         }
       ],
-      "bytes": 38128,
+      "bytes": 37742,
       "frameLabels": [
-        "butter",
-        "sage",
-        "rose"
+        "bakery",
+        "cafe",
+        "flowers"
       ]
     },
     "sky-dawn": {

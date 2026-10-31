@@ -36,15 +36,22 @@ it("keeps Blender dimensions, rendered footprints and engine extents in agreemen
     expect(a.geometry).toEqual(shape);
     for(const [w,h] of [[320,570],[390,650],[430,900]]) for(const z of [-1000,0,1000,14000,70000]) {
       const draw=obstaclePlacement(kind,1,z,w,h);
-      expect(draw.y+(a.groundFront[1]-a.anchor[1])*draw.scale).toBeCloseTo(project(1,z-shape.front,w,h).y,5);
-      expect(draw.y+(a.groundBack[1]-a.anchor[1])*draw.scale).toBeCloseTo(project(1,z+shape.back,w,h).y,5);
-      if(z===0) {
-        expect(draw.y).toBeCloseTo(h*runGeometry.feet,2);
-        expect((a.anchor[1]-a.heightTop[1])*draw.scale).toBeCloseTo(worldHeightPixels(shape.height,h),2);
-      }
+      expect(draw.frontY).toBeCloseTo(project(1,z-shape.front,w,h).y,5);
+      expect(draw.backY).toBeCloseTo(project(1,z+shape.back,w,h).y,5);
+      expect(draw.y).toBeCloseTo(project(1,z,w,h).y,5);
+      expect((a.anchor[1]-a.heightTop[1])*draw.scale).toBeCloseTo(worldHeightPixels(shape.height,h)*projectionDepth(z),5);
     }
   }
 });
-it("inverts the road projection including the linear feet contact zone", () => {
+it("inverts the road projection with a single pinhole at every distance", () => {
   for(const z of [-3000,0,1000,2000,2001,14000,90000]) expect(projectionZ(projectionDepth(z))).toBeCloseTo(z,7);
+});
+
+it("uses standard pinhole scale and a bunny-sized cart at contact", () => {
+  for(const z of [-1000,0,1000,2000,14000,90000]) {
+    expect(projectionDepth(z)).toBeCloseTo(runGeometry.focalDistance/(runGeometry.focalDistance+z),12);
+  }
+  expect(runGeometry.horizon).toBeCloseTo(1/3,1);
+  expect(runGeometry.obstacles.cart.height/runGeometry.standingHeight).toBeCloseTo(1.3,1);
+  expect(worldHeightPixels(runGeometry.obstacles.cart.height,650)).toBeLessThan(650*.25);
 });

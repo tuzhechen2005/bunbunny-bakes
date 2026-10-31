@@ -1,4 +1,4 @@
-export const RUN_ENGINE_VERSION = 2;
+export const RUN_ENGINE_VERSION = 3;
 export const TICK_RATE = 60;
 export const UNITS_PER_METRE = 1000;
 export const MAX_RUN_TICKS = 15 * 60 * TICK_RATE;
@@ -61,6 +61,8 @@ export interface RunState {
 }
 export interface RunGame {
   step(toTick: number): RunEvent[];
+  /** Borrowed mutable view for the live renderer; never retain across frames. */
+  frame(toTick: number): RunState;
   input(tick: number, dir: RunDirection): RunEvent[];
   state(): RunState;
 }

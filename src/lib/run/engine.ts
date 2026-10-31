@@ -1,11 +1,11 @@
 import { clearsObstacle, overlapsObstacle, MAX_OBSTACLE_FRONT, MAX_OBSTACLE_BACK } from "./geometry";
 import { createRunTrack } from "./track";
 import {
-  BASE_SPEED, CAP_SPEED, RAMP_TICKS, MAX_RUN_TICKS, MAX_INPUTS, JUMP_TICKS,
+  MAX_SPEED, BASE_SPEED, CAP_SPEED, RAMP_TICKS, MAX_RUN_TICKS, MAX_INPUTS, JUMP_TICKS,
   SLIDE_TICKS, LANE_CHANGE_TICKS, MAGNET_TICKS, COFFEE_TICKS, VISIBLE_DISTANCE,
   UNITS_PER_METRE, RunReplayError,
   type RunDirection, type RunGame, type RunLane, type RunEvent, type RunObject,
-  type RunObstacleKind, type RunPlayer,
+  type RunObstacleKind, type RunPlayer, type RunState,
 } from "./types";
 
 export function runSpeed(tick: number, coffee = false): number {
@@ -22,7 +22,7 @@ export function validRunDirection(dir: unknown): dir is RunDirection {
   return dir === "L" || dir === "R" || dir === "U" || dir === "D";
 }
 
-export function createRunGame({ seed }: { seed: string }): RunGame {
+export function createRunGame({ seed, realtime = false }: { seed: string; realtime?: boolean }): RunGame {
   const track = createRunTrack(seed);
   let tick = 0, distance = 0, bread = 0, over = false;
   let lane: RunLane = 1;
@@ -44,13 +44,54 @@ export function createRunGame({ seed }: { seed: string }): RunGame {
       generatedEnd = chunk.end;
     }
   }
-  fill();
+  if(realtime) {
+    // At most 7,224 objects for the entire 15-minute capped run. Generate once
+    // before starting the clock so chunk creation/compaction never runs in rAF.
+    while(generatedEnd < MAX_RUN_TICKS*MAX_SPEED+VISIBLE_DISTANCE) {
+      const chunk=track.next();
+      for(const object of chunk.objects)objects.push(object);
+      generatedEnd=chunk.end;
+    }
+  } else fill();
+  const liveObjects:RunObject[]=Array.from({length:64},()=>({id:0,lane:1,z:0,kind:'bread'}));
+  const liveChange={from:1,to:1,progress:0} as NonNullable<RunPlayer['laneChange']>;
+  const live:RunState={tick:0,player:{lane:1,pose:'run',progress:0,laneChange:null,queuedLane:null},
+    objects:[],speed:BASE_SPEED,distance:0,bread:0,score:0,over:false,
+    powerUps:{magnetUntil:0,coffeeUntil:0,magnetTicks:0,coffeeTicks:0},events:[]};
+  // Separate pools keep event shapes identical to detached replay events.
+  const poolSize=realtime?objects.length+4:0;
+  const collectPool=Array.from({length:poolSize},()=>({type:'collect' as const,tick:0,id:0,kind:'bread' as 'bread'|'paper-bag'|'coffee',lane:1 as RunLane}));
+  const expirePool=Array.from({length:poolSize},()=>({type:'expire' as const,tick:0,kind:'coffee' as 'coffee'|'paper-bag'}));
+  const collisionPool=Array.from({length:realtime?2:0},()=>({type:'collision' as const,tick:0,id:0,kind:'cart' as RunObstacleKind,lane:1 as RunLane}));
+  const overEvent={type:'over' as const,tick:0,reason:'collision' as 'collision'|'limit'};
+  function expire(kind:'paper-bag'|'coffee') {
+    const event=realtime?expirePool[events.length]:{type:'expire' as const,tick,kind};
+    event.tick=tick;event.kind=kind;events.push(event);
+  }
+  function collect(obj:RunObject) {
+    const kind=obj.kind as 'bread'|'paper-bag'|'coffee';
+    const event=realtime?collectPool[events.length]:{type:'collect' as const,tick,id:obj.id,kind,lane:obj.lane};
+    event.tick=tick;event.id=obj.id;event.kind=kind;event.lane=obj.lane;events.push(event);
+  }
+  function collide(obj:RunObject) {
+    const event=realtime?collisionPool[0]:{type:'collision' as const,tick,id:obj.id,kind:obj.kind as RunObstacleKind,lane:obj.lane};
+    event.tick=tick;event.id=obj.id;event.kind=obj.kind as RunObstacleKind;event.lane=obj.lane;events.push(event);
+  }
+  function end(reason:'collision'|'limit') {
+    const event=realtime?overEvent:{type:'over' as const,tick,reason};
+    event.tick=tick;event.reason=reason;events.push(event);
+  }
 
+  const changeBuffer={from:1 as RunLane,to:1 as RunLane,start:0,end:0};
+  const actionPool=Array.from({length:2},()=>({type:'action' as const,tick:0,dir:'L' as RunDirection}));
+  let actionCount=0;
   function startLane(dir: "L" | "R") {
     const to = lane + (dir === "L" ? -1 : 1);
     if (to < 0 || to > 2) return;
-    change = { from: lane, to: to as RunLane, start: tick, end: tick + LANE_CHANGE_TICKS };
-    events.push({ type: "action", tick, dir });
+    change = realtime?changeBuffer:{from:lane,to:to as RunLane,start:tick,end:tick+LANE_CHANGE_TICKS};
+    change.from=lane;change.to=to as RunLane;change.start=tick;change.end=tick+LANE_CHANGE_TICKS;
+    if(realtime){const event=actionPool[actionCount++];event.tick=tick;event.dir=dir;events.push(event);}
+    else events.push({type:'action',tick,dir});
   }
 
   function occupiedLane(): RunLane {
@@ -63,8 +104,8 @@ export function createRunGame({ seed }: { seed: string }): RunGame {
   function advance(toTick: number) {
     while (tick < toTick && !over) {
       tick++;
-      if (magnetUntil === tick) events.push({ type: "expire", tick, kind: "paper-bag" });
-      if (coffeeUntil === tick) events.push({ type: "expire", tick, kind: "coffee" });
+      if (magnetUntil === tick) expire("paper-bag");
+      if (coffeeUntil === tick) expire("coffee");
       if (action && tick >= actionEnd) action = null;
       if (change && tick >= change.end) {
         lane = change.to;
@@ -82,8 +123,8 @@ export function createRunGame({ seed }: { seed: string }): RunGame {
               !overlapsObstacle(obj.kind, obj.z - previousDistance, obj.z - distance)) continue;
           if (!clearsObstacle(obj.kind, action, actionProgress())) {
             over = true;
-            events.push({ type: "collision", tick, id: obj.id, kind: obj.kind, lane: obj.lane });
-            events.push({ type: "over", tick, reason: "collision" });
+            collide(obj);
+            end("collision");
             break;
           }
         } else if (obj.z > previousDistance && obj.z <= distance &&
@@ -91,13 +132,13 @@ export function createRunGame({ seed }: { seed: string }): RunGame {
           if (obj.kind === "bread") bread++;
           else if (obj.kind === "paper-bag") magnetUntil = tick + MAGNET_TICKS;
           else coffeeUntil = tick + COFFEE_TICKS;
-          events.push({ type: "collect", tick, id: obj.id, kind: obj.kind, lane: obj.lane });
+          collect(obj);
         }
       }
       while (head < objects.length && objects[head].z < distance - MAX_OBSTACLE_BACK) head++;
       if (tick === MAX_RUN_TICKS && !over) {
         over = true;
-        events.push({ type: "over", tick, reason: "limit" });
+        end("limit");
       }
       fill();
     }
@@ -119,10 +160,32 @@ export function createRunGame({ seed }: { seed: string }): RunGame {
     };
   }
   return {
+    frame(toTick) {
+      checkTime(toTick);
+      if(!over){events.length=0;actionCount=0;advance(toTick);}
+      live.tick=tick;live.distance=distance;live.bread=bread;live.over=over;
+      live.speed=runSpeed(tick,coffeeUntil>tick);live.score=Math.floor(distance/UNITS_PER_METRE)+bread*10;
+      live.player.lane=occupiedLane();live.player.pose=action??(change?'lane-change':'run');
+      if(change){liveChange.from=change.from;liveChange.to=change.to;liveChange.progress=Math.floor((tick-change.start)*1000/LANE_CHANGE_TICKS);}
+      live.player.laneChange=change?liveChange:null;
+      live.player.progress=action?actionProgress():change?liveChange.progress:0;live.player.queuedLane=queued;
+      live.powerUps.magnetUntil=magnetUntil;live.powerUps.coffeeUntil=coffeeUntil;
+      live.powerUps.magnetTicks=Math.max(0,magnetUntil-tick);live.powerUps.coffeeTicks=Math.max(0,coffeeUntil-tick);
+      let count=0;
+      for(let i=head;i<objects.length&&objects[i].z<=distance+VISIBLE_DISTANCE;i++) {
+        const object=objects[i];
+        if(isRunObstacle(object.kind)?object.z+MAX_OBSTACLE_BACK<distance:object.z<=distance)continue;
+        const target=liveObjects[count];
+        target.id=object.id;target.lane=object.lane;target.kind=object.kind;target.z=object.z-distance;
+        live.objects[count++]=target;
+      }
+      live.objects.length=count;live.events=events;
+      return live;
+    },
     step(toTick) {
       checkTime(toTick);
       if (over) return [];
-      events = [];
+      events = [];actionCount=0;
       advance(toTick);
       return events.map((e) => ({ ...e }));
     },
@@ -132,7 +195,7 @@ export function createRunGame({ seed }: { seed: string }): RunGame {
       if (at <= lastInput) throw new RunReplayError("input ticks not increasing");
       if (inputCount >= MAX_INPUTS) throw new RunReplayError("too many inputs");
       if (over) throw new RunReplayError("input after game over");
-      events = [];
+      events = [];actionCount=0;
       advance(at);
       if (over) throw new RunReplayError("input after game over");
       lastInput = at;

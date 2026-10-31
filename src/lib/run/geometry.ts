@@ -26,20 +26,14 @@ export function overlapsObstacle(kind: RunObstacleKind, previousZ: number, z: nu
   const shape = geometry.obstacles[kind];
   return z <= shape.front - geometry.edgeGrace && previousZ >= -shape.back + geometry.edgeGrace;
 }
-/** Vertical world height at the player's contact plane; camera elevation is atan(3/4). */
+/** Level pinhole camera; height above the road fixes the vertical world scale. */
 export function worldHeightPixels(mm: number, height: number): number {
-  return mm / geometry.focalDistance * height * (geometry.feet - geometry.horizon) * 4 / 3;
+  return mm / geometry.cameraHeight * height * (geometry.feet - geometry.horizon);
 }
-
-/** Linear contact zone keeps sprite origin and both depth edges on one plane at z=0.
- * The distant perspective joins with the same value and slope (no visual seam).
- */
+/** One continuous pinhole, including the short visible interval behind the feet. */
 export function projectionDepth(z: number): number {
-  const { focalDistance: focal, contactZone: near } = geometry;
-  return z <= near ? 1 - z / focal : (1 - near / focal) / (1 + (z - near) / (focal - near));
+  return geometry.focalDistance / (geometry.focalDistance + z);
 }
 export function projectionZ(depth: number): number {
-  const { focalDistance: focal, contactZone: near } = geometry;
-  const join = 1 - near / focal;
-  return depth >= join ? (1 - depth) * focal : near + (join / depth - 1) * (focal - near);
+  return geometry.focalDistance * (1 / depth - 1);
 }

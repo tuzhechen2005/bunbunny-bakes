@@ -1,12 +1,12 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { renderRun } from "@/components/run/runRenderer";
+import { prepareRunRenderer, renderRun } from "@/components/run/runRenderer";
 import { manifest, type RunArt } from "@/components/run/runAssets";
 import { createRunGame } from "@/lib/run";
 
 function drawingContext(scale = 1) {
   return {
     getTransform: () => ({ a: scale }),
-    setTransform: vi.fn(),
+    setTransform: vi.fn(),save:vi.fn(),restore:vi.fn(),clip:vi.fn(),
     drawImage: vi.fn(),
     createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
     fillRect: vi.fn(), beginPath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(),
@@ -21,6 +21,7 @@ function setup() {
     return { width: 0, height: 0, getContext: () => ctx };
   });
   vi.stubGlobal("document", { createElement });
+  vi.stubGlobal("Path2D",class {moveTo(){} lineTo(){} closePath(){}});
   const art = Object.fromEntries(Object.keys(manifest.assets).map(name => [name, { width: 768, height: 768 }])) as RunArt;
   const game = createRunGame({ seed: "v1.abcdef0123456789" });
   const ctx = drawingContext();
@@ -55,6 +56,7 @@ it("invalidates caches for size, pixel ratio, or art changes, then reuses them",
     [390, 700, 3, art], [390, 700, 3, { ...art }],
   ] as const) {
     ctx.getTransform = () => ({ a: scale });
+    prepareRunRenderer(context,images,width,height,scale);
     renderRun(context, images, game.state(), width, height, false);
     const allocated = createElement.mock.calls.length;
     expect(allocated).toBeGreaterThan(last);
@@ -64,15 +66,15 @@ it("invalidates caches for size, pixel ratio, or art changes, then reuses them",
   }
 });
 
-it("does not multiply scenery submissions on high-DPR screens", () => {
+it("bounds scenery submissions and caps detail at DPR 2", () => {
   const { art, game } = setup();
-  const counts = [1, 3].map(scale => {
+  const counts = [1, 2, 3].map(scale => {
     const ctx = drawingContext(scale);
     renderRun(canvasContext(ctx), art, game.state(), 370, 650, false);
     return ctx.drawImage.mock.calls.length;
   });
-  expect(counts[1]).toBe(counts[0]);
-  expect(counts[1]).toBeLessThan(700);
+  expect(counts[2]).toBe(counts[1]);
+  expect(counts[1]).toBeLessThan(1100);
 });
 
 import { worldHeightPixels, jumpLift, slideBodyHeight, runGeometry } from "@/lib/run/geometry";
@@ -86,7 +88,7 @@ it("draws the bunny feet/lift and crouch to the authoritative geometry on every 
       renderRun(canvasContext(ctx),art,state,390,650,false);
       const call=ctx.drawImage.mock.calls.at(-1)!;
       const asset=manifest.assets[pose==='jump'?'bunny-jump':'bunny-slide'];
-      const frame=asset.frames.find(f=>f.rect[0]===call[1] && f.rect[1]===call[2])!;
+      const frame=asset.frames[pose==='jump'?Math.min(2,Math.floor(state.player.progress*3/1000)):state.player.progress<250?0:1];
       const scaleY=call[8]/frame.rect[3];
       const feet=call[6]+frame.anchor[1]*scaleY;
       expect(feet).toBeCloseTo(650*runGeometry.feet-(pose==='jump'?worldHeightPixels(jumpLift(state.player.progress),650):0),6);
@@ -95,14 +97,25 @@ it("draws the bunny feet/lift and crouch to the authoritative geometry on every 
     }
   }
 });
-it("draws complete building frames with uniform scaling, never stretched facade slices", () => {
+it("maps continuous facade columns from cached mips, with no large source sheet in the hot path", () => {
   const {art,game,ctx}=setup();
   renderRun(canvasContext(ctx),art,game.state(),390,650,false);
-  const calls=ctx.drawImage.mock.calls.filter(c=>c[0]===art['shops-left'] || c[0]===art['shops-right']);
-  expect(calls.length).toBeGreaterThan(4);
-  for(const call of calls) {
-    expect(call[3]).toBe(manifest.assets['shops-left'].frameSize[0]);
-    expect(call[4]).toBe(manifest.assets['shops-left'].frameSize[1]);
-    expect(call[7]/call[3]).toBeCloseTo(call[8]/call[4],8);
-  }
+  const calls=ctx.drawImage.mock.calls;
+  expect(calls.some(c=>Object.values(art).includes(c[0]))).toBe(false);
+  const strips=calls.filter(c=>c.length===9&&c[7]<=2.26);
+  expect(strips.length).toBeGreaterThan(150);
+  expect(calls.length).toBeLessThan(650);
+});
+
+it("preserves projected collision ground endpoints in the actual obstacle draw bands",()=>{
+  const {art,game,ctx}=setup();
+  const state=game.state();state.objects=[{id:1,lane:1,z:1000,kind:'cart'}];
+  renderRun(canvasContext(ctx),art,state,390,650,false);
+  const a=manifest.assets['bread-cart'];
+  const calls=ctx.drawImage.mock.calls.filter(c=>c.length===9&&c[7]>5&&Math.abs(c[5]-(195-a.anchor[0]*worldHeightPixels(4400,650)*(24000/25000)/(a.anchor[1]-a.heightTop[1])))<1e-6);
+  expect(calls.length).toBe(5);
+  const front=650*(runGeometry.horizon+(runGeometry.feet-runGeometry.horizon)*24000/(24000+1000-runGeometry.obstacles.cart.front));
+  const back=650*(runGeometry.horizon+(runGeometry.feet-runGeometry.horizon)*24000/(24000+1000+runGeometry.obstacles.cart.back));
+  expect(calls[2][6]).toBeCloseTo(back,6);
+  expect(calls[4][6]).toBeCloseTo(front,6);
 });

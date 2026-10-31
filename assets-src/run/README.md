@@ -1,151 +1,119 @@
-# Dawn delivery art — R5 / D150
+# Dawn delivery art — R6 / D153
 
-Original, procedurally modeled bakery-town sprites. White bunny courier, folded
-kraft bread bag, hand-scored loaves, flour sacks, wooden bread cart, striped shop
-awning, rain puddle, takeaway coffee, stone street, and three shop palettes per
-side. All geometry, materials, posing, lighting, and the dawn gradient are built
-in `render.py`. No downloaded models, textures, fonts, or runtime 3D assets.
+Original procedural Blender models, with no downloaded models/textures/fonts or runtime
+3D. The courier now faces straight forward along +Y: the camera sees its back, tail,
+kraft bread backpack and upright ears. The street sides are flat front elevations of
+continuous bakery, café and flower-shop facades, with warm windows, awnings, lamps and
+planters. They have no plinths, ground slabs, isometric roofs or baked street perspective.
 
-R5 shares obstacle dimensions with engine v2 in `src/lib/run/geometry.json`. Blender
-fits each obstacle mesh to those front/back/height values and exports projected ground
-endpoints and height references; the renderer and unit tests consume this contract.
+`src/lib/run/geometry.json` is shared with engine v3 and the Canvas renderer. Blender
+fits obstacle meshes to these front/back/height dimensions and exports ground endpoints
+and the physical top reference. The cart is 4400 mm tall; the bunny is 3400 mm (1.294×).
 
-## Re-render
+## Docker Blender pipeline
 
-From the repository root, with Blender and the existing Node dependencies:
+Run from the repository root with Docker and the existing Node dependencies:
 
 ```sh
-/opt/homebrew/bin/blender -b --factory-startup --python-exit-code 1 \
-  --python assets-src/run/render.py
+mkdir -p assets-src/run/.cache
+BUILDX_CONFIG="$PWD/assets-src/run/.cache/buildx" \
+  docker build -t bunbunny-run-render -f assets-src/run/Dockerfile assets-src/run
+docker run --rm --network none \
+  -v "$PWD:/work:ro" -v "$PWD/assets-src/run:/work/assets-src/run" bunbunny-run-render
 node assets-src/run/pack.mjs
+# Offline visual QA uses a local-only CPU Canvas dependency; no browser.
+npm install --prefix assets-src/run/.cache/preview \
+  --cache assets-src/run/.cache/npm --no-package-lock @napi-rs/canvas@1.1.0
+npx tsx assets-src/run/preview.ts
 ```
 
-`render.py` uses Cycles CPU, 256 samples, no detail-smearing denoiser, a fixed random seed, an
-orthographic camera, warm sun, and cool ambient fill. Clay renders use AgX at
-+0.6 EV; the emissive sky uses Standard/sRGB to retain the dawn palette. All assets render at **2× the listed target dimensions**, then the packer downsamples
-RGBA with **Lanczos3** before encoding WebP (quality 92, alpha quality 100). It writes intermediate
-RGBA PNGs and `renders.json` into the ignored `.cache/` directory. `pack.mjs`
-uses the project's existing `sharp` dependency to write WebP sheets and
-`manifest.json` into `public/brand/run/`, plus the unshipped `preview.png` here.
-It fails if any required frames are missing, if sprites touch their frame edges,
-if animation poses are duplicated, or if all shipped files exceed **1,500,000
-bytes** (the stricter decimal interpretation of 1.5 MB).
-
-If Blender needs writable user directories, use scoped environment variables:
+The optional Docker image uses Debian Blender 4.3.2/Cycles CPU, avoiding the installed
+macOS Blender's Metal-discovery crash. The native alternative, where supported:
 
 ```sh
-mkdir -p assets-src/run/.cache/config assets-src/run/.cache/tmp
 BLENDER_USER_CONFIG="$PWD/assets-src/run/.cache/config" \
 TMPDIR="$PWD/assets-src/run/.cache/tmp" \
   /opt/homebrew/bin/blender -b --factory-startup --python-exit-code 1 \
   --python assets-src/run/render.py
 ```
 
-On this machine Blender 5.2.2's headless executable crashed in
-`supports_barycentric_whitelist` during Metal device discovery, before running
-Python. Moving user/temp directories did not fix it; the macOS `bpy` 4.5.3 and
-4.2.0 packages also crashed on import. The included optional Dockerfile runs
-the same script with Debian's Blender 4.3.2 and Cycles CPU, without Metal or changes
-to the installed Blender app:
+To iterate after a full render, append `-- --only bunny-run,bread-cart --samples 256`
+to the Docker command (or native Blender invocation), then rerun pack and preview.
+Partial rendering retains metadata for other assets; first perform one complete render.
 
-```sh
-BUILDX_CONFIG="$PWD/assets-src/run/.cache/buildx" \
-  docker build -t bunbunny-run-render -f assets-src/run/Dockerfile assets-src/run
-docker run --rm --network none \
-  -v "$PWD:/work:ro" -v "$PWD/assets-src/run:/work/assets-src/run" bunbunny-run-render
-node assets-src/run/pack.mjs
-```
-
-To iterate on selected assets after a complete render:
-
-```sh
-/opt/homebrew/bin/blender -b --factory-startup --python-exit-code 1 \
-  --python assets-src/run/render.py -- --only bunny-run,bread-cart --samples 256
-node assets-src/run/pack.mjs
-```
-
-The Docker invocation accepts the same arguments after the image name and `--`.
-Partial renders retain existing metadata for other assets. Do one complete render
-before packing. Python and Node sources, final WebPs, manifest, and preview
-belong in version control; `.cache/` and `__pycache__/` do not. No `.blend` file
-is needed because the scene is reconstructed from source.
+`render.py` uses Cycles CPU, 256 samples, no denoiser, a fixed seed, warm sun and cool
+ambient fill. All assets render at **2× target size**, then `pack.mjs` applies Lanczos3
+and WebP quality 92 / alpha quality 100. The stone road uses lossless WebP with matched
+periodic edge scanlines. Clay uses AgX +0.6 EV; the dawn gradient uses Standard/sRGB.
+Intermediate PNGs, renderer metadata, native Canvas tools and contact sheet stay in the
+ignored `.cache/`. Commit source, final WebPs, manifest and `preview.png`, never the cache.
+No `.blend` file is needed.
 
 ## Asset contract
 
 | ID | Frames | Source frame size | Playback |
 | --- | ---: | --- | --- |
-| `bunny-run` | 8 | 256 × 320 | 14 fps, loop |
+| `bunny-run` | 8 | 256 × 320 | 14 fps loop |
 | `bunny-jump` | 3 | 256 × 320 | takeoff / airborne / landing |
-| `bunny-slide` | 2 | 256 × 320 | enter / hold, 8 fps |
-| `bunny-lean` | 2 | 256 × 320 | left / right |
-| `bunny-crash` | 3 | 256 × 320 | 8 fps, hold final frame |
+| `bunny-slide` | 2 | 256 × 320 | enter / hold |
+| `bunny-lean` | 2 | 256 × 320 | screen left / right |
+| `bunny-crash` | 3 | 256 × 320 | 8 fps, hold final |
 | `bread-cart` | 1 | 320 × 320 | static |
 | `flour-sacks` | 1 | 288 × 288 | static |
-| `shop-awning` | 1 | 384 × 384 | static, overhead obstacle |
-| `puddle` | 1 | 320 × 192 | static, ground obstacle |
-| `loaf-spin` | 6 | 128 × 128 | 10 fps, loop |
-| `paper-bag` | 1 | 192 × 224 | static |
-| `coffee-cup` | 1 | 192 × 224 | static |
-| `road-stone` | 1 | 768 × 512 | vertical repeat |
-| `shops-left`, `shops-right` | 3 each | 384 × 512 | butter / sage / rose variants |
+| `shop-awning` | 1 | 384 × 384 | static |
+| `puddle` | 1 | 320 × 192 | static |
+| `loaf-spin` | 6 | 128 × 128 | 10 fps loop |
+| `paper-bag`, `coffee-cup` | 1 each | 192 × 224 | static |
+| `road-stone` | 1 | 768 × 512 | ground-plan texture |
+| `shops-left`, `shops-right` | 3 each | 600 × 500 | bakery / café / flowers |
 | `sky-dawn` | 1 | 780 × 960 | backdrop |
 
-The manifest uses top-left image coordinates in **source pixels**, untrimmed
-frames, row-major sheets (at most 2048 px wide), and `pixelRatio: 2`.
-`frameSize`, `frameCount`, `columns`, `rows`, `frames[].rect`, `anchor`,
-`frames[].anchor`, `contentBounds`, frame labels, and playback hints are explicit.
-Content bounds normalize the visible bunny body height and support visual inspection;
-obstacle collision dimensions come only from the shared geometry, not alpha bounds.
+Manifest coordinates are top-left source pixels, row-major untrimmed frames, with
+`pixelRatio: 2`, frame rectangles, individual ground anchors, alpha bounds and labels.
+`geometry`, `groundFront`, `groundBack`, `heightTop` describe obstacles. Bunny anchors
+are the rendered feet baseline; jump world lift comes solely from the engine curve.
+Reduced motion selects static poses without stopping essential game movement.
 
-Use the recorded anchor to place each sprite's projected ground origin. For
-example, at nominal size, `s = 0.5`; then apply the game's distance scale:
+Sprites use an orthographic asset camera at 22.62° elevation, +Y forward, +X right,
+zero bunny yaw. This approximates the game's ray elevation at the courier plane.
+Shop textures instead use a straight front-elevation camera, with a wall filling every
+edge of the 6×5 m tile. Their side is determined by the runtime wall plane, not by a
+baked camera angle. Three palettes share cornice/window heights for continuous joins.
 
-```js
-const s = 0.5 * perspectiveScale;
-const { rect: [sx, sy, sw, sh], anchor: [ax, ay] } = asset.frames[frameIndex];
-ctx.drawImage(image, sx, sy, sw, sh, x - ax * s, y - ay * s, sw * s, sh * s);
-```
+## Projection and performance
 
-The bunny's ground anchor is its rendered feet baseline. The wider crash camera keeps
-all tumble poses inside the frame; each frame records its own anchor. Jump poses have
-expressive tucks but no extra baked vertical translation: the game supplies world lift.
-The renderer fits bunny body height to the shared standing/slide height and places the
-feet at the projected ground line minus shared jump lift. Lean indices are screen left then screen right. `fps: 0` means select
-by game state, not a timer. Playback speeds are presentation hints only, never
-inputs to authoritative replay. For reduced motion, choose a representative
-static pose; pause animation with the game (D146).
+The game uses one pinhole: `scale = 24000 / (24000 + z)`, with horizon 33%, feet 86%,
+camera height 10000 mm. Heights use `height / cameraHeight * screenGroundSpan * scale`.
+Obstacle bodies scale with this pinhole, while five continuous source bands separately
+map the top, back-ground, origin and front-ground rows to the shared physical geometry.
+This keeps D150 contact endpoints without using the depth derivative as the body scale.
 
-The camera looks along +Y from behind at 36.87° elevation, with +X screen right.
-The courier is turned 28° so the bag and silhouette have a gentle three-quarter
-read. Obstacles share this camera. Light and material palette are shared.
+The stone road maps by inverse Y projection. Facades map by inverse X projection to
+continuous walls parallel to the run direction (x = ±0.49 canvas widths at z=0).
+Each facade tile spans 15000 mm along the street and 12500 mm vertically. The three
+variants repeat seamlessly in sequence; fractional source coordinates scroll, and wrap
+samples split across tile boundaries. No stretched last scanlines or isolated buildings.
 
-## Environment tiling
+Load/resize builds sky/lane layers, projection tables and √2-spaced sprite/texture mip
+pyramids. Runtime samples prefiltered textures near their actual destination size,
+including horizontal prefiltering for distant facade columns. Columns are one device
+pixel wide, and a cached path clips the road edges. DPR is capped at two.
+No per-frame canvas filters/shadows, mip creation or source-sheet downscaling.
 
-- `road-stone` is an orthographic **ground-plan texture**, intended to be mapped
-  into the road trapezoid with the client's Canvas 2D scanline/strip projection.
-  It is not a prepainted perspective road and contains no lane markings.
-- Shop frames are **complete perspective views** of individual beveled buildings,
-  with roofs, recessed windows, door hardware, planters and curbs. Left/right buildings
-  turn toward the road and are rendered independently under the same dawn sun. Draw
-  each complete frame with **uniform scaling** and its ground anchor; never slice,
-  stretch or map a facade onto Canvas columns. Each building selects one of three palettes.
-- The ground texture includes neighboring periodic modules to preserve
-  occlusion and soft shadows across boundaries. The packer reconciles only
-  three edge scanlines to remove stochastic sampling/subpixel differences.
-  The road WebP is lossless to preserve those exact seam pixels.
-- The dawn backdrop has no text or baked UI. At 390 CSS px wide its 780 px
-  source supplies 2× coverage; cover/crop to the viewport as needed.
+## Review and validation
 
-Review `preview.png` at full size and at phone scale. Its English review labels
-are outside `public/` and are not game copy. The shipped art contains no text.
+`pack.mjs` rejects missing/duplicate frames, clipped sprites (wall elevations intentionally
+fill their tile), broken road seams, inconsistent dimensions and assets over **1,500,000
+bytes** including manifest. `preview.ts` uses the **actual runtime renderer**, offline in
+CPU Canvas, at 320/390 CSS px and DPR 2. It combines both street views and all poses into
+`preview.png`, and prints a 240-frame CPU drawing benchmark. Check the back/tail/bag,
+lean direction, tile joins, smooth street perspective and bunny/cart size in that image.
 
-## R5 quality checks
+Unit tests pin pinhole/inverse projection, top/contact dimensions, actual ground-band
+draw endpoints, jump/slide height, cache reuse, mip usage, submission count and pooled
+live-state equivalence to server replay. Development `/game/run?fps=1` displays rAF FPS;
+no readout is shipped in production. A mid-phone WeChat WebView 60fps playtest remains
+necessary; offline CPU timings are not a device FPS claim. No browsers were used for R6.
 
-The models use 48×32 smooth spheres, five-segment bevels, inset ears, turned cheeks,
-eye catchlights, paper gussets/creases and a folded bag base. The packer rejects clipped
-poses, duplicate animation frames, missing assets and an over-budget output. Tests map
-manifest ground endpoints and physical heights back to the shared engine dimensions,
-check that shops retain their aspect ratio, and verify that the courier's drawn feet and
-lift agree with replay. The contact sheet is inspected directly, without a browser.
-
-R5 verified output: **467,101 bytes** including the manifest (38 frames).
+R6 final shipped total: **462,158 bytes**. Offline CPU drawing: median **1.52 ms**,
+p95 **2.67 ms** over 240 frames at 390×650 / DPR 2 (host measurement only).

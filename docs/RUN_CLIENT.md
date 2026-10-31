@@ -1,4 +1,4 @@
-# RUN client / server (R5, D146 / D150)
+# RUN client / server (R6, D146 / D150 / D153)
 
 `/game/run` follows GRAB's identity form, local save/resume/discard, quit/restart sheets,
 leaderboard/crown, sound preference, result verification/retry and prize line. RUN is always
@@ -8,13 +8,35 @@ same machinery as the other games. All visible copy is in `src/copy.ts`.
 
 ## Rendering and input
 
-The Canvas 2D renderer uses `public/brand/run/manifest.json` frame rectangles and ground
-anchors. Dawn sky, scanline-projected scrolling stone texture, whole pre-rendered shop
-sprites (uniform aspect-preserving scaling), back-to-front lane objects and the courier
-share the projection. Buildings are never sliced into stretched Canvas columns.
-The backing store follows CSS dimensions with devicePixelRatio capped at two. Sprites decode
-before a start request or resuming the clock; a small loading label and retryable load error
-cover slow/failed loads. Static menu/hub crops do not run a Canvas.
+The Canvas 2D renderer uses `public/brand/run/manifest.json` rectangles and ground
+anchors. The courier is modeled straight along +Y: the camera sees its back, tail,
+backpack and upright ears. Eight run frames plus jump, slide, left/right lean and crash
+poses are rendered in Docker Blender. Shop elevations (bakery, café, flower shop) have
+warm windows, awnings, lamps and planters, without ground plinths. Inverse pinhole
+columns map them onto continuous walls parallel to the street, with both sides sharing
+the road's vanishing point. The columns sample the full source interval they cover,
+with mip filtering on both axes to avoid distant shimmer.
+
+Backing-store DPR is capped at 2. `prepareRunRenderer` builds sky/lane layers, sprite
+mip pyramids and road/facade projection tables on load/resize before the clock starts.
+The road and walls scroll from these cached textures with fractional source coordinates;
+wrap intervals split across the seam instead of stretching the last scanline/column.
+A cached road clip preserves smooth road edges; facade columns are one device pixel.
+No per-frame canvas filters/shadows, source-sheet downscaling, closures, arrays, projection
+objects or DOMMatrix reads. Canvas draws use the closest prefiltered mip (at most √2
+minification). The live engine pre-generates its bounded 15-minute track, pools events
+and reuses one borrowed frame view; detached snapshots remain available to server replay.
+HUD/DOM diagnostics run on a 100 ms timer and React only publishes changed values;
+checkpoint copying runs once per second or on input/hide/finish. Audio, terminal reporting
+and HUD updates run on that timer or discrete input/lifecycle handlers; rAF only advances
+the pooled engine, records scalar flags and draws. Collision freezes/draws at the exact
+tick; terminal reporting follows within 100 ms (or immediately on hide/exit).
+
+Sprites decode before starting/resuming. A loading label and retryable load error cover
+failed loads. Static menu/hub crops do not run Canvas. In development only, `/game/run?fps=1`
+shows a once-per-second rAF readout; it is absent in production. The target is steady
+60fps in a mid-phone WeChat WebView. Offline CPU drawing timings are useful regression
+checks, not evidence of device FPS; browser/device measurement is still required.
 
 rAF runs only while visible, active and unpaused. Capture-phase visibility/pagehide listeners
 advance the last active tick before D136 flush, then pause the monotonic clock and cancel rAF.
@@ -28,16 +50,22 @@ keys share the same path. Boundary/busy inputs remain in the log; same-tick dupl
 inputs after MAX_INPUTS are blocked before engine submission, with a visible cap notice. `data-lane`, `data-state` and
 `data-tick` on the wrapper expose the real simulation to tests, with no testing bypass.
 
-## Geometry and timing (engine v2)
+## Geometry and timing (engine v3)
 
-`src/lib/run/geometry.json` is shared by replay, Canvas projection and Blender. `z = 0`
-is exactly the courier's feet line (86% of canvas height); negative z continues behind it.
-A linear 2 m contact zone makes the origin and both sprite depth endpoints agree at the
-feet line; the distant perspective joins continuously with the same slope.
-Each obstacle has front/back extents and a physical height. Blender fits its mesh to these
-values and records projected ground endpoints in the manifest. The renderer maps those
-endpoints onto the same projected front/back positions. `runGeometry.test.ts` pins this
-contract across viewport sizes and distances, including jump lift and slide body height.
+`src/lib/run/geometry.json` is shared by replay, Canvas and Blender. One continuous
+pinhole uses `scale = 24000 / (24000 + z)` and its exact inverse throughout the street.
+`z=0` is the courier's feet (86% height); the horizon is 33%. Camera height is 10000 mm;
+world height projects as `mm / cameraHeight * canvasHeight * (feet - horizon) * scale`.
+Cart height is 4400 mm versus a 3400 mm bunny (1.294×); at 650 CSS px this is about
+152 px versus 117 px. No contact-zone branch or footprint-derived whole-sprite scale.
+
+D150's front/back extents remain authoritative. Obstacle sprites use continuous vertical
+bands: the physical top scales with pinhole depth, while the authored back, origin and
+front ground rows map individually onto the projected replay endpoints. This preserves
+the collision footprint without scaling the whole body by a depth derivative. Puddles
+use the same ground mapping (their height marker lies inside the ground footprint).
+`runGeometry.test.ts` pins dimensions, feet, camera inverse, growth, jump lift, slide
+height and cart ratio; renderer tests check the actual submitted ground bands.
 
 Every tick sweeps the movement interval through the obstacle footprint. Collision remains
 active after its centre crosses until its back edge passes. A 160 mm inset at either edge
@@ -48,7 +76,7 @@ stand up; awnings check the shared body-height function throughout the overlap. 
 remain impassable; coffee remains invulnerable. Lane occupancy follows the drawn lane,
 switching once at the horizontal animation's midpoint, for both hazards and pickups.
 
-R5 art uses Cycles CPU at 256 samples, 2× target resolution, Lanczos3 downsampling and
+R6 art uses Cycles CPU at 256 samples, 2× target resolution, Lanczos3 downsampling and
 full-quality alpha. Meshes have smoother curves, beveled edges, sculpted facial detail and
 folded bag gussets. All runtime assets, including the manifest, remain below 1,500,000 bytes.
 `assets-src/run/preview.png` is the unshipped visual review sheet.
@@ -61,7 +89,7 @@ and terminal tick, removes old versions, and rejects expired/malformed saves. Ev
 input and each elapsed second checkpoints; hiding/exit/finish captures the exact current tick.
 Completed saves remain until server acknowledgment and retry the same run after a reload.
 
-Engine v2 seeds use `v2.`; v1 unfinished runs and local saves are rejected rather than
+Engine v3 seeds use `v3.`; v1/v2 unfinished runs and local saves are rejected rather than
 reinterpreted. Finished stored scores remain unchanged. The save payload schema is still
 `v: 1`; the storage key and seed carry the engine version.
 
@@ -83,3 +111,9 @@ both remain ranked for owner review. D136/D143 reporting/throttling/tie behavior
 
 Checks: `npx tsc --noEmit --incremental false`, `npm run lint`,
 `npx vitest run --configLoader runner` (DB names must end `_test`), `npm run fonts`.
+
+R6 verification (2026-10-31): TypeScript, ESLint and all 1,115 unit tests passed
+(`--configLoader runner --project unit --maxWorkers 2`). Public assets: **462,158 bytes**.
+Offline CPU Canvas at 390×650 CSS px / DPR 2: 240 draws, median 1.52 ms, p95 2.67 ms.
+The reviewed `preview.png` contains actual-renderer street views and the Blender pose sheet.
+No browser/device run was performed; the CPU timing does not certify WeChat 60fps.
