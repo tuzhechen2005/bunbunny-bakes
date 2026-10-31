@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <filter id="shadow" x="-25%" y="-60%" width="150%" height="240%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#51351D" flood-opacity=".3"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <g transform="rotate(-34 32 32)">
+      <!-- Narrow necks and rounded end knobs remain distinct at 40px. -->
+      <path d="M16 29.5H10C8.5 29.5 8.5 28 6.5 28C2.5 28 2.5 36 6.5 36C8.5 36 8.5 34.5 10 34.5H16Z" fill="#AF733D" stroke="#80512C" stroke-width="1"/>
+      <path d="M48 29.5H54C55.5 29.5 55.5 28 57.5 28C61.5 28 61.5 36 57.5 36C55.5 36 55.5 34.5 54 34.5H48Z" fill="#AF733D" stroke="#80512C" stroke-width="1"/>
+      <path d="M6 30H13M51 30H58" stroke="#EBC48A" stroke-width="1.5" stroke-linecap="round"/>
+      <rect x="15" y="23.5" width="34" height="17" rx="5" fill="#DCA45E" stroke="#8E5C32" stroke-width="1.2"/>
+      <path d="M16 35.5C24 38 40 38 48 35.5V36C48 38 46.5 40 44 40H20C17.5 40 16 38 16 36Z" fill="#BF8345"/>
+      <path d="M21 27H43" stroke="#F6DAA1" stroke-width="3" stroke-linecap="round"/>
+      <path d="M21 32C26 30 31 34 36 32S42 31 44 32M24 36C29 34.5 32 37 37 35.5" stroke="#B77C40" stroke-width=".85" stroke-linecap="round"/>
+      <path d="M18.5 28V35M45.5 28V35" stroke="#ECC184" stroke-width="1" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="160%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.6" flood-color="#68401E" flood-opacity=".28"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <!-- Broad domed shoulders, toasted base and open cuts give the boule its weight. -->
+    <path d="M7 36C6 22 16 11 30 10C45 9 56 21 56 35C57 49 46 56 31 56C17 56 7 49 7 36Z" fill="#E9AE4D" stroke="#A76A2E" stroke-width="1.2"/>
+    <path d="M8 38C13 47 24 50 35 49C44 49 51 45 55 39C53 51 44 55 31 55C18 55 9 49 8 38Z" fill="#C88A36"/>
+    <path d="M13 28C15 19 23 14 31 14C37 14 42 16 45 20C33 16 23 19 16 29C14 31 12 31 13 28Z" fill="#F6CF7D"/>
+    <path d="M18 38C17 29 22 22 28 20C23 27 22 33 23 40Z" fill="#A96C30"/>
+    <path d="M18 37C17 29 21 23 26 21C22 27 21 32 22 38Z" fill="#FFF0C4"/>
+    <path d="M29 42C27 32 31 24 38 21C33 28 32 35 34 43Z" fill="#A96C30"/>
+    <path d="M29 40C28 32 31 25 36 23C32 29 31 34 33 41Z" fill="#FFF0C4"/>
+    <path d="M40 42C38 35 41 29 46 27C43 32 43 37 45 42Z" fill="#A96C30"/>
+    <path d="M40 40C39 35 41 30 44 29C42 33 42 37 43 40Z" fill="#FFF0C4"/>
+    <path d="M50 5L52.5 11.5L59 14L52.5 16.5L50 23L47.5 16.5L41 14L47.5 11.5Z" fill="#FFF2C8" stroke="#C18A3D" stroke-width="1" stroke-linejoin="round"/>
+  </g>
+</svg>
