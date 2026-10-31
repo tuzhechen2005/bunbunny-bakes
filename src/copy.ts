@@ -264,6 +264,42 @@ export const copy = {
       loadFailed: "暂时看不到成绩，稍后再试",
       rules: "每周一 0:00 重新开始，每个微信号只计本周最高分。",
     },
+    /** How-to-play intro shown once per game, skippable, replayable from the menu. */
+    tutorial: {
+      open: "玩法介绍", skip: "跳过", next: "下一步", go: "开始玩", step: "第 {n} / {total} 步",
+      big: [
+        { title: "点哪里，面包就掉哪里", text: "左右点屏幕选位置" },
+        { title: "一样的面包碰在一起", text: "合成更大一级的面包" },
+        { title: "合出大面包", text: "面包堆到顶线就结束" },
+      ],
+      tu: [
+        { title: "点面包，放进纸袋", text: "被压住的要先拿走上面的" },
+        { title: "3 个一样的自动打包", text: "纸袋装满就结束" },
+        { title: "完成订单多拿分", text: "道具能撤回、洗牌" },
+      ],
+      m3: [
+        { title: "交换相邻的两个面包", text: "3 个连成一线就消除" },
+        { title: "连 4 个出擀面杖", text: "连 5 个出大面包" },
+        { title: "步数用完前达到目标分", text: "过关后解锁下一关" },
+      ],
+      grab: [
+        { title: "夹子左右摆，点一下伸出去", text: "夹到什么带回什么" },
+        { title: "发金光的面包分最高", text: "太生、太焦都少分" },
+        { title: "越重收得越慢", text: "时钟 +5 秒" },
+      ],
+      run: [
+        { title: "左右滑，换车道", text: "躲开推车和迎面的车" },
+        { title: "上滑跳，下滑趴", text: "跳过面粉和水坑，趴过遮阳棚" },
+        { title: "踩斜坡跑上车顶", text: "车顶上也有面包" },
+        { title: "纸袋吸面包，咖啡无敌", text: "越跑越快，撞到就结束" },
+      ],
+      td: [
+        { title: "点炮位，摆厨具", text: "擀面杖打一只 · 打蛋器打一片 · 筛粉器减速 · 烤箱打得远" },
+        { title: "害虫会扛走面包", text: "打倒它，面包自己滚回来" },
+        { title: "升到 3 级二选一", text: "每关 5 波，最后一波有大胃王鼠" },
+        { title: "提前叫波多拿金币", text: "可以 2× 3× 加速" },
+      ],
+    },
     /** 消除大面包 (D100–D105): the `/game` page. */
     game: {
       live: "正在玩",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { GameTutorial } from "@/components/game/GameTutorial";
 import { fill } from "@/components/customer/format";
 import { LeaderboardView } from "@/components/game/LeaderboardView";
 import { isRetryable, readRemembered, writeRemembered } from "@/components/game/gameApi";
@@ -393,6 +394,7 @@ export function M3Page() {
             >
               {g.viewBoard}
             </button>
+            <GameTutorial game="m3" />
           </div>
           <p className="mt-auto pt-8 text-[13px] leading-[1.7] text-c-grey" data-testid="m3-rules">
             {rules}

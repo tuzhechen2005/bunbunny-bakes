@@ -114,7 +114,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
       publish(game.step(elapsedTick(clock.pause(performance.now()))),true);
     };
     let frames=0,fpsStart=0,collected=false;
-    const fpsEnabled=process.env.NODE_ENV!=='production'&&new URLSearchParams(window.location.search).get('fps')==='1';
+    const fpsEnabled=new URLSearchParams(window.location.search).get('fps')==='1';
     const fpsElement=fps.current;
     if(fpsElement)fpsElement.hidden=!fpsEnabled;
     const frame=(now:number)=>{
@@ -143,7 +143,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
       publish(EMPTY_EVENTS,false,false,state.current);
       const now=performance.now();
       if(fpsEnabled&&fpsElement&&fpsStart&&now-fpsStart>=1000){
-        fpsElement.textContent=`${Math.round(frames*1000/(now-fpsStart))} ${t.fpsUnit}`;
+        fpsElement.textContent=`${Math.round(frames*1000/(now-fpsStart))} ${t.fpsUnit} · ${surface.current&&'webgl' in surface.current&&surface.current.webgl?'GL':'2D'} · ${window.devicePixelRatio}x`;
         frames=0;fpsStart=now;
       }
     },HUD_INTERVAL_MS);
@@ -204,7 +204,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
     </div>
     <div ref={wrapper} className={`run-board${webgl?" run-board-gl":""}`} role="application" aria-label={t.boardLabel} tabIndex={0} onClick={()=>{if(state.current.over)onShowResult?.();}} data-testid="run-board" >
       <canvas ref={canvas} aria-hidden="true" />
-      {process.env.NODE_ENV!=='production'&&<output ref={fps} hidden className="run-fps" aria-hidden="true" />}
+      <output ref={fps} hidden className="run-fps" aria-hidden="true" />
       {!art&&<p className="run-overlay" role="status">{t.loading}</p>}
       {capped&&!hud.over&&<p className="run-input-limit" role="status">{t.inputLimit}</p>}
       {(paused||hidden)&&!hud.over&&<p className="run-overlay" role="status">{t.paused}</p>}

@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { GameTutorial } from '@/components/game/GameTutorial';
 import { TopBar } from '@/components/ui/TopBar';
 import { focusRing } from '@/components/ui/focus';
 import { GameShell, SpeakerButton, GameRegistrationField, gamePrimary, gameSecondary } from '@/components/game/GameChrome';
@@ -115,6 +116,7 @@ export function TdPage() {
         <button className={gameSecondary} data-testid="td-restart" onClick={() => setDialog('restart')}>{g.restart}</button></>
         : <button className={gamePrimary} data-testid="td-menu-start" onClick={() => {setError('');setPhase('form');}}>{nextLevel > 1 ? g.resume : g.start}</button>}
       <button className={gameSecondary} data-testid="td-open-board" onClick={() => setPhase('board')}>{g.viewBoard}</button>
+      <GameTutorial game="td" />
     </main>}
     {phase === 'form' && <main className="td-menu td-form-page"><h1>{t.title}</h1><form onSubmit={begin} noValidate className="mt-6 flex flex-col gap-4" data-testid="td-form">
       <GameRegistrationField kind="wechat" testId="td-wechat" value={wechat} onChange={e => setWechat(e.target.value)} error={errors.wechat} errorId="td-wechat-err" />

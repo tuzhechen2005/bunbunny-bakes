@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { GameTutorial } from "@/components/game/GameTutorial";
 import { RollNumber } from "@/components/customer/checkout/RollNumber";
 import { fill } from "@/components/customer/format";
 import { Sheet, type SheetHandle } from "@/components/ui/Sheet";
@@ -359,6 +360,7 @@ export function GamePage() {
             >
               {t.viewBoard}
             </button>
+            <GameTutorial game="big" />
           </div>
           <p className="mt-auto pt-8 text-[13px] leading-[1.7] text-c-grey" data-testid="game-rules">
             {rules}
