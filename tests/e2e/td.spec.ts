@@ -24,7 +24,7 @@ async function begin(page:Page) {
   await expect(page.getByTestId('td-nickname')).toHaveAttribute('placeholder',g.nicknamePlaceholder);
   await page.getByTestId('td-wechat').fill('baker');await page.getByTestId('td-nickname').fill('Baker');await page.getByTestId('td-start').click();
   await expect(page.getByTestId('td-slot-0')).toBeEnabled();
-  await expect(page.getByTestId('top-bar-back')).toBeVisible();
+  await expect(page.locator('[data-testid=top-bar-back]:visible')).toHaveCount(1);
   await expect(page.getByTestId('td-pause')).toHaveCount(0);
   await expect(page.getByTestId('td-sound')).toHaveText('');
 }
