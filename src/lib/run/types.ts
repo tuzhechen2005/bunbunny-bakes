@@ -1,12 +1,12 @@
-export const RUN_ENGINE_VERSION = 3;
+export const RUN_ENGINE_VERSION = 4;
 export const TICK_RATE = 60;
 export const UNITS_PER_METRE = 1000;
 export const MAX_RUN_TICKS = 15 * 60 * TICK_RATE;
 export const MAX_INPUTS = 20_000;
 /** Speeds are integer millimetres per tick. */
-export const BASE_SPEED = 200;
+export const BASE_SPEED = 320;
 export const CAP_SPEED = 500;
-export const RAMP_TICKS = 120 * TICK_RATE;
+export const RAMP_TICKS = 75 * TICK_RATE;
 export const MAX_SPEED = CAP_SPEED * 3 / 2;
 export const JUMP_TICKS = 42;
 export const SLIDE_TICKS = 36;

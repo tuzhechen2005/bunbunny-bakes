@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { RunObject, RunObstacleKind } from "@/lib/run/types";
+import { RAMP_TICKS, type RunObject, type RunObstacleKind } from "@/lib/run/types";
 const fixture = vi.hoisted(() => ({ objects: [] as RunObject[] }));
 vi.mock("@/lib/run/track", () => ({ createRunTrack: () => ({ next: () => ({ end: 100_000_000, objects: fixture.objects }) }) }));
 import { createRunGame, runSpeed } from "@/lib/run/engine";
@@ -19,7 +19,7 @@ function scenario(kind: RunObstacleKind, centreTick: number, offset: number) {
 
 describe("continuous obstacle overlap", () => {
   it.each(['flour','puddle','awning'] as const)("%s passes through the full footprint with a centred action at base and cap speed", kind => {
-    for(const centreTick of [100,7500]) {
+    for(const centreTick of [100,RAMP_TICKS]) {
       const {game,at,dir}=scenario(kind,centreTick,kind==='awning'?18:21);
       game.step(centreTick+20);
       expect(game.state().over).toBe(false);
@@ -27,7 +27,7 @@ describe("continuous obstacle overlap", () => {
     }
   });
   it.each(['flour','awning'] as const)("%s still collides after the centre has crossed when the action ends early", kind => {
-    const {game,centre}=scenario(kind,100,kind==='awning'?29:34);
+    const {game,centre}=scenario(kind,100,kind==='awning'?31:36);
     game.step(100);
     expect(game.state().over).toBe(false);
     expect(game.state().objects.some(o=>o.z<=0)).toBe(true);
@@ -56,7 +56,9 @@ describe("continuous obstacle overlap", () => {
     expect(() => scenario('flour',100,1)).toThrow(/after game over/);
   });
   it("entering a lane midway through an overlap collides; the target lane is free before midpoint", () => {
-    fixture.objects=[{id:1,lane:2,z:20_000,kind:'cart'}];
+    let centre = 0;
+    for (let tick = 1; tick <= 100; tick++) centre += runSpeed(tick);
+    fixture.objects=[{id:1,lane:2,z:centre,kind:'cart'}];
     const game=createRunGame({seed:'lane'});
     game.step(96);game.input(96,'R');
     game.step(101);expect(game.state().player.lane).toBe(1);expect(game.state().over).toBe(false);

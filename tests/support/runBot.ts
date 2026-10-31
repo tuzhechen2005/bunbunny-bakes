@@ -16,7 +16,9 @@ export interface RunBotResult {
 }
 export const BOT_REACTION_TICKS = 15;
 export const BOT_SAMPLE_TICKS = 6;
+// Use the live speed for R7/v4 timing; no assumed starting speed or ramp duration.
 const GOOD_LOOKAHEAD = 21_500;
+const GOOD_LOOKAHEAD_TICKS = 44;
 
 function run(seed: string, limit: number, mode: "good" | "random" | "perfect"): RunBotResult {
   const game = createRunGame({ seed });
@@ -48,7 +50,7 @@ function run(seed: string, limit: number, mode: "good" | "random" | "perfect"): 
       if (pending[0]?.tick === s.tick) swipe(pending.shift()!.dir);
       if (s.tick % BOT_SAMPLE_TICKS === 0 && pending.length === 0 && !s.player.laneChange) {
         const row = s.objects.find((o) => isRunObstacle(o.kind) && o.z >= -MAX_OBSTACLE_BACK);
-        if (row && row.id !== handledRow && row.z <= Math.min(GOOD_LOOKAHEAD, s.speed * 44)) {
+        if (row && row.id !== handledRow && row.z <= Math.min(GOOD_LOOKAHEAD, s.speed * GOOD_LOOKAHEAD_TICKS)) {
           handledRow = row.id;
           const obstacles = s.objects.filter((o) => o.z === row.z && isRunObstacle(o.kind));
           const danger = obstacles.find((o) => o.lane === s.player.lane);

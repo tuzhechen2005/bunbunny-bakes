@@ -107,16 +107,17 @@ for a width that fits the place it is shown (rope, grid, detail: `sizes` in `src
 | `docs/TASKS.md` | Milestones |
 | `docs/HANDOFF.md` | Where things stand |
 
-### Dawn delivery runner (R5)
+### Dawn delivery runner (R7)
 
-`/game/run` uses engine/replay **v2**: continuous obstacle depth, visible jump/slide
-clearance, and midpoint lane occupancy share geometry with the Canvas renderer and Blender.
-Old unfinished v1 runs/saves are rejected; stored finished scores remain unchanged.
+`/game/run` uses engine/replay **v4**: starts at 320 mm/tick (19.2 m/s), reaches the
+500 mm/tick cap in 75 seconds, and retains coffee ×1.5 (maximum 750 mm/tick).
+Continuous obstacle depth, visible jump/slide clearance, and midpoint lane occupancy share geometry with the Canvas renderer and Blender.
+Old unfinished v1/v2/v3 runs/saves are rejected; stored finished scores remain unchanged.
 The rebuilt dawn-town art uses 256-sample, supersampled Blender renders and whole building
 sprites, with all shipped run assets capped at 1.5 MB. See [RUN client](docs/RUN_CLIENT.md),
 [engine rules](src/lib/run/README.md), and [art pipeline](assets-src/run/README.md).
 
-R5 checks: `npx tsc --noEmit --incremental false`, `npm run lint`,
+R7 checks: `npx tsc --noEmit --incremental false`, `npm run lint`,
 `npx vitest run --configLoader runner --project unit`. No browser execution in this task.
 
 ## 三连烤 weekly levels (S9)
