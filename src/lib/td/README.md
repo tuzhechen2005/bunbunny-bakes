@@ -31,7 +31,7 @@ const final = replayTd({ seed: level.seed, tierCount: 6 }, inputs);
 // final.over, final.passed, final.bread, final.tick, etc.
 ```
 
-- `TD_ENGINE_VERSION = 1`; canonical seed: `v1.td.<Monday YYYY-MM-DD>.<level>`.
+- `TD_ENGINE_VERSION = 2`; canonical seed: `v2.td.<Monday YYYY-MM-DD>.<level>`.
   Old, unversioned, noncanonical, and unsupported versions are rejected. A real
   Gregorian Monday and positive safe-integer level are required. No per-player seed
   suffix exists: everyone receives the same five waves for the same week and level.
@@ -56,8 +56,10 @@ const final = replayTd({ seed: level.seed, tierCount: 6 }, inputs);
   occupied-slot, empty-slot, max-upgrade, busy-wave, or terminal attempts also return
   `false` and count as rejected; their valid future time is advanced first. Successful
   actions increment `inputsAccepted`. No rejected action spends coins or builds.
-- A game accepts at most 2,000 total input attempts. Clients should validate transport
-  shape and log every well-formed attempt, including rejected gameplay actions.
+- A game accepts at most 2,000 total input attempts. Clients validate transport shape and log well-formed attempts until 100 have been
+  rejected. After that, preflight and silently ignore invalid taps without calling
+  `apply`; valid actions still execute and are logged. This preserves identical
+  replay counters below the server limit, including after save/resume.
   `replayTd` validates the **entire** array before simulation: exact shapes, nondecreasing
   ticks, observation bound, and input cap. It throws `TdReplayError` for malformed
   logs, inputs at/after termination, or >120 ignored gameplay inputs. A malformed live
@@ -131,7 +133,8 @@ Upgrading retains the current cooldown and does not change shots already in flig
 
 ## Economy and tuning constants
 
-Start coins: **300**. Placement is tier 0; two upgrades produce tiers 1 and 2.
+Start coins: **300** through L10; add **102 per level from L11 through L20**,
+then cap at **1320**. The original pest curve continues growing after L20. Placement is tier 0; two upgrades produce tiers 1 and 2.
 Upgrade costs are incremental, not total costs. Selling returns `floor(totalSpent/2)`.
 No income comes from theft or time, and no interest or passive damage exists.
 
@@ -189,21 +192,21 @@ generalization. These are measurements
 of these fixed policies, not estimates of human player success. L1 intentionally lets
 even random purchasers succeed often; the policy gap is measured at L10.
 
-Regression bounds: greedy L1 ≥98%, L10 35–65%, L20 <15%; random L10 ≤15% and at least
+Regression bounds: greedy L1 ≥98%, L10 35–65%, L20 10–15%; random L10 ≤15% and at least
 20 percentage points below greedy. Random total passes across the three checkpoints
 must be <75% of greedy total passes.
 
-Measured with engine v1 and the included bot policy (2026-10-31):
+Measured with engine v2 and the included bot policy (2026-10-31):
 
 | Level | Regression greedy | Regression random | Held-out greedy | Held-out random |
 | --- | ---: | ---: | ---: | ---: |
-| 1 | 100/100 (100%) | 96/100 (96%) | 100/100 (100%) | 100/100 (100%) |
-| 10 | 45/100 (45%) | 1/100 (1%) | 47/100 (47%) | 0/100 (0%) |
-| 20 | 0/100 (0%) | 0/100 (0%) | 0/100 (0%) | 0/100 (0%) |
+| 1 | 100/100 (100%) | 97/100 (97%) | 100/100 (100%) | 100/100 (100%) |
+| 10 | 46/100 (46%) | 0/100 (0%) | 44/100 (44%) | 0/100 (0%) |
+| 20 | 11/100 (11%) | 11/100 (11%) | 12/100 (12%) | 8/100 (8%) |
 
-Across both cohorts, greedy passes are **100% / 46% / 0%** at L1/L10/L20; random
-passes are **98% / 0.5% / 0%**. The longest observed held-out run is 7,707 ticks,
-well below the hard cap. Reproduce the held-out cohort with `tdBotWeeks(100, 100)`
+Across both cohorts, greedy passes are **100% / 45% / 11.5%** at L1/L10/L20; random
+passes are **98.5% / 0% / 9.5%**. Both 100-week cohorts run in the tuning regression.
+Reproduce the held-out cohort with `tdBotWeeks(100, 100)`
 and the same `greedyTd(tdLevel(week, n))` / `randomTd(...)` calls used in the tuning test.
 
 Tests cover seeded/versioned generation, all map geometry, integer snapshots,

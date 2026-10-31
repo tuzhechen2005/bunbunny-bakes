@@ -10,7 +10,9 @@ const level = () => tdLevel("2026-10-26", 1);
 
 describe("TD deterministic level and geometry", () => {
   it("pins the version and generates five shared weekly waves", () => {
+    expect(TD_ENGINE_VERSION).toBe(2);
     expect(tdSeedVersion(level().seed)).toBe(TD_ENGINE_VERSION);
+    expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([300, 300, 402, 1320, 1320]);
     expect(level()).toEqual(level());
     expect(level().waves).toHaveLength(5);
     expect(tdLevel("2026-11-02", 1).waves).not.toEqual(level().waves);
@@ -28,7 +30,7 @@ describe("TD deterministic level and geometry", () => {
       expect(() => tdLevel(week, 1)).toThrow();
     }
     for (const n of [0, -1, 1.1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) expect(() => tdLevel("2026-10-26", n)).toThrow();
-    for (const seed of ["unversioned", "v2.td.2026-10-26.1", "v1.td.2026-10-26.01", "v1.td.2026-02-30.1"]) {
+    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
       expect(() => createTdGame({ seed })).toThrow();
     }
     for (const tierCount of [0, 101, 1.5, NaN]) expect(() => createTdGame({ level: level(), tierCount })).toThrow();

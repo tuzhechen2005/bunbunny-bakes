@@ -6,6 +6,8 @@ import { copy } from '@/copy';
 import { fill } from '@/components/customer/format';
 import { sound } from '@/components/game/sound';
 import { haptic } from '@/lib/motion/react';
+import { applyTdClientInput } from './tdInput';
+import { gameSecondary } from '@/components/game/GameChrome';
 import { createTdClock } from './tdClock';
 import { preloadTdArt } from './tdAssets';
 import { breadImages, createTdRenderer } from './tdRenderer';
@@ -70,8 +72,8 @@ export function TdBoard({ save, paused, soundOn, reduced, onProgress, onOver }: 
       game.step(clock.tick(performance.now()));
       if (game.over) { publish(true); stop(); return; }
       const input = { ...a, tick: game.state().tick } as TdInput;
-      // Log every well-formed attempt; disabled controls normally prevent rejected actions.
-      const accepted = game.apply(input); inputs.current.push(input);
+      // Retain replayable rejected attempts only up to the client safety margin.
+      const accepted = applyTdClientInput(game, inputs.current, input);
       if (accepted) { if (settings.current.soundOn) sound.drop(); if (!settings.current.reduced) haptic(8); }
       publish(true); render?.(state.current);
     };
@@ -93,8 +95,8 @@ export function TdBoard({ save, paused, soundOn, reduced, onProgress, onOver }: 
   const disabled = paused || hidden || hud.over || !ready || hud.inputsAccepted + hud.inputsRejected >= MAX_INPUTS;
   return <section className="td-play">
     <div className="td-hud" aria-live="off">
-      <b>{fill(t.level, { n: save.level })}</b><span>{t.wave} <b data-testid="td-wave">{hud.wave}/5</b></span>
-      <span>{t.coins} <b data-testid="td-coins">{hud.coins}</b></span><span>{t.bread} <b data-testid="td-bread">{hud.bread}</b></span>
+      <p>{t.levels}<b className="font-num" data-testid="td-level">{save.level}</b></p><p>{t.wave}<b className="font-num" data-testid="td-wave">{hud.wave}/5</b></p>
+      <p>{t.coins}<b className="font-num" data-testid="td-coins">{hud.coins}</b></p><p>{t.bread}<b className="font-num" data-testid="td-bread">{hud.bread}</b></p>
     </div>
     <div className="td-target"><span>{t.target}</span>{target?.imageUrl ? <img src={target.imageUrl} alt={target.name ?? ''} width={26} height={26} /> : <span aria-hidden="true">◒</span>}</div>
     <div className="td-field-wrap"><div className="td-field" ref={wrapper} data-testid="td-board" aria-label={t.boardLabel}>
@@ -114,8 +116,8 @@ export function TdBoard({ save, paused, soundOn, reduced, onProgress, onOver }: 
       {(!ready || paused || hidden) && <p className="td-overlay" role="status">{!ready ? t.loading : t.paused}</p>}
     </div></div>
     <div className="td-controls">
-      <button data-testid="td-speed" aria-pressed={speed === 2} disabled={disabled} onClick={() => { const value = speed === 1 ? 2 : 1; clock.speed(value, performance.now()); setSpeed(value); }}>{speed === 1 ? t.speedOne : t.speedTwo}</button>
-      <button data-testid="td-call-wave" disabled={disabled || hud.nextWaveTick === null} onClick={() => action.current({type:'callWave',slot:-1})}>{t.nextWave}</button>
+      <button className={gameSecondary} data-testid="td-speed" aria-pressed={speed === 2} disabled={disabled} onClick={() => { const value = speed === 1 ? 2 : 1; clock.speed(value, performance.now()); setSpeed(value); }}>{speed === 1 ? t.speedOne : t.speedTwo}</button>
+      <button className={gameSecondary} data-testid="td-call-wave" disabled={disabled || hud.nextWaveTick === null} onClick={() => action.current({type:'callWave',slot:-1})}>{t.nextWave}</button>
     </div>
     {hud.inputsAccepted + hud.inputsRejected >= MAX_INPUTS && <p role="status">{t.inputLimit}</p>}
   </section>;

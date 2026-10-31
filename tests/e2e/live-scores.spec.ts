@@ -1,10 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { m3Level } from "../../src/lib/m3";
 import { copy } from "../../src/copy";
 import { BOARD_REFRESH_MS, PROGRESS_MIN_GAP_MS, PROGRESS_REPORT_MS } from "../../src/lib/liveScores";
 
 test.use({ browserName: "chromium", reducedMotion: "reduce" });
 const tiers = Array.from({ length: 6 }, (_, i) => ({ id: `t${i}`, name: `面包${i}`, radius: .07 + i * .02,
   points: i * 10, imageUrl: null, color: { bg: "var(--c-wash)", ink: "var(--c-ink)" } }));
+const m3 = { ...m3Level("2026-10-26", 1), level: 1, weekKey: "2026-10-26" };
 const week = { start: "2026-10-26", end: "2026-11-01" };
 
 for (const game of ["big", "tu", "m3"]) {
@@ -16,14 +18,14 @@ for (const game of ["big", "tu", "m3"]) {
     const payloads: { runId: string; log: unknown[] }[] = [];
     await page.route("**/api/menu", r => r.fulfill({ json: { products: [] } }));
     await page.route("**/api/game/hub", r => r.fulfill({ json: { liveScores: true, week, prizeGame: "BIG", games: [] } }));
-    await page.route(`**${api}/start`, r => r.fulfill({ json: { runId: "test-run", seed: "test-seed", tiers: game === "big" ? [...tiers, { ...tiers[5], id: "big", radius: .25 }] : tiers, expiresAt: "2099-01-01" } }));
+    await page.route(`**${api}/start`, r => r.fulfill({ json: { runId: "test-run", seed: "test-seed", ...(game === "m3" ? m3 : {}), tiers: game === "big" ? [...tiers, { ...tiers[5], id: "big", radius: .25 }] : game === "m3" ? tiers.slice(0, m3.tierCount) : tiers, expiresAt: "2099-01-01" } }));
     await page.route(`**${api}/progress`, r => {
       reports++; payloads.push(r.request().postDataJSON());
       return r.fulfill({ status: off ? 404 : 200, json: { score: 0 } });
     });
     await page.route(`**${api}/leaderboard**`, r => {
       boards++;
-      return r.fulfill({ json: { liveScores: !off, week, top: [{ rank: 1, nickname: "兔兔", wechatMasked: "wx***01", score: boards, live: true }], lastWinner: null } });
+      return r.fulfill({ json: { liveScores: !off, week, ...(game === "m3" ? { nextLevel: 1, myBest: 0 } : {}), top: [{ rank: 1, nickname: "兔兔", wechatMasked: "wx***01", score: boards, live: true }], lastWinner: null } });
     });
     await page.clock.install();
     await page.goto(path);

@@ -1,8 +1,9 @@
 import { expect, it, vi, afterEach } from 'vitest';
 import { createTdClock } from '@/components/td/tdClock';
-import { parseTdSave } from '@/components/td/tdSave';
-import { tdLevel, replayTd } from '@/lib/td';
+import { parseTdSave, TD_SAVE_KEY } from '@/components/td/tdSave';
+import { createTdGame, tdLevel, replayTd, type TdInput } from '@/lib/td';
 import { TD_ASSET_NAMES, preloadTdArt } from '@/components/td/tdAssets';
+import { applyTdClientInput } from '@/components/td/tdInput';
 const seed = tdLevel('2026-10-19',1).seed;
 const tiers = [{id:'bread',radius:.1,points:1,imageUrl:'/bread.webp',color:{bg:'white',ink:'black'}}];
 const save = {v:1,seed,level:1,weekKey:'2026-10-19',runId:'00000000-0000-4000-8000-000000000001',nickname:'Baker',tiers,inputs:[],endTick:60,score:0,expiresAt:'2026-10-26T05:00:00Z'};
@@ -15,8 +16,9 @@ it('settles old speed, excludes paused/hidden time, caps time and resumes exact 
 });
 it('restores only canonical unexpired replayable saves, including completed retry evidence', () => {
   const now=Date.parse('2026-10-20T12:00:00Z');
+  expect(TD_SAVE_KEY).toBe('bb_td_save_v2');
   expect(parseTdSave(JSON.stringify(save),now)).toEqual(save);
-  for (const patch of [{score:999},{endTick:-1},{seed:'v0.td.2026-10-19.1'},{level:2},{tiers:[]},{inputs:[{tick:500,type:'sell',slot:0}]}]) expect(parseTdSave(JSON.stringify({...save,...patch}),now)).toBeNull();
+  for (const patch of [{score:999},{endTick:-1},{seed:'v1.td.2026-10-19.1'},{level:2},{tiers:[]},{inputs:[{tick:500,type:'sell',slot:0}]}]) expect(parseTdSave(JSON.stringify({...save,...patch}),now)).toBeNull();
   expect(parseTdSave(JSON.stringify(save),Date.parse(save.expiresAt))).toBeNull();
   const terminal=replayTd({seed,tierCount:1},[]);
   expect(parseTdSave(JSON.stringify({...save,endTick:terminal.tick,score:terminal.wave}),now)?.endTick).toBe(terminal.tick);
@@ -35,4 +37,29 @@ it('decodes RUN-format rectangles and anchors while missing entries remain optio
   const {preloadTdArt:load}=await import('@/components/td/tdAssets');
   const art=await load();expect(art['pest-ant']?.image.src).toBe('/brand/td/ant.webp');
   expect(art['pest-ant']?.asset.frames[1].anchor).toEqual([30,71]);expect(art['map-1']).toBeUndefined();
+});
+
+it('caps rejected client attempts at 100 while valid actions stay replayable, including after resume', () => {
+  let game = createTdGame({ seed });
+  const inputs: TdInput[] = [];
+  const invalid: TdInput = { tick: 0, type: 'sell', slot: 0 };
+  for (let i = 0; i < 150; i++) applyTdClientInput(game, inputs, invalid);
+  expect(game.inputsRejected).toBe(100);
+  expect(inputs).toHaveLength(100);
+  game = createTdGame({ seed });
+  for (const input of inputs) game.apply(input);
+  applyTdClientInput(game, inputs, invalid);
+  expect(game.inputsRejected).toBe(100);
+  expect(applyTdClientInput(game, inputs, {tick: 0, type: 'place', slot: 0, tower: 'oven'})).toBe(true);
+  for (const input of [
+    {tick: 0, type: 'place', slot: 0, tower: 'rollingPin'},
+    {tick: 0, type: 'upgrade', slot: 0},
+    {tick: 0, type: 'upgrade', slot: 1},
+  ] as TdInput[]) expect(applyTdClientInput(game, inputs, input)).toBe(false);
+  expect(applyTdClientInput(game, inputs, {tick: 0, type: 'sell', slot: 0})).toBe(true);
+  expect(applyTdClientInput(game, inputs, {tick: 0, type: 'callWave', slot: -1})).toBe(true);
+  expect(applyTdClientInput(game, inputs, {tick: 0, type: 'callWave', slot: -1})).toBe(false);
+  expect(game.inputsRejected).toBe(100);
+  game.step(60);
+  expect(replayTd({seed}, inputs, 60)).toEqual(game.state());
 });

@@ -1,4 +1,4 @@
-export const TD_ENGINE_VERSION = 1;
+export const TD_ENGINE_VERSION = 2;
 export const TICKS_PER_SECOND = 60;
 export const FIELD_WIDTH = 720;
 export const FIELD_HEIGHT = 1080;

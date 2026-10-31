@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { fill } from "@/components/customer/format";
 import { LeaderboardView } from "@/components/game/LeaderboardView";
 import { isRetryable, readRemembered, writeRemembered } from "@/components/game/gameApi";
@@ -11,6 +11,7 @@ import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import { useGameHub } from "@/components/game/useGameHub";
 import { useLiveProgress } from "@/components/game/useLiveProgress";
+import { GameShell as Shell, SpeakerButton, GameRegistrationField, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { copy } from "@/copy";
 import { elapsedTick } from "./grabClock";
 import { fetchMenu } from "@/lib/api";
@@ -47,32 +48,6 @@ function validate(wechatId: string, nickname: string) {
     wechat: points(w) >= 1 && points(w) <= 40 ? null : g.wechatInvalid,
     nick: points(n) >= 1 && points(n) <= 10 && !CONTROL.test(n) ? null : g.nicknameInvalid,
   };
-}
-
-function Shell({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex flex-1 flex-col bg-c-wash text-c-ink">
-      <div className="mx-auto flex w-full max-w-[430px] flex-1 flex-col overflow-x-clip bg-c-paper">{children}</div>
-    </div>
-  );
-}
-
-function SpeakerButton({ on, onToggle }: { on: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-pressed={on}
-      aria-label={on ? g.soundOff : g.soundOn}
-      className={`grid size-11 shrink-0 place-items-center rounded-full text-c-ink ${focusRing}`}
-      data-testid="grab-sound"
-    >
-      <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" />
-        {on ? <path d="M15.5 9a4 4 0 010 6M18 6.5a8 8 0 010 11" /> : <path d="M16 9.5l5 5M21 9.5l-5 5" />}
-      </svg>
-    </button>
-  );
 }
 
 export function GrabPage() {
@@ -303,15 +278,15 @@ export function GrabPage() {
               {g.exit}
             </button>
           ) : null}
-          <SpeakerButton on={soundOn} onToggle={toggleSound} />
+          <SpeakerButton testId="grab-sound" on={soundOn} onToggle={toggleSound} />
         </div>
       }
     />
     </div>
   );
 
-  const primary = `font-display h-14 w-full rounded-full bg-c-ink text-lg text-c-paper ${focusRing}`;
-  const secondary = `min-h-11 w-full rounded-full bg-c-wash text-[15px] font-bold ${focusRing}`;
+  const primary = gamePrimary;
+  const secondary = gameSecondary;
 
   // ---------------- leaderboard ----------------
   if (phase === "board") {
@@ -444,53 +419,14 @@ export function GrabPage() {
 
   // ---------------- form ----------------
   if (phase === "form" || !run) {
-    const input =
-      "h-12 w-full rounded-2xl border border-c-line bg-c-paper px-4 text-base text-c-ink placeholder:text-c-grey-soft focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-c-ink";
     return (
       <Shell>
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
           <h1 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.title}</h1>
           <form onSubmit={begin} noValidate className="mt-6 flex flex-col gap-4" data-testid="grab-form">
-            <label className="block">
-              <span className="mb-1.5 block text-[13px] font-bold">{g.wechatLabel}</span>
-              <input
-                value={wechatId}
-                onChange={(e) => setWechatId(e.target.value)}
-                placeholder={g.wechatPlaceholder}
-                autoComplete="off"
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck={false}
-                aria-invalid={errors.wechat ? true : undefined}
-                aria-describedby={errors.wechat ? "grab-wechat-err" : undefined}
-                className={input}
-                data-testid="grab-wechat"
-              />
-              {errors.wechat ? (
-                <span id="grab-wechat-err" role="alert" className="mt-1 block text-[13px] text-c-red">
-                  {errors.wechat}
-                </span>
-              ) : null}
-            </label>
-            <label className="block">
-              <span className="mb-1.5 block text-[13px] font-bold">{g.nicknameLabel}</span>
-              <input
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                placeholder={g.nicknamePlaceholder}
-                autoComplete="off"
-                aria-invalid={errors.nick ? true : undefined}
-                aria-describedby={errors.nick ? "grab-nick-err" : undefined}
-                className={input}
-                data-testid="grab-nickname"
-              />
-              {errors.nick ? (
-                <span id="grab-nick-err" role="alert" className="mt-1 block text-[13px] text-c-red">
-                  {errors.nick}
-                </span>
-              ) : null}
-            </label>
+            <GameRegistrationField kind="wechat" testId="grab-wechat" value={wechatId} onChange={(e) => setWechatId(e.target.value)} error={errors.wechat} errorId="grab-wechat-err" />
+            <GameRegistrationField kind="nickname" testId="grab-nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} error={errors.nick} errorId="grab-nick-err" />
             {formError ? (
               <p role="alert" className="m-0 text-sm text-c-red" data-testid="grab-form-error">
                 {formError}

@@ -1,7 +1,6 @@
 # TD server and client (D2 / D151, D152, D154, D155)
 
-`/game/td` is the sixth game. This worktree imports D1's committed engine and tests from
-`codex/td` (c2ddb59), unchanged. The server reuses `gameLevels.ts` from `codex/m3lv`.
+`/game/td` is the sixth game. D4 upgrades D1's engine to v2 with the calibrated opening economy (D156). The server reuses `gameLevels.ts` from `codex/m3lv`.
 D3 art is optional; no browser was used during implementation.
 
 ## Server contract
@@ -55,7 +54,8 @@ names and prices. Unaffordable choices are disabled. Existing towers offer two
 upgrades and half-spend selling. The HUD shows level, wave /5, coins and breads;
 the target TierView photo changes each wave. The bread pile consumes ascending
 snapshot indices, keeping the highest-priced bread until last. Controls include
-pause, 1×/2×, early wave and remembered sound. All visible copy is in `src/copy.ts`.
+1×/2×, early wave and remembered sound. The shared top bar has a back chevron,
+exit action and speaker icon; opening the exit sheet pauses simulation. All visible copy is in `src/copy.ts`.
 
 ## Art handoff
 
@@ -74,7 +74,7 @@ Required names:
 
 ## Persistence and checks
 
-`bb_td_save_v1` stores run metadata, tier photos, input log and exact simulation tick.
+`bb_td_save_v2` stores run metadata, tier photos, input log and exact simulation tick.
 It checkpoints each simulation second and every input/pause/hide/exit/terminal state.
 Resume replays the log; expired, malformed, wrong-version, wrong-level, mismatched-score
 or noncanonical terminal saves are discarded. Completed saves remain until the server
@@ -113,3 +113,25 @@ with all four TD client tests (1,138 unit cases total). The full DB run executed
 in the four affected files plus the new additive TD migration file passed (826 DB
 cases covered in total). Fonts regenerated successfully. No e2e/browser execution
 and no commit were performed.
+
+## D4 polish (2026-10-31)
+
+- TD, RUN and GRAB share the page shell, speaker, primary/secondary styles and
+  registration fields (including placeholders). TD HUD uses small grey labels and
+  `font-num` values. Exit confirmation is the pause control.
+- The endpoint displays ten separate rounded-square photo tiles on a two-row tray.
+  Theft fades one fixed-position tile per bread (with a small lift unless reduced
+  motion is enabled); surviving tiles never reflow. Terminal frames remove the last
+  tile immediately because the renderer stops there.
+- The TD hub icon uses the same cream fill and warm brown contour as RUN.
+- M3 level progress has explicit WebKit/Firefox track and fill styling; live-score
+  e2e mocks supply the current weekly level contract.
+- Rejected client inputs stop at 100, including after resume. Further invalid taps
+  do not enter the engine or log; valid actions remain available. Server replay
+  retains its independent >120 rejection limit.
+- Engine v2 seeds and save keys reject v1 unfinished runs. The existing server
+  version gate follows `TD_ENGINE_VERSION`; verified historical scores are unchanged.
+
+D4 verification: TypeScript, repository ESLint, all 1,145 unit tests and all 826
+Postgres tests passed against `bunbunny_td4_test`. Playwright discovered the 12
+updated TD/live-score e2e cases without launching a browser. No commit was made.

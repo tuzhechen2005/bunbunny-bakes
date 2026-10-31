@@ -1,4 +1,4 @@
-import { TD_MAPS, type TdState, type TowerKind, type PestKind } from '@/lib/td';
+import { START_BREAD, TD_MAPS, type TdState, type TowerKind, type PestKind } from '@/lib/td';
 import type { TierView } from '@/components/game/types';
 import type { TdArt, TdSprite } from './tdAssets';
 
@@ -47,19 +47,41 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
     bg.fillStyle = paper; bg.strokeStyle = line; bg.lineWidth = 3; bg.beginPath(); bg.arc(slot.x, slot.y, 35, 0, Math.PI * 2); bg.fill(); bg.stroke();
     bg.fillStyle = ink; bg.fillRect(slot.x - 10, slot.y - 2, 20, 4); bg.fillRect(slot.x - 2, slot.y - 10, 4, 20);
   }
-  const breads = tiers.map((t, i) => {
+  const breads = tiers.map((_, i) => {
     const c = document.createElement('canvas'); c.width = c.height = 64;
     const b = c.getContext('2d')!;
-    b.beginPath(); b.arc(32, 32, 30, 0, Math.PI * 2); b.clip(); b.fillStyle = t.color.bg; b.fillRect(0, 0, 64, 64);
+    b.beginPath(); b.roundRect(1, 1, 62, 62, 12); b.clip(); b.fillStyle = paper; b.fillRect(0, 0, 64, 64);
     const photo = photos[i];
     if (photo) { const size = Math.min(photo.width, photo.height); b.drawImage(photo, (photo.width-size)/2, (photo.height-size)/2, size, size, 0, 0, 64, 64); }
     else { b.strokeStyle = ink; b.lineWidth = 3; b.beginPath(); b.ellipse(32, 34, 23, 16, -.2, 0, Math.PI*2); b.stroke(); }
+    b.strokeStyle = line; b.lineWidth = 2; b.stroke();
     return c;
   });
+  // Two rows on a tray. Each original bread keeps its position after a theft.
+  const trayX = Math.max(8, Math.min(466, end.x - 119)), trayY = Math.min(970, end.y - 110);
+  const tileX = Array.from({ length: START_BREAD }, (_, i) => trayX + 10 + i % 5 * 46);
+  const tileY = Array.from({ length: START_BREAD }, (_, i) => trayY + 10 + Math.floor(i / 5) * 46);
+  const lostAt = new Float64Array(START_BREAD).fill(-1);
+  let previousBread = -1;
+  bg.fillStyle = paper; bg.strokeStyle = line; bg.lineWidth = 3;
+  bg.beginPath(); bg.roundRect(trayX, trayY, 246, 108, 16); bg.fill(); bg.stroke();
   return (s: TdState) => {
     ctx.setTransform(canvas.width / 720, 0, 0, canvas.height / 1080, 0, 0);
     ctx.drawImage(layer, 0, 0);
-    for (let i = 0; i < s.breadTiers.length; i++) ctx.drawImage(breads[s.breadTiers[i]], Math.max(8, Math.min(560, end.x-70)) + i%4*29, Math.min(970, end.y-55) + Math.floor(i/4)*24, 60, 60);
+    if (previousBread >= 0 && s.bread < previousBread) {
+      for (let i = START_BREAD - previousBread; i < START_BREAD - s.bread; i++) lostAt[i] = s.tick;
+    }
+    previousBread = s.bread;
+    for (let i = 0; i < START_BREAD; i++) {
+      const stolen = i < START_BREAD - s.bread;
+      const age = lostAt[i] < 0 ? 1 : Math.min(1, (s.tick - lostAt[i]) / 18);
+      // Terminal scenes stop drawing, so the last tile must disappear on their final frame.
+      if (stolen && (age >= 1 || s.over)) continue;
+      ctx.globalAlpha = stolen ? 1 - age : 1;
+      const lift = stolen && !reduced ? age * 12 : 0;
+      ctx.drawImage(breads[Math.floor(i * (tiers.length - 1) / (START_BREAD - 1))], tileX[i], tileY[i] - lift, 42, 42);
+    }
+    ctx.globalAlpha = 1;
     for (let i = 0; i < s.towers.length; i++) {
       const t = s.towers[i];
       if (!sprite(ctx, art[towerNames[t.kind][t.level]], t.x, t.y, 100, s.tick, reduced)) {

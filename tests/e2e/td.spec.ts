@@ -19,8 +19,14 @@ async function mockApi(page:Page) {
   return {starts,finishes};
 }
 async function begin(page:Page) {
-  await page.getByTestId('td-menu-start').click();await page.getByTestId('td-wechat').fill('baker');await page.getByTestId('td-nickname').fill('Baker');await page.getByTestId('td-start').click();
+  await page.getByTestId('td-menu-start').click();
+  await expect(page.getByTestId('td-wechat')).toHaveAttribute('placeholder',g.wechatPlaceholder);
+  await expect(page.getByTestId('td-nickname')).toHaveAttribute('placeholder',g.nicknamePlaceholder);
+  await page.getByTestId('td-wechat').fill('baker');await page.getByTestId('td-nickname').fill('Baker');await page.getByTestId('td-start').click();
   await expect(page.getByTestId('td-slot-0')).toBeEnabled();
+  await expect(page.getByTestId('top-bar-back')).toBeVisible();
+  await expect(page.getByTestId('td-pause')).toHaveCount(0);
+  await expect(page.getByTestId('td-sound')).toHaveText('');
 }
 for(const width of [320,390]) test.describe(`TD ${width}`,()=>{
   test.use({viewport:{width,height:700},hasTouch:true});
@@ -41,9 +47,9 @@ for(const width of [320,390]) test.describe(`TD ${width}`,()=>{
   });
   test('pause/hidden time stops; save resumes without another start, discard and reduced motion',async({page})=>{
     const api=await mockApi(page);await page.emulateMedia({reducedMotion:'reduce'});await page.clock.install();await page.goto('/game/td');await begin(page);
-    await page.clock.runFor(1000);await page.getByTestId('td-pause').click();
+    await page.clock.runFor(1000);await page.getByTestId('td-exit').click();
     const stage=page.getByTestId('td-board'),tick=await stage.getAttribute('data-tick');await page.clock.runFor(5000);await expect(stage).toHaveAttribute('data-tick',tick!);
-    await page.getByTestId('td-pause').click();await page.clock.runFor(100);
+    await page.getByTestId('td-keep-playing').click();await page.clock.runFor(100);
     await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
     const hidden=await stage.getAttribute('data-tick');await page.clock.runFor(5000);await expect(stage).toHaveAttribute('data-tick',hidden!);
     await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));});

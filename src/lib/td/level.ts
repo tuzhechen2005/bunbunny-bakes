@@ -55,7 +55,10 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
       }),
     };
   });
-  return { seed, weekKey, number: n, map: Math.floor((n - 1) / 4) % 3, startCoins: 300, waves };
+  // Late levels need a viable opening defense before bounty income can sustain upgrades.
+  // Keep L1–L10 unchanged; ramp through L20, then let the original pest curve keep growing.
+  const startCoins = 300 + Math.min(10, Math.max(0, difficulty - 9)) * 102;
+  return { seed, weekKey, number: n, map: Math.floor((n - 1) / 4) % 3, startCoins, waves };
 }
 
 export function tdLevelFromSeed(seed: string): TdLevel {

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56" fill="#fdf4e2" stroke="#64321f" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+  <!-- The same cream fill, warm brown contour and simple shapes as run.svg. -->
+  <path d="M18 20C12 12 13 3 17 3s6 10 6 16m5 0C27 9 31 2 35 4s0 12-4 17"/>
+  <path d="M12 28c0-8 6-13 14-13s14 5 14 13-6 13-14 13-14-5-14-13Z"/>
+  <circle cx="21" cy="26" r="1.4" fill="#64321f" stroke="none"/>
+  <circle cx="31" cy="26" r="1.4" fill="#64321f" stroke="none"/>
+  <path d="m24 31 2 2 2-2m-2 2v2" fill="none" stroke-width="2"/>
+  <!-- A loaf shields the bakery; rounded scoring marks keep it readable at 56px. -->
+  <path d="M11 48c0-9 6-15 16-15h11c10 0 15 6 15 15v4H11Z"/>
+  <path d="m27 37-3 6m12-6-3 6m12-5-3 6" fill="none"/>
+  <!-- Rolling pin and two small paws. -->
+  <path d="m5 35 5-2m30-9 5-2" fill="none" stroke-width="5"/>
+  <rect x="9" y="27" width="32" height="9" rx="4" transform="rotate(-20 25 31.5)"/>
+  <path d="M12 34q-4-4-6 0t4 6m25-12q-3-4-6-1t2 6"/>
+</svg>

@@ -2,9 +2,9 @@ import { expect, it } from "vitest";
 import { tdLevel } from "@/lib/td";
 import { greedyTd, randomTd, tdBotWeeks } from "../support/tdBot";
 
-it("keeps greedy progression and random play inside the agreed tuning bounds", () => {
+it.each([0, 100])("keeps greedy progression and random play inside the tuning bounds (week offset %i)", (offset) => {
   const rates = [1, 10, 20].map(n => {
-    const weeks = tdBotWeeks(100);
+    const weeks = tdBotWeeks(100, offset);
     const greedy = weeks.map(week => greedyTd(tdLevel(week, n)).state);
     const random = weeks.map(week => randomTd(tdLevel(week, n)).state);
     return { level: n, greedy: greedy.filter(s => s.passed).length, random: random.filter(s => s.passed).length };
@@ -13,7 +13,8 @@ it("keeps greedy progression and random play inside the agreed tuning bounds", (
   expect(rates[0].greedy).toBeGreaterThanOrEqual(98);
   expect(rates[1].greedy).toBeGreaterThanOrEqual(35);
   expect(rates[1].greedy).toBeLessThanOrEqual(65);
-  expect(rates[2].greedy).toBeLessThan(15);
+  expect(rates[2].greedy).toBeGreaterThanOrEqual(10);
+  expect(rates[2].greedy).toBeLessThanOrEqual(15);
   expect(rates[1].random).toBeLessThanOrEqual(15);
   expect(rates[1].random).toBeLessThanOrEqual(rates[1].greedy - 20);
   // L1 intentionally remains forgiving to beginners, including random purchasers.
