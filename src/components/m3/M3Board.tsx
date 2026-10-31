@@ -9,7 +9,7 @@ import { BIG_BASE, ROLL_BASE, MIN_MOVE_GAP_MS, createM3Game, legalM3Moves, tierO
 import { motionHealth } from "@/lib/motion/fps";
 import { haptic, useMotionPrefs } from "@/lib/motion/react";
 import { adjacent, animationQueue, sameCell, swipeDirection, swipeTarget, type AnimationFrame, type SwipeDirection } from "./m3Animation";
-import { BoardPaper, BreadFace, SpecialMark } from "./M3Art";
+import { BoardPaper, BreadFace, PieceFace } from "./M3Art";
 import "./m3.css";
 
 const t = copy.customer.m3;
@@ -194,8 +194,7 @@ export function M3Board({ tiers, seed, initialMoves = [], soundOn, reduced, onPr
         const tier = tiers[tierOf(code)];
         return <div key={`${r}-${c}`} className="m3-cell" style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%` }}>
           {code >= 0 && <span className={`m3-piece ${effect} ${!quiet && hint && (sameCell(hint.a, p) || sameCell(hint.b, p)) ? "m3-hint" : ""}`} style={{ "--dx": `${dx}%`, "--dy": `${dy}%`, "--duration": `${invalid ? 360 : frame?.ms ?? 180}ms` } as CSSProperties}>
-            <BreadFace key={tier.id} tier={tier} />
-            {code >= ROLL_BASE ? <SpecialMark kind={code >= BIG_BASE ? "big" : "roll"} /> : null}
+            <PieceFace tier={tier} kind={code >= ROLL_BASE ? code >= BIG_BASE ? "big" : "roll" : undefined} />
           </span>}
           <button type="button" className="m3-target" data-cell={`${r},${c}`} data-testid={`m3-cell-${r}-${c}`} data-code={code} aria-pressed={sameCell(selected, p)} disabled={busy}
             aria-label={fill(t.tileLabel, { r: String(r + 1), c: String(c + 1), name: tier?.name ?? "", special: code >= BIG_BASE ? t.big : code >= ROLL_BASE ? t.roll : "" })}

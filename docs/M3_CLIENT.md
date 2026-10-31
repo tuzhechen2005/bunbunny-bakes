@@ -38,7 +38,11 @@ Hand-drawn `roll.svg` replaces the black frame with a diagonal wooden rolling pi
 barrel, restrained grain/highlight, narrow handles and rounded knobs, with a soft shadow.
 `big.svg` is a larger golden boule with cream scoring, a toasted base, sheen and a small
 sparkle. Illustration colours live in the SVG assets; pieces retain their 22% rounded corners.
-The mark wrapper breathes from 1 to 1.08 over 1.6 seconds, while its image hops 2.5px with a
-soft landing every 3.2 seconds. CSS cell phases stagger both loops. Idle motion resets during
+Round 2 enlarges the pin to roughly 95% of the art diagonal, with a barrel about one third
+of the tile width and chunkier handles; the boule sparkle sits farther inside the tile.
+Two inner wrappers move the bread photo and mark together: breathing from 1 to 1.1 over
+1.6 seconds, and bouncing to -14% of the face height with take-off stretch and landing squash
+every 2.4 seconds. The outer `.m3-piece` retains the effect transforms, and the face stays
+mounted when a special forms. CSS cell phases stagger both loops. Idle motion resets during
 board playback, travel/invalid/pop/refill/flash effects, hints and shuffles; quiet/degraded and
 reduced-motion modes keep marks still. No idle JavaScript loop, target or aria changes.

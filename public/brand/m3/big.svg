@@ -15,6 +15,6 @@
     <path d="M29 40C28 32 31 25 36 23C32 29 31 34 33 41Z" fill="#FFF0C4"/>
     <path d="M40 42C38 35 41 29 46 27C43 32 43 37 45 42Z" fill="#A96C30"/>
     <path d="M40 40C39 35 41 30 44 29C42 33 42 37 43 40Z" fill="#FFF0C4"/>
-    <path d="M50 5L52.5 11.5L59 14L52.5 16.5L50 23L47.5 16.5L41 14L47.5 11.5Z" fill="#FFF2C8" stroke="#C18A3D" stroke-width="1" stroke-linejoin="round"/>
+    <path d="M46 10L48.5 16.5L55 19L48.5 21.5L46 28L43.5 21.5L37 19L43.5 16.5Z" fill="#FFF2C8" stroke="#C18A3D" stroke-width="1" stroke-linejoin="round"/>
   </g>
 </svg>

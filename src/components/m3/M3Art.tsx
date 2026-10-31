@@ -12,7 +12,16 @@ export function BreadFace({ tier }: { tier: TierView }) {
   </span>;
 }
 
-/** Separate breathing and hop layers keep idle motion off the piece's effect transform. */
+/** Keep the face mounted as specials form, with both idle layers below piece effects. */
+export function PieceFace({ tier, kind }: { tier: TierView; kind?: "roll" | "big" }) {
+  return <span className={`m3-piece-face${kind ? " m3-piece-face-special" : ""}`}>
+    <span className="m3-piece-bounce">
+      <BreadFace key={tier.id} tier={tier} />
+      {kind && <SpecialMark kind={kind} />}
+    </span>
+  </span>;
+}
+
 export function SpecialMark({ kind }: { kind: "roll" | "big" }) {
   return <span className={`m3-special m3-special-${kind}`} aria-hidden="true">
     {/* Static SVGs carry the illustration palette and stay crisp at board size. */}

@@ -22,9 +22,11 @@
 .m3-piece { position:absolute; inset:0; padding:1.5px; pointer-events:none; }
 .m3-face { position:relative; display:grid; place-items:center; width:100%; height:100%; border-radius:22%; overflow:hidden; font-size:20px; }
 .m3-face img { width:100%; height:100%; object-fit:cover; }
-.m3-special { position:absolute; inset:1.5px; width:calc(100% - 3px); height:calc(100% - 3px); overflow:visible; }
-.m3-special { animation:var(--m3-breathe, none) 1.6s ease-in-out var(--m3-idle-phase, 0s) infinite; transform-origin:center; }
-.m3-special img { display:block; width:100%; height:100%; transform-origin:50% 75%; animation:var(--m3-hop, none) 3.2s ease-in-out var(--m3-idle-phase, 0s) infinite; }
+.m3-piece-face, .m3-piece-bounce { position:relative; display:block; width:100%; height:100%; }
+.m3-piece-face-special { animation:var(--m3-breathe, none) 1.6s ease-in-out var(--m3-idle-phase, 0s) infinite; transform-origin:center; }
+.m3-piece-face-special > .m3-piece-bounce { transform-origin:50% 100%; animation:var(--m3-hop, none) 2.4s ease-in-out var(--m3-idle-phase, 0s) infinite; }
+.m3-special { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+.m3-special img { display:block; width:100%; height:100%; }
 /* Position-based phases need no timers or changes to the board's accessible targets. */
 .m3-cell:nth-child(4n) { --m3-idle-phase:-.4s; }
 .m3-cell:nth-child(4n + 1) { --m3-idle-phase:-.8s; }
@@ -35,13 +37,16 @@
   --m3-breathe:m3-special-breathe;
   --m3-hop:m3-special-hop;
 }
-@keyframes m3-special-breathe { 0%,100% { transform:scale(1); } 50% { transform:scale(1.08); } }
+@keyframes m3-special-breathe { 0%,100% { transform:scale(1); } 50% { transform:scale(1.1); } }
 @keyframes m3-special-hop {
-  0%,58%,86%,100% { transform:translateY(0) scale(1); }
-  68% { transform:translateY(-2.5px) scale(.98,1.03); }
-  77% { transform:translateY(0) scale(1.04,.96); }
+  0%,52%,90%,100% { transform:translateY(0) scale(1); }
+  58% { transform:translateY(0) scale(1.06,.92); }
+  64% { transform:translateY(-8%) scale(.95,1.08); }
+  70% { transform:translateY(-14%) scale(.98,1.03); }
+  80% { transform:translateY(0) scale(1.08,.9); }
+  85% { transform:translateY(-2%) scale(.99,1.02); }
 }
-.m3-quiet .m3-special, .m3-quiet .m3-special img { animation:none; transform:none; }
+.m3-quiet .m3-piece-face, .m3-quiet .m3-piece-bounce { animation:none; transform:none; }
 .m3-target { position:absolute; inset:0; border:0; border-radius:8px; background:transparent; z-index:2; cursor:pointer; -webkit-tap-highlight-color:transparent; }
 .m3-target[aria-pressed="true"], .m3-target:focus-visible { outline:2px solid var(--c-ink); outline-offset:-2px; }
 .m3-target:disabled { cursor:default; }
@@ -67,7 +72,7 @@
 @media (prefers-reduced-motion:reduce) {
   .m3-play *, .m3-play *::before, .m3-play *::after { animation-name:m3-fade !important; transform:none !important; }
   .m3-play .m3-hint { animation:none !important; }
-  .m3-special, .m3-special img { animation:none !important; transform:none !important; }
+  .m3-play .m3-piece-face, .m3-play .m3-piece-bounce { animation:none !important; transform:none !important; }
 }
 .m3-record-pop { animation:m3-record 600ms ease-out both; }
 .m3-record-fade { animation:m3-record-fade 250ms ease-out both; }
