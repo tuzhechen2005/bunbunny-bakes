@@ -18,25 +18,26 @@
 .grab-board:focus-visible { outline:2px solid var(--c-ink); outline-offset:3px; }
 .grab-board .m3-paper { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
 .grab-board > * { pointer-events:none; }
-.grab-oven { position:absolute; width:18%; height:auto; right:1%; top:2%; transition:filter 180ms; }
-.grab-oven-warm { filter:brightness(1.22) drop-shadow(0 0 8px color-mix(in srgb,var(--c-red) 40%,transparent)); }
+.grab-oven { position:absolute; width:18%; height:auto; right:1%; top:2%; transition:opacity 180ms; opacity:.85; }
+.grab-oven-warm { opacity:1; }
 .grab-item { position:absolute; display:block; transform:translate(-50%,-50%); }
 .grab-face { position:relative; display:block; width:100%; height:100%; border-radius:22%; overflow:hidden; }
 .grab-face > img:not(.grab-sparkle) { display:block; width:100%; height:100%; object-fit:cover; }
-.grab-raw > img { filter:brightness(1.08) saturate(.75) sepia(.1); }
-.grab-perfect { animation:grab-glow 1600ms ease-in-out infinite; }
+.grab-raw::after { content:""; position:absolute; inset:0; background:var(--c-paper); opacity:.16; }
+.grab-perfect { outline:1px solid var(--linen); }
 .grab-sparkle { position:absolute; right:6%; top:5%; width:23%; height:23%; animation:grab-twinkle 1600ms ease-in-out infinite; }
 @keyframes grab-twinkle { 0%,100% { opacity:.35; } 50% { opacity:1; } }
-.grab-burnt > img { filter:brightness(.7) sepia(.35) saturate(1.1); }
-.grab-arm { position:absolute; left:50%; top:0; width:4.4%; margin-left:-2.2%; transform-origin:50% 0; z-index:2; }
+.grab-burnt::after { content:""; position:absolute; inset:0; border:3px solid var(--c-ink); border-radius:inherit; opacity:.45; }
+.grab-arm { position:absolute; left:50%; top:0; width:4.4%; height:100%; margin-left:-2.2%; transform-origin:50% 0; z-index:2; }
+.grab-arm-scale, .grab-tip { position:absolute; inset:0; transform-origin:50% 0; will-change:transform; }
+.grab-held-position { position:absolute; inset:0; z-index:1; will-change:transform; }
 .grab-arm-segment { width:100%; height:100%; max-width:none; display:block; object-fit:fill; }
-.grab-tongs { position:absolute; bottom:0; left:50%; transform:translate(-50%,55%); width:350%; height:auto; max-width:none; }
+.grab-tongs { position:absolute; top:0; left:50%; transform:translate(-50%,-45%); width:350%; height:auto; max-width:none; }
 .grab-held { z-index:1; }
 .grab-score-pop { position:absolute; top:12%; left:50%; z-index:4; color:var(--c-ink); background:var(--c-paper); border:1px solid var(--c-line); border-radius:30px; padding:4px 12px; font-size:24px; animation:grab-score 800ms ease-out both; }
 .grab-paused { position:absolute; top:65px; left:0; right:0; text-align:center; pointer-events:none; color:var(--c-grey-text); font-size:13px; }
 .grab-record-pop { animation:grab-record 420ms ease-out both; }
 .grab-record-fade { animation:grab-record-fade 420ms ease-out both; }
-@keyframes grab-glow { 0%,100% { box-shadow:0 0 4px color-mix(in srgb,var(--linen) 30%,transparent); } 50% { box-shadow:0 0 12px color-mix(in srgb,var(--linen) 60%,transparent); } }
 @keyframes grab-score { 0% { opacity:0; transform:translate(-50%,10px); } 20% { opacity:1; } 100% { opacity:0; transform:translate(-50%,-25px); } }
 @keyframes grab-fade { 0% { opacity:0; } 20%,70% { opacity:1; } 100% { opacity:0; } }
 @keyframes grab-record { from { opacity:0; transform:scale(.9); } to { opacity:1; transform:scale(1); } }

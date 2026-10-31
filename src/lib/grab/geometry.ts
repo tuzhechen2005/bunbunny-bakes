@@ -1,4 +1,4 @@
-import { FIELD_HEIGHT, PIVOT_X, PIVOT_Y, SWING_PERIOD_TICKS } from "./types";
+import { FIELD_HEIGHT, GRAB_MARGIN, PIVOT_X, PIVOT_Y, SWING_PERIOD_TICKS } from "./types";
 
 // Rounded sin(degrees) * 10000, baked at authoring time. No runtime trigonometry.
 const SIN = [0, 175, 349, 523, 698, 872, 1045, 1219, 1392, 1564, 1736, 1908, 2079, 2250, 2419, 2588, 2756, 2924, 3090, 3256, 3420, 3584, 3746, 3907, 4067, 4226, 4384, 4540, 4695, 4848, 5000, 5150, 5299, 5446, 5592, 5736, 5878, 6018, 6157, 6293, 6428, 6561, 6691, 6820, 6947, 7071, 7193, 7314, 7431, 7547, 7660, 7771, 7880, 7986, 8090, 8192, 8290, 8387, 8480, 8572, 8660, 8746, 8829, 8910, 8988, 9063, 9135, 9205, 9272, 9336, 9397, 9455, 9511, 9563, 9613, 9659, 9703, 9744, 9781, 9816, 9848, 9877, 9903, 9925, 9945, 9962, 9976, 9986, 9994, 9998, 10000] as const;
@@ -39,21 +39,28 @@ export function circleIntersectsSegment(
   return cross * cross <= radius * radius * squareLength;
 }
 
-/** First swept-tip contact, at one field-unit resolution; stable item order breaks ties. */
+/** First swept-tip contact, at one field-unit resolution; nearest tip line wins simultaneous contacts, then stable item order. */
 export function firstContact(
   angle: number, from: number, to: number, items: readonly { x: number; y: number; radius: number }[],
 ): { index: number; length: number } | null {
+  const d = direction(angle);
   let a = clawTip(angle, from);
   const b = clawTip(angle, to);
   const candidates = items.map((item, index) => ({ item, index })).filter(({ item }) =>
     // Allow for the one-unit rounded path's deviation from this coarse chord.
-    circleIntersectsSegment(item.x, item.y, item.radius + 2, a.x, a.y, b.x, b.y));
+    circleIntersectsSegment(item.x, item.y, item.radius + GRAB_MARGIN + 2, a.x, a.y, b.x, b.y));
   if (!candidates.length) return null;
   for (let length = from + 1; length <= to; length++) {
     const tip = clawTip(angle, length);
+    let nearest: number | null = null;
+    let distance = Infinity;
     for (const { item, index } of candidates) {
-      if (circleIntersectsSegment(item.x, item.y, item.radius, a.x, a.y, tip.x, tip.y)) return { index, length };
+      if (!circleIntersectsSegment(item.x, item.y, item.radius + GRAB_MARGIN, a.x, a.y, tip.x, tip.y)) continue;
+      // Common direction length: compare integer cross products without division.
+      const toLine = Math.abs((item.x - PIVOT_X) * d.y - (item.y - PIVOT_Y) * d.x);
+      if (toLine < distance) { nearest = index; distance = toLine; }
     }
+    if (nearest !== null) return { index: nearest, length };
     a = tip;
   }
   return null;

@@ -1,4 +1,4 @@
-# src/lib/grab — 兔兔夹面包 (G1 / D145)
+# src/lib/grab — 兔兔夹面包 (G4 / D149)
 
 Original grab-and-reel rules, shared by client and server. Pure TypeScript: integer field
 coordinates, fixed integer ticks, integer scores, and the shared seeded RNG in `../game/rng.ts`.
@@ -67,11 +67,13 @@ The engine supplies logical positions and animation events, not artwork or UI la
 
 ## Rules and tuning constants
 
-- Field 720 × 1440, pivot `(360, 0)`, oven animation origin `(680, 80)`.
+- Field 720 × 1080 (2:3), pivot `(360, 0)`, oven animation origin `(680, 80)`.
 - Idle angle follows a 300-tick triangular swing from −70° to +70° and back. Its phase is
   tied to the run's tick, including time spent reeling. A launch freezes the current angle.
-- Extension is 14 units/tick. Contact uses the first circle met by the swept tip at one-unit
-  length resolution; array order breaks an exact tie. At a field edge an empty claw returns.
+- Extension is 14 units/tick. The entire swept tip uses `item.radius + 22` field units,
+  including the coarse candidate test and one-unit contact scan. First contact wins; among
+  simultaneous contacts, choose the centre nearest the tip line, then array order for exact
+  ties. At a field edge an empty claw returns.
 - Empty return is 14 units/tick; held return is `max(2, 17 − 4 × weight)` units/tick.
   Even the shortest edge miss takes 28 ticks outward and 28 inward (about 0.93 seconds total).
   Board input launches on primary pointer-down for touch/pen and left mouse presses, with a
@@ -93,13 +95,20 @@ is still perfect, and strictly after 9 seconds is burnt. Base points are multipl
 so all awards are exact integers. `breadStage`, `breadPoints`, and `reelSpeed` are exported
 pure helpers. Non-breads are unaffected by age.
 
+At age 601 (`BREAD_REFRESH_AGE`), after 60 burnt ticks, the oven replaces field bread with
+fresh raw bread of the same tier, size and position and a new run-wide id. It emits `refill`
+without a `pop` or score; it consumes no RNG or item-deck draw and cannot create extra clocks.
+Held bread never refreshes. This repeats throughout bonus time, so unattended bread cannot
+stay burnt for the rest of the run. Its visual is a small crust border, never a dark photo filter.
+
 Eight initial items start at age zero. Each contact schedules one replacement 30 ticks later,
-even if the caught item is still returning. Slots are chosen from a seeded 4 × 5 lower-field
+even if the caught item is still returning. Slots are chosen from a seeded 4 × 4 lower-field
 lattice with independent seeded x/y jitter (±14/±16 units). The spacing guarantees non-overlap
 without retry loops, including at the largest radius. Column centres are 90/270/450/630;
-row centres are 522/729/936/1143/1350. Item bounds span y=433…1439 (the lower 70%).
-Bread radii are about 1.58× v1; the height-fitted phone board is narrower, giving approximately
-1.35× the previous photo dimensions on a 390×844 screen. Visual diameters and hitboxes match. A refill may reuse the vacated slot;
+row centres are 420/610/800/990. Item bounds span y=331…1079 (the lower 70%).
+Bread radii remain 41/57/73, about 1.58× v1; shortening the height-fitted board makes the photos
+larger on the same phone viewport. Visual diameters remain unchanged in field units; forgiving
+hitboxes extend 22 units beyond the photo radius. A refill may reuse the vacated slot;
 the held item is no longer a field obstacle. Item ids never repeat.
 
 The oven draws shuffled 32-item batches: 23 breads, 7 butter, 1 flour, 1 clock. Bread size and
@@ -114,9 +123,11 @@ snapshot but earns nothing. There is no end bonus.
 ### Finite replay bound
 
 `MAX_RUN_TICKS = 6000` is a conservative natural bound, not a gameplay timer cap. Every item
-contact is at least 433 units below the pivot. Each completed grab takes more than 32 ticks
-(at least 31 outward and 26 inward with the fastest held return). At time `T`, at most
-`9 + floor(T/32)` items can have spawned, including the initial eight and a pending grab.
+contact is at least 309 units below the pivot (331 minimum photo edge minus 22 tolerance).
+Each completed grab takes more than 32 ticks (at least 23 outward and 19 inward with the
+fastest held return). At time `T`, at most `9 + floor(T/32)` items can have been drawn from
+the deck, including the initial eight and a pending grab. Automatic bread renewal draws
+nothing from that deck and therefore does not affect the clock bound.
 With one clock per 32-item batch, a run's duration `T` satisfies
 `T ≤ 3600 + 300 × ceil((9 + T/32)/32)`, which implies `T < 5636`. Thus stepping to 6000 always
 finishes naturally. Even `step(Number.MAX_SAFE_INTEGER)` stops at the natural deadline.
@@ -138,8 +149,9 @@ The result is exactly `{ score, over, grabs, launchesAccepted }`.
 
 Configuration errors (fewer than 3 tiers) remain `RangeError`. Wall-clock plausibility and
 suspicious-rate checks live in `src/server/grab.ts` and `grabRules.ts`; this engine does not trust or read wall time.
-`GRAB_ENGINE_VERSION = 3` is exported. Version 3 slows extension and empty return; v1/v2 saves
-and server runs are rejected by the existing version guards. `grabSeed(randomHex)` embeds it in server-issued seeds;
+`GRAB_ENGINE_VERSION = 4` is exported. Version 4 shortens the field, widens swept contact
+and renews burnt field bread; v1/v2/v3 saves and server runs are rejected by the existing
+version guards. `grabSeed(randomHex)` embeds it in server-issued seeds;
 `grabSeedVersion(seed)` returns the encoded version or null for malformed/unversioned seeds. Bump it for any
 future rules/RNG/geometry change that changes the score of an existing seed and input log.
 
@@ -147,8 +159,8 @@ future rules/RNG/geometry change that changes the score of an existing seed and 
 
 `tests/support/grabBot.ts` contains both bots. Random launches after a seeded uniform 0–17 tick
 delay each time the claw becomes idle, without inspecting targets. Greedy inspects only the
-current public items, estimates visible ray hits over the next half-swing in two-tick increments,
-and chooses points per travel-plus-wait time. It predicts contact age, avoids flour, and values
+current public items, uses the shared swept-contact geometry over the next half-swing in two-tick increments,
+and chooses points per travel-plus-wait time. It predicts contact age modulo the 601-tick bread renewal, avoids flour, and values
 a clock's time bonus; it never sees future refills or clones the engine RNG. Both log actual
 launches and simulate the same engine. Bot prediction may use floating point; engine/replay do not.
 
@@ -156,11 +168,13 @@ Reproduce with `npx tsx scripts/grab-tune.mts [seeds=200] [tiers=6] [seedPrefix=
 
 | Corpus | Random mean score | Greedy mean score | Ratio | Greedy mean grabs |
 | --- | ---: | ---: | ---: | ---: |
-| `grab-tune0…199`, 6 tiers | 743.73 | 2729.27 | 27.25% | 16.115 |
-| `grab-check0…999`, 3 tiers | 768.804 | 2677.546 | 28.71% | 16.131 |
+| `grab-tune0…199`, 6 tiers | 2391.97 | 4446.86 | 53.79% | 21.105 |
+| `grab-check0…999`, 3 tiers | 2378.296 | 4451.822 | 53.42% | 21.146 |
 
-The 200-seed unit regression requires a 25–35% score ratio and 15–20 mean completed greedy grabs.
-Slower empty returns make random misses more costly, while aimed play retains the grab target.
+G4 intentionally supersedes the old 25–35% ratio / 15–20 grab target: the owner asked for
+clearly more forgiving play. The 200-seed regression now allows a 45–65% score ratio and
+18–26 mean completed greedy grabs, retaining a strategy advantage without narrowing the hitbox.
+The table records measurements, not a reason to tune away the requested forgiveness.
 Other tests cover deterministic events and snapshots, chunked stepping, replay/live equality,
 bad logs, exact doneness/contact/delivery boundaries, clocks, timeout ties, refill separation,
 snapshot isolation and maximum-input replay cost. The performance check requests the full 6000-tick

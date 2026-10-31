@@ -1,7 +1,7 @@
 import { SWING_PERIOD_TICKS, type GrabState } from "../../src/lib/grab";
 import { fieldLength, firstContact, swingAngle } from "../../src/lib/grab/geometry";
 
-/** Aim at the centre of the widest visible bread window, using the engine's geometry. */
+/** Aim with v4 swept tolerance. Oven renewal keeps bread positions/radii, so the ray stays valid. */
 export function aimGrabBread(state: GrabState): { tick: number; margin: number } {
   if (state.over || state.claw.phase !== "idle") throw new Error("Cannot aim a busy or completed grab");
   let start = state.tick + 10;

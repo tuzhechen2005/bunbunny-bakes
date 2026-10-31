@@ -1,7 +1,7 @@
 import { createRng } from "../game/rng";
 import { clawTip, fieldLength, firstContact, swingAngle } from "./geometry";
 import {
-  CLOCK_BONUS_TICKS, EMPTY_REEL_SPEED, EXTEND_SPEED, FIELD_ITEMS, MIN_TIERS,
+  BREAD_REFRESH_AGE, CLOCK_BONUS_TICKS, EMPTY_REEL_SPEED, EXTEND_SPEED, FIELD_ITEMS, MIN_TIERS,
   OVEN_X, OVEN_Y, REFILL_DELAY_TICKS, RUN_TICKS,
   type GrabEvent, type GrabGame, type GrabItem, type GrabKind, type GrabSize,
   type GrabStage, type GrabState, type GrabTierInput,
@@ -68,12 +68,12 @@ export function createGrabGame(opts: { seed: string; tiers: readonly GrabTierInp
     const kind = deck.pop()!;
     const size: GrabSize = kind === "bread" ? (["S", "M", "L"] as const)[rng.int(3)] : kind === "flour" ? "L" : "S";
     const tier = kind === "bread" ? rng.int(tierCount) : null;
-    const free = Array.from({ length: 20 }, (_, i) => i).filter((slot) => !items.some((item) => item.slot === slot));
+    const free = Array.from({ length: 16 }, (_, i) => i).filter((slot) => !items.some((item) => item.slot === slot));
     const slot = free[rng.int(free.length)];
     return {
       id: nextId++, kind, tier, size, slot, born: tick,
       x: 90 + (slot % 4) * 180 + rng.int(29) - 14,
-      y: 522 + Math.trunc(slot / 4) * 207 + rng.int(33) - 16,
+      y: 420 + Math.trunc(slot / 4) * 190 + rng.int(33) - 16,
       radius: kind === "bread" ? BREAD[size].radius : kind === "flour" ? 44 : 25,
       weight: kind === "bread" ? BREAD[size].weight : kind === "flour" ? 8 : 0,
     };
@@ -95,6 +95,15 @@ export function createGrabGame(opts: { seed: string; tiers: readonly GrabTierInp
         const item = spawn();
         items.push(item);
         events.push({ type: "refill", tick, item: snapshotItem(item), from: { x: OVEN_X, y: OVEN_Y } });
+      }
+      // Refresh only bread, in place, without drawing another bonus-item batch.
+      // Held bread is outside this array, so its contact stage remains frozen.
+      for (const item of items) {
+        if (item.kind === "bread" && tick - item.born >= BREAD_REFRESH_AGE) {
+          item.id = nextId++;
+          item.born = tick;
+          events.push({ type: "refill", tick, item: snapshotItem(item), from: { x: OVEN_X, y: OVEN_Y } });
+        }
       }
       if (phase === "idle") angle = swingAngle(tick);
       else if (phase === "extending") {

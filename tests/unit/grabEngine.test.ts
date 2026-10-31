@@ -20,13 +20,17 @@ function fixture(
   for (let seedIndex = 0; seedIndex < 1000; seedIndex++) {
     const seed = `fixture${seedIndex}`;
     const game = createGrabGame({ seed, tiers: tiers() });
-    const items = game.state().items;
+    const scout = createGrabGame({ seed, tiers: tiers() });
     for (let at = from; at <= to; at++) {
+      scout.step(at);
+      const items = scout.state().items;
       const angle = swingAngle(at);
       const hit = firstContact(angle, 0, fieldLength(angle), items);
       if (!hit) continue;
       const contactTick = at + Math.ceil(hit.length / EXTEND_SPEED);
-      if (!predicate(items[hit.index], contactTick, hit.length)) continue;
+      const item = items[hit.index];
+      if (item.kind === "bread" && item.age + contactTick - at >= 601) continue;
+      if (!predicate(item, contactTick, hit.length)) continue;
       game.launch(at);
       game.step(contactTick);
       expect(game.state().claw.held?.id).toBe(items[hit.index].id);
@@ -42,7 +46,8 @@ describe("grab engine", () => {
       expect(() => createGrabGame({ seed: "x", tiers: tiers(n) })).toThrow(RangeError);
       expect(() => replayGrab("x", tiers(n), [])).toThrow(RangeError);
     }
-    expect(GRAB_ENGINE_VERSION).toBe(3);
+    expect(GRAB_ENGINE_VERSION).toBe(4);
+    expect([FIELD_WIDTH, FIELD_HEIGHT]).toEqual([720, 1080]);
     expect(createGrabGame({ seed: "x", tiers: tiers(10) }).state().items).toHaveLength(8);
   });
 
@@ -118,7 +123,37 @@ describe("grab engine", () => {
 
   it("hits the first item along the tip path rather than the first array entry", () => {
     const items = [{ x: 360, y: 250, radius: 10 }, { x: 360, y: 150, radius: 10 }];
-    expect(firstContact(0, 0, 600, items)).toEqual({ index: 1, length: 140 });
+    expect(firstContact(0, 0, 600, items)).toEqual({ index: 1, length: 118 });
+  });
+
+  it("adds 22 units of forgiveness to the whole swept tip and chooses the nearest line", () => {
+    expect(firstContact(0, 0, 300, [{ x: 392, y: 150, radius: 10 }])).not.toBeNull();
+    expect(firstContact(0, 0, 300, [{ x: 393, y: 150, radius: 10 }])).toBeNull();
+    const overlapping = [{ x: 380, y: 150, radius: 20 }, { x: 360, y: 150, radius: 20 }];
+    expect(firstContact(0, 140, 154, overlapping)?.index).toBe(1);
+  });
+
+  it("replaces burnt field bread after 60 ticks without farming clocks or changing its slot", () => {
+    const game = createGrabGame({ seed: "fresh-oven", tiers: tiers() });
+    const initial = game.state().items;
+    for (let cycle = 0; cycle < 5; cycle++) {
+      game.step(cycle * 601 + 600);
+      const before = game.state().items;
+      expect(before.filter(i => i.kind === "bread").every(i => i.stage === "burnt" && i.age === 600)).toBe(true);
+      const events = game.step((cycle + 1) * 601);
+      const after = game.state().items;
+      expect(after).toHaveLength(8);
+      for (let i = 0; i < after.length; i++) {
+        expect(after[i]).toMatchObject({ kind: initial[i].kind, tier: initial[i].tier, size: initial[i].size, x: initial[i].x, y: initial[i].y });
+        if (after[i].kind === "bread") {
+          expect(after[i]).toMatchObject({ age: 0, stage: "raw" });
+          expect(after[i].id).toBeGreaterThan(before[i].id);
+        } else expect(after[i].id).toBe(initial[i].id);
+      }
+      expect(events.every(e => e.type === "refill" && e.item.kind === "bread")).toBe(true);
+      expect(game.score).toBe(0);
+      expect(game.state().timeLeft).toBe(RUN_TICKS - game.state().tick);
+    }
   });
 
   it.each([239, 240, 540, 541])("locks doneness at contact tick %i, not at delivery", (age) => {

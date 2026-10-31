@@ -54,7 +54,7 @@ it("rejects bad replay logs, observation ticks, too many ignored launches and im
 it("expires on weekly reset and engine version mismatch for finish and progress", async () => {
  await tiers(); const r=await start();
  await expect(finishGrabRun(db,play(r),IP,new Date(r.expiresAt))).rejects.toMatchObject({message:copy.gameApi.runExpired});
- for (const [index, seed] of ["v1.abcdef", "v999.abcdef"].entries()) {
+ for (const [index, seed] of ["v1.abcdef", "v2.abcdef", "v3.abcdef", "v999.abcdef"].entries()) {
   await db.gameRun.update({where:{id:r.runId},data:{seed}});
   await expect(finishGrabRun(db,play(r),IP,LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
   await expect(progressRun(db,"GRAB",{runId:r.runId,log:[],endTick:0},new Date(+LATER + index * 10_000))).rejects.toMatchObject({message:copy.gameApi.runExpired});

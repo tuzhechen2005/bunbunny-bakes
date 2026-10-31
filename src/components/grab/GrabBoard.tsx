@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from "react";
+import { memo, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { copy } from "@/copy";
 import { fill } from "@/components/customer/format";
 import type { TierView } from "@/components/game/types";
 import { sound } from "@/components/game/sound";
 import { haptic, useMotionPrefs } from "@/lib/motion/react";
-import { createGrabGame, FIELD_WIDTH, FIELD_HEIGHT, OVEN_X, OVEN_Y, type GrabEvent, type GrabItem } from "@/lib/grab";
+import { createGrabGame, FIELD_WIDTH, FIELD_HEIGHT, OVEN_X, OVEN_Y, type GrabEvent, type GrabItem, type GrabState } from "@/lib/grab";
 import { BoardPaper } from "@/components/m3/M3Art";
 import { GrabArt, GrabFace } from "./GrabArt";
 import { createGrabClock, elapsedTick } from "./grabClock";
+import { grabPresentationKey, isGrabRefilling } from "./grabPresentation";
 import "./grab.css";
 
 const t = copy.customer.grab;
@@ -22,6 +23,17 @@ interface Props {
   onProgress: (p: GrabProgress) => void; onOver: (p: GrabProgress) => void; onShowResult?: () => void;
 }
 type ScorePop = Extract<GrabEvent, { type: "score" }>;
+
+const GrabSprite = memo(function GrabSprite({ bread, tiers, held = false, refilling = false }: {
+  bread: GrabItem; tiers: TierView[]; held?: boolean; refilling?: boolean;
+}) {
+  return <span className={`grab-item${held ? " grab-held" : refilling ? " grab-refill" : ""}`} data-kind={bread.kind} data-stage={bread.stage}
+    style={{ left: `${(held ? 0 : bread.x) / FIELD_WIDTH * 100}%`, top: `${(held ? 0 : bread.y) / FIELD_HEIGHT * 100}%`, width: `${bread.radius * 2 / FIELD_WIDTH * 100}%`, height: `${bread.radius * 2 / FIELD_HEIGHT * 100}%`, "--from-x": `${(OVEN_X - bread.x) / (bread.radius * 2) * 100}%`, "--from-y": `${(OVEN_Y - bread.y) / (bread.radius * 2) * 100}%` } as CSSProperties}>
+    <GrabFace item={bread} tiers={tiers} />
+  </span>;
+}, (a, b) => a.tiers === b.tiers && a.held === b.held && a.refilling === b.refilling &&
+  a.bread.id === b.bread.id && a.bread.stage === b.bread.stage &&
+  (a.held || (a.bread.x === b.bread.x && a.bread.y === b.bread.y)));
 
 export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElapsedMs = 0, soundOn, reduced, paused, onProgress, onOver, onShowResult }: Props) {
   const { degraded } = useMotionPrefs();
@@ -37,7 +49,28 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
   const [snap, setSnap] = useState(() => game.state());
   const [hidden, setHidden] = useState(false);
   const [pops, setPops] = useState<ScorePop[]>([]);
-  const [ovenTick, setOvenTick] = useState(-100);
+  const [ovenWarm, setOvenWarm] = useState(false);
+  const ovenUntil = useRef(-1);
+  const livePops = useRef<ScorePop[]>([]);
+  const presentation = useRef("");
+  const board = useRef<HTMLButtonElement>(null);
+  const arm = useRef<HTMLSpanElement>(null);
+  const armSegment = useRef<HTMLSpanElement>(null);
+  const tip = useRef<HTMLSpanElement>(null);
+  const heldPosition = useRef<HTMLSpanElement>(null);
+  const paint = useCallback((state: GrabState) => {
+    if (arm.current) arm.current.style.transform = `rotate(${-state.claw.angle}deg)`;
+    if (armSegment.current) armSegment.current.style.transform = `scaleY(${state.claw.length / FIELD_HEIGHT})`;
+    if (tip.current) tip.current.style.transform = `translateY(${state.claw.length / FIELD_HEIGHT * 100}%)`;
+    if (heldPosition.current) heldPosition.current.style.transform = `translate(${state.claw.x / FIELD_WIDTH * 100}%, ${state.claw.y / FIELD_HEIGHT * 100}%)`;
+    if (board.current) {
+      board.current.dataset.tick = String(state.tick);
+      board.current.dataset.phase = state.claw.phase;
+      board.current.dataset.launches = String(state.launchesAccepted);
+    }
+  }, []);
+  // Paint new held DOM immediately on commit, including restored saves.
+  useLayoutEffect(() => { paint(game.state()); });
   const raf = useRef<number | null>(null);
   const reported = useRef(false);
   const active = useRef(false);
@@ -47,17 +80,22 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
   const publish = useCallback((events: GrabEvent[], render = true) => {
     const state = game.state();
     const elapsedMs = state.tick * 1000 / 60;
-    const progress = { launches: [...launches.current], score: state.score, elapsedMs, endTick: state.tick };
+    const progress = { launches: launches.current, score: state.score, elapsedMs, endTick: state.tick };
     onProgress(progress);
     if (render) {
-      setSnap(state);
+      paint(state);
       const scores = events.filter((e): e is ScorePop => e.type === "score");
-      setPops(old => {
-        const keep = old.filter(e => state.tick - e.tick < 48);
-        return !scores.length && keep.length === old.length ? old : [...keep, ...scores];
-      });
-      const refill = [...events].reverse().find(e => e.type === "refill");
-      if (refill) setOvenTick(refill.tick);
+      livePops.current = [...livePops.current.filter(e => state.tick - e.tick < 48), ...scores]
+        .filter(e => state.tick - e.tick < 48).slice(-4);
+      for (const event of events) if (event.type === "refill") ovenUntil.current = event.tick + 30;
+      const warm = state.tick < ovenUntil.current;
+      const key = `${grabPresentationKey(state)}|${warm}|${livePops.current.map(e => e.item).join(",")}`;
+      if (key !== presentation.current) {
+        presentation.current = key;
+        setSnap(state);
+        setPops(livePops.current);
+        setOvenWarm(warm);
+      }
       if (scores.length && state.tick !== lastFeedback.current) {
         lastFeedback.current = state.tick;
         if (soundOn) sound.merge(1);
@@ -69,7 +107,7 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
         onOver(progress);
       }
     }
-  }, [game, onOver, onProgress, quiet, soundOn]);
+  }, [game, onOver, onProgress, paint, quiet, soundOn]);
 
   const stop = useCallback(() => {
     // Freeze at the input event, before React renders the exit sheet or runs effects.
@@ -125,14 +163,10 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
     const events = game.step(tick);
     // Busy taps have no gameplay effect; omit them from the canonical client log.
     if (!game.over && game.state().claw.phase === "idle" && tick > (launches.current.at(-1) ?? -1)) {
-      if (game.launch(tick)) { launches.current.push(tick); if (soundOn) sound.drop(); }
+      if (game.launch(tick)) { launches.current = [...launches.current, tick]; if (soundOn) sound.drop(); }
     }
     publish(events);
   };
-  const item = (bread: GrabItem, held = false) => <span key={bread.id} className={`grab-item${held ? " grab-held" : snap.tick - bread.age > 0 && bread.age < 18 ? " grab-refill" : ""}`} data-kind={bread.kind} data-stage={bread.stage}
-    style={{ left: `${bread.x / FIELD_WIDTH * 100}%`, top: `${bread.y / FIELD_HEIGHT * 100}%`, width: `${bread.radius * 2 / FIELD_WIDTH * 100}%`, height: `${bread.radius * 2 / FIELD_HEIGHT * 100}%`, "--from-x": `${(OVEN_X - bread.x) / (bread.radius * 2) * 100}%`, "--from-y": `${(OVEN_Y - bread.y) / (bread.radius * 2) * 100}%` } as CSSProperties}>
-    <GrabFace item={bread} tiers={tiers} />
-  </span>;
   return <section className={`grab-play${quiet ? " grab-quiet" : ""}${paused || hidden || snap.over ? " grab-still" : ""}`}>
     <div className="grab-hud">
       <p>{t.timer}<b className="font-num" data-testid="grab-timer">{Math.ceil(snap.timeLeft / 60)}</b></p>
@@ -142,7 +176,7 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
     <div className="grab-field-space">
     <div className="grab-field-frame" style={{ aspectRatio: `${FIELD_WIDTH} / ${FIELD_HEIGHT}`, "--grab-aspect": FIELD_WIDTH / FIELD_HEIGHT } as CSSProperties}>
     <GrabArt name="bunny" className="grab-bunny" />
-    <button type="button" className="grab-board"
+    <button ref={board} type="button" className="grab-board"
       onPointerDown={e => {
         lastPointerEvent.current = performance.now();
         if (e.button === 0 && (e.pointerType === "mouse" || e.isPrimary)) launch();
@@ -154,15 +188,17 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
       // capability. Suppress the compatibility click following a pointer/touch input.
       onClick={e => {
         if (e.detail === 0 || performance.now() - lastPointerEvent.current > 500) launch();
-      }} aria-label={t.boardLabel} data-testid="grab-board" data-tick={snap.tick} data-phase={snap.claw.phase} data-launches={snap.launchesAccepted}>
+      }} aria-label={t.boardLabel} data-testid="grab-board" >
       <BoardPaper />
-      <GrabArt name="oven" className={`grab-oven${snap.tick - ovenTick < 30 ? " grab-oven-warm" : ""}`} />
-      {snap.items.map(bread => item(bread))}
-      <span className="grab-arm" style={{ transform: `rotate(${-snap.claw.angle}deg)`, height: `${snap.claw.length / FIELD_HEIGHT * 100}%` }}>
-        <GrabArt name="arm" className="grab-arm-segment" />
-        <GrabArt name="tongs" className="grab-tongs" />
+      <GrabArt name="oven" className={`grab-oven${ovenWarm ? " grab-oven-warm" : ""}`} />
+      {snap.items.map(bread => <GrabSprite key={bread.id} bread={bread} tiers={tiers} refilling={isGrabRefilling(bread, snap.tick)} />)}
+      <span ref={arm} className="grab-arm">
+        <span ref={armSegment} className="grab-arm-scale"><GrabArt name="arm" className="grab-arm-segment" /></span>
+        <span ref={tip} className="grab-tip"><GrabArt name="tongs" className="grab-tongs" /></span>
       </span>
-      {snap.claw.held && item(snap.claw.held, true)}
+      <span ref={heldPosition} className="grab-held-position">
+        {snap.claw.held && <GrabSprite key={snap.claw.held.id} bread={snap.claw.held} tiers={tiers} held />}
+      </span>
       {pops.map(e => <span key={e.item} className="grab-score-pop font-num">
         {e.bonusTicks ? t.bonus : fill(t.reward, { n: e.points })}
       </span>)}

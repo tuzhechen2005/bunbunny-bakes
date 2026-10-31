@@ -89,7 +89,7 @@ for (const hasTouch of [true, false]) {
 }
 for(const width of [320,390]) {
  test.describe(`GRAB ${width}px`,()=>{
-  test.use({viewport:{width,height:800},hasTouch:true});
+  test.use({viewport:{width,height:700},hasTouch:true});
   test("four game hub, illustrated menu, prize gating and leaderboard",async({page})=>{
    await mockApi(page);await page.goto("/game/hub");
    const boxes=await Promise.all(["big","tu","m3","grab"].map(k=>page.getByTestId(`hub-game-${k}`).boundingBox()));
@@ -100,6 +100,24 @@ for(const width of [320,390]) {
    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
    await page.getByTestId("grab-open-board").click();await expect(page.getByTestId("game-all-time")).toContainText("9000");await page.getByTestId("grab-board-close").click();
    await page.route("**/api/game/hub",r=>r.fulfill({json:{week:BOARD.week,prizeGame:"TU",games:[]}}));await page.reload();await expect(page.getByTestId("grab-prize-line")).toHaveCount(0);
+  });
+  test("keeps idle photo nodes stable and renews burnt bread without image filters",async({page})=>{
+   await mockApi(page); await page.clock.install(); await page.goto("/game/grab");
+   await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000)); await start(page);
+   const photo = await page.locator('.grab-item[data-kind="bread"]').first().elementHandle();
+   await page.clock.runFor(1000);
+   expect(await photo!.evaluate(node=>node.isConnected)).toBe(true);
+   await page.clock.runFor(8200);
+   await expect(page.locator('.grab-item[data-stage="burnt"]').first()).toBeVisible();
+   const filters = await page.locator(".grab-board img").evaluateAll(nodes=>nodes.map(node=>getComputedStyle(node).filter));
+   expect(filters.every(filter=>filter==="none")).toBe(true);
+   await page.clock.runFor(1100);
+   await expect(page.locator('.grab-item[data-stage="burnt"]')).toHaveCount(0);
+   await expect(page.locator(".grab-item")).toHaveCount(8);
+   expect(await photo!.evaluate(node=>node.isConnected)).toBe(false);
+   await page.clock.runFor(35000);
+   await expect(page.locator(".grab-item")).toHaveCount(8);
+   await expect(page.locator(".grab-score-pop")).toHaveCount(0);
   });
   test("accepts a press before the deferred animation boot",async({page})=>{
    await mockApi(page); await page.clock.install(); await page.goto("/game/grab");
@@ -120,15 +138,16 @@ for(const width of [320,390]) {
    await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));await start(page);
    expect(api.starts).toEqual([{wechatId:"grab_fan",nickname:"Baker"}]);
    const box=(await page.getByTestId("grab-board").boundingBox())!;expect(box.width/box.height).toBeCloseTo(FIELD_WIDTH/FIELD_HEIGHT,1);
-   expect(box.y + box.height).toBeGreaterThan(780);
-   expect(box.y + box.height).toBeLessThanOrEqual(800);
+   expect(box.y + box.height).toBeGreaterThan(680);
+   expect(box.y + box.height).toBeLessThanOrEqual(700);
+   expect(await page.evaluate(()=>document.documentElement.scrollHeight)).toBeLessThanOrEqual(700);
    for (const [index, input] of ["touch", "mouse"].entries()) {
     await page.clock.runFor(100);
     const scoreBefore = Number(await page.getByTestId("grab-score").textContent());
     const tick = Number(await page.getByTestId("grab-board").getAttribute("data-tick"));
     const game = createGrabGame({seed:SEED,tiers:TIERS});
     (await stored(page)).launches.forEach((at:number)=>game.launch(at)); game.step(tick);
-    // The deep field can have narrower hit windows after the first delivery.
+    // Re-aim against the actual v4 board after each delivery/oven refill.
     // Use the widest window's actual margin; still send exactly one input per launch.
     const target = aimGrabBread(game.state());
     await page.clock.runFor((target.tick-tick)*1000/TICKS_PER_SECOND);
