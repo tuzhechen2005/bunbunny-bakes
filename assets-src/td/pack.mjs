@@ -12,13 +12,14 @@ const cache = resolve(root, '.cache');
 const expected = Object.fromEntries([
   ...[1, 2, 3].map(n => [`map-${n}`, 1]),
   ...['pin', 'sifter', 'whisk', 'oven'].flatMap(k => [0, 1, 2].map(t => [`tower-${k}-${t}`, 1])),
-  ...['ant', 'mouse', 'sparrow', 'beetle'].map(k => [`pest-${k}`, 4]),
+  ...['ant', 'mouse', 'sparrow', 'beetle', 'boss'].map(k => [`pest-${k}`, 4]),
   ...['pin', 'whisk', 'oven'].map(k => [`proj-${k}`, 1]),
   ['fx-hit', 4], ['slot', 1],
 ]);
 const specs = JSON.parse(await readFile(resolve(cache, 'renders.json'), 'utf8'));
 assert.deepEqual(specs.map(s => s.id).sort(), Object.keys(expected).sort(), 'Render the complete asset set');
 const source = await readFile(resolve(root, '../../src/lib/td/maps.ts'), 'utf8');
+const slotRadius = Number((await readFile(resolve(root, '../../src/lib/td/types.ts'), 'utf8')).match(/TD_SLOT_RADIUS = (\d+)/)[1]);
 const sourceHash = createHash('sha256').update(source).digest('hex');
 const maps = [...source.matchAll(/map\("([^"]+)",\s*(\[\[.*?\]\]),\s*(\[\[.*?\]\])\)/gs)]
   .map(([, name, path, slots]) => ({ name, path: JSON.parse(path), slots: JSON.parse(slots) }));
@@ -48,6 +49,7 @@ for (const [id, count] of Object.entries(expected)) {
   if (isMap) {
     assert.deepEqual([width, height], [720, 1080]);
     const data = maps[Number(id.slice(4))-1];
+    assert.equal(spec.map.slotRadius, slotRadius);
     assert.equal(spec.map.sha256, sourceHash, `Stale map data: rerender ${id}`);
     for (const key of ['name', 'path', 'slots']) assert.deepEqual(spec.map[key], data[key]);
     for (const [key, points] of [['Path', data.path], ['Slots', data.slots]]) {
@@ -128,7 +130,7 @@ for (const asset of Object.values(manifest.assets)) {
 }
 
 // Offline contact sheet: all poses, tower tiers at 56px, clean maps and alignment inset.
-const W = 1500, H = 1660, review = [];
+const W = 1500, H = 1760, review = [];
 function label(text, x, y, size=19, color='#66523f') {
   review.push({ input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${x}" y="${y}" fill="${color}" font-family="sans-serif" font-size="${size}">${text}</text></svg>`), left: 0, top: 0 });
 }
@@ -137,15 +139,15 @@ async function thumb(id, frame, x, y, width, height) {
     { fit: 'contain', background: '#00000000' }).png().toBuffer(), left: x, top: y });
 }
 label('BUNBUNNY / BAKERY DEFENSE', 32, 46, 30);
-label('D3 · Blender clay · 55° camera · 2x render + Lanczos · decoded WebP review', 32, 80, 18);
+label('D5 · Blender clay · 55° camera · 2x render + Lanczos · decoded WebP review', 32, 80, 18);
 for (let i = 0; i < 3; i++) {
   const x = 32+i*490;
   label(['01 / MAPLE KITCHEN COUNTER', '02 / TILED BAKERY SHOP', '03 / BACK HERB GARDEN'][i], x, 116, 18);
   await thumb(`map-${i+1}`, 0, x, 134, 456, 684);
-  // A small exact overlay verifies route centerlines and all ten slot positions.
+  // A small exact overlay verifies route centerlines and all seven slot positions.
   const data = maps[i];
   const sx = 142/720, sy = 213/1080;
-  const overlay = `<svg width="142" height="213"><polyline points="${data.path.map(([px, py]) => `${px*sx},${py*sy}`).join(' ')}" fill="none" stroke="#d13c52" stroke-width="1.4"/>${data.slots.map(([px, py]) => `<circle cx="${px*sx}" cy="${py*sy}" r="5.8" fill="none" stroke="#26636b" stroke-width="1"/>`).join('')}</svg>`;
+  const overlay = `<svg width="142" height="213"><polyline points="${data.path.map(([px, py]) => `${px*sx},${py*sy}`).join(' ')}" fill="none" stroke="#d13c52" stroke-width="1.4"/>${data.slots.map(([px, py]) => `<circle cx="${px*sx}" cy="${py*sy}" r="${slotRadius*sx}" fill="none" stroke="#26636b" stroke-width="1"/>`).join('')}</svg>`;
   const small = await sharp(thumbs.get(`map-${i+1}:0`)).resize(142, 213).composite([{ input: Buffer.from(overlay) }]).png().toBuffer();
   review.push({ input: small, left: x+310, top: 836 });
   label('Exact route + slots', x+310, 1070, 14);
@@ -160,7 +162,7 @@ for (const [row, kind] of ['pin', 'sifter', 'whisk', 'oven'].entries()) {
   }
 }
 label('PESTS / FOUR FRAMES / FACE RIGHT; ROTATE ABOUT ANCHOR', 522, 1119, 18);
-for (const [row, kind] of ['ant', 'mouse', 'sparrow', 'beetle'].entries()) {
+for (const [row, kind] of ['ant', 'mouse', 'sparrow', 'beetle', 'boss'].entries()) {
   const y = 1142+row*99;
   label(kind, 524, y+42, 16);
   for (let frame = 0; frame < 4; frame++) await thumb(`pest-${kind}`, frame, 625+frame*114, y, 95, 95);
@@ -171,7 +173,7 @@ label('HIT PUFF / 16 FPS / ONCE', 32, 1486, 17);
 for (let frame = 0; frame < 4; frame++) await thumb('fx-hit', frame, 32+frame*74, 1498, 68, 68);
 await thumb('slot', 0, 1140, 1210, 100, 100);
 label('Slot / quiet pad', 1110, 1332, 16);
-label(`${Object.keys(expected).length} atlases · ${Object.values(expected).reduce((a, b) => a+b, 0)} frames · ${total.toLocaleString('en-US')} / 1,500,000 bytes`, 32, 1622, 22);
+label(`${Object.keys(expected).length} atlases · ${Object.values(expected).reduce((a, b) => a+b, 0)} frames · ${total.toLocaleString('en-US')} / 1,500,000 bytes`, 32, 1722, 22);
 await sharp({ create: { width: W, height: H, channels: 4, background: '#f4ebdd' } })
   .composite(review).png().toFile(resolve(root, 'preview.png'));
 console.log(results.join('\n'));

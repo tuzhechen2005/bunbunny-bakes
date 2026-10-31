@@ -1,7 +1,7 @@
 import { createRng } from "../../src/lib/game/rng";
 import {
   createTdGame, TD_MAPS, TOWER_KINDS, towerStats, pathLength, pathPosition, distanceSquared,
-  MAX_LEVEL_TICKS, SUBUNITS, type TdInput, type TdLevel, type TowerKind,
+  MAX_LEVEL_TICKS, SUBUNITS, type TdInput, type TdLevel, type TowerKind, type TdBranch,
 } from "../../src/lib/td";
 
 /** Public geometry/stats only; no future waves, RNG state, or private engine injection. */
@@ -10,8 +10,8 @@ function run(level: TdLevel, mode: "greedy" | "random") {
   const rng = createRng(`${level.seed}:td-bot`);
   const map = TD_MAPS[level.map];
   const inputs: TdInput[] = [];
-  const coverage = (slot: number, kind: TowerKind, tier: number) => {
-    const stats = towerStats(kind, tier);
+  const coverage = (slot: number, kind: TowerKind, tier: number, branch?: TdBranch) => {
+    const stats = towerStats(kind, tier, branch);
     let total = 0;
     const length = pathLength(map);
     for (let d = 0; d < length; d += 24 * SUBUNITS) {
@@ -19,13 +19,16 @@ function run(level: TdLevel, mode: "greedy" | "random") {
     }
     return total;
   };
-  const strength = (slot: number, kind: TowerKind, tier: number) => {
-    const stats = towerStats(kind, tier);
-    return coverage(slot, kind, tier) * stats.damage * (kind === "whisk" ? 3 : kind === "oven" ? 0.8 : 1) / Math.max(1, stats.cooldown);
+  const strength = (slot: number, kind: TowerKind, tier: number, branch?: TdBranch) => {
+    const stats = towerStats(kind, tier, branch);
+    return coverage(slot, kind, tier, branch) * (stats.damage * stats.strikes + stats.burn * 4) * (kind === "whisk" ? (stats.splash > 100 ? 4 : 3) : kind === "oven" ? (stats.pierce ? 1.8 : 0.8) : 1) / Math.max(1, stats.cooldown);
   };
   const values = map.slots.map((_, slot) => Object.fromEntries(TOWER_KINDS.map(kind => [kind,
     [0, 1, 2].map(tier => strength(slot, kind, tier)),
   ])) as Record<TowerKind, number[]>);
+  const branchValues = map.slots.map((_, slot) => Object.fromEntries(TOWER_KINDS.map(kind => [kind,
+    { a: strength(slot, kind, 2, "a"), b: strength(slot, kind, 2, "b") },
+  ])) as Record<TowerKind, Record<TdBranch, number>>);
   function apply(input: TdInput) {
     if (!game.apply(input)) throw new Error("bot proposed an illegal action");
     inputs.push(input);
@@ -49,8 +52,10 @@ function run(level: TdLevel, mode: "greedy" | "random") {
           candidates.push({ input: { tick: state.tick, type: "place", slot, tower: kind }, cost, value: value / cost });
         } else if (tower.level < 2) {
           const cost = towerStats(tower.kind, tower.level + 1).cost;
-          candidates.push({ input: { tick: state.tick, type: "upgrade", slot }, cost,
-            value: (values[slot][tower.kind][tower.level + 1] - values[slot][tower.kind][tower.level]) / cost });
+          for (const branch of tower.level === 1 ? ["a", "b"] as const : [undefined]) {
+            candidates.push({ input: { tick: state.tick, type: "upgrade", slot, ...(branch ? { branch } : {}) }, cost,
+              value: ((branch ? branchValues[slot][tower.kind][branch] : values[slot][tower.kind][tower.level + 1]) - values[slot][tower.kind][tower.level]) / cost });
+          }
         }
       }
       if (mode === "greedy") {

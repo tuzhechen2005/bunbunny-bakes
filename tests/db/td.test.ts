@@ -96,7 +96,7 @@ it('routes expose masked boards, enforce body limits/versions/expiry and allow d
   const board = await (await boardGET(getRequest('/api/game/td/leaderboard?wechatId=WX_ROUTE'))).json();
   expect(board).toMatchObject({nextLevel:2,myBest:1,top:[{score:1,wechatMasked:'wx***te'}]});
   expect((await finishPOST(jsonRequest('/api/game/td/finish',{padding:'x'.repeat(TD_MAX_FINISH_BODY_BYTES)}))).status).toBe(422);
-  const bad = await start('old');await db.gameRun.update({where:{id:bad.runId},data:{seed:'v1.td.2026-10-19.1'}});
+  const bad = await start('old');await db.gameRun.update({where:{id:bad.runId},data:{seed:'v2.td.2026-10-19.1'}});
   await expect(finish(bad)).rejects.toMatchObject({message:copy.gameApi.runExpired});
   await expect(progressRun(db,'TD',{runId:bad.runId,log:[],endTick:60},LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
   const expired = await start('expired');await expect(finish(expired,new Date('2026-10-26T05:00:00Z'))).rejects.toMatchObject({message:copy.gameApi.runExpired});
@@ -104,8 +104,20 @@ it('routes expose masked boards, enforce body limits/versions/expiry and allow d
 });
 it('flags suspicious evidence for review without excluding a verified pass', async () => {
   const r = await start();
-  const inputs = [...Array.from({length:100},()=>({tick:0,type:'sell',slot:9})),...win.inputs];
+  const inputs = [...Array.from({length:100},()=>({tick:0,type:'sell',slot:6})),...win.inputs];
   const result = await finishTdRun(db,{runId:r.runId,inputs,endTick:win.state.tick},'ip',LATER);
   expect(result).toMatchObject({passed:true,rank:1});
   expect(await db.gameRun.findUniqueOrThrow({where:{id:r.runId}})).toMatchObject({suspicious:true});
+});
+
+it('validates and persists branch choices in server replay', async () => {
+  const r = await start('branch');
+  expect(win.inputs.some(i => i.type === 'upgrade' && i.branch)).toBe(true);
+  const malformed = win.inputs.map(i => i.type === 'upgrade' && i.branch ? { ...i, branch: 'c' } : i);
+  await expect(finishTdRun(db, { runId: r.runId, inputs: malformed, endTick: win.state.tick }, 'ip', LATER)).rejects.toMatchObject({ code: 'VALIDATION' });
+  const branchIndex = win.inputs.findIndex(i => i.type === 'upgrade' && i.branch);
+  const prefix = win.inputs.slice(0, branchIndex + 1);
+  await progressRun(db, 'TD', { runId: r.runId, log: prefix, endTick: prefix.at(-1)!.tick }, LATER);
+  expect(await finish(r)).toMatchObject({ passed: true });
+  expect((await db.gameRun.findUniqueOrThrow({ where: { id: r.runId } })).drops).toEqual(win.inputs);
 });

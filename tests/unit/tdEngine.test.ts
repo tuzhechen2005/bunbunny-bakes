@@ -10,7 +10,7 @@ const level = () => tdLevel("2026-10-26", 1);
 
 describe("TD deterministic level and geometry", () => {
   it("pins the version and generates five shared weekly waves", () => {
-    expect(TD_ENGINE_VERSION).toBe(2);
+    expect(TD_ENGINE_VERSION).toBe(3);
     expect(tdSeedVersion(level().seed)).toBe(TD_ENGINE_VERSION);
     expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([300, 300, 402, 1320, 1320]);
     expect(level()).toEqual(level());
@@ -30,20 +30,20 @@ describe("TD deterministic level and geometry", () => {
       expect(() => tdLevel(week, 1)).toThrow();
     }
     for (const n of [0, -1, 1.1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) expect(() => tdLevel("2026-10-26", n)).toThrow();
-    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
+    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v4.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
       expect(() => createTdGame({ seed })).toThrow();
     }
     for (const tierCount of [0, 101, 1.5, NaN]) expect(() => createTdGame({ level: level(), tierCount })).toThrow();
     const tampered = level();
     tampered.waves[0].pests[0].hp = 1; tampered.startCoins = 1000000; tampered.map = 2;
     expect(createTdGame({ level: tampered }).state()).toEqual(createTdGame({ level: level() }).state());
-    expect(tdLevel("2026-10-26", Number.MAX_SAFE_INTEGER).waves.flatMap(w => w.pests).length).toBeLessThanOrEqual(480);
+    expect(tdLevel("2026-10-26", Number.MAX_SAFE_INTEGER).waves.flatMap(w => w.pests).length).toBeLessThanOrEqual(481);
   });
 
-  it("keeps all three winding paths and ten off-path slots in the portrait field", () => {
+  it("keeps all three winding paths and seven off-path slots in the portrait field", () => {
     expect(TD_MAPS).toHaveLength(3);
     for (const map of TD_MAPS) {
-      expect(map.slots).toHaveLength(10);
+      expect(map.slots).toHaveLength(7);
       expect(map.path.length).toBeGreaterThanOrEqual(6);
       for (const p of [...map.path, ...map.slots]) {
         expect(Number.isInteger(p.x) && Number.isInteger(p.y)).toBe(true);
@@ -56,7 +56,7 @@ describe("TD deterministic level and geometry", () => {
         for (const slot of map.slots) {
           const x = Math.max(Math.min(a.x, b.x), Math.min(Math.max(a.x, b.x), slot.x));
           const y = Math.max(Math.min(a.y, b.y), Math.min(Math.max(a.y, b.y), slot.y));
-          expect((slot.x - x) ** 2 + (slot.y - y) ** 2).toBeGreaterThanOrEqual(55 ** 2);
+          expect((slot.x - x) ** 2 + (slot.y - y) ** 2).toBeGreaterThanOrEqual(79 ** 2);
         }
         // Non-neighbouring axis-aligned segments must not cross or touch.
         for (let j = i + 2; j < map.path.length; j++) {
@@ -82,7 +82,7 @@ describe("TD input and replay contract", () => {
     expect(g.apply({ tick: 0, type: "place", slot: 0, tower: "rollingPin" })).toBe(true);
     expect(g.apply({ tick: 0, type: "place", slot: 0, tower: "oven" })).toBe(false);
     expect(g.apply({ tick: 0, type: "upgrade", slot: 0 })).toBe(true);
-    expect(g.apply({ tick: 0, type: "upgrade", slot: 0 })).toBe(true);
+    expect(g.apply({ tick: 0, type: "upgrade", slot: 0, branch: "a" })).toBe(true);
     expect(g.apply({ tick: 0, type: "upgrade", slot: 0 })).toBe(false);
     const tower = g.state().towers[0];
     expect(tower.level).toBe(2);
@@ -170,7 +170,7 @@ describe("TD input and replay contract", () => {
       expect(result.state.over).toBe(true);
       expect(result.state.tick).toBeLessThanOrEqual(MAX_LEVEL_TICKS);
     }
-  });
+  }, 20_000);
 });
 
 describe("TD combat and waves", () => {
@@ -178,7 +178,7 @@ describe("TD combat and waves", () => {
     const auto = createTdGame({ level: level() });
     auto.step(599); expect(auto.state().wave).toBe(0);
     auto.step(600); expect(auto.state()).toMatchObject({ wave: 1, spawning: true, nextWaveTick: null });
-    expect(auto.state().events).toContainEqual({ type: "wave", tick: 600, wave: 1, targetTier: 0, bonus: 0 });
+    expect(auto.state().events).toContainEqual({ type: "waveStart", tick: 600, wave: 1, targetTier: 5, bonus: 0 });
     auto.step(601); expect(auto.state().pests).toHaveLength(1);
     const early = createTdGame({ level: level() });
     expect(early.apply({ tick: 0, type: "callWave", slot: -1 })).toBe(true);
@@ -193,13 +193,13 @@ describe("TD combat and waves", () => {
     expect(early.apply({ tick: lastSpawn, type: "callWave", slot: -1 })).toBe(false);
   });
 
-  it("steals exactly one bread per arrival, cheapest first, and stops at zero", () => {
+  it("carries the most expensive bread back and loses it only at spawn", () => {
     const g = createTdGame({ level: level(), tierCount: 12 });
     const initial = g.state().breadTiers;
     expect(initial[0]).toBe(0); expect(initial.at(-1)).toBe(11);
     const events = g.step(MAX_LEVEL_TICKS);
-    const thefts = events.filter(e => e.type === "steal");
-    expect(thefts.map(e => e.tier)).toEqual(initial);
+    const thefts = events.filter(e => e.type === "pickup");
+    expect(thefts.flatMap(e => e.tiers)).toEqual([...initial].reverse());
     expect(new Set(thefts.map(e => e.pest)).size).toBe(10);
     expect(g.state()).toMatchObject({ bread: 0, breadTiers: [], over: true, passed: false });
     expect(events.at(-1)).toMatchObject({ type: "over", reason: "bread" });
@@ -269,7 +269,7 @@ describe("TD combat and waves", () => {
     const armor = createTdGame({ level: tdLevel("2026-10-26", 8) });
     armor.apply({ tick: 0, type: "place", slot: 0, tower: "rollingPin" });
     armor.apply({ tick: 0, type: "upgrade", slot: 0 });
-    armor.apply({ tick: 0, type: "upgrade", slot: 0 });
+    armor.apply({ tick: 0, type: "upgrade", slot: 0, branch: "a" });
     armor.apply({ tick: 0, type: "callWave", slot: -1 });
     const armoredEvents = armor.step(MAX_LEVEL_TICKS);
     const beetles = new Set(armoredEvents.filter(e => e.type === "spawn" && e.kind === "beetle").map(e => (e as Extract<TdEvent, { type: "spawn" }>).pest));

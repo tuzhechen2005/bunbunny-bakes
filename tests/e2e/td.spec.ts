@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { copy } from '../../src/copy';
-import { tdLevel, replayTd, type TdInput } from '../../src/lib/td';
+import { tdLevel, replayTd, TD_ENGINE_VERSION, type TdInput } from '../../src/lib/td';
 import { greedyTd } from '../support/tdBot';
 import { TD_SAVE_KEY } from '../../src/components/td/tdSave';
 // File-level browser selection: never override browserName inside a describe.
@@ -58,6 +58,8 @@ for(const width of [320,390]) test.describe(`TD ${width}`,()=>{
   });
   test('failed completed save retries exact run after reload, win offers next level',async({page})=>{
     const api=await mockApi(page),bot=greedyTd(tdLevel(weekKey,1));
+    expect(seed.startsWith(`v${TD_ENGINE_VERSION}.td.`)).toBe(true);
+    expect(bot.inputs.some(i=>i.type==='upgrade' && i.branch)).toBe(true);
     const save={v:1,runId:'00000000-0000-4000-8000-000000000099',seed,level:1,weekKey,tiers,nickname:'Baker',expiresAt:'2099-01-01T00:00:00Z',inputs:bot.inputs,endTick:bot.state.tick,score:bot.state.wave};
     await page.addInitScript(({key,save})=>{if(!sessionStorage.getItem('seeded')){localStorage.setItem(key,JSON.stringify(save));sessionStorage.setItem('seeded','1');}},{key:TD_SAVE_KEY,save});
     await page.route('**/api/game/td/finish',r=>r.fulfill({status:503,json:{error:'INTERNAL',message:g.submitFailed}}));
