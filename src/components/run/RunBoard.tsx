@@ -6,7 +6,7 @@ import { sound } from "@/components/game/sound";
 import { haptic, useMotionPrefs } from "@/lib/motion/react";
 import { createRunClock, elapsedTick } from "./runClock";
 import { preloadRunArt, type RunArt } from "./runAssets";
-import { prepareRunRenderer, renderRun } from "./runRenderer";
+import { createRunView, type RunView } from "./runView";
 import { swipeDirection } from "./runHelpers";
 import { RunSprite } from "./RunArt";
 
@@ -45,12 +45,13 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
   const wrapper=useRef<HTMLDivElement>(null);
   const active=useRef(false), reported=useRef(false), raf=useRef<number|null>(null);
   const crashFrame=useRef<number|null>(initialState.over?2:null);
-  const surface=useRef<{ctx:CanvasRenderingContext2D;w:number;h:number}|null>(null);
+  const surface=useRef<RunView|null>(null);
+  const [webgl,setWebgl]=useState(false);
   const draw=useCallback(()=>{
-    const target=surface.current;
-    if(!target||!art)return;
-    renderRun(target.ctx,art,state.current,target.w,target.h,quiet,crashFrame.current);
-  },[art,quiet]);
+    surface.current?.draw(state.current,quiet,crashFrame.current);
+  },[quiet]);
+  const drawRef=useRef(draw);
+  useEffect(()=>{drawRef.current=draw;draw();},[draw]);
   useEffect(()=>{
     let alive=true;
     void preloadRunArt().then(a=>{if(alive)setArt(a);});
@@ -58,24 +59,20 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
   },[]);
   useEffect(()=>{
     const el=canvas.current;
-    if(!el)return;
+    if(!el||!art)return;
+    const view=createRunView(el,art);
+    surface.current=view;setWebgl(view.webgl);
     // Layout and backing-store allocation belong to resize, never the animation loop.
     const resize=()=>{
       const {width:w,height:h}=el.getBoundingClientRect();
-      if(w<=0||h<=0){surface.current=null;return;}
-      const dpr=Math.min(2,window.devicePixelRatio||1);
-      const width=Math.round(w*dpr),height=Math.round(h*dpr);
-      if(el.width!==width||el.height!==height){el.width=width;el.height=height;}
-      const ctx=el.getContext('2d');if(!ctx)return;
-      ctx.setTransform(width/w,0,0,height/h,0,0);
-      if(art)prepareRunRenderer(ctx,art,w,h,dpr);
-      surface.current={ctx,w,h};draw();
+      if(w<=0||h<=0)return;
+      view.resize(w,h,Math.min(2,window.devicePixelRatio||1));drawRef.current();
     };
     const observer=new ResizeObserver(resize);
     observer.observe(el);window.addEventListener('resize',resize);
     resize();
-    return ()=>{observer.disconnect();window.removeEventListener('resize',resize);};
-  },[art,draw]);
+    return ()=>{observer.disconnect();window.removeEventListener('resize',resize);surface.current=null;view.dispose();};
+  },[art]);
   const publish=useCallback((events:RunEvent[],force=false,render=true,snapshot?:RunState)=>{
     const s=snapshot??game.state();state.current=s;
     const now=performance.now();
@@ -205,7 +202,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
       </div>
       <p>{t.bread}<b className="font-num" data-testid="run-bread">{hud.bread}</b></p>
     </div>
-    <div ref={wrapper} className="run-board" role="application" aria-label={t.boardLabel} tabIndex={0} onClick={()=>{if(state.current.over)onShowResult?.();}} data-testid="run-board" >
+    <div ref={wrapper} className={`run-board${webgl?" run-board-gl":""}`} role="application" aria-label={t.boardLabel} tabIndex={0} onClick={()=>{if(state.current.over)onShowResult?.();}} data-testid="run-board" >
       <canvas ref={canvas} aria-hidden="true" />
       {process.env.NODE_ENV!=='production'&&<output ref={fps} hidden className="run-fps" aria-hidden="true" />}
       {!art&&<p className="run-overlay" role="status">{t.loading}</p>}

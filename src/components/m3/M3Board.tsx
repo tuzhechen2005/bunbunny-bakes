@@ -9,7 +9,7 @@ import { BIG_BASE, ROLL_BASE, MIN_MOVE_GAP_MS, createM3Game, legalM3Moves, tierO
 import { motionHealth } from "@/lib/motion/fps";
 import { haptic, useMotionPrefs } from "@/lib/motion/react";
 import { adjacent, animationQueue, sameCell, swipeDirection, swipeTarget, type AnimationFrame, type SwipeDirection } from "./m3Animation";
-import { BoardPaper, BreadFace, PieceFace } from "./M3Art";
+import { BreadFace, PieceFace } from "./M3Art";
 import { M3SpecialTip } from "./M3SpecialTip";
 import "./m3.css";
 
@@ -164,24 +164,24 @@ export function M3Board({ level, rules, tiers, seed, initialMoves = [], soundOn,
   const view = frame ? ["refill", "special", "order", "shuffle", "over"].includes(frame.event.type) ? frame.after : frame.before : snap;
   const display = frame?.after ?? snap;
   return <div className={`m3-play ${quiet ? "m3-quiet" : ""}`} data-testid="m3-play" data-reduced={reduced} data-degraded={degraded}>
-    {level && <p className="font-display m-0 text-center text-lg" data-testid="m3-level">{fill(t.level, { n: String(level) })}</p>}
-    <div className="m3-hud">
-      <p>{t.movesLeft}<b className="font-num" data-testid="m3-moves">{display.movesLeft}</b></p>
-      <p>{t.score}<b className="font-num"><span data-testid="m3-score">{display.score}</span>{rules && <span className="text-base text-c-grey"> / {rules.target}</span>}</b></p>
+    <div className="m3-status">
+      <p className="m3-stat">{t.movesLeft}<b className={`font-num${display.movesLeft <= 3 && !display.over ? " m3-low" : ""}`} data-testid="m3-moves">{display.movesLeft}</b></p>
+      {level && <p className="m3-level-pill font-display" data-testid="m3-level">{fill(t.level, { n: String(level) })}</p>}
+      <p className="m3-stat m3-stat-end">{t.score}<b className="font-num"><span key={display.score} className={display.score ? "m3-bump" : ""} data-testid="m3-score">{display.score}</span>{rules && <span className="m3-target-num"> / {rules.target}</span>}</b></p>
+      {rules && <progress className="m3-level-progress" value={Math.min(display.score, rules.target)} max={rules.target} aria-label={t.target} data-testid="m3-target" />}
     </div>
-    {rules && <progress className="m3-level-progress" value={Math.min(display.score, rules.target)} max={rules.target} aria-label={t.target} data-testid="m3-target" />}
-    <p className="m3-order-label">{t.orders}</p>
-    <div className="m3-orders" data-testid="m3-orders">
-      {view.orders.map((order, i) => <div key={i} className={`m3-order ${event?.type === "order" && event.index === i && event.action === "complete" ? "m3-order-done" : ""}`} data-testid={`m3-order-${i}`} data-have={order.have} data-tier={order.tier}>
-        <div><span>{fill(t.orderNeed, { n: String(order.need) })}</span><b className="font-num">{fill(t.reward, { n: String(order.points) })}</b></div>
-        <div><span className="m3-order-photo"><BreadFace key={tiers[order.tier].id} tier={tiers[order.tier]} /></span><span className="font-num" data-testid={`m3-order-progress-${i}`}>{fill(t.progress, { have: String(order.have), need: String(order.need) })}</span></div>
-        <progress value={order.have} max={order.need} aria-label={tiers[order.tier].name ?? t.orders} />
+    <div className="m3-orders" data-testid="m3-orders" aria-label={t.orders}>
+      {view.orders.map((order, i) => <div key={i} className={`m3-order ${order.have >= order.need ? "m3-order-full " : ""}${event?.type === "order" && event.index === i && event.action === "complete" ? "m3-order-done" : ""}`} data-testid={`m3-order-${i}`} data-have={order.have} data-tier={order.tier}>
+        <span className="m3-order-photo"><BreadFace key={tiers[order.tier].id} tier={tiers[order.tier]} /></span>
+        <div className="m3-order-body">
+          <div><span className="font-num" data-testid={`m3-order-progress-${i}`}>{fill(t.progress, { have: String(order.have), need: String(order.need) })}</span><b className="font-num">{fill(t.reward, { n: String(order.points) })}</b></div>
+          <progress value={order.have} max={order.need} aria-label={tiers[order.tier].name ?? t.orders} />
+        </div>
       </div>)}
     </div>
     <div className="m3-board-wrap">
       <M3SpecialTip board={view.board} />
       <div ref={board} className={`m3-board ${event?.type === "shuffle" ? "m3-shuffle" : ""}`} role="group" aria-label={t.boardLabel} aria-busy={busy} data-testid="m3-board">
-        <BoardPaper />
         {view.board.flatMap((row, r) => row.map((code, c) => {
           const p = { r, c };
           let dx = 0, dy = 0, effect = "";
@@ -198,7 +198,7 @@ export function M3Board({ level, rules, tiers, seed, initialMoves = [], soundOn,
           if (event?.type === "match" && event.cells.some(cell => sameCell(cell, p))) effect = "m3-pop";
           if (event?.type === "special" && sameCell(event.cell, p)) effect = "m3-flash";
           const tier = tiers[tierOf(code)];
-          return <div key={`${r}-${c}`} className="m3-cell" style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%` }}>
+          return <div key={`${r}-${c}`} className={`m3-cell${(r + c) % 2 ? " m3-cell-alt" : ""}`} style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%` }}>
             {code >= 0 && <span className={`m3-piece ${effect} ${!quiet && hint && (sameCell(hint.a, p) || sameCell(hint.b, p)) ? "m3-hint" : ""}`} style={{ "--dx": `${dx}%`, "--dy": `${dy}%`, "--duration": `${invalid ? 360 : frame?.ms ?? 180}ms` } as CSSProperties}>
               <PieceFace tier={tier} kind={code >= ROLL_BASE ? code >= BIG_BASE ? "big" : "roll" : undefined} />
             </span>}

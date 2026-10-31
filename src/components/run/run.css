@@ -26,3 +26,4 @@
 .run-input-limit { position:absolute; inset:12px 12px auto; margin:0; padding:10px; border-radius:12px; background:var(--c-paper); color:var(--c-ink); font-size:12px; text-align:center; }
 
 .run-fps { position: absolute; top: .5rem; left: .5rem; z-index: 2; padding: .15rem .4rem; background: var(--c-paper); color: var(--c-ink); font: 12px monospace; pointer-events: none; }
+.run-board-gl { background:linear-gradient(180deg,#9fcde6 0%,#cfe0e6 20%,#f6e0d1 38%,#f6e0d1 100%); }

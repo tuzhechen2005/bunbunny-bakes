@@ -6,8 +6,7 @@ import { fill } from "@/components/customer/format";
 import type { TierView } from "@/components/game/types";
 import { sound } from "@/components/game/sound";
 import { haptic, useMotionPrefs } from "@/lib/motion/react";
-import { createGrabGame, FIELD_WIDTH, FIELD_HEIGHT, OVEN_X, OVEN_Y, type GrabEvent, type GrabItem, type GrabState } from "@/lib/grab";
-import { BoardPaper } from "@/components/m3/M3Art";
+import { createGrabGame, FIELD_WIDTH, FIELD_HEIGHT, OVEN_X, OVEN_Y, RUN_TICKS, type GrabEvent, type GrabItem, type GrabState } from "@/lib/grab";
 import { GrabArt, GrabFace } from "./GrabArt";
 import { createGrabClock, elapsedTick } from "./grabClock";
 import { grabPresentationKey, isGrabRefilling } from "./grabPresentation";
@@ -28,7 +27,7 @@ const GrabSprite = memo(function GrabSprite({ bread, tiers, held = false, refill
   bread: GrabItem; tiers: TierView[]; held?: boolean; refilling?: boolean;
 }) {
   return <span className={`grab-item${held ? " grab-held" : refilling ? " grab-refill" : ""}`} data-kind={bread.kind} data-stage={bread.stage}
-    style={{ left: `${(held ? 0 : bread.x) / FIELD_WIDTH * 100}%`, top: `${(held ? 0 : bread.y) / FIELD_HEIGHT * 100}%`, width: `${bread.radius * 2 / FIELD_WIDTH * 100}%`, height: `${bread.radius * 2 / FIELD_HEIGHT * 100}%`, "--from-x": `${(OVEN_X - bread.x) / (bread.radius * 2) * 100}%`, "--from-y": `${(OVEN_Y - bread.y) / (bread.radius * 2) * 100}%` } as CSSProperties}>
+    style={{ left: `${(held ? 0 : bread.x) / FIELD_WIDTH * 100}%`, top: `${(held ? 0 : bread.y) / FIELD_HEIGHT * 100}%`, width: `${bread.radius * 2 / FIELD_WIDTH * 100}%`, height: `${bread.radius * 2 / FIELD_HEIGHT * 100}%`, "--rot": `${(bread.id * 37) % 13 - 6}deg`, "--from-x": `${(OVEN_X - bread.x) / (bread.radius * 2) * 100}%`, "--from-y": `${(OVEN_Y - bread.y) / (bread.radius * 2) * 100}%` } as CSSProperties}>
     <GrabFace item={bread} tiers={tiers} />
   </span>;
 }, (a, b) => a.tiers === b.tiers && a.held === b.held && a.refilling === b.refilling &&
@@ -58,7 +57,12 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
   const armSegment = useRef<HTMLSpanElement>(null);
   const tip = useRef<HTMLSpanElement>(null);
   const heldPosition = useRef<HTMLSpanElement>(null);
+  const tipShadow = useRef<HTMLSpanElement>(null);
   const paint = useCallback((state: GrabState) => {
+    if (tipShadow.current) {
+      tipShadow.current.style.transform = `translate(${(state.claw.x + 14) / FIELD_WIDTH * 100}%, ${(state.claw.y + 22) / FIELD_HEIGHT * 100}%)`;
+      tipShadow.current.style.opacity = state.claw.phase === "idle" ? "0" : "1";
+    }
     if (arm.current) arm.current.style.transform = `rotate(${-state.claw.angle}deg)`;
     if (armSegment.current) armSegment.current.style.transform = `scaleY(${state.claw.length / FIELD_HEIGHT})`;
     if (tip.current) tip.current.style.transform = `translateY(${state.claw.length / FIELD_HEIGHT * 100}%)`;
@@ -167,11 +171,13 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
     }
     publish(events);
   };
-  return <section className={`grab-play${quiet ? " grab-quiet" : ""}${paused || hidden || snap.over ? " grab-still" : ""}`}>
+  const seconds = Math.ceil(snap.timeLeft / 60);
+  return <section className={`grab-play${quiet ? " grab-quiet" : ""}${paused || hidden || snap.over ? " grab-still" : ""}${seconds <= 10 && !snap.over ? " grab-hurry" : ""}`}>
     <div className="grab-hud">
-      <p>{t.timer}<b className="font-num" data-testid="grab-timer">{Math.ceil(snap.timeLeft / 60)}</b></p>
-      <p>{t.score}<b className="font-num" data-testid="grab-score">{snap.score}</b></p>
+      <p>{t.timer}<b className="font-num" data-testid="grab-timer">{seconds}</b></p>
+      <p>{t.score}<b key={snap.score} className={`font-num${snap.score ? " grab-bump" : ""}`} data-testid="grab-score">{snap.score}</b></p>
     </div>
+    <div className="grab-timebar" aria-hidden="true"><i style={{ transform: `scaleX(${Math.min(1, Math.max(0, snap.timeLeft - 60) / RUN_TICKS)})` }} /></div>
     <div className="grab-bakery" aria-hidden="true" />
     <div className="grab-field-space">
     <div className="grab-field-frame" style={{ aspectRatio: `${FIELD_WIDTH} / ${FIELD_HEIGHT}`, "--grab-aspect": FIELD_WIDTH / FIELD_HEIGHT } as CSSProperties}>
@@ -189,9 +195,9 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
       onClick={e => {
         if (e.detail === 0 || performance.now() - lastPointerEvent.current > 500) launch();
       }} aria-label={t.boardLabel} data-testid="grab-board" >
-      <BoardPaper />
       <GrabArt name="oven" className={`grab-oven${ovenWarm ? " grab-oven-warm" : ""}`} />
       {snap.items.map(bread => <GrabSprite key={bread.id} bread={bread} tiers={tiers} refilling={isGrabRefilling(bread, snap.tick)} />)}
+      <span ref={tipShadow} className="grab-tip-shadow" aria-hidden="true" />
       <span ref={arm} className="grab-arm">
         <span ref={armSegment} className="grab-arm-scale"><GrabArt name="arm" className="grab-arm-segment" /></span>
         <span ref={tip} className="grab-tip"><GrabArt name="tongs" className="grab-tongs" /></span>
@@ -199,8 +205,9 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
       <span ref={heldPosition} className="grab-held-position">
         {snap.claw.held && <GrabSprite key={snap.claw.held.id} bread={snap.claw.held} tiers={tiers} held />}
       </span>
-      {pops.map(e => <span key={e.item} className="grab-score-pop font-num">
-        {e.bonusTicks ? t.bonus : fill(t.reward, { n: e.points })}
+      {pops.map(e => <span key={e.item}>
+        <span className="grab-burst" aria-hidden="true" />
+        <span className="grab-score-pop font-num">{e.bonusTicks ? t.bonus : fill(t.reward, { n: e.points })}</span>
       </span>)}
     </button>
     </div>
