@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createTdGame, replayTd, tdLevel, tdSeedVersion, TD_ENGINE_VERSION,
-  MAX_LEVEL_TICKS, MAX_INPUTS, MAX_IGNORED_INPUTS, TD_MAPS, pathLength, pathPosition,
+  FIELD_WIDTH, FIELD_HEIGHT, TD_SLOT_RADIUS, SUBUNITS, MAX_LEVEL_TICKS, MAX_INPUTS, MAX_IGNORED_INPUTS, TD_MAPS, pathLength, pathPosition,
   towerStats, distanceSquared, type TdEvent, type TdInput,
 } from "@/lib/td";
 import { greedyTd, randomTd } from "../support/tdBot";
@@ -10,7 +10,7 @@ const level = () => tdLevel("2026-10-26", 1);
 
 describe("TD deterministic level and geometry", () => {
   it("pins the version and generates five shared weekly waves", () => {
-    expect(TD_ENGINE_VERSION).toBe(3);
+    expect(TD_ENGINE_VERSION).toBe(4);
     expect(tdSeedVersion(level().seed)).toBe(TD_ENGINE_VERSION);
     expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([300, 300, 402, 1320, 1320]);
     expect(level()).toEqual(level());
@@ -20,8 +20,8 @@ describe("TD deterministic level and geometry", () => {
       const l = tdLevel("2026-10-26", n);
       expect(l.map).toBe(Math.floor((n - 1) / 4) % 3);
       const kinds = l.waves.flatMap(w => w.pests.map(p => p.kind));
-      expect(kinds.includes("sparrow")).toBe(n >= 4);
-      expect(kinds.includes("beetle")).toBe(n >= 8);
+      expect(kinds.includes("sparrow")).toBe(n >= 3);
+      expect(kinds.includes("beetle")).toBe(n >= 3);
     }
   });
 
@@ -30,7 +30,7 @@ describe("TD deterministic level and geometry", () => {
       expect(() => tdLevel(week, 1)).toThrow();
     }
     for (const n of [0, -1, 1.1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) expect(() => tdLevel("2026-10-26", n)).toThrow();
-    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v4.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
+    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
       expect(() => createTdGame({ seed })).toThrow();
     }
     for (const tierCount of [0, 101, 1.5, NaN]) expect(() => createTdGame({ level: level(), tierCount })).toThrow();
@@ -40,15 +40,32 @@ describe("TD deterministic level and geometry", () => {
     expect(tdLevel("2026-10-26", Number.MAX_SAFE_INTEGER).waves.flatMap(w => w.pests).length).toBeLessThanOrEqual(481);
   });
 
-  it("keeps all three winding paths and seven off-path slots in the portrait field", () => {
+  it("keeps all three winding paths and eleven off-path slots in the landscape field", () => {
+    expect([FIELD_WIDTH, FIELD_HEIGHT]).toEqual([1440, 810]);
     expect(TD_MAPS).toHaveLength(3);
     for (const map of TD_MAPS) {
-      expect(map.slots).toHaveLength(7);
+      expect(map.slots).toHaveLength(11);
+      expect(map.path[0].x).toBe(0);
+      expect(pathLength(map) / SUBUNITS).toBeGreaterThan(2800);
+      const plate = map.path.at(-1)!;
+      expect(plate.x).toBeGreaterThan(1100);
+      expect(plate.x + 115).toBeLessThan(FIELD_WIDTH);
+      expect(plate.y).toBeGreaterThan(115);
+      expect(plate.y + 115).toBeLessThan(FIELD_HEIGHT);
+      for (const slot of map.slots) {
+        expect(slot.x).toBeGreaterThan(TD_SLOT_RADIUS);
+        expect(slot.y).toBeGreaterThan(TD_SLOT_RADIUS);
+        let covered = false;
+        for (let d = 0; d < pathLength(map); d += SUBUNITS * 10) {
+          if (distanceSquared(slot, pathPosition(map, d)) <= towerStats('whisk').range ** 2) covered = true;
+        }
+        expect(covered).toBe(true);
+      }
       expect(map.path.length).toBeGreaterThanOrEqual(6);
       for (const p of [...map.path, ...map.slots]) {
         expect(Number.isInteger(p.x) && Number.isInteger(p.y)).toBe(true);
-        expect(p.x).toBeGreaterThanOrEqual(0); expect(p.x).toBeLessThanOrEqual(720);
-        expect(p.y).toBeGreaterThanOrEqual(0); expect(p.y).toBeLessThanOrEqual(1080);
+        expect(p.x).toBeGreaterThanOrEqual(0); expect(p.x).toBeLessThanOrEqual(1440);
+        expect(p.y).toBeGreaterThanOrEqual(0); expect(p.y).toBeLessThanOrEqual(810);
       }
       for (let i = 1; i < map.path.length; i++) {
         const a = map.path[i - 1], b = map.path[i];
@@ -95,7 +112,7 @@ describe("TD input and replay contract", () => {
     const g = createTdGame({ level: level() });
     const invalid: unknown[] = [null, [], {}, { tick: 0, type: "place", slot: 0 },
       { tick: 0, type: "callWave", slot: 0 }, { tick: 0, type: "callWave", slot: -1, speed: 2 },
-      { tick: 0, type: "sell", slot: 10 }, { tick: 0, type: "place", slot: 0, tower: "toString" },
+      { tick: 0, type: "sell", slot: 11 }, { tick: 0, type: "place", slot: 0, tower: "toString" },
       ...[-1, 1.5, NaN, Infinity, MAX_LEVEL_TICKS + 1].map(tick => ({ tick, type: "sell", slot: 0 }))];
     for (const input of invalid) expect(g.apply(input as TdInput)).toBe(false);
     expect(g.state()).toMatchObject({ tick: 0, inputsRejected: invalid.length, inputsAccepted: 0 });
@@ -220,7 +237,7 @@ describe("TD combat and waves", () => {
         const prev = before.pests.find(q => q.id === p.id);
         if (!prev) continue;
         const auras = before.towers.filter(t => distanceSquared(prev, t) <= towerStats(t.kind).range ** 2);
-        const slow = auras.length && p.kind !== "sparrow" ? 30 : 0;
+        const slow = auras.length && p.kind !== "sparrow" ? 40 : 0;
         expect(p.distance - prev.distance).toBe(Math.floor(p.speed * (100 - slow) / 100));
         expect(p.slowed).toBe(slow > 0);
         expect({ x: p.x, y: p.y }).toEqual(pathPosition(TD_MAPS[0], p.distance));

@@ -96,7 +96,7 @@ it('routes expose masked boards, enforce body limits/versions/expiry and allow d
   const board = await (await boardGET(getRequest('/api/game/td/leaderboard?wechatId=WX_ROUTE'))).json();
   expect(board).toMatchObject({nextLevel:2,myBest:1,top:[{score:1,wechatMasked:'wx***te'}]});
   expect((await finishPOST(jsonRequest('/api/game/td/finish',{padding:'x'.repeat(TD_MAX_FINISH_BODY_BYTES)}))).status).toBe(422);
-  const bad = await start('old');await db.gameRun.update({where:{id:bad.runId},data:{seed:'v2.td.2026-10-19.1'}});
+  const bad = await start('old');await db.gameRun.update({where:{id:bad.runId},data:{seed:'v3.td.2026-10-19.1'}});
   await expect(finish(bad)).rejects.toMatchObject({message:copy.gameApi.runExpired});
   await expect(progressRun(db,'TD',{runId:bad.runId,log:[],endTick:60},LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
   const expired = await start('expired');await expect(finish(expired,new Date('2026-10-26T05:00:00Z'))).rejects.toMatchObject({message:copy.gameApi.runExpired});
@@ -120,4 +120,17 @@ it('validates and persists branch choices in server replay', async () => {
   await progressRun(db, 'TD', { runId: r.runId, log: prefix, endTick: prefix.at(-1)!.tick }, LATER);
   expect(await finish(r)).toMatchObject({ passed: true });
   expect((await db.gameRun.findUniqueOrThrow({ where: { id: r.runId } })).drops).toEqual(win.inputs);
+});
+
+it('accepts 3x wall time, including its exact slack boundary, but rejects faster evidence', async () => {
+  const playMs = Math.ceil(win.state.tick * 1000 / 60);
+  const fastest = Math.ceil(playMs / 3 - 10_000);
+  const accepted = await start('three');
+  expect(await finish(accepted, new Date(+T + fastest))).toMatchObject({ passed: true });
+  const rejected = await start('too_fast');
+  await expect(finish(rejected, new Date(+T + fastest - 1))).rejects.toMatchObject({ code: 'VALIDATION' });
+  const progress = await start('progress_three');
+  const tick = 3600;
+  const inputs = win.inputs.filter(i => i.tick <= tick);
+  await progressRun(db, 'TD', { runId: progress.runId, log: inputs, endTick: tick }, new Date(+T + 20_000));
 });

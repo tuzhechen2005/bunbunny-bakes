@@ -1,4 +1,4 @@
-# Bakery defense artwork — D5 / D152
+# Bakery defense artwork — D6 / D152
 
 Original procedural Blender clay models, without downloaded models, textures, fonts,
 or runtime 3D. The palette, AgX +0.6 EV, warm sun, cool ambient fill and matte clay
@@ -61,7 +61,7 @@ Additional `map` and `facing` metadata describe alignment and rotation.
 
 | IDs | Frames each | Source frame size | Playback |
 | --- | ---: | --- | --- |
-| `map-1`, `map-2`, `map-3` | 1 | 720 × 1080 | static, opaque, path only; slots drawn by frontend |
+| `map-1`, `map-2`, `map-3` | 1 | 1440 × 810 | static, opaque, path only; slots drawn by frontend |
 | `tower-pin-0..2` | 1 | 128 × 144 | maple pin → brass reinforced pin → double roller |
 | `tower-sifter-0..2` | 1 | 128 × 144 | sieve cup → hand crank → stacked flour chamber |
 | `tower-whisk-0..2` | 1 | 128 × 144 | single whisk → twin whisk → brass stand mixer |
@@ -85,7 +85,7 @@ a deliberate single-direction atlas tradeoff. Reduced motion may hold frame zero
 while retaining essential path movement. Towers are upright and need no rotation.
 Pin and oven projectiles point right; the whisk projectile is radially symmetric.
 
-At a 360 × 540 CSS board, map scale is 0.5: source maps are 720 × 1080. Use the same
+At a 720 × 405 CSS board, map scale is 0.5: source maps are 1440 × 810. Use the same
 board scale for actors (tower frames become 64 × 72 CSS px, with approximately 56px
 visual footprints). `pixelRatio: 2` is the runner's nominal display-density metadata;
 the renderer's separate `supersample: 2` is already resolved by the packer. Do not
@@ -107,14 +107,14 @@ ctx.restore();
 
 D2's loader should fetch `/brand/td/manifest.json`, decode `baseUrl + asset.file`, and
 retain its placeholder path if manifest/image loading fails. This art-only task does
-not change the runtime loader or other TypeScript. Do not draw a second path over these full map backgrounds. Draw all seven slots in
+not change the runtime loader or other TypeScript. Do not draw a second path over these full map backgrounds. Draw all eleven slots in
 the frontend; `slot` remains available as a placement overlay. Carried bread is drawn
 with owner photos by the frontend; no carried-bread marker is included.
 
 ## Exact map alignment
 
 `render.py` reads **`src/lib/td/maps.ts` directly**. It parses all three literal map
-calls and fails if they are absent or no longer have seven slots; coordinates are never
+calls and fails if they are absent or no longer have eleven slots; coordinates are never
 copied into source art. Map order is engine order:
 
 1. Cooling rack → maple kitchen counter, mixing bowl and cooling trays.
@@ -122,17 +122,17 @@ copied into source art. Map order is engine order:
 3. Proofing walk → sage back garden, terracotta herb pots and clay pebbles.
 
 The camera target is the board center. For a map point `(x, y)` on a surface at height
-`z`, world coordinates are `((x-360)/100, ((540-y)/100-z*cos(55°))/sin(55°), z)`.
+`z`, world coordinates are `((x-720)/100, ((405-y)/100-z*cos(55°))/sin(55°), z)`.
 This compensates both the oblique camera and raised surfaces. Blender projects every
 path vertex and slot center back to pixels, asserting an error below **0.01px**.
 The final manifest records these checks and the SHA-256 of the actual map source.
 
 The route is one continuous 74px-wide surface with an 86px outer border. Its straight
 centerlines and orthogonal bends follow the engine exactly. Only the outside edges
-of corners are rounded; the centerline is never smoothed. Seven 42-unit-radius slot clearances remain in manifest metadata for alignment, but no pads are baked. Props reject path and slot clearances, and
+of corners are rounded; the centerline is never smoothed. Eleven 42-unit-radius slot clearances remain in manifest metadata for alignment, but no pads are baked. Props reject path and slot clearances, and
 the final 115px-radius endpoint apron stays empty for the game's bread pile. There is
-**no baked bread**. Endpoints lie on the bottom image edge as defined by the engine;
-the art does not relocate them inward.
+**no baked bread**. Routes enter the left edge and end near the right side with the entire 115px-radius
+plate clearance inside the board. No plate is baked into the background.
 
 Changing `maps.ts` requires rerendering **all three maps**. The packer refuses stale
 map hashes or changed paths/slots, including when packing old caches after a source edit.
@@ -151,11 +151,12 @@ tier both enlarged and at 56px frame width, every pest pose, projectiles and hit
 Review it with a local image viewer; no browser or application server is needed.
 The preview and source/cache files are not included in the runtime download budget.
 
-Verified shipped total: **220,860 bytes**, including the manifest (25 atlases,
+Verified shipped total: **232,482 bytes**, including the manifest (25 atlases,
 43 frames). The offline preview was inspected after WebP encoding; all tower tiers,
 pest poses, path/slot overlays and transparency margins pass review.
 
-D5 rerendered all three backgrounds and added the boss using Docker Blender. The
-packer and decoded contact sheet verify seven slot clearances, no baked pads, four
+D6 rerendered all three landscape backgrounds using Docker Blender; the existing
+boss and other sprite models are retained. The
+packer and decoded contact sheet verify eleven slot clearances, no baked pads, four
 unique right-facing boss poses, unclipped alpha, unchanged version-3 manifest format,
 and the public size budget. No browser or carried-bread marker is used.

@@ -139,9 +139,9 @@ export function verifyTdRun(run: GameRun, data: z.output<typeof tdFinishSchema>,
     outcome = replayTd({ level, tierCount: tdTierCount(run.tiersSnapshot) }, data.inputs, data.endTick);
     if (outcome.tick !== data.endTick || (complete && !outcome.over)) throw badRun();
   } catch { throw badRun(); }
-  // 2x is the fastest supported presentation speed. Pauses consume no simulation time.
+  // 3x is the fastest supported presentation speed. Pauses consume no simulation time.
   const playMs = Math.ceil(data.endTick * 1000 / 60);
-  if (playMs / 2 > now.getTime() - run.startedAt.getTime() + PLAUSIBILITY_SLACK_MS
+  if (playMs / 3 > now.getTime() - run.startedAt.getTime() + PLAUSIBILITY_SLACK_MS
     || (run.playMs !== null && playMs < run.playMs)
     || (Array.isArray(run.drops) && !run.drops.every((v, i) => isDeepStrictEqual(v, data.inputs[i])))) throw badRun();
   return { score: outcome.wave, playMs, suspicious: isTdSuspicious(data.inputs), passed: outcome.passed };

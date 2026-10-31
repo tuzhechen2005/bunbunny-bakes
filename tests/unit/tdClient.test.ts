@@ -16,7 +16,7 @@ it('settles old speed, excludes paused/hidden time, caps time and resumes exact 
 });
 it('restores only canonical unexpired replayable saves, including completed retry evidence', () => {
   const now=Date.parse('2026-10-20T12:00:00Z');
-  expect(TD_SAVE_KEY).toBe('bb_td_save_v3');
+  expect(TD_SAVE_KEY).toBe('bb_td_save_v4');
   expect(parseTdSave(JSON.stringify(save),now)).toEqual(save);
   for (const patch of [{score:999},{endTick:-1},{seed:'v1.td.2026-10-19.1'},{level:2},{tiers:[]},{inputs:[{tick:500,type:'sell',slot:0}]}]) expect(parseTdSave(JSON.stringify({...save,...patch}),now)).toBeNull();
   expect(parseTdSave(JSON.stringify(save),Date.parse(save.expiresAt))).toBeNull();

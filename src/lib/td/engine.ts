@@ -17,7 +17,7 @@ export function validTdInput(input: unknown): input is TdInput {
   if (!validTdTick(i.tick)) return false;
   const keys = Object.keys(input).sort().join(",");
   if (i.type === "callWave") return keys === "slot,tick,type" && i.slot === -1;
-  if (!Number.isInteger(i.slot) || i.slot < 0 || i.slot >= 7) return false;
+  if (!Number.isInteger(i.slot) || i.slot < 0 || i.slot >= TD_MAPS[0].slots.length) return false;
   if (i.type === "place") return keys === "slot,tick,tower,type" && TOWER_KINDS.includes(i.tower);
   if (i.type === "upgrade") return keys === "slot,tick,type" || (keys === "branch,slot,tick,type" && (i.branch === "a" || i.branch === "b"));
   return i.type === "sell" && keys === "slot,tick,type";
@@ -76,6 +76,9 @@ export function createTdGame(opts: TdOptions): TdGame {
     }
   };
   const advance = (toTick: number) => {
+    // Inputs cannot change towers during an advance; reuse their stats across ticks.
+    const combat = towers.map(tower => ({ tower, stats: towerStats(tower.kind, tower.level, tower.branch) }));
+    const sifters = combat.filter(({ tower }) => tower.kind === "flourSifter");
     while (!over && tick < toTick) {
       tick++;
       // Timeout wins all ties; spawn exits resolve before damage.
@@ -83,7 +86,7 @@ export function createTdGame(opts: TdOptions): TdGame {
       if (nextWaveTick !== null && tick >= nextWaveTick) startWave(false);
       if (spawnTick !== null && tick >= spawnTick) {
         const spec = level.waves[wave - 1].pests[spawnIndex++];
-        const pest: TdPest = { ...spec, ...pathPosition(map, 0), id: nextPest++, wave, distance: 0, maxHp: spec.hp, slowed: false, heading: pathHeading(map, 0), carrying: 0, carriedTiers: [], returning: false, burnUntil: 0, burnTick: 0, burnDamage: 0, burnTower: -1 };
+        const pest: TdPest = { ...spec, ...pathPosition(map, 0), id: nextPest++, wave, distance: 0, maxHp: spec.hp, slowed: false, heading: pathHeading(map, 0), carrying: 0, carriedTiers: [], returning: false, flourUntil: 0, flourDamage: 0, flourTower: -1, flourChip: 0, burnUntil: 0, burnTick: 0, burnDamage: 0, burnTower: -1 };
         pests.push(pest);
         if (pest.boss) events.push({ type: "bossSpawn", tick, pest: pest.id, wave });
         events.push({ type: "spawn", tick, pest: pest.id, kind: pest.kind, wave });
@@ -102,12 +105,22 @@ export function createTdGame(opts: TdOptions): TdGame {
         }
       }
       dropped = dropped.filter(b => b.distance < end);
-      const sifters = towers.filter(t => t.kind === "flourSifter").map(t => ({ tower: t, stats: towerStats(t.kind, t.level, t.branch) }));
       for (const pest of pests) {
-        let slow = 0;
+        let slow = 0, chip = 0, source = -1;
         if (pest.kind !== "sparrow") for (const { tower, stats } of sifters) {
-          if (distanceSquared(pest, tower) <= stats.range ** 2) slow = Math.max(slow, stats.slowPercent);
+          if (distanceSquared(pest, tower) <= stats.range ** 2) {
+            slow = Math.max(slow, stats.slowPercent);
+            if (stats.chipDps > chip) { chip = stats.chipDps; source = tower.slot; }
+            if (stats.linger) { pest.flourUntil = tick + stats.linger; pest.flourDamage = stats.chipDps; pest.flourTower = tower.slot; }
+          }
         }
+        // Strongest aura wins; branch-a coating persists for 60 ticks after exit.
+        if (pest.flourUntil >= tick) {
+          slow = Math.max(slow, 65);
+          if (pest.flourDamage > chip) { chip = pest.flourDamage; source = pest.flourTower; }
+        }
+        pest.flourChip += chip;
+        pest.flourTower = source;
         pest.slowed = slow > 0;
         const speed = Math.max(1, Math.floor(pest.speed * (100 - slow) * (pest.carrying ? 80 : 100) / 10000));
         pest.distance = Math.max(0, Math.min(end, pest.distance + (pest.returning ? -speed : speed)));
@@ -126,6 +139,12 @@ export function createTdGame(opts: TdOptions): TdGame {
       }
       pests = pests.filter(p => !(p.returning && p.distance === 0));
       if (lost === START_BREAD) { finish("bread"); break; }
+      for (const pest of pests) if (pest.flourChip >= 60) {
+        const damage = Math.floor(pest.flourChip / 60);
+        pest.flourChip %= 60;
+        // Fine flour chips ignore armor; integer accumulation gives exact tier DPS.
+        hit(pest, { id: 0, slot: pest.flourTower, damage: damage + pest.armor, knockback: 0, burn: 0 });
+      }
       for (const pest of pests) if (pest.burnUntil >= tick && pest.burnDamage && tick >= pest.burnTick) {
         hit(pest, { id: 0, slot: pest.burnTower, damage: pest.burnDamage, knockback: 0, burn: 0 });
         pest.burnTick = tick + 30;
@@ -161,9 +180,8 @@ export function createTdGame(opts: TdOptions): TdGame {
       pests = pests.filter(p => p.hp > 0);
 
       // Stable slot order, then furthest path progress, then oldest pest id.
-      for (const tower of towers) {
+      for (const { tower, stats } of combat) {
         if (tower.kind === "flourSifter" || tower.readyTick > tick) continue;
-        const stats = towerStats(tower.kind, tower.level, tower.branch);
         let target: TdPest | undefined;
         for (const pest of pests) if (distanceSquared(tower, pest) <= stats.range ** 2
           && (!target || pest.distance > target.distance || (pest.distance === target.distance && pest.id < target.id))) target = pest;
