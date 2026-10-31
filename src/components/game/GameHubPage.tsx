@@ -23,16 +23,18 @@ export function GameHubPage() {
         <main className="px-5 pt-5 pb-[calc(24px+env(safe-area-inset-bottom))]" data-testid="game-hub">
           <div className="grid grid-cols-2 gap-3">
             {games.map((game) => (
-              <Link key={game.kind} href={game.href} className={`relative flex min-w-0 flex-col items-start rounded-3xl bg-c-wash px-4 pt-11 pb-5 ${game.kind === "RUN" ? "col-span-2" : ""} ${focusRing}`} data-testid={`hub-game-${game.kind.toLowerCase()}`}>
-                {data?.prizeGame === game.kind ? (
-                  <span className="absolute top-3 left-4 text-[11px] font-bold text-c-grey" data-testid="hub-prize">{t.prizeBadge}</span>
-                ) : null}
+              <Link key={game.kind} href={game.href} className={`relative flex min-w-0 rounded-3xl bg-c-wash px-4 ${game.kind === "RUN" ? "col-span-2 items-center gap-4 py-4" : "flex-col items-start pt-11 pb-5"} ${focusRing}`} data-testid={`hub-game-${game.kind.toLowerCase()}`}>
                 <GameIcon kind={game.kind} />
-                <h2 className="m-0 mt-5 text-[20px] leading-snug font-bold tracking-[-0.03em]">{game.name}</h2>
-                <p className="m-0 mt-2 min-h-6 text-xs text-c-grey" data-testid="hub-best">
-                  {data ? game.weekBest === null ? t.emptyBest : <>{g.entryBest} <b className="font-num text-base text-c-ink">{game.weekBest}</b></> : null}
-                </p>
-                {data?.liveScores && game.live ? <LiveBadge /> : null}
+                <div className={game.kind === "RUN" ? "min-w-0 flex-1" : "mt-5"}>
+                  {data?.prizeGame === game.kind ? (
+                    <span className={`${game.kind === "RUN" ? "mb-1 block" : "absolute top-3 left-4"} text-[11px] font-bold text-c-grey`} data-testid="hub-prize">{t.prizeBadge}</span>
+                  ) : null}
+                  <h2 className="m-0 text-[20px] leading-snug font-bold tracking-[-0.03em]">{game.name}</h2>
+                  <p className={`m-0 ${game.kind === "RUN" ? "mt-1" : "mt-2"} min-h-6 text-xs text-c-grey`} data-testid="hub-best">
+                    {data ? game.weekBest === null ? t.emptyBest : <>{g.entryBest} <b className="font-num text-base text-c-ink">{game.weekBest}</b></> : null}
+                  </p>
+                  {data?.liveScores && game.live ? <LiveBadge /> : null}
+                </div>
               </Link>
             ))}
           </div>

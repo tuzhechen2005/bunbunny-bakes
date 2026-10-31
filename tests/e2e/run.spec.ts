@@ -1,4 +1,4 @@
-// D146: mocked APIs with real RUN engine/sheets. Authored here; browsers are not run in this task.
+// D146: mocked APIs with real RUN engine/sheets.
 import { expect, test, type Page } from "@playwright/test";
 import { copy } from "../../src/copy";
 import { replayRun, type RunInput } from "../../src/lib/run";
@@ -35,11 +35,23 @@ async function swipeLeft(page:Page) {
 }
 for(const width of [320,390])test.describe(`RUN ${width}px`,()=>{
  test.use({viewport:{width,height:800},hasTouch:true});
- test("five-game hub with full-width runner, menu, prize line and leaderboard",async({page})=>{
+ test("five-game hub with compact full-width runner, menu, prize line and leaderboard",async({page})=>{
   await mockApi(page);await page.goto("/game/hub");
+  const runner=page.getByTestId("hub-game-run");
+  await expect(runner.getByTestId("hub-prize")).toBeVisible();
+  await page.evaluate(()=>document.fonts.ready);
   const boxes=await Promise.all(["big","tu","m3","grab","run"].map(k=>page.getByTestId(`hub-game-${k}`).boundingBox()));
   expect(boxes[0]!.y).toBe(boxes[1]!.y);expect(boxes[2]!.y).toBe(boxes[3]!.y);expect(boxes[4]!.y).toBeGreaterThan(boxes[3]!.y);expect(boxes[4]!.width).toBeGreaterThan(boxes[0]!.width*2);
-  await page.getByTestId("hub-game-run").click();await expect(page.getByRole("heading",{level:1})).toHaveText(t.title);
+  expect(boxes[4]!.height).toBeGreaterThanOrEqual(boxes[0]!.height*.4);
+  expect(boxes[4]!.height).toBeLessThanOrEqual(boxes[0]!.height*.6);
+  const icon=runner.locator("img");
+  await expect(icon).toHaveAttribute("src","/brand/run.svg");
+  await expect(icon).toHaveJSProperty("naturalWidth",56);
+  const iconBox=(await icon.boundingBox())!,titleBox=(await runner.getByRole("heading").boundingBox())!,bestBox=(await runner.getByTestId("hub-best").boundingBox())!;
+  expect(titleBox.x).toBeGreaterThan(iconBox.x+iconBox.width);
+  expect(bestBox.x).toBe(titleBox.x);expect(bestBox.y).toBeGreaterThanOrEqual(titleBox.y+titleBox.height);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  await runner.click();await expect(page.getByRole("heading",{level:1})).toHaveText(t.title);
   await expect(page.getByTestId("run-prize-line")).toHaveText(g.prizeLine);expect(await page.locator("canvas").count()).toBe(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   await page.getByTestId("run-open-board").click();await expect(page.getByTestId("game-all-time")).toContainText("9000");await page.getByTestId("run-board-close").click();
