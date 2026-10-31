@@ -15,10 +15,10 @@ const expected = {
   'paper-bag': 1, 'coffee-cup': 1, 'road-stone': 1, 'shops-left': 3, 'shops-right': 3, 'sky-dawn': 1,
 };
 const manifest = {
-  version: 1, baseUrl: '/brand/run/', pixelRatio: 2, colorSpace: 'srgb',
+  version: 2, baseUrl: '/brand/run/', pixelRatio: 2, colorSpace: 'srgb',
   renderer: specs.find(spec => spec.renderer)?.renderer,
   camera: { projection: 'orthographic', azimuthDegrees: 0, elevationDegrees: 36.869898,
-    forwardAxis: '+Y', screenRightAxis: '+X', bunnyYawDegrees: -12 },
+    forwardAxis: '+Y', screenRightAxis: '+X', bunnyYawDegrees: -28 },
   coordinates: { origin: 'top-left', units: 'source pixels',
     anchor: 'projected world origin; place at ground contact, not image center',
     draw: 'drawImage(sheet, ...rect, x-anchor[0]*scale, y-anchor[1]*scale, frameWidth*scale, frameHeight*scale)',
@@ -42,7 +42,11 @@ for (const spec of specs) {
     assert.ok(frame.anchor[0] >= 0 && frame.anchor[0] <= width &&
       frame.anchor[1] >= 0 && frame.anchor[1] <= height, `Invalid anchor: ${spec.id}`);
     const source = resolve(root, '.cache', frame.file);
-    const { data, info } = await sharp(source).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const sourceInfo = await sharp(source).metadata();
+    assert.equal(spec.supersample, 2, `Missing supersample contract: ${spec.id}`);
+    assert.equal(sourceInfo.width, width * spec.supersample);
+    assert.equal(sourceInfo.height, height * spec.supersample);
+    const { data, info } = await sharp(source).ensureAlpha().resize(width, height, { kernel: sharp.kernel.lanczos3 }).raw().toBuffer({ resolveWithObject: true });
     assert.equal(info.width, width);
     assert.equal(info.height, height);
     // Geometry/light are periodic. Average the outermost 3 scanlines to remove
@@ -78,6 +82,7 @@ for (const spec of specs) {
     hashes.add(input.toString('base64'));
     const x = (i % columns)*width, y = Math.floor(i/columns)*height;
     layers.push({ input, left: x, top: y });
+    if (spec.id.startsWith("bunny-")) frame.anchor[1] = maxY + 1;
     frames.push({ rect: [x, y, width, height], anchor: frame.anchor,
       contentBounds: [minX, minY, maxX-minX+1, maxY-minY+1] });
     previews.set(`${spec.id}:${i}`, input);
@@ -87,7 +92,7 @@ for (const spec of specs) {
   // Lossless environment edges stay exactly seamless after decoding.
   await sharp({ create: { width: width*columns, height: height*rows, channels: 4,
     background: '#00000000' } }).composite(layers)
-    .webp(spec.repeatAxis ? { lossless: true, effort: 6 } : { quality: 86, alphaQuality: 100, effort: 6 })
+    .webp(spec.repeatAxis ? { lossless: true, effort: 6 } : { quality: 92, alphaQuality: 100, effort: 6 })
     .toFile(resolve(out, file));
   const decoded = await sharp(resolve(out, file)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   assert.equal(decoded.info.width, width*columns);
@@ -104,6 +109,8 @@ for (const spec of specs) {
   const bytes = (await stat(resolve(out, file))).size;
   manifest.assets[spec.id] = {
     file, frameSize: spec.frameSize, frameCount: spec.frameCount, columns, rows,
+    pixelsPerMetre: spec.pixelsPerMetre,
+    ...(spec.geometry ? { geometry: spec.geometry, groundFront: spec.groundFront, groundBack: spec.groundBack, heightTop: spec.heightTop } : {}),
     fps: spec.fps, loop: spec.loop, anchor: spec.frames[0].anchor, frames, bytes,
     ...(spec.frameLabels ? { frameLabels: spec.frameLabels } : {}),
     ...(spec.repeatAxis ? { repeatAxis: spec.repeatAxis,
@@ -130,7 +137,7 @@ async function thumb(id, index, x, y, w, h) {
   reviewLayers.push({ input, left: x, top: y });
 }
 label('BUNBUNNY / DAWN DELIVERY', 52, 63, 34);
-label('R2 • Procedural Blender clay town • 2x sprites • No runtime 3D', 52, 100, 19);
+label('R5 • Procedural Blender clay town • 2x sprites • No runtime 3D', 52, 100, 19);
 let y = 155;
 for (const [id, title, count] of [
   ['bunny-run', 'RUN / 8', 8], ['bunny-jump', 'JUMP / 3', 3],
@@ -150,7 +157,7 @@ label('COLLECT + POWER UP', 52, 1280, 18);
 for (let i = 0; i < 6; i++) await thumb('loaf-spin', i, 295+i*116, 1235, 105, 110);
 await thumb('paper-bag', 0, 1060, 1230, 145, 155);
 await thumb('coffee-cup', 0, 1280, 1230, 145, 155);
-label('TOWN / REPEATABLE STRIPS', 52, 1444, 18);
+label('TOWN / WHOLE PERSPECTIVE SPRITES', 52, 1444, 18);
 for (const [sideIndex, side] of ['left', 'right'].entries()) {
   for (let i = 0; i < 3; i++) await thumb(`shops-${side}`, i, 52+(sideIndex*3+i)*155, 1470, 143, 330);
 }

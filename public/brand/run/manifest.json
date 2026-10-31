@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "baseUrl": "/brand/run/",
   "pixelRatio": 2,
   "colorSpace": "srgb",
@@ -13,7 +13,7 @@
     "elevationDegrees": 36.869898,
     "forwardAxis": "+Y",
     "screenRightAxis": "+X",
-    "bunnyYawDegrees": -12
+    "bunnyYawDegrees": -28
   },
   "coordinates": {
     "origin": "top-left",
@@ -32,11 +32,12 @@
       "frameCount": 8,
       "columns": 8,
       "rows": 1,
+      "pixelsPerMetre": 78.76923076923077,
       "fps": 14,
       "loop": true,
       "anchor": [
         128,
-        254.523
+        260
       ],
       "frames": [
         {
@@ -48,13 +49,13 @@
           ],
           "anchor": [
             128,
-            254.523
+            260
           ],
           "contentBounds": [
-            83,
-            39,
-            92,
-            217
+            69,
+            35,
+            115,
+            225
           ]
         },
         {
@@ -66,13 +67,13 @@
           ],
           "anchor": [
             128,
-            254.523
+            261
           ],
           "contentBounds": [
-            81,
-            39,
-            96,
-            219
+            69,
+            34,
+            115,
+            227
           ]
         },
         {
@@ -84,13 +85,13 @@
           ],
           "anchor": [
             128,
-            254.523
+            261
           ],
           "contentBounds": [
-            81,
-            39,
-            97,
-            218
+            69,
+            35,
+            115,
+            226
           ]
         },
         {
@@ -102,13 +103,13 @@
           ],
           "anchor": [
             128,
-            254.523
+            261
           ],
           "contentBounds": [
-            81,
-            44,
-            96,
-            214
+            69,
+            39,
+            115,
+            222
           ]
         },
         {
@@ -120,13 +121,13 @@
           ],
           "anchor": [
             128,
-            254.523
+            260
           ],
           "contentBounds": [
-            83,
-            46,
-            92,
-            210
+            69,
+            41,
+            115,
+            219
           ]
         },
         {
@@ -138,13 +139,13 @@
           ],
           "anchor": [
             128,
-            254.523
+            248
           ],
           "contentBounds": [
-            83,
-            41,
-            93,
-            211
+            69,
+            36,
+            115,
+            212
           ]
         },
         {
@@ -156,13 +157,13 @@
           ],
           "anchor": [
             128,
-            254.523
+            248
           ],
           "contentBounds": [
-            82,
-            35,
-            95,
-            217
+            69,
+            30,
+            115,
+            218
           ]
         },
         {
@@ -174,17 +175,17 @@
           ],
           "anchor": [
             128,
-            254.523
+            248
           ],
           "contentBounds": [
-            83,
-            36,
-            93,
-            216
+            69,
+            31,
+            115,
+            217
           ]
         }
       ],
-      "bytes": 25986
+      "bytes": 53140
     },
     "bunny-jump": {
       "file": "bunny-jump.webp",
@@ -195,11 +196,12 @@
       "frameCount": 3,
       "columns": 3,
       "rows": 1,
+      "pixelsPerMetre": 78.76923076923077,
       "fps": 0,
       "loop": false,
       "anchor": [
         128,
-        254.523
+        254
       ],
       "frames": [
         {
@@ -211,13 +213,13 @@
           ],
           "anchor": [
             128,
-            254.523
+            254
           ],
           "contentBounds": [
-            87,
-            26,
-            91,
-            224
+            75,
+            23,
+            117,
+            231
           ]
         },
         {
@@ -229,13 +231,13 @@
           ],
           "anchor": [
             128,
-            254.523
+            264
           ],
           "contentBounds": [
-            83,
-            4,
-            98,
-            245
+            78,
+            14,
+            120,
+            250
           ]
         },
         {
@@ -247,17 +249,17 @@
           ],
           "anchor": [
             128,
-            254.523
+            257
           ],
           "contentBounds": [
-            80,
-            61,
-            95,
-            194
+            62,
+            57,
+            118,
+            200
           ]
         }
       ],
-      "bytes": 11220,
+      "bytes": 23500,
       "frameLabels": [
         "takeoff",
         "airborne",
@@ -273,11 +275,12 @@
       "frameCount": 2,
       "columns": 2,
       "rows": 1,
+      "pixelsPerMetre": 78.76923076923077,
       "fps": 8,
       "loop": true,
       "anchor": [
         128,
-        254.523
+        275
       ],
       "frames": [
         {
@@ -289,13 +292,13 @@
           ],
           "anchor": [
             128,
-            254.523
+            275
           ],
           "contentBounds": [
-            89,
-            82,
-            113,
-            188
+            96,
+            86,
+            143,
+            189
           ]
         },
         {
@@ -307,17 +310,17 @@
           ],
           "anchor": [
             128,
-            254.523
+            276
           ],
           "contentBounds": [
+            97,
             89,
-            85,
-            114,
+            144,
             187
           ]
         }
       ],
-      "bytes": 6892,
+      "bytes": 14574,
       "frameLabels": [
         "enter",
         "hold"
@@ -332,11 +335,12 @@
       "frameCount": 2,
       "columns": 2,
       "rows": 1,
+      "pixelsPerMetre": 78.76923076923077,
       "fps": 0,
       "loop": false,
       "anchor": [
         128,
-        254.523
+        253
       ],
       "frames": [
         {
@@ -348,13 +352,13 @@
           ],
           "anchor": [
             128,
-            254.523
+            253
           ],
           "contentBounds": [
-            32,
-            47,
-            133,
-            210
+            37,
+            41,
+            132,
+            212
           ]
         },
         {
@@ -366,17 +370,17 @@
           ],
           "anchor": [
             128,
-            254.523
+            273
           ],
           "contentBounds": [
-            94,
-            54,
-            124,
-            215
+            80,
+            59,
+            130,
+            214
           ]
         }
       ],
-      "bytes": 7748,
+      "bytes": 15896,
       "frameLabels": [
         "left",
         "right"
@@ -391,11 +395,12 @@
       "frameCount": 3,
       "columns": 3,
       "rows": 1,
+      "pixelsPerMetre": 62.439024390243915,
       "fps": 8,
       "loop": false,
       "anchor": [
-        128,
-        254.523
+        92.878,
+        249
       ],
       "frames": [
         {
@@ -406,14 +411,14 @@
             320
           ],
           "anchor": [
-            128,
-            254.523
+            92.878,
+            249
           ],
           "contentBounds": [
-            91,
-            32,
-            114,
-            236
+            61,
+            60,
+            99,
+            189
           ]
         },
         {
@@ -424,14 +429,14 @@
             320
           ],
           "anchor": [
-            128,
-            254.523
+            92.878,
+            251
           ],
           "contentBounds": [
-            98,
-            41,
-            147,
-            228
+            75,
+            76,
+            126,
+            175
           ]
         },
         {
@@ -442,18 +447,18 @@
             320
           ],
           "anchor": [
-            128,
-            254.523
+            92.878,
+            262
           ],
           "contentBounds": [
-            99,
-            117,
-            155,
-            167
+            79,
+            140,
+            140,
+            122
           ]
         }
       ],
-      "bytes": 11510,
+      "bytes": 18230,
       "frameLabels": [
         "impact",
         "tumble",
@@ -469,11 +474,29 @@
       "frameCount": 1,
       "columns": 1,
       "rows": 1,
+      "pixelsPerMetre": 47.407407407407405,
+      "geometry": {
+        "front": 1200,
+        "back": 1400,
+        "height": 2700
+      },
+      "groundFront": [
+        160,
+        259.556
+      ],
+      "groundBack": [
+        160,
+        167.111
+      ],
+      "heightTop": [
+        160,
+        88.889
+      ],
       "fps": 0,
       "loop": false,
       "anchor": [
         160,
-        235.035
+        216.889
       ],
       "frames": [
         {
@@ -485,17 +508,17 @@
           ],
           "anchor": [
             160,
-            235.035
+            216.889
           ],
           "contentBounds": [
-            72,
-            38,
-            176,
-            230
+            94,
+            45,
+            132,
+            205
           ]
         }
       ],
-      "bytes": 5734
+      "bytes": 7280
     },
     "flour-sacks": {
       "file": "flour-sacks.webp",
@@ -506,11 +529,29 @@
       "frameCount": 1,
       "columns": 1,
       "rows": 1,
+      "pixelsPerMetre": 59.07692307692309,
+      "geometry": {
+        "front": 750,
+        "back": 750,
+        "height": 1800
+      },
+      "groundFront": [
+        144,
+        227.446
+      ],
+      "groundBack": [
+        144,
+        160.985
+      ],
+      "heightTop": [
+        144,
+        87.877
+      ],
       "fps": 0,
       "loop": false,
       "anchor": [
         144,
-        219.323
+        194.216
       ],
       "frames": [
         {
@@ -522,17 +563,17 @@
           ],
           "anchor": [
             144,
-            219.323
+            194.216
           ],
           "contentBounds": [
-            53,
-            87,
-            180,
-            145
+            59,
+            82,
+            168,
+            126
           ]
         }
       ],
-      "bytes": 3052
+      "bytes": 5422
     },
     "shop-awning": {
       "file": "shop-awning.webp",
@@ -543,11 +584,30 @@
       "frameCount": 1,
       "columns": 1,
       "rows": 1,
+      "pixelsPerMetre": 55.85454545454545,
+      "geometry": {
+        "front": 900,
+        "back": 900,
+        "height": 3600,
+        "clearance": 2200
+      },
+      "groundFront": [
+        192,
+        321.862
+      ],
+      "groundBack": [
+        192,
+        246.458
+      ],
+      "heightTop": [
+        192,
+        83.084
+      ],
       "fps": 0,
       "loop": false,
       "anchor": [
         192,
-        291.474
+        284.16
       ],
       "frames": [
         {
@@ -559,17 +619,17 @@
           ],
           "anchor": [
             192,
-            291.474
+            284.16
           ],
           "contentBounds": [
-            66,
-            72,
-            252,
-            207
+            101,
+            58,
+            182,
+            205
           ]
         }
       ],
-      "bytes": 4102
+      "bytes": 5698
     },
     "puddle": {
       "file": "puddle.webp",
@@ -580,6 +640,24 @@
       "frameCount": 1,
       "columns": 1,
       "rows": 1,
+      "pixelsPerMetre": 75.29411764705883,
+      "geometry": {
+        "front": 1000,
+        "back": 1000,
+        "height": 120
+      },
+      "groundFront": [
+        160,
+        152.471
+      ],
+      "groundBack": [
+        160,
+        39.53
+      ],
+      "heightTop": [
+        160,
+        86.965
+      ],
       "fps": 0,
       "loop": false,
       "anchor": [
@@ -599,14 +677,14 @@
             96
           ],
           "contentBounds": [
-            34,
-            43,
-            258,
-            106
+            31,
+            32,
+            264,
+            120
           ]
         }
       ],
-      "bytes": 2808
+      "bytes": 6008
     },
     "loaf-spin": {
       "file": "loaf-spin.webp",
@@ -617,6 +695,7 @@
       "frameCount": 6,
       "columns": 6,
       "rows": 1,
+      "pixelsPerMetre": 62.06060606060606,
       "fps": 10,
       "loop": true,
       "anchor": [
@@ -637,9 +716,9 @@
           ],
           "contentBounds": [
             30,
-            26,
+            27,
             68,
-            77
+            76
           ]
         },
         {
@@ -691,9 +770,9 @@
           ],
           "contentBounds": [
             30,
-            26,
+            27,
             68,
-            77
+            76
           ]
         },
         {
@@ -733,7 +812,7 @@
           ]
         }
       ],
-      "bytes": 7204
+      "bytes": 15574
     },
     "paper-bag": {
       "file": "paper-bag.webp",
@@ -744,6 +823,7 @@
       "frameCount": 1,
       "columns": 1,
       "rows": 1,
+      "pixelsPerMetre": 99.55555555555556,
       "fps": 0,
       "loop": false,
       "anchor": [
@@ -764,13 +844,13 @@
           ],
           "contentBounds": [
             50,
-            46,
+            47,
             90,
-            139
+            142
           ]
         }
       ],
-      "bytes": 2874
+      "bytes": 4904
     },
     "coffee-cup": {
       "file": "coffee-cup.webp",
@@ -781,6 +861,7 @@
       "frameCount": 1,
       "columns": 1,
       "rows": 1,
+      "pixelsPerMetre": 99.55555555555556,
       "fps": 0,
       "loop": false,
       "anchor": [
@@ -807,7 +888,7 @@
           ]
         }
       ],
-      "bytes": 3208
+      "bytes": 6108
     },
     "road-stone": {
       "file": "road-stone.webp",
@@ -818,6 +899,7 @@
       "frameCount": 1,
       "columns": 1,
       "rows": 1,
+      "pixelsPerMetre": 102.4,
       "fps": 0,
       "loop": false,
       "anchor": [
@@ -844,171 +926,167 @@
           ]
         }
       ],
-      "bytes": 232396,
+      "bytes": 188982,
       "repeatAxis": "y",
       "projection": "ground-plan; map onto road trapezoid"
     },
     "shops-left": {
       "file": "shops-left.webp",
       "frameSize": [
-        256,
+        384,
         512
       ],
       "frameCount": 3,
       "columns": 3,
       "rows": 1,
+      "pixelsPerMetre": 55.35135135135135,
       "fps": 0,
       "loop": false,
       "anchor": [
-        128,
-        256
+        192,
+        300.281
       ],
       "frames": [
         {
           "rect": [
             0,
             0,
-            256,
+            384,
             512
           ],
           "anchor": [
-            128,
-            256
+            192,
+            300.281
           ],
           "contentBounds": [
-            0,
-            0,
-            256,
-            512
+            54,
+            102,
+            276,
+            329
           ]
         },
         {
           "rect": [
-            256,
+            384,
             0,
-            256,
+            384,
             512
           ],
           "anchor": [
-            128,
-            256
+            192,
+            300.281
           ],
           "contentBounds": [
-            0,
-            0,
-            256,
-            512
+            54,
+            102,
+            276,
+            329
           ]
         },
         {
           "rect": [
-            512,
+            768,
             0,
-            256,
+            384,
             512
           ],
           "anchor": [
-            128,
-            256
+            192,
+            300.281
           ],
           "contentBounds": [
-            0,
-            0,
-            256,
-            512
+            54,
+            102,
+            276,
+            329
           ]
         }
       ],
-      "bytes": 245802,
+      "bytes": 40612,
       "frameLabels": [
         "butter",
         "sage",
         "rose"
-      ],
-      "repeatAxis": "y",
-      "projection": "camera-plane; repeat vertically before perspective scaling",
-      "variantPolicy": "repeat the same variant; crossfade when changing palette"
+      ]
     },
     "shops-right": {
       "file": "shops-right.webp",
       "frameSize": [
-        256,
+        384,
         512
       ],
       "frameCount": 3,
       "columns": 3,
       "rows": 1,
+      "pixelsPerMetre": 55.35135135135135,
       "fps": 0,
       "loop": false,
       "anchor": [
-        128,
-        256
+        192,
+        300.281
       ],
       "frames": [
         {
           "rect": [
             0,
             0,
-            256,
+            384,
             512
           ],
           "anchor": [
-            128,
-            256
+            192,
+            300.281
           ],
           "contentBounds": [
-            0,
-            0,
-            256,
-            512
+            54,
+            104,
+            276,
+            327
           ]
         },
         {
           "rect": [
-            256,
+            384,
             0,
-            256,
+            384,
             512
           ],
           "anchor": [
-            128,
-            256
+            192,
+            300.281
           ],
           "contentBounds": [
-            0,
-            0,
-            256,
-            512
+            54,
+            104,
+            276,
+            327
           ]
         },
         {
           "rect": [
-            512,
+            768,
             0,
-            256,
+            384,
             512
           ],
           "anchor": [
-            128,
-            256
+            192,
+            300.281
           ],
           "contentBounds": [
-            0,
-            0,
-            256,
-            512
+            54,
+            104,
+            276,
+            327
           ]
         }
       ],
-      "bytes": 235556,
+      "bytes": 38128,
       "frameLabels": [
         "butter",
         "sage",
         "rose"
-      ],
-      "repeatAxis": "y",
-      "projection": "camera-plane; repeat vertically before perspective scaling",
-      "variantPolicy": "repeat the same variant; crossfade when changing palette"
+      ]
     },
     "sky-dawn": {
       "file": "sky-dawn.webp",
@@ -1045,7 +1123,7 @@
           ]
         }
       ],
-      "bytes": 3120
+      "bytes": 3860
     }
   }
 }

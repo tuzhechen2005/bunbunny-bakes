@@ -7,16 +7,17 @@ import sys
 from pathlib import Path
 
 import bpy
-import _cycles
 from mathutils import Vector
 from bpy_extras.object_utils import world_to_camera_view
 
 ROOT = Path(__file__).resolve().parent
 CACHE = ROOT / ".cache"
 CACHE.mkdir(exist_ok=True)
+GEOMETRY = json.loads((ROOT.parents[1] / "src/lib/run/geometry.json").read_text())
+SUPERSAMPLE = 2
 parser = argparse.ArgumentParser()
 parser.add_argument("--only", default="", help="Comma-separated asset IDs; default: all")
-parser.add_argument("--samples", type=int, default=128)
+parser.add_argument("--samples", type=int, default=256)
 args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
 SELECTED = set(filter(None, args.only.split(",")))
 PALETTE = {
@@ -65,7 +66,7 @@ def group(name, loc=(0, 0, 0), rot=(0, 0, 0), parent=None):
 
 
 def ball(name, loc, scale, mat, parent=None):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=16, location=loc)
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=32, location=loc)
     obj = bpy.context.object
     obj.name = name
     obj.scale = scale
@@ -83,7 +84,7 @@ def box(name, loc, size, mat, bevel=.06, parent=None):
     if bevel:
         mod = obj.modifiers.new("Soft molded edges", "BEVEL")
         mod.width = bevel
-        mod.segments = 3
+        mod.segments = 5
         obj.modifiers.new("Weighted face normals", "WEIGHTED_NORMAL")
     return finish(obj, mat, parent)
 
@@ -112,7 +113,7 @@ def cylinder(name, loc, radius, depth, mat, parent=None, rotation=(0, 0, 0), top
     obj.name = name
     bevel = obj.modifiers.new("Rounded rim", "BEVEL")
     bevel.width = .035
-    bevel.segments = 3
+    bevel.segments = 5
     obj.modifiers.new("Weighted normals", "WEIGHTED_NORMAL")
     return finish(obj, mat, parent)
 
@@ -150,6 +151,13 @@ def bread_bag(parent=None, loc=(0, 0, 0), scale=1, with_bread=True):
         mesh("Zigzag paper lip", vertices, [(2*i, 2*i+1, 2*i+3, 2*i+2) for i in range(14)], "kraft", root)
     for x in (-.29, .29):
         tube("Folded seam", [(x, -.205, .1), (x*.9, -.207, .5), (x, -.205, .81)], .012, "fold", root)
+    for side in (-1, 1):
+        mesh("Triangular folded gusset", [(side*.351,-.18,.12), (side*.351,.18,.12),
+             (side*.32,0,.45), (side*.351,-.18,.80), (side*.351,.18,.80)],
+             [(0,1,2),(2,3,4)], "fold", root)
+        tube("Pressed diagonal paper crease", [(side*.28,-.208,.12), (side*.14,-.216,.23),
+             (side*.29,-.209,.35)], .006, "fold", root)
+    box("Folded bottom", (0,-.202,.075), (.61,.025,.09), "fold", .018, root)
     # Brand mark is a tiny sculpted bunny silhouette, never lettering.
     ball("Bunny stamp head", (0, -.204, .42), (.11, .012, .09), "fold", root)
     for x in (-.05, .05):
@@ -164,12 +172,12 @@ def bread_bag(parent=None, loc=(0, 0, 0), scale=1, with_bread=True):
 def bunny(action, frame):
     phase = frame * math.tau / 8
     bob = .035 * (1-math.cos(phase*2)) if action == "run" else 0
-    root = group("Courier pose", (0, 0, bob), (0, 0, math.radians(-12)))
+    root = group("Courier pose", (0, 0, bob), (0, 0, math.radians(-28)))
     if action == "lean":
         root.rotation_euler.y = -.24 if frame == 0 else .24
         root.rotation_euler.z += .13 if frame == 0 else -.13
     if action == "jump":
-        root.location.z = (0, .15, .04)[frame]
+        root.location.z = 0  # World lift comes exclusively from shared game geometry.
         root.rotation_euler.x = (-.13, -.22, .12)[frame]
     if action == "slide":
         root.rotation_euler.x = (-1.08, -1.18)[frame]
@@ -180,7 +188,15 @@ def bunny(action, frame):
         root.rotation_euler.z += (0, -.12, -.35)[frame]
         root.location = (0, -.22, (0, .08, .18)[frame])
     ball("Pear-shaped white body", (0, 0, .94), (.41, .33, .55), "fur", root)
-    ball("Round head", (0, .065, 1.57), (.45, .38, .39), "fur", root)
+    head = group("Turned head", (0, .065, 1.57), (0, 0, -.42), root)
+    ball("Round head", (0, 0, 0), (.46, .39, .41), "fur", head)
+    for side in (-1, 1):
+        ball("Velvet cheek", (side*.28, .24, -.11), (.18, .16, .15), "cream", head)
+        ball("Glossy eye", (side*.29, .30, .035), (.047, .035, .060), "dark", head)
+        ball("Eye catchlight", (side*.29-.012, .326, .056), (.012, .010, .016), "fur", head)
+        ball("Soft cheek blush", (side*.36, .26, -.08), (.064, .020, .036), "pink", head)
+    ball("Button nose", (0, .407, -.10), (.055, .032, .040), "pink", head)
+    tube("Smile", [(-.07, .386, -.17), (0, .412, -.19), (.07, .386, -.17)], .009, "fold", head)
     for side in (-1, 1):
         ear = group("Soft ear", (side*.21, .08, 1.82), parent=root)
         ear.rotation_euler = (.12 + .08*math.sin(phase+side) if action == "run" else .15,
@@ -209,10 +225,7 @@ def bunny(action, frame):
                                (side*.27, -.36, .69)], .035, "fold", root)
     bread_bag(root, (0, -.48, .62), .9)
     ball("Cotton tail", (0, -.34, .53), (.19, .18, .18), "fur", root)
-    # Face belongs on the forward side; a cheek/nose profile appears in the lean.
-    for x in (-.22, .22):
-        ball("Eye", (x, .387, 1.62), (.035, .025, .045), "dark", root)
-    ball("Nose", (0, .442, 1.48), (.055, .025, .04), "pink", root)
+
 
 
 def cart():
@@ -309,18 +322,17 @@ def road():
 
 
 def shop(side, variant):
-    # Camera-space vertical repeat: y translation by 20/3 gives exactly 4 units
-    # screen-up at this camera elevation. Neighbor copies preserve edge occlusion.
+    # Complete beveled shop, turned toward the street; never stretched into strips.
     palette = ("butter", "sage", "rose")
     color = palette[variant]
     period = 20/3
-    for repeat in range(-2, 3):
-        g = group("Periodic shop module", (0, repeat*period, 0))
-        box("Sidewalk", (0, 0, -.07), (2.6, period+.02, .14), "stone", .015, g)
+    for repeat in range(1):
+        g = group("Individual shop module", (0, repeat*period, 0), (0, 0, .28 if side == "left" else -.28))
+        box("Sidewalk", (0, 0, -.07), (2.6, 5.4, .14), "stone", .015, g)
         # Road-facing curb stays on the inner edge; left and right are separate renders.
         inner = .96 if side == "left" else -.96
-        for i in range(10):
-            box("Curb block", (inner, -period/2+(i+.5)*period/10, .04), (.19, period/10-.025, .19), "cream", .025, g)
+        for i in range(8):
+            box("Curb block", (inner, -2.7+(i+.5)*5.4/8, .04), (.19, 5.4/8-.025, .19), "cream", .025, g)
         x = -.16 if side == "left" else .16
         house = group("Little stone-street shop", (x, .10, 0), parent=g)
         box("Plaster shop walls", (0, 0, 1.04), (1.56, 2.65, 2.08), "plaster", .065, house)
@@ -368,8 +380,7 @@ def setup(width, height, span, target=(0, 0, 1.2), transparent=True, top=False):
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
     scene.cycles.samples = args.samples
-    # Debian's ARM build may omit OpenImageDenoise; CPU rendering still works.
-    scene.cycles.use_denoising = bool(getattr(_cycles, "with_openimagedenoise", False))
+    scene.cycles.use_denoising = False  # Supersampling preserves sculpted details without denoiser blur.
     if not scene.cycles.use_denoising:
         scene.cycles.samples = max(args.samples, 64)
     scene.cycles.seed = 146
@@ -377,6 +388,8 @@ def setup(width, height, span, target=(0, 0, 1.2), transparent=True, top=False):
     scene.render.threads = 8
     scene.render.resolution_x, scene.render.resolution_y = width, height
     scene.render.resolution_percentage = 100
+    scene.render.resolution_x *= SUPERSAMPLE
+    scene.render.resolution_y *= SUPERSAMPLE
     scene.render.image_settings.file_format = "PNG"
     scene.render.image_settings.color_mode = "RGBA"
     scene.render.film_transparent = transparent
@@ -405,7 +418,7 @@ def setup(width, height, span, target=(0, 0, 1.2), transparent=True, top=False):
 def anchor(scene, point=(0, 0, 0)):
     bpy.context.view_layer.update()
     uv = world_to_camera_view(scene, scene.camera, Vector(point))
-    return [round(uv.x*scene.render.resolution_x, 3), round((1-uv.y)*scene.render.resolution_y, 3)]
+    return [round(uv.x*scene.render.resolution_x/SUPERSAMPLE, 3), round((1-uv.y)*scene.render.resolution_y/SUPERSAMPLE, 3)]
 
 
 def sky():
@@ -444,9 +457,10 @@ SPECS = []
 
 
 def render_asset(name, count, width, height, span, build, target=(0, 0, 1.2), fps=0,
-                 loop=False, top=False, tile=False, labels=None):
+                 loop=False, top=False, tile=False, labels=None, obstacle=None):
     spec = {"id": name, "frameSize": [width, height], "frameCount": count,
-            "fps": fps, "loop": loop, "pixelRatio": 2,
+            "fps": fps, "loop": loop, "pixelRatio": 2, "supersample": SUPERSAMPLE,
+            "pixelsPerMetre": max(width, height)/span*.8,
             "renderer": {"blender": bpy.app.version_string, "engine": "Cycles CPU"}, "frames": []}
     if labels:
         spec["frameLabels"] = labels
@@ -457,6 +471,33 @@ def render_asset(name, count, width, height, span, build, target=(0, 0, 1.2), fp
             continue
         scene = setup(width, height, span, target, top=top)
         build(i)
+        if obstacle:
+            shape = GEOMETRY["obstacles"][obstacle]
+            bpy.context.view_layer.update()
+            meshes = [o for o in scene.objects if o.type in {"MESH", "CURVE"}]
+            corners = [o.matrix_world @ Vector(v) for o in meshes for v in o.bound_box]
+            low = [min(v[k] for v in corners) for k in range(3)]
+            high = [max(v[k] for v in corners) for k in range(3)]
+            # Fit the actual model to the authoritative footprint and height in metres.
+            fit = group("Authoritative obstacle geometry")
+            for o in list(scene.objects):
+                if o.type not in {"CAMERA", "LIGHT"} and o != fit and o.parent is None:
+                    o.parent = fit
+            fit.scale.y = (shape["front"] + shape["back"])/1000/(high[1]-low[1])
+            fit.location.y = -shape["front"]/1000-low[1]*fit.scale.y
+            fit.scale.z = shape["height"]/1000/(high[2]-low[2])
+            fit.location.z = -low[2]*fit.scale.z
+            fit.scale.x = 1.4 if obstacle != "awning" else 1.25
+            bpy.context.view_layer.update()
+            if obstacle == "awning":
+                for obj in meshes:
+                    if obj.name.startswith("Scalloped hem"):
+                        obj.location.z = shape["clearance"]/1000/fit.scale.z + .12
+                bpy.context.view_layer.update()
+            spec["geometry"] = shape
+            spec["groundFront"] = anchor(scene, (0,-shape["front"]/1000,0))
+            spec["groundBack"] = anchor(scene, (0,shape["back"]/1000,0))
+            spec["heightTop"] = anchor(scene, (0,0,shape["height"]/1000))
         spec["frames"].append({"anchor": anchor(scene), "file": f"{name}-{i:02}.png"})
         scene.render.filepath = str(CACHE / f"{name}-{i:02}.png")
         bpy.ops.render.render(write_still=True)
@@ -470,27 +511,27 @@ for action, count, fps, loop, labels in (
     ("lean", 2, 0, False, ["left", "right"]),
     ("crash", 3, 8, False, ["impact", "tumble", "rest"]),
 ):
-    render_asset("bunny-"+action, count, 256, 320, 3.25, lambda i, a=action: bunny(a, i),
-                 target=(0, 0, 1.2), fps=fps, loop=loop, labels=labels)
-render_asset("bread-cart", 1, 320, 320, 2.9, lambda _: cart(), target=(0, 0, .85))
-render_asset("flour-sacks", 1, 288, 288, 2.6,
-             lambda _: [sack((-.40, 0, 0), 1, -.16), sack((.38, .12, 0), 1, .12), sack((0, .05, .66), .9, -.1)], target=(0, 0, .85))
-render_asset("shop-awning", 1, 384, 384, 3.15, lambda _: awning(), target=(0, 0, 1.02))
-render_asset("puddle", 1, 320, 192, 2.5, lambda _: puddle(), target=(0, 0, 0))
+    render_asset("bunny-"+action, count, 256, 320, 4.1 if action == "crash" else 3.25, lambda i, a=action: bunny(a, i),
+                 target=(.45 if action == "crash" else 0, 0, 1.2), fps=fps, loop=loop, labels=labels)
+render_asset("bread-cart", 1, 320, 320, 5.4, lambda _: cart(), target=(0, 0, 1.2), obstacle="cart")
+render_asset("flour-sacks", 1, 288, 288, 3.9,
+             lambda _: [sack((-.40, 0, 0), 1, -.16), sack((.38, .12, 0), 1, .12), sack((0, .05, .66), .9, -.1)], target=(0, 0, .85), obstacle="flour")
+render_asset("shop-awning", 1, 384, 384, 5.5, lambda _: awning(), target=(0, 0, 1.65), obstacle="awning")
+render_asset("puddle", 1, 320, 192, 3.4, lambda _: puddle(), target=(0, 0, 0), obstacle="puddle")
 render_asset("loaf-spin", 6, 128, 128, 1.65,
              lambda i: loaf(loc=(0, 0, .18), rotation=i*math.tau/6), target=(0, 0, .43), fps=10, loop=True)
 render_asset("paper-bag", 1, 192, 224, 1.8, lambda _: bread_bag(), target=(0, 0, .64))
 render_asset("coffee-cup", 1, 192, 224, 1.8, lambda _: coffee(), target=(0, 0, .70))
 render_asset("road-stone", 1, 768, 512, 6, lambda _: road(), target=(0, 0, 0), top=True, tile=True)
 for side in ("left", "right"):
-    render_asset("shops-"+side, 3, 256, 512, 4, lambda i, s=side: shop(s, i),
-                 target=(0, 0, 0), tile=True, labels=["butter", "sage", "rose"])
+    render_asset("shops-"+side, 3, 384, 512, 7.4, lambda i, s=side: shop(s, i),
+                 target=(0, 0, .8), labels=["butter", "sage", "rose"])
 if not SELECTED or "sky-dawn" in SELECTED:
     scene = sky()
     scene.render.filepath = str(CACHE / "sky-dawn-00.png")
     bpy.ops.render.render(write_still=True)
 SPECS.append({"id": "sky-dawn", "frameSize": [780, 960], "frameCount": 1, "pixelRatio": 2,
-              "fps": 0, "loop": False, "frames": [{"anchor": [390, 960], "file": "sky-dawn-00.png"}]})
+              "fps": 0, "loop": False, "supersample": SUPERSAMPLE, "frames": [{"anchor": [390, 960], "file": "sky-dawn-00.png"}]})
 
 # A partial render updates only selected metadata, retaining the other full-render entries.
 metadata_path = CACHE / "renders.json"
@@ -501,4 +542,4 @@ if SELECTED and metadata_path.exists():
             previous[spec["id"]] = spec
     SPECS = list(previous.values())
 metadata_path.write_text(json.dumps(SPECS, indent=2) + "\n")
-print("R2 rendering complete:", metadata_path)
+print("R5 rendering complete:", metadata_path)

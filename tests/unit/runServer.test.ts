@@ -3,6 +3,8 @@ import { runSeed, runSeedVersion, RUN_ENGINE_VERSION } from "@/lib/run";
 import { isRunSuspicious } from "@/server/runRules";
 it("pins replay versions", () => {
   expect(runSeedVersion(runSeed("ab12"))).toBe(RUN_ENGINE_VERSION);
+  expect(runSeed("ab12")).toBe("v2.ab12");
+  expect(runSeedVersion("v1.ab12")).not.toBe(RUN_ENGINE_VERSION);
   expect(runSeedVersion("legacy")).toBeNull();
 });
 it("flags median gaps below 120ms or active durations strictly over ten minutes", () => {

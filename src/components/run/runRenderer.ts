@@ -1,6 +1,7 @@
-import type { RunState, RunObjectKind } from "@/lib/run";
+import { isRunObstacle, type RunState, type RunObjectKind } from "@/lib/run";
 import { manifest, type AssetName, type RunArt } from "./runAssets";
 import { project } from "./runHelpers";
+import { runGeometry, jumpLift, slideBodyHeight, worldHeightPixels, projectionZ } from "@/lib/run/geometry";
 const objectArt: Record<RunObjectKind, AssetName> = { cart:"bread-cart", flour:"flour-sacks", awning:"shop-awning", puddle:"puddle", bread:"loaf-spin", "paper-bag":"paper-bag", coffee:"coffee-cup" };
 
 const BUILDING_SPACING=11000;
@@ -14,24 +15,6 @@ function surface(width:number,height:number) {
   return {canvas,ctx};
 }
 
-/** Crop the repeating facade once and prefilter smaller strips for distant buildings. */
-function facadeStrips(art:RunArt) {
-  return (['shops-left','shops-right'] as const).map(name=>
-    [0,1,2].map(palette=>{
-      const first=surface(239,362);
-      first.ctx.drawImage(art[name],palette*256,0,239,362,0,0,239,362);
-      const levels=[first.canvas];
-      while(levels.at(-1)!.height>8) {
-        const previous=levels.at(-1)!;
-        const next=surface(previous.width/2,previous.height/2);
-        next.ctx.drawImage(previous,0,0,next.canvas.width,next.canvas.height);
-        levels.push(next.canvas);
-      }
-      return levels;
-    })
-  );
-}
-
 /** Size-dependent geometry and painted layers live as long as the canvas/size/art do. */
 function cacheScenery(art:RunArt,w:number,h:number,scale:number) {
   const sky=surface(w*scale,h*scale),lanes=surface(w*scale,h*scale);
@@ -40,7 +23,7 @@ function cacheScenery(art:RunArt,w:number,h:number,scale:number) {
   const gradient=sky.ctx.createLinearGradient(0,0,0,h*.65);
   gradient.addColorStop(0,'#b8dcec');gradient.addColorStop(.45,'#f9d8c6');gradient.addColorStop(1,'#ffe6c9');
   sky.ctx.fillStyle=gradient;sky.ctx.fillRect(0,0,w,h);
-  const horizon=h*.24,groundSpan=h*.62,bottomDepth=(h-horizon)/groundSpan;
+  const horizon=h*runGeometry.horizon,groundSpan=h*(runGeometry.feet-runGeometry.horizon),bottomDepth=(h-horizon)/groundSpan;
   sky.ctx.fillStyle='#e8d4b9';sky.ctx.beginPath();sky.ctx.moveTo(w/2,horizon);
   sky.ctx.lineTo(w/2+w*.51*bottomDepth,h);sky.ctx.lineTo(w/2-w*.51*bottomDepth,h);
   sky.ctx.closePath();sky.ctx.fill();
@@ -53,35 +36,19 @@ function cacheScenery(art:RunArt,w:number,h:number,scale:number) {
   }
   const road=[];
   for(let y=Math.ceil(horizon+1);y<h;y+=2) {
-    const depth=(y-horizon)/groundSpan,z=14000*(1/depth-1);
-    const nextZ=14000*(1/((y+2-horizon)/groundSpan)-1),half=w*.405*depth;
+    const depth=(y-horizon)/groundSpan,z=projectionZ(depth);
+    const nextZ=projectionZ((y+2-horizon)/groundSpan),half=w*.405*depth;
     road.push({y,z,x:w/2-half,width:half*2,sh:Math.max(1,Math.abs(z-nextZ)/24)});
   }
-  const facades=facadeStrips(art),walls=[];
-  // One CSS-pixel strip is enough for scenery; DPR still controls the cached layers
-  // and foreground sprites. Background draw-call count must not triple on a 3x phone.
-  const edge=w*.46,pixel=1;
-  // Geometry is stationary: movement only changes the sampled world texture coordinate.
-  for(let u=edge*14000/(14000+29*BUILDING_SPACING);u<w/2;u+=pixel) {
-    const width=Math.min(pixel,w/2-u),depth=(u+width/2)/edge;
-    const z=14000*(1/depth-1),height=210*w/390*depth;
-    const strips=facades.map(side=>side.map(levels=>{
-      let level=0;
-      while(level+1<levels.length&&levels[level+1].height>=height*scale)level++;
-      return levels[level];
-    }));
-    walls.push({u,width,z,height,y:horizon+groundSpan*depth-height,strips,
-      sourceWidth:Math.max(.5,14000*width/(edge*depth*depth)/BUILDING_SPACING*239)});
-  }
-  return {art,w,h,scale,sky:sky.canvas,lanes:lanes.canvas,road,walls};
+  return {art,w,h,scale,sky:sky.canvas,lanes:lanes.canvas,road};
 }
 const sceneryCache=new WeakMap<CanvasRenderingContext2D,ReturnType<typeof cacheScenery>>();
 
 export function renderRun(ctx: CanvasRenderingContext2D, art: RunArt, s: RunState, w: number, h: number, quiet: boolean, crashFrame: number | null = null) {
-  const sprite = (name: AssetName, frame: number, x: number, y: number, scale: number) => {
+  const sprite = (name: AssetName, frame: number, x: number, y: number, scale: number, scaleY = scale) => {
     const a = manifest.assets[name], f = a.frames[Math.min(a.frameCount-1, Math.max(0, frame))];
     const [sx,sy,sw,sh] = f.rect, [ax,ay] = f.anchor;
-    ctx.drawImage(art[name],sx,sy,sw,sh,x-ax*scale,y-ay*scale,sw*scale,sh*scale);
+    ctx.drawImage(art[name],sx,sy,sw,sh,x-ax*scale,y-ay*scaleY,sw*scale,sh*scaleY);
   };
   const scale=ctx.getTransform().a;
   let scenery=sceneryCache.get(ctx);
@@ -93,7 +60,7 @@ export function renderRun(ctx: CanvasRenderingContext2D, art: RunArt, s: RunStat
   ctx.globalCompositeOperation='source-over';
   ctx.filter='none';
   ctx.imageSmoothingEnabled=true;
-  // Static layers and facade mipmaps already received high-quality filtering at cache time.
+  // Static layers were filtered at cache time; foreground sprites use high-quality sampling.
   ctx.imageSmoothingQuality='low';
   ctx.drawImage(scenery.sky,0,0,w,h);
   const road=art['road-stone'];
@@ -102,19 +69,16 @@ export function renderRun(ctx: CanvasRenderingContext2D, art: RunArt, s: RunStat
     ctx.drawImage(road,0,sy,road.width,Math.min(road.height-sy,row.sh),row.x,row.y,row.width,2.5);
   }
   ctx.drawImage(scenery.lanes,0,0,w,h);
-  const farZ=29*BUILDING_SPACING-mod(s.distance,BUILDING_SPACING);
-  for(const column of scenery.walls) {
-    if(column.z>farZ)continue;
-    const worldZ=s.distance+column.z;
-    const along=mod(worldZ,BUILDING_SPACING)/BUILDING_SPACING;
-    const palette=mod(Math.floor(worldZ/(36*BUILDING_SPACING)),3);
-    for(let side=0;side<2;side++) {
-      const strip=column.strips[side][palette];
-      const sourceX=(side===0?1-along:along)*238;
-      const sourceWidth=Math.min(239-sourceX,column.sourceWidth);
-      const sourceScale=strip.width/239;
-      ctx.drawImage(strip,sourceX*sourceScale,0,sourceWidth*sourceScale,strip.height,
-        side===0?w/2-column.u-column.width:w/2+column.u,column.y,column.width+.25/scale,column.height);
+  ctx.imageSmoothingQuality='high';
+  // Whole pre-rendered shops: preserve aspect ratio, bevels and roof perspective.
+  for(let row=14;row>=0;row--) {
+    const z=row*BUILDING_SPACING-mod(s.distance,BUILDING_SPACING);
+    if(z < -2500) continue;
+    const p=project(1,z,w,h);
+    const palette=mod(Math.floor((s.distance+z)/BUILDING_SPACING),3);
+    for(const side of [-1,1]) {
+      sprite(side<0?'shops-left':'shops-right',palette,
+        w/2+side*w*.72*p.scale/(w/390),p.y,.90*p.scale);
     }
   }
   ctx.imageSmoothingQuality='high';
@@ -122,9 +86,12 @@ export function renderRun(ctx: CanvasRenderingContext2D, art: RunArt, s: RunStat
     const o=s.objects[i];
     const p=project(o.lane,o.z,w,h), name=objectArt[o.kind];
     const frame=o.kind==='bread' && !quiet ? Math.floor(s.tick/6)%6 : 0;
-    // Obstacle silhouettes fit within a lane; collectibles read smaller than the courier.
-    const size=o.kind==='awning'?.64:o.kind==='bread'?.65:.52;
-    sprite(name,frame,p.x,p.y,size*p.scale);
+    if(isRunObstacle(o.kind)) {
+      const placement=obstaclePlacement(o.kind,o.lane,o.z,w,h);
+      sprite(name,frame,placement.x,placement.y,placement.scale);
+    } else {
+      sprite(name,frame,p.x,p.y,(o.kind==='bread'?.65:.52)*p.scale);
+    }
   }
   const change=s.player.laneChange;
   const lane=change ? change.from+(change.to-change.from)*change.progress/1000 : s.player.lane;
@@ -132,8 +99,33 @@ export function renderRun(ctx: CanvasRenderingContext2D, art: RunArt, s: RunStat
   let name: AssetName='bunny-run', frame=quiet?0:Math.floor(s.tick*14/60)%8;
   let lift=0;
   if(crashFrame !== null) {name='bunny-crash'; frame=crashFrame;}
-  else if(s.player.pose==='jump') {name='bunny-jump';frame=Math.min(2,Math.floor(s.player.progress*3/1000));lift=Math.sin(Math.PI*s.player.progress/1000)*h*.105;}
+  else if(s.player.pose==='jump') {name='bunny-jump';frame=Math.min(2,Math.floor(s.player.progress*3/1000));lift=worldHeightPixels(jumpLift(s.player.progress),h);}
   else if(s.player.pose==='slide') {name='bunny-slide';frame=s.player.progress<250?0:1;}
   else if(change) {name='bunny-lean';frame=change.to<change.from?0:1;}
-  sprite(name,frame,p.x,p.y-lift,.65*p.scale);
+  const sliding=s.player.pose==='slide' && crashFrame===null;
+  const bodyHeight=sliding ? slideBodyHeight(s.player.progress) : runGeometry.standingHeight;
+  const runFrame=manifest.assets['bunny-run'].frames[0];
+  const standingScale=worldHeightPixels(runGeometry.standingHeight,h)/(runFrame.anchor[1]-runFrame.contentBounds[1]);
+  if(sliding) {
+    // Blend the upright crouch into the modeled low pose; keep both feet and body
+    // height on the authoritative curve throughout entry and exit.
+    const crouch=(runGeometry.standingHeight-bodyHeight)/(runGeometry.standingHeight-runGeometry.slideHeight);
+    ctx.globalAlpha=1-crouch;
+    sprite('bunny-run',0,p.x,p.y,standingScale,worldHeightPixels(bodyHeight,h)/(runFrame.anchor[1]-runFrame.contentBounds[1]));
+    ctx.globalAlpha=crouch;
+  }
+  const f=manifest.assets[name].frames[frame];
+  const scaleY=worldHeightPixels(bodyHeight,h)/(f.anchor[1]-f.contentBounds[1]);
+  sprite(name,frame,p.x,p.y-lift,sliding ? standingScale : scaleY,scaleY);
+  ctx.globalAlpha=1;
+}
+
+/** Fit the rendered ground footprint to the same front/back used by replay. */
+export function obstaclePlacement(kind: keyof typeof runGeometry.obstacles,lane:number,z:number,w:number,h:number) {
+  const asset=manifest.assets[objectArt[kind]];
+  if(!('groundFront' in asset) || !('groundBack' in asset)) throw new Error("Missing RUN geometry");
+  const shape=runGeometry.obstacles[kind];
+  const front=project(lane,z-shape.front,w,h),back=project(lane,z+shape.back,w,h);
+  const scale=(front.y-back.y)/(asset.groundFront[1]-asset.groundBack[1]);
+  return {x:project(lane,z,w,h).x,y:front.y-(asset.groundFront[1]-asset.anchor[1])*scale,scale};
 }

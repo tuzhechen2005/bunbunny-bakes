@@ -1,0 +1,17 @@
+{
+  "horizon": 0.24,
+  "feet": 0.86,
+  "focalDistance": 14000,
+  "contactZone": 2000,
+  "jumpHeight": 3600,
+  "standingHeight": 3400,
+  "slideHeight": 1100,
+  "edgeGrace": 160,
+  "heightGrace": 120,
+  "obstacles": {
+    "cart": { "front": 1200, "back": 1400, "height": 2700 },
+    "flour": { "front": 750, "back": 750, "height": 1800 },
+    "awning": { "front": 900, "back": 900, "height": 3600, "clearance": 2200 },
+    "puddle": { "front": 1000, "back": 1000, "height": 120 }
+  }
+}

@@ -1,3 +1,4 @@
+import { clearsObstacle, overlapsObstacle, MAX_OBSTACLE_FRONT, MAX_OBSTACLE_BACK } from "./geometry";
 import { createRunTrack } from "./track";
 import {
   BASE_SPEED, CAP_SPEED, RAMP_TICKS, MAX_RUN_TICKS, MAX_INPUTS, JUMP_TICKS,
@@ -52,6 +53,13 @@ export function createRunGame({ seed }: { seed: string }): RunGame {
     events.push({ type: "action", tick, dir });
   }
 
+  function occupiedLane(): RunLane {
+    return change && (tick - change.start) * 2 >= LANE_CHANGE_TICKS ? change.to : lane;
+  }
+  function actionProgress() {
+    return action ? Math.floor((tick - actionStart) * 1000 / (actionEnd - actionStart)) : 0;
+  }
+
   function advance(toTick: number) {
     while (tick < toTick && !over) {
       tick++;
@@ -63,28 +71,30 @@ export function createRunGame({ seed }: { seed: string }): RunGame {
         change = null;
         if (queued) { const dir = queued; queued = null; startLane(dir); }
       }
+      const previousDistance = distance;
       distance += runSpeed(tick, coffeeUntil > tick);
-      // Swept crossing checks: no object can be skipped by a high-speed tick.
-      while (head < objects.length && objects[head].z <= distance) {
-        const obj = objects[head++];
-        const occupied = obj.lane === lane || obj.lane === change?.to;
+      // Keep obstacles through their back edge, checking every overlapping tick.
+      // Collectibles still fire only on their swept centre crossing, in z/id order.
+      for (let i = head; i < objects.length && objects[i].z <= distance + MAX_OBSTACLE_FRONT; i++) {
+        const obj = objects[i];
         if (isRunObstacle(obj.kind)) {
-          const clears = coffeeUntil > tick || !occupied ||
-            (obj.kind === "awning" && action === "slide") ||
-            ((obj.kind === "flour" || obj.kind === "puddle") && action === "jump");
-          if (!clears) {
+          if (obj.lane !== occupiedLane() || coffeeUntil > tick ||
+              !overlapsObstacle(obj.kind, obj.z - previousDistance, obj.z - distance)) continue;
+          if (!clearsObstacle(obj.kind, action, actionProgress())) {
             over = true;
             events.push({ type: "collision", tick, id: obj.id, kind: obj.kind, lane: obj.lane });
             events.push({ type: "over", tick, reason: "collision" });
             break;
           }
-        } else if (obj.lane === lane || (obj.kind === "bread" && magnetUntil > tick)) {
+        } else if (obj.z > previousDistance && obj.z <= distance &&
+                   (obj.lane === occupiedLane() || (obj.kind === "bread" && magnetUntil > tick))) {
           if (obj.kind === "bread") bread++;
           else if (obj.kind === "paper-bag") magnetUntil = tick + MAGNET_TICKS;
           else coffeeUntil = tick + COFFEE_TICKS;
           events.push({ type: "collect", tick, id: obj.id, kind: obj.kind, lane: obj.lane });
         }
       }
+      while (head < objects.length && objects[head].z < distance - MAX_OBSTACLE_BACK) head++;
       if (tick === MAX_RUN_TICKS && !over) {
         over = true;
         events.push({ type: "over", tick, reason: "limit" });
@@ -103,8 +113,8 @@ export function createRunGame({ seed }: { seed: string }): RunGame {
       progress: Math.floor((tick - change.start) * 1000 / LANE_CHANGE_TICKS),
     } : null;
     return {
-      lane, pose: action ?? (change ? "lane-change" : "run"),
-      progress: action ? Math.floor((tick - actionStart) * 1000 / (actionEnd - actionStart)) : laneChange?.progress ?? 0,
+      lane: occupiedLane(), pose: action ?? (change ? "lane-change" : "run"),
+      progress: action ? actionProgress() : laneChange?.progress ?? 0,
       laneChange, queuedLane: queued,
     };
   }
@@ -141,7 +151,8 @@ export function createRunGame({ seed }: { seed: string }): RunGame {
     state() {
       return {
         tick, player: player(),
-        objects: objects.slice(head).filter((o) => o.z > distance && o.z <= distance + VISIBLE_DISTANCE)
+        objects: objects.slice(head).filter((o) => o.z <= distance + VISIBLE_DISTANCE &&
+          (isRunObstacle(o.kind) ? o.z + MAX_OBSTACLE_BACK >= distance : o.z > distance))
           .map((o) => ({ ...o, z: o.z - distance })),
         speed: runSpeed(tick, coffeeUntil > tick), distance, bread,
         score: Math.floor(distance / UNITS_PER_METRE) + bread * 10, over,

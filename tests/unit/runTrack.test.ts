@@ -3,6 +3,7 @@ import {
   LANES, ROW_GAP, MAX_SPEED, MIN_REACTION_TICKS, MIN_REACTION_DISTANCE,
   LANE_CHANGE_TICKS, VISIBLE_DISTANCE, isRunObstacle,
 } from "@/lib/run";
+import { MAX_OBSTACLE_FRONT, MAX_OBSTACLE_BACK } from "@/lib/run/geometry";
 import { createRunTrack } from "@/lib/run/track";
 import { perfectRun } from "../support/runBot";
 
@@ -34,8 +35,8 @@ describe("run track solvability", () => {
           const changes = Math.abs(open[0] - lane);
           if (changes === 2) twoLaneCrossings++;
           // An independent constructive reachability proof, with one full tick of margin.
-          expect(z - previousZ).toBeGreaterThanOrEqual(MAX_SPEED * (MIN_REACTION_TICKS + changes * LANE_CHANGE_TICKS + 1));
-          expect(z - previousZ - MAX_SPEED * changes * LANE_CHANGE_TICKS).toBeGreaterThanOrEqual(MIN_REACTION_DISTANCE);
+          expect(z - previousZ - MAX_OBSTACLE_FRONT - MAX_OBSTACLE_BACK).toBeGreaterThanOrEqual(MAX_SPEED * (MIN_REACTION_TICKS + changes * LANE_CHANGE_TICKS + 1));
+          expect(z - previousZ - MAX_OBSTACLE_FRONT - MAX_OBSTACLE_BACK - MAX_SPEED * changes * LANE_CHANGE_TICKS).toBeGreaterThanOrEqual(MIN_REACTION_DISTANCE);
           expect(VISIBLE_DISTANCE).toBeGreaterThanOrEqual(z - previousZ);
           previousZ = z; lane = open[0];
         }
