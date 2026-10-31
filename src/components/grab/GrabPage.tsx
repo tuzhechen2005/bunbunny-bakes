@@ -15,7 +15,7 @@ import { copy } from "@/copy";
 import { elapsedTick } from "./grabClock";
 import { fetchMenu } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
-import { GrabBoard, type GrabProgress } from "./GrabBoard";
+import { GrabBoard, type GrabBoardHandle, type GrabProgress } from "./GrabBoard";
 import { GrabRules } from "./GrabArt";
 import { fetchGrabLeaderboard, finishGrab, startGrab } from "./grabApi";
 import { clearGrabSave, readGrabSave, writeGrabSave, type GrabSave } from "./grabSave";
@@ -98,6 +98,7 @@ export function GrabPage() {
   const [save, setSave] = useState<GrabSave | null>(null);
   const [dialog, setDialog] = useState<"restart" | "exit" | null>(null);
   const dialogRef = useRef<SheetHandle>(null);
+  const boardRef = useRef<GrabBoardHandle>(null);
   const afterDialog = useRef<() => void>(() => {});
   const meta = useRef({ seed: "", expiresAt: "", nickname: "", tiers: [] as TierView[] });
   const submitted = useRef(new Set<string>());
@@ -280,9 +281,15 @@ export function GrabPage() {
     sheetRef.current?.close();
   };
 
+  const openExit = () => {
+    boardRef.current?.pause();
+    // Pausing can deliver the final active tick and end the run.
+    if (phaseRef.current === "playing") setDialog("exit");
+  };
+
   const top = (
     <div onClickCapture={e => {
-      if (phase === "playing" && (e.target as Element).closest("a")) { e.preventDefault(); setDialog("exit"); }
+      if (phase === "playing" && (e.target as Element).closest("a")) { e.preventDefault(); openExit(); }
     }}>
     <TopBar
       backHref="/game/hub"
@@ -292,7 +299,7 @@ export function GrabPage() {
       right={
         <div className="flex items-center">
           {phase === "playing" ? (
-            <button type="button" onClick={() => setDialog("exit")} className={`min-h-11 shrink-0 rounded-full px-3 text-sm font-bold text-c-ink ${focusRing}`} data-testid="grab-exit">
+            <button type="button" onClick={openExit} className={`min-h-11 shrink-0 rounded-full px-3 text-sm font-bold text-c-ink ${focusRing}`} data-testid="grab-exit">
               {g.exit}
             </button>
           ) : null}
@@ -508,7 +515,7 @@ export function GrabPage() {
     <Shell>
       {top}
       <main className="grab-main">
-        <GrabBoard key={run.key} tiers={run.tiers} seed={run.seed} initialLaunches={run.initialLaunches} initialElapsedMs={run.initialElapsedMs} paused={dialog !== null || phase !== "playing"} soundOn={soundOn} reduced={reduced} onProgress={onProgress} onOver={onOver} onShowResult={phase === "over" ? () => setSheetOpen(true) : undefined} />
+        <GrabBoard ref={boardRef} key={run.key} tiers={run.tiers} seed={run.seed} initialLaunches={run.initialLaunches} initialElapsedMs={run.initialElapsedMs} paused={dialog !== null || phase !== "playing"} soundOn={soundOn} reduced={reduced} onProgress={onProgress} onOver={onOver} onShowResult={phase === "over" ? () => setSheetOpen(true) : undefined} />
         {phase === "over" && !sheetOpen ? (
           <div
             className="absolute inset-x-2 bottom-[calc(12px+env(safe-area-inset-bottom))] z-50 flex h-12 items-stretch overflow-hidden rounded-full border border-c-line bg-c-paper/90 text-c-ink backdrop-blur-sm"

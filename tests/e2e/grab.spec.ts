@@ -1,12 +1,12 @@
-// G2/G3: mocked HTTP with the real deterministic engine. Browser execution belongs to Claude.
+// G2/G3: mocked HTTP with the real deterministic engine.
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 import { copy } from "../../src/copy";
-import { createGrabGame, replayGrab, GRAB_ENGINE_VERSION, FIELD_WIDTH, FIELD_HEIGHT } from "../../src/lib/grab";
-import { firstContact, fieldLength, swingAngle } from "../../src/lib/grab/geometry";
+import { createGrabGame, replayGrab, GRAB_ENGINE_VERSION, FIELD_WIDTH, FIELD_HEIGHT, TICKS_PER_SECOND } from "../../src/lib/grab";
 test.use({ browserName: "chromium" });
 import { GRAB_SAVE_KEY } from "../../src/components/grab/grabSave";
 import { greedyGrab } from "../support/grabBot";
+import { aimGrabBread } from "../support/grabAim";
 
 const SEED = `v${GRAB_ENGINE_VERSION}.abcdef0123456789`;
 const TIERS = Array.from({length:6},(_,i)=>({id:`t${i}`,name:`Bread ${i}`,radius:.1,points:10,imageUrl:`/api/images/mock/grab-${i}.jpg`,color:{bg:"#EFE7DA",ink:"#4A2723"}}));
@@ -60,7 +60,10 @@ for(const width of [320,390]) {
    expect(Number(await page.getByTestId("grab-board").getAttribute("data-tick"))).toBeGreaterThan(0);
   });
   test("start, aimed launch, delivery, live report and final sheet",async({page})=>{
-   const api=await mockApi(page);await page.clock.install();await page.goto("/game/grab");await start(page);
+   const api=await mockApi(page);await page.clock.install();await page.goto("/game/grab");
+   // runFor alone resumes real time afterwards. Freeze it before starting so test-side
+   // replay/search and browser round trips cannot drift outside a narrow bread window.
+   await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));await start(page);
    expect(api.starts).toEqual([{wechatId:"grab_fan",nickname:"Baker"}]);
    const box=(await page.getByTestId("grab-board").boundingBox())!;expect(box.width/box.height).toBeCloseTo(FIELD_WIDTH/FIELD_HEIGHT,1);
    expect(box.y + box.height).toBeGreaterThan(780);
@@ -71,21 +74,18 @@ for(const width of [320,390]) {
     const tick = Number(await page.getByTestId("grab-board").getAttribute("data-tick"));
     const game = createGrabGame({seed:SEED,tiers:TIERS});
     (await stored(page)).launches.forEach((at:number)=>game.launch(at)); game.step(tick);
-    // Aim at bread with a ±3 tick margin; no retry loop can hide a dropped input.
-    const items = game.state().items;
-    const target = Array.from({length:300},(_,i)=>tick+i+10).find(at=>
-     [-3,-2,-1,0,1,2,3].every(offset=>{
-      const angle=swingAngle(at+offset), hit=firstContact(angle,0,fieldLength(angle),items);
-      return hit && items[hit.index].kind === "bread";
-     }));
-    expect(target).toBeDefined();
-    await page.clock.runFor((target!-tick)*1000/60);
+    // V2's deep field has narrower hit windows after the first delivery.
+    // Use the widest window's actual margin; still send exactly one input per launch.
+    const target = aimGrabBread(game.state());
+    await page.clock.runFor((target.tick-tick)*1000/TICKS_PER_SECOND);
     if (input === "touch") await page.getByTestId("grab-board").tap();
     // The review used mouse.click at the field centre in a hasTouch context.
     else await page.mouse.click(box.x+box.width/2,box.y+box.height/2);
     await expect(page.getByTestId("grab-board")).toHaveAttribute("data-phase", "extending");
     await expect(page.getByTestId("grab-board")).toHaveAttribute("data-launches", String(index+1));
-    expect((await stored(page)).launches).toHaveLength(index+1);
+    const launches = (await stored(page)).launches as number[];
+    expect(launches).toHaveLength(index+1);
+    expect(Math.abs(launches[index]-target.tick)).toBeLessThanOrEqual(target.margin);
     await page.clock.runFor(100);
     const arm = await page.locator(".grab-arm-segment").boundingBox();
     expect(arm!.height).toBeGreaterThan(0);
@@ -108,14 +108,16 @@ for(const width of [320,390]) {
    await page.getByTestId("grab-exit").click();await expect(page.getByTestId("grab-exit-sheet")).toBeVisible();
    const tick=await page.getByTestId("grab-board").getAttribute("data-tick");await page.clock.runFor(5000);await expect(page.getByTestId("grab-board")).toHaveAttribute("data-tick",tick!);
    await page.getByTestId("grab-exit-save").click();await page.clock.runFor(1000);await expect(page.getByTestId("grab-resume")).toBeVisible();
-   const saved=await stored(page);await page.reload();await page.getByTestId("grab-resume").click();expect(api.starts).toHaveLength(1);
+   const saved=await stored(page);expect(Math.round(saved.elapsedMs*TICKS_PER_SECOND/1000)).toBe(Number(tick));await page.reload();await page.getByTestId("grab-resume").click();expect(api.starts).toHaveLength(1);
    await page.clock.runFor(100);expect(Number(await page.getByTestId("grab-board").getAttribute("data-tick"))).toBeGreaterThanOrEqual(Math.round(saved.elapsedMs*60/1000));
    await page.evaluate(()=>{Object.defineProperty(document,"hidden",{configurable:true,value:true});document.dispatchEvent(new Event("visibilitychange"));});
    const hiddenTick=await page.getByTestId("grab-board").getAttribute("data-tick");await page.clock.runFor(10000);await expect(page.getByTestId("grab-board")).toHaveAttribute("data-tick",hiddenTick!);
    await page.evaluate(()=>{Object.defineProperty(document,"hidden",{configurable:true,value:false});document.dispatchEvent(new Event("visibilitychange"));});await page.clock.runFor(500);
    expect(Number(await page.getByTestId("grab-board").getAttribute("data-tick"))).toBeGreaterThan(Number(hiddenTick));
    await expect(page.locator(".grab-perfect").first()).toHaveCSS("animation-name","none");
-   await page.getByTestId("top-bar-back").click();await expect(page.getByTestId("grab-exit-sheet")).toBeVisible();await page.getByTestId("grab-exit-discard").click();await page.clock.runFor(1000);
+   await page.getByTestId("top-bar-back").click();await expect(page.getByTestId("grab-exit-sheet")).toBeVisible();
+   const backTick=await page.getByTestId("grab-board").getAttribute("data-tick");await page.clock.runFor(5000);await expect(page.getByTestId("grab-board")).toHaveAttribute("data-tick",backTick!);
+   await page.getByTestId("grab-exit-discard").click();await page.clock.runFor(1000);
    await expect(page.getByTestId("grab-menu-start")).toBeVisible();expect(await page.evaluate(key=>localStorage.getItem(key),GRAB_SAVE_KEY)).toBeNull();
   });
   test("completed save retries finish without starting another run",async({page})=>{

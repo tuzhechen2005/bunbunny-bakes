@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from "react";
 import { copy } from "@/copy";
 import { fill } from "@/components/customer/format";
 import type { TierView } from "@/components/game/types";
@@ -14,14 +14,16 @@ import "./grab.css";
 
 const t = copy.customer.grab;
 export interface GrabProgress { launches: number[]; score: number; elapsedMs: number; endTick: number }
+export interface GrabBoardHandle { pause: () => void }
 interface Props {
+  ref?: Ref<GrabBoardHandle>;
   seed: string; tiers: TierView[]; initialLaunches?: number[]; initialElapsedMs?: number;
   soundOn: boolean; reduced: boolean; paused: boolean;
   onProgress: (p: GrabProgress) => void; onOver: (p: GrabProgress) => void; onShowResult?: () => void;
 }
 type ScorePop = Extract<GrabEvent, { type: "score" }>;
 
-export function GrabBoard({ seed, tiers, initialLaunches = [], initialElapsedMs = 0, soundOn, reduced, paused, onProgress, onOver, onShowResult }: Props) {
+export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElapsedMs = 0, soundOn, reduced, paused, onProgress, onOver, onShowResult }: Props) {
   const { degraded } = useMotionPrefs();
   const quiet = reduced || degraded;
   const [game] = useState(() => {
@@ -68,14 +70,17 @@ export function GrabBoard({ seed, tiers, initialLaunches = [], initialElapsedMs 
     }
   }, [game, onOver, onProgress, quiet, soundOn]);
 
+  const stop = useCallback(() => {
+    // Freeze at the input event, before React renders the exit sheet or runs effects.
+    const elapsed = clock.pause(performance.now());
+    active.current = false;
+    if (raf.current !== null) cancelAnimationFrame(raf.current);
+    raf.current = null;
+    publish(game.step(elapsedTick(elapsed)));
+  }, [clock, game, publish]);
+  useImperativeHandle(ref, () => ({ pause: stop }), [stop]);
+
   useEffect(() => {
-    const stop = () => {
-      active.current = false;
-      if (raf.current !== null) cancelAnimationFrame(raf.current);
-      raf.current = null;
-      const elapsed = clock.pause(performance.now());
-      publish(game.step(elapsedTick(elapsed)));
-    };
     const frame = () => {
       if (!active.current) return;
       publish(game.step(elapsedTick(clock.read(performance.now()))));
@@ -107,7 +112,7 @@ export function GrabBoard({ seed, tiers, initialLaunches = [], initialElapsedMs 
       document.removeEventListener("visibilitychange", visibility, true);
       window.removeEventListener("pagehide", stop, true);
     };
-  }, [clock, game, paused, publish]);
+  }, [clock, game, paused, publish, stop]);
 
   const launch = () => {
     if (game.over) { onShowResult?.(); return; }
