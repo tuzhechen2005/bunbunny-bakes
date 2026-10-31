@@ -1,0 +1,51 @@
+.grab-play { padding:4px 12px calc(84px + env(safe-area-inset-bottom)); }
+.grab-help-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-top:20px; }
+.grab-help-card { display:flex; flex-direction:column; align-items:center; border:1px solid var(--c-line); border-radius:18px; padding:12px 2px; background:var(--c-wash); }
+.grab-help-card img { width:48px; height:48px; object-fit:contain; margin-bottom:7px; }
+.grab-help-card b { font-size:14px; }
+.grab-help-card span { margin-top:4px; color:var(--c-grey-text); font-size:11px; white-space:nowrap; }
+.grab-hud { display:flex; justify-content:space-between; padding:4px 6px 0; }
+.grab-hud p { margin:0; font-size:12px; color:var(--c-grey-text); }
+.grab-hud p:last-child { text-align:right; }
+.grab-hud b { display:block; color:var(--c-ink); font-size:38px; line-height:1.15; font-weight:400; }
+.grab-bakery { position:relative; height:76px; pointer-events:none; z-index:2; }
+.grab-bunny { position:absolute; height:94px; width:108px; bottom:-11px; left:50%; transform:translateX(-50%); }
+.grab-board { display:block; position:relative; isolation:isolate; width:100%; aspect-ratio:720/600; padding:0; border:1px solid var(--c-line); border-radius:20px 20px 28px 28px; background:var(--c-wash); overflow:hidden; touch-action:manipulation; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; cursor:pointer; }
+.grab-board:focus-visible { outline:2px solid var(--c-ink); outline-offset:3px; }
+.grab-board .m3-paper { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.grab-board > * { pointer-events:none; }
+.grab-oven { position:absolute; width:18%; height:24%; right:1%; top:2%; transition:filter 180ms; }
+.grab-oven-warm { filter:brightness(1.22) drop-shadow(0 0 8px color-mix(in srgb,var(--c-red) 40%,transparent)); }
+.grab-item { position:absolute; display:block; transform:translate(-50%,-50%); }
+.grab-face { display:block; width:100%; height:100%; border-radius:22%; overflow:hidden; }
+.grab-face img { display:block; width:100%; height:100%; object-fit:cover; }
+.grab-raw { filter:brightness(1.22) saturate(.55); }
+.grab-perfect { animation:grab-glow 1600ms ease-in-out infinite; }
+.grab-burnt { filter:brightness(.55) sepia(.65); }
+.grab-arm { position:absolute; left:50%; top:0; width:3.4%; margin-left:-1.7%; transform-origin:50% 0; z-index:2; }
+.grab-arm-segment { width:100%; height:100%; display:block; }
+.grab-tongs { position:absolute; bottom:0; left:50%; transform:translate(-50%,55%); width:300%; height:auto; max-width:none; }
+.grab-held { z-index:3; }
+.grab-score-pop { position:absolute; top:12%; left:50%; z-index:4; color:var(--c-ink); background:var(--c-paper); border:1px solid var(--c-line); border-radius:30px; padding:4px 12px; font-size:24px; animation:grab-score 800ms ease-out both; }
+.grab-paused { text-align:center; color:var(--c-grey-text); font-size:13px; }
+.grab-record-pop { animation:grab-record 420ms ease-out both; }
+.grab-record-fade { animation:grab-record-fade 420ms ease-out both; }
+@keyframes grab-glow { 0%,100% { box-shadow:0 0 4px color-mix(in srgb,var(--c-red) 18%,transparent); } 50% { box-shadow:0 0 12px color-mix(in srgb,var(--c-red) 40%,transparent); } }
+@keyframes grab-score { 0% { opacity:0; transform:translate(-50%,10px); } 20% { opacity:1; } 100% { opacity:0; transform:translate(-50%,-25px); } }
+@keyframes grab-fade { 0% { opacity:0; } 20%,70% { opacity:1; } 100% { opacity:0; } }
+@keyframes grab-record { from { opacity:0; transform:scale(.9); } to { opacity:1; transform:scale(1); } }
+.grab-still * { animation-play-state:paused; }
+.grab-quiet .grab-perfect { animation:none; }
+.grab-quiet .grab-score-pop { animation-name:grab-fade; transform:translateX(-50%); }
+@media (prefers-reduced-motion:reduce) {
+  .grab-perfect { animation:none; }
+  .grab-score-pop { animation-name:grab-fade; transform:translateX(-50%); }
+  .grab-record-pop { animation-name:grab-record-fade; }
+  .grab-oven { transition:none; }
+}
+
+.grab-refill > .grab-face { animation:grab-refill 300ms ease-out both; }
+.grab-quiet .grab-refill > .grab-face { animation-name:grab-record-fade; }
+@keyframes grab-refill { from { opacity:0; transform:translate(var(--from-x),var(--from-y)) scale(.5); } to { opacity:1; transform:translate(0,0) scale(1); } }
+@keyframes grab-record-fade { from { opacity:0; } to { opacity:1; } }
+@media (prefers-reduced-motion:reduce) { .grab-refill > .grab-face { animation-name:grab-record-fade; } }

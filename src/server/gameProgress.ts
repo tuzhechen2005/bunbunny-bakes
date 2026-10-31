@@ -13,7 +13,10 @@ import { m3FinishSchema, verifyM3Run } from "./m3";
 import { runExpiresAt, weekKeyOf } from "./gameWeek";
 import { liveScoresEnabled } from "./liveScores";
 
-const envelope = z.object({ runId: z.uuid(), log: z.unknown() });
+import { GRAB_ENGINE_VERSION, grabSeedVersion } from "@/lib/grab";
+import { grabFinishSchema, verifyGrabRun } from "./grab";
+
+const envelope = z.object({ runId: z.uuid(), log: z.unknown(), endTick: z.unknown().optional() });
 
 /** Full replay only. Reserve the throttle before parsing/replaying the potentially large log. */
 export async function progressRun(db: DbClient, game: GameKind, input: unknown, now: Date) {
@@ -36,22 +39,25 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
   if (run.finishedAt) return { score: run.score, live: false };
   if (now >= runExpiresAt(run.startedAt)
     || (game === "TU" && tuSeedVersion(run.seed) !== TU_ENGINE_VERSION)
-    || (game === "M3" && m3SeedVersion(run.seed) !== M3_ENGINE_VERSION)) {
+    || (game === "M3" && m3SeedVersion(run.seed) !== M3_ENGINE_VERSION)
+    || (game === "GRAB" && grabSeedVersion(run.seed) !== GRAB_ENGINE_VERSION)) {
     throw new AppError("VALIDATION", { message: copy.gameApi.runExpired });
   }
   if (await isBanned(db, run.wechatId)) throw new AppError("VALIDATION", { message: copy.gameApi.banned });
-  const field = game === "BIG" ? "drops" : game === "TU" ? "taps" : "moves";
-  const inputBody = { runId: run.id, [field]: data.log };
+  const field = game === "BIG" ? "drops" : game === "TU" ? "taps" : game === "GRAB" ? "launches" : "moves";
+  const inputBody = { runId: run.id, [field]: data.log, endTick: data.endTick };
   const body = game === "BIG" ? parseGameInput(finishSchema, inputBody)
     : game === "TU" ? parseGameInput(tuFinishSchema, inputBody)
+    : game === "GRAB" ? parseGameInput(grabFinishSchema, inputBody)
     : parseGameInput(m3FinishSchema, inputBody);
-  const log = "drops" in body ? body.drops : "taps" in body ? body.taps : body.moves;
+  const log = "drops" in body ? body.drops : "taps" in body ? body.taps : "launches" in body ? body.launches : body.moves;
   // Compare canonical evidence before paying for a replay of a stale/diverging report.
   if (Array.isArray(run.drops) && !samePrefix(run.drops, log)) {
     throw new AppError("VALIDATION", { message: copy.gameApi.badRun });
   }
   const verified = "drops" in body ? verifyBigRun(run, body, now)
     : "taps" in body ? verifyTuRun(run, body, now)
+    : "launches" in body ? verifyGrabRun(run, body, now)
     : verifyM3Run(run, body, now);
   // Initialize even a zero score, but idle reports must not move the tie-break time.
   const updatedAt = run.updatedAt === null || run.score === null || verified.score > run.score ? now : run.updatedAt;

@@ -60,7 +60,7 @@ const timeLabel = (iso: string) => timeFmt.format(new Date(iso)).replace(",", ""
 
 const chip = "inline-flex items-center rounded-full border border-line px-2 py-0.5 text-sm";
 
-export function BoardPanel({ game = "big" }: { game?: "big" | "tu" | "m3" }) {
+export function BoardPanel({ game = "big" }: { game?: "big" | "tu" | "m3" | "grab" }) {
   // The query selects a game; absent means BIG. Bans are shared across all three.
   const q = game === "big" ? "" : `game=${game}`;
   const withGame = (path: string) => (q ? `${path}${path.includes("?") ? "&" : "?"}${q}` : path);

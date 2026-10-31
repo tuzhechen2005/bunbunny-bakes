@@ -380,6 +380,16 @@ export const copy = {
       capReached: "点击次数已到上限，本局结束",
     },
 
+    grab: {
+      title: "兔兔夹面包", pageTitle: "兔兔夹面包",
+      startHint: "看准刚出炉的面包，轻点夹回来",
+      rules: "60 秒 · 越大越重 · 刚烤好分最高",
+      unavailable: "面包还没备齐，稍后再来",
+      boardLabel: "夹面包烤台，点一下伸出夹子",
+      timer: "剩余时间", score: "得分", reward: "+{n}", bonus: "+5 秒",
+      tongRule: "点一下伸出去", breadRule: "刚烤好分最高", clockRule: "+5 秒",
+      tongs: "夹子", bread: "面包", clock: "闹钟", paused: "已暂停", resume: "继续夹面包",
+    },
     m3: {
       title: "兔兔三连烤",
       pageTitle: "兔兔三连烤",
@@ -483,6 +493,7 @@ export const copy = {
     /** 兔了个兔 needs at least 2 bread tiers (D123); shown when the shop has fewer. */
     tuNotReady: "兔了个兔还没准备好，请稍后再来",
     /** Ranked M3 needs all six bread tiers (D135). */
+    grabNotReady: "兔兔夹面包还没准备好，请稍后再来",
     m3NotReady: "兔兔三连烤还没准备好，请稍后再来",
   },
 
@@ -545,6 +556,7 @@ export const copy = {
       gameBig: "消除大面包",
       gameTu: "兔了个兔",
       gameM3: "兔兔三连烤",
+      gameGrab: "兔兔夹面包",
       loading: "加载中…",
       loadFailed: "加载失败，请刷新重试",
       retry: "重试",
@@ -1365,6 +1377,7 @@ export const copy = {
         gameBig: "消除大面包",
         gameTu: "兔了个兔",
         gameM3: "兔兔三连烤",
+        gameGrab: "兔兔夹面包",
         emptyBoard: "上周没有人上榜。",
       },
     },

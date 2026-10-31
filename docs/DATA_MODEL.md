@@ -266,3 +266,21 @@ NEW ──▶ CONTACTED ──▶ CONFIRMED ──▶ BAKING ──▶ READY ─
 7. **seq 唯一**：并发下单后，同一天的 `seq` 连续且不重复。
 
 **S5 / D136 实时成绩**：增量迁移 `20261030210000_game_live_scores` 只为 `GameRun` 增加可空 `updatedAt`、`progressAttemptAt`（均 timestamptz(3)）。`score` 与 `drops/dropCount/simSteps/playMs/suspicious` 复用为最后一次从头验分的结果；`updatedAt` 为首次验分或已验证分数上升的时间（未完成局同分排序依据，分数不变时不推进），`finishedAt = null AND updatedAt != null` 表示已有未完成成绩。`progressAttemptAt` 原子限流，验证失败也计入 8 秒间隔；已有验分成绩的未完成局用此字段判断 30 秒内活动，不影响同分排序。finish 保存最终成绩并清空 `updatedAt`，不影响原有结束幂等。`weekKey` 为开局周；旧局过周不可再改，清理仅删除没有任何验分进度的未完成局，已验分未完成局及其操作证据与已完成局采用相同保留策略，供历史周榜、奖励和邮件引用。关停实时功能不删除这些记录。
+
+### GRAB（D145，G2）
+
+增量迁移 `20261031120000_game_kind_grab` 仅为 PostgreSQL `GameKind` 枚举追加 `GRAB`；
+不重写 BIG/TU/M3 的 GameRun、GameAward、GamePrizeWeek，也不改变默认值、索引或唯一约束。
+GRAB 共用这些表及禁止上榜名单；后台与冠军邮件按 game 隔离。
+
+- `seed`：`v${GRAB_ENGINE_VERSION}.<128-bit random hex>`，版本不一致的未完成局拒绝 finish/progress。
+- `tiersSnapshot`：开局的全部非 big 配置和照片信息，按 sortOrder；重放只验证并提取唯一 id，至少三档。
+- `drops`：此游戏存 `number[]` launch ticks，严格递增；`dropCount` 为尝试次数。
+- `playMs`：`round(endTick * 1000 / 60)`，能准确还原 endTick；不把切后台和主动暂停时间计入。
+- `score`、`updatedAt`、`progressAttemptAt`、`weekKey`：沿用 D136/D143 实时成绩语义。
+  未完成但已验分的局和日志保留；finish 清空 updatedAt 并固定 finishedAt。
+- `suspicious`：相邻 launch 毫秒间隔中位数 < 350ms；仅提醒店主，不取消排名。
+
+数据库测试：`tests/db/grab.test.ts`、`grab.admin.test.ts`、`migration.grab.test.ts`，覆盖真实
+Postgres 迁移保留、重放/墙钟限制、版本/周过期、少于三档、并发幂等、实时榜单、后台和邮件。
+只使用名字以 `_test` 结尾的数据库；本任务独立库为 `bunbunny_grab2_test`。

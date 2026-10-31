@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import { z } from "zod";
 import { addDays } from "@/domain/dates";
 import type { LocalDate } from "@/domain/types";
-import { eligiblePrizeGames, M3_PRIZE_FROM_WEEK } from "@/lib/gamePrizePool";
+import { eligiblePrizeGames, M3_PRIZE_FROM_WEEK, GRAB_PRIZE_FROM_WEEK } from "@/lib/gamePrizePool";
 import { GAME_CATALOG } from "@/lib/gameCatalog";
 import { loadTierConfigs } from "./gameTiers";
 import { AppError } from "./errors";
@@ -24,7 +24,7 @@ async function lockPrizeWeeks(tx: Tx) {
 export async function getPrizeWeek(db: DbClient, now: Date, weekKey: LocalDate = weekKeyOf(now)) {
   const existing = await db.gamePrizeWeek.findUnique({ where: { weekKey } });
   if (existing) return existing;
-  const tiers = weekKey >= M3_PRIZE_FROM_WEEK ? await loadTierConfigs(db) : [];
+  const tiers = (weekKey >= M3_PRIZE_FROM_WEEK || weekKey >= GRAB_PRIZE_FROM_WEEK) ? await loadTierConfigs(db) : [];
   const eligible = eligiblePrizeGames(weekKey, tiers.filter(t => t.id !== "big").length);
   return db.$transaction(async (tx) => {
     await lockPrizeWeeks(tx);
@@ -45,10 +45,10 @@ export async function getPrizeWeek(db: DbClient, now: Date, weekKey: LocalDate =
 export async function overridePrizeGame(db: DbClient, game: unknown, now: Date) {
   const input = parseGameInput(prizeBodySchema, { game });
   const weekKey = weekKeyOf(now);
-  if (input.game === "M3") {
+  if (input.game === "M3" || input.game === "GRAB") {
     const tiers = await loadTierConfigs(db);
-    if (!eligiblePrizeGames(weekKey, tiers.filter(t => t.id !== "big").length).includes("M3")) {
-      throw new AppError("VALIDATION", { message: copy.customer.m3.unavailable });
+    if (!eligiblePrizeGames(weekKey, tiers.filter(t => t.id !== "big").length).includes(input.game)) {
+      throw new AppError("VALIDATION", { message: input.game === "GRAB" ? copy.customer.grab.unavailable : copy.customer.m3.unavailable });
     }
   }
   return db.$transaction(async (tx) => {

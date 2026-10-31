@@ -130,8 +130,9 @@ The result is exactly `{ score, over, grabs, launchesAccepted }`.
 - More than `MAX_IGNORED_LAUNCHES` (120) busy launches. Exactly 120 are tolerated.
 
 Configuration errors (fewer than 3 tiers) remain `RangeError`. Wall-clock plausibility and
-suspicious-rate checks belong to G2; this engine does not trust or read wall time.
-`GRAB_ENGINE_VERSION = 1` is exported. G2 will embed it in server-issued seeds. Bump it for any
+suspicious-rate checks live in `src/server/grab.ts` and `grabRules.ts`; this engine does not trust or read wall time.
+`GRAB_ENGINE_VERSION = 1` is exported. `grabSeed(randomHex)` embeds it in server-issued seeds;
+`grabSeedVersion(seed)` returns the encoded version or null for malformed/unversioned seeds. Bump it for any
 future rules/RNG/geometry change that changes the score of an existing seed and input log.
 
 ## Bot measurements

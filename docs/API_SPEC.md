@@ -367,3 +367,30 @@ production: {
 - 三游戏 leaderboard 响应新增 `liveScores: boolean`，`top` 每行新增 `live: boolean`；未完成且最近 30 秒内验分才为 live。大厅响应也有 `liveScores`，各游戏项有 `live`，表示当前榜首是否正在玩。页面可见时每 15 秒刷新；切后台暂停请求。显示小字「● 正在玩」，圆点使用 `c-red`。
 - `LIVE_SCORES=off` 为运行时关停开关（未设置时开启，含 dev/test）：progress 在读请求体和访问数据库之前返回 404；客户端收到首次 404 后本次页面会话停止所有游戏上报。榜单返回 `liveScores: false`，只按已完成局排名、不显示 live、不自动刷新。finish 保持可用；已经保存的历史验分数据不删除。
 - 四个时间常量统一在 `src/lib/liveScores.ts`；服务端开关在 `src/server/liveScores.ts`。生产部署前只需应用增量迁移 `20261030210000_game_live_scores`。
+
+## 兔兔夹面包（G2/G3，D145）
+
+- `POST /api/game/grab/start`：与 M3 相同的 `{ wechatId, nickname }`，返回
+  `{ runId, seed, tiers, expiresAt }`（201、no-store）。种子为 `v1.<随机 hex>`，版本来自
+  `GRAB_ENGINE_VERSION`。使用共享配置按 sortOrder 排列的全部非 big 面包档，不截成三种；
+  少于 3 种时返回 VALIDATION / `copy.gameApi.grabNotReady`。每局保存完整展示配置，重放只取快照 id。
+- `POST /api/game/grab/finish`：`{ runId, launches: number[], endTick: number }`。
+  launches 是严格递增的非负整数 tick；`tick = round(at * 60 / 1000)`，客户端不另传 `at`。
+  服务端从 tick 推导整数毫秒 `at = round(tick * 1000 / 60)`，保证往返一致。
+  `endTick` 表示最后观察时间（即使没有点击，也能重放计时和夹回计分）。所有 tick ≤ 6000，
+  最多 `MAX_LAUNCHES = 6000` 条；最多容忍 120 次忙碌时输入，其他 GrabReplayError 均转为 VALIDATION。
+  请求体限制 `ceil(MAX_LAUNCHES * (digits(MAX_RUN_TICKS) + 1) * 1.25) + 4096 = 41596` 字节。
+  返回与 M3 相同的成绩、个人纪录、周排名和破纪录标记；重复 finish 幂等，以首次成功结果为准。
+- `POST /api/game/grab/progress`：`{ runId, log: number[], endTick: number }`。
+  与 M3 一样每 10 秒上报完整日志，退出/隐藏时距上次不足 8 秒跳过，finish 总是提交最终完整日志。
+  共享 8 秒服务端节流、LIVE_SCORES 开关、日志前缀校验和榜单排序规则；另拒绝 endTick 倒退。
+  每次从快照重放；不接收客户端分数。score 没增加时不移动同分排序时间。
+- `GET /api/game/grab/leaderboard`：共享 M3 的周榜、历史最高、上周冠军、可选 myBest、live 字段；
+  只返回脱敏微信号。榜单打开时每 15 秒刷新，隐藏暂停。
+
+开局/结算分别使用独立 `grab_start_ip:` / `grab_finish_ip:` 限流键；禁止名单、周一到期、
+IP 哈希规则与 M3 相同。主动暂停的时间不计入 endTick；有效游玩时间不得超过服务器开局后经过时间
+加共享 slack，也不得超过本次重放的 60 秒 + 已送达闹钟奖励 + slack。
+后台所有游戏接口支持 `?game=grab`，奖池覆盖支持 `{ game: "GRAB" }`。
+`GRAB_PRIZE_FROM_WEEK = "2026-12-07"` 是 **PRE-DEPLOY 占位**，部署前改成实际首周之后的芝加哥周一；
+不到日期或不足 3 档时不能抽中或被店主覆盖选中。既有周抽签仍保持稳定。
