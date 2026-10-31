@@ -8,7 +8,7 @@ Accepted moves are saved before animation, including the final move, so reloadin
 resumes/retries the same run. Completed logs remain until finish acknowledgment or explicit discard;
 resuming a completed save retries the same run without starting a new one.
 Events play in engine order; only active transitions run a frame
-monitor. Reduced motion and automatic degraded mode use fades, without hints or haptics.
+monitor. Reduced motion and automatic degraded mode use fades, without idle move hints or haptics.
 
 ## Integration / release
 
@@ -46,3 +46,19 @@ every 2.4 seconds. The outer `.m3-piece` retains the effect transforms, and the 
 mounted when a special forms. CSS cell phases stagger both loops. Idle motion resets during
 board playback, travel/invalid/pop/refill/flash effects, hints and shuffles; quiet/degraded and
 reduced-motion modes keep marks still. No idle JavaScript loop, target or aria changes.
+
+## Special explanations (S7 / D144)
+
+Roll pieces retain the full bread face, with the existing wooden pin and its soft SVG shadow
+at 40% size in the bottom-right corner. The badge overhangs by 3%; big pieces remain full-cover.
+Both marks still share the bread's existing breathing/bounce wrappers.
+The start menu pairs each illustration with its match count and clearing effect; the remaining
+rules are a single short line. All labels and tips live in `copy.customer.m3`.
+
+`M3SpecialTip` observes the displayed board, so it catches specials during cascades as well as
+on resume. First appearances queue independently, hold for two seconds, then fade for 200ms.
+The overlay sits above the board without affecting layout or intercepting input, and uses only
+opacity even under reduced motion. `bb_m3_special_tip_roll` and `bb_m3_special_tip_big` persist
+when their respective tips are shown; unavailable storage falls back to once per mounted board.
+The mocked browser spec covers both kinds, queueing, reload persistence, separate storage keys,
+normal/reduced motion, badge sizing and side-by-side menu cards at 320/390px.
