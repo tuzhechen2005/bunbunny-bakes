@@ -1,0 +1,25 @@
+.run-sprite { display:block; background-repeat:no-repeat; background-position:0 0; }
+.run-help-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-top:20px; }
+.run-help-card { display:flex; flex-direction:column; align-items:center; border:1px solid var(--c-line); border-radius:18px; padding:8px 2px 12px; background:var(--c-wash); }
+.run-help-card .run-sprite { width:70px; max-width:100%; }
+.run-help-card b { font-size:12px; }
+.run-play { padding:4px 10px calc(84px + env(safe-area-inset-bottom)); }
+.run-hud { display:flex; align-items:center; justify-content:space-between; padding:0 8px 8px; }
+.run-hud p { margin:0; font-size:12px; color:var(--c-grey-text); }
+.run-hud p:last-child { text-align:right; }
+.run-hud b { display:block; color:var(--c-ink); font-size:32px; font-weight:400; line-height:1.1; }
+.run-board { position:relative; width:100%; height:clamp(360px,68svh,620px); overflow:hidden; border-radius:24px; border:1px solid var(--c-line); background:var(--c-wash); touch-action:none; user-select:none; -webkit-user-select:none; }
+.run-board:focus-visible { outline:2px solid var(--c-ink); outline-offset:3px; }
+.run-board canvas { display:block; width:100%; height:100%; }
+.run-overlay { position:absolute; top:45%; left:15%; width:70%; padding:16px; border-radius:20px; text-align:center; color:var(--c-ink); background:var(--c-paper); }
+.run-powers { display:flex; gap:6px; }
+.run-power { position:relative; width:44px; height:44px; }
+.run-power svg { position:absolute; inset:0; width:100%; height:100%; }
+.run-power .run-sprite { position:absolute; inset:5px; }
+.run-record-pop { animation:run-record 420ms ease-out both; }
+.run-record-fade { animation:run-fade 420ms ease-out both; }
+@keyframes run-record { from { opacity:0; transform:scale(.9); } to { opacity:1; transform:scale(1); } }
+@keyframes run-fade { from { opacity:0; } to { opacity:1; } }
+@media (prefers-reduced-motion:reduce) { .run-record-pop { animation-name:run-fade; } }
+
+.run-input-limit { position:absolute; inset:12px 12px auto; margin:0; padding:10px; border-radius:12px; background:var(--c-paper); color:var(--c-ink); font-size:12px; text-align:center; }

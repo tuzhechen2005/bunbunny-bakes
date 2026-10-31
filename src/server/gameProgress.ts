@@ -16,6 +16,9 @@ import { liveScoresEnabled } from "./liveScores";
 import { GRAB_ENGINE_VERSION, grabSeedVersion } from "@/lib/grab";
 import { grabFinishSchema, verifyGrabRun } from "./grab";
 
+import { RUN_ENGINE_VERSION, runSeedVersion } from "@/lib/run";
+import { runFinishSchema, verifyRun } from "./run";
+
 const envelope = z.object({ runId: z.uuid(), log: z.unknown(), endTick: z.unknown().optional() });
 
 /** Full replay only. Reserve the throttle before parsing/replaying the potentially large log. */
@@ -40,22 +43,25 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
   if (now >= runExpiresAt(run.startedAt)
     || (game === "TU" && tuSeedVersion(run.seed) !== TU_ENGINE_VERSION)
     || (game === "M3" && m3SeedVersion(run.seed) !== M3_ENGINE_VERSION)
-    || (game === "GRAB" && grabSeedVersion(run.seed) !== GRAB_ENGINE_VERSION)) {
+    || (game === "GRAB" && grabSeedVersion(run.seed) !== GRAB_ENGINE_VERSION)
+    || (game === "RUN" && runSeedVersion(run.seed) !== RUN_ENGINE_VERSION)) {
     throw new AppError("VALIDATION", { message: copy.gameApi.runExpired });
   }
   if (await isBanned(db, run.wechatId)) throw new AppError("VALIDATION", { message: copy.gameApi.banned });
-  const field = game === "BIG" ? "drops" : game === "TU" ? "taps" : game === "GRAB" ? "launches" : "moves";
+  const field = game === "RUN" ? "inputs" : game === "BIG" ? "drops" : game === "TU" ? "taps" : game === "GRAB" ? "launches" : "moves";
   const inputBody = { runId: run.id, [field]: data.log, endTick: data.endTick };
-  const body = game === "BIG" ? parseGameInput(finishSchema, inputBody)
+  const body = game === "RUN" ? parseGameInput(runFinishSchema, inputBody)
+    : game === "BIG" ? parseGameInput(finishSchema, inputBody)
     : game === "TU" ? parseGameInput(tuFinishSchema, inputBody)
     : game === "GRAB" ? parseGameInput(grabFinishSchema, inputBody)
     : parseGameInput(m3FinishSchema, inputBody);
-  const log = "drops" in body ? body.drops : "taps" in body ? body.taps : "launches" in body ? body.launches : body.moves;
+  const log = "inputs" in body ? body.inputs : "drops" in body ? body.drops : "taps" in body ? body.taps : "launches" in body ? body.launches : body.moves;
   // Compare canonical evidence before paying for a replay of a stale/diverging report.
   if (Array.isArray(run.drops) && !samePrefix(run.drops, log)) {
     throw new AppError("VALIDATION", { message: copy.gameApi.badRun });
   }
-  const verified = "drops" in body ? verifyBigRun(run, body, now)
+  const verified = "inputs" in body ? verifyRun(run, body, now)
+    : "drops" in body ? verifyBigRun(run, body, now)
     : "taps" in body ? verifyTuRun(run, body, now)
     : "launches" in body ? verifyGrabRun(run, body, now)
     : verifyM3Run(run, body, now);

@@ -5,9 +5,12 @@ import type { GameKind } from "./gameCatalog";
 export const M3_PRIZE_FROM_WEEK = "2026-11-30";
 // PRE-DEPLOY: set to the Chicago Monday after the actual first production week.
 export const GRAB_PRIZE_FROM_WEEK = "2026-12-07";
-const PRIZE_POOL: readonly GameKind[] = ["BIG", "TU", "M3", "GRAB"];
+// PRE-DEPLOY: replace with the Chicago Monday after RUN first appears in production.
+export const RUN_PRIZE_FROM_WEEK = "2026-12-07";
+const PRIZE_POOL: readonly GameKind[] = ["BIG", "TU", "M3", "GRAB", "RUN"];
 
 export function eligiblePrizeGames(weekKey: string, breadTierCount: number): GameKind[] {
   return PRIZE_POOL.filter(game => (game !== "M3" || (weekKey >= M3_PRIZE_FROM_WEEK && breadTierCount >= 6))
-    && (game !== "GRAB" || (weekKey >= GRAB_PRIZE_FROM_WEEK && breadTierCount >= 3)));
+    && (game !== "GRAB" || (weekKey >= GRAB_PRIZE_FROM_WEEK && breadTierCount >= 3))
+    && (game !== "RUN" || weekKey >= RUN_PRIZE_FROM_WEEK));
 }

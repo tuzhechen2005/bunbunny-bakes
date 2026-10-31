@@ -84,7 +84,7 @@ it("weekly board masks ids, groups identities, excludes hidden/banned and other 
  await db.gameBan.create({data:{wechatId:"WX_C"}});
  const board=await getGrabLeaderboard(db,T,"wx_a");expect(board.top.map(r=>r.score)).toEqual([20]);expect(board.myBest).toBe(20);expect(board.allTime?.score).toBe(20);
  expect(JSON.stringify(board)).not.toContain('"wechatId"');
- expect((await getGameHub(db,T)).games.map(g=>g.kind)).toEqual(["BIG","TU","M3","GRAB"]);
+ expect((await getGameHub(db,T)).games.map(g=>g.kind)).toEqual(["BIG","TU","M3","GRAB","RUN"]);
 });
 it("prize eligibility waits until launch week plus one and requires three tiers", async () => {
  await tiers(2);const after=new Date("2026-12-07T18:00:00Z");

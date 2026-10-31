@@ -1,0 +1,1 @@
+ALTER TYPE "GameKind" ADD VALUE 'RUN';

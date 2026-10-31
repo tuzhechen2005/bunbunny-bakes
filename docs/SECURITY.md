@@ -116,3 +116,16 @@ endTick 推导的有效时长必须 ≤ 开局至请求的实际时间 + slack�
 进度请求先预留共享 8 秒节流再重放；日志必须延续已验分前缀，游玩时间不能倒退。
 已完成的局不再被进度覆盖；首次验分和分数增加才推进同分排序时间。中位间隔 <350ms 标可疑但保留排名。
 发奖游戏首次上线的下一周才能进入候选池，配置不足三档时不可新选；实际日期部署前核对。
+
+### RUN replay boundary (D146)
+
+RUN start/finish use the same hashed-IP rate limits and shared banned-identity checks as GRAB.
+The server issues a random versioned seed, never accepts injected engine state or client score,
+and replays the full tick/direction log. Zod limits logs to engine `MAX_INPUTS` and endTick to
+54,000; strict input objects and a derived streaming body limit bound parsing/replay work.
+Malformed ordering/directions, inputs after death, post-crash observation time, unsupported seed
+versions, expired runs, shorter/diverging verified prefixes and elapsed-time rollback are rejected.
+Active play cannot exceed server wall time plus shared plausibility slack or the 15-minute cap;
+paused time is allowed only before weekly expiry. Median input gaps below 120 ms and runs over
+ten minutes are review flags, not automatic ranking bans. Progress uses the shared pre-replay
+throttle, CAS write and stable-score tie rules. Public boards never expose full WeChat ids.
