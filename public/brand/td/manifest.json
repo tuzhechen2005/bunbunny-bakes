@@ -1,0 +1,1735 @@
+{
+  "version": 3,
+  "baseUrl": "/brand/td/",
+  "pixelRatio": 2,
+  "colorSpace": "srgb",
+  "renderer": {
+    "blender": "4.3.2",
+    "engine": "Cycles CPU",
+    "samples": 128,
+    "supersample": 2,
+    "downsample": "Lanczos3"
+  },
+  "camera": {
+    "projection": "orthographic",
+    "azimuthDegrees": 0,
+    "elevationDegrees": 55,
+    "forwardAxis": "+X",
+    "screenRightAxis": "+X"
+  },
+  "coordinates": {
+    "origin": "top-left",
+    "units": "source pixels",
+    "anchor": "projected ground origin; maps use top-left [0, 0]",
+    "draw": "drawImage(sheet, ...rect, x-anchor[0]*scale, y-anchor[1]*scale, frameWidth*scale, frameHeight*scale)",
+    "scale": "0.5 gives nominal CSS size at 2x; maps are 720x1080 logical pixels; use the same board scale for all art"
+  },
+  "assets": {
+    "map-1": {
+      "file": "map-1.webp",
+      "frameSize": [
+        720,
+        1080
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 100,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        0,
+        0
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            720,
+            1080
+          ],
+          "anchor": [
+            0,
+            0
+          ],
+          "contentBounds": [
+            0,
+            0,
+            720,
+            1080
+          ]
+        }
+      ],
+      "bytes": 15050,
+      "map": {
+        "name": "Cooling rack",
+        "path": [
+          [
+            0,
+            140
+          ],
+          [
+            600,
+            140
+          ],
+          [
+            600,
+            400
+          ],
+          [
+            120,
+            400
+          ],
+          [
+            120,
+            680
+          ],
+          [
+            600,
+            680
+          ],
+          [
+            600,
+            960
+          ],
+          [
+            360,
+            960
+          ],
+          [
+            360,
+            1080
+          ]
+        ],
+        "slots": [
+          [
+            160,
+            230
+          ],
+          [
+            440,
+            230
+          ],
+          [
+            510,
+            320
+          ],
+          [
+            280,
+            490
+          ],
+          [
+            210,
+            590
+          ],
+          [
+            440,
+            590
+          ],
+          [
+            510,
+            770
+          ],
+          [
+            210,
+            850
+          ],
+          [
+            440,
+            870
+          ],
+          [
+            660,
+            520
+          ]
+        ],
+        "source": "src/lib/td/maps.ts",
+        "sha256": "09c61b90c5b100d518eabdf6f123411de2175f582786c8c23215ff7e52e7b543",
+        "pathWidth": 74,
+        "slotRadius": 30,
+        "breadClearance": 115,
+        "projectedPath": [
+          [
+            0,
+            139.9999
+          ],
+          [
+            600,
+            139.9999
+          ],
+          [
+            600,
+            399.9999
+          ],
+          [
+            120,
+            399.9999
+          ],
+          [
+            120,
+            679.9999
+          ],
+          [
+            600,
+            679.9999
+          ],
+          [
+            600,
+            959.9999
+          ],
+          [
+            360,
+            959.9999
+          ],
+          [
+            360,
+            1079.9999
+          ]
+        ],
+        "projectedSlots": [
+          [
+            160,
+            229.9999
+          ],
+          [
+            440,
+            229.9999
+          ],
+          [
+            510,
+            319.9999
+          ],
+          [
+            280,
+            489.9999
+          ],
+          [
+            210,
+            589.9999
+          ],
+          [
+            440,
+            589.9999
+          ],
+          [
+            510,
+            769.9999
+          ],
+          [
+            210,
+            849.9999
+          ],
+          [
+            440,
+            869.9999
+          ],
+          [
+            660,
+            519.9999
+          ]
+        ]
+      }
+    },
+    "map-2": {
+      "file": "map-2.webp",
+      "frameSize": [
+        720,
+        1080
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 100,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        0,
+        0
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            720,
+            1080
+          ],
+          "anchor": [
+            0,
+            0
+          ],
+          "contentBounds": [
+            0,
+            0,
+            720,
+            1080
+          ]
+        }
+      ],
+      "bytes": 18594,
+      "map": {
+        "name": "Dough folds",
+        "path": [
+          [
+            120,
+            0
+          ],
+          [
+            120,
+            300
+          ],
+          [
+            580,
+            300
+          ],
+          [
+            580,
+            560
+          ],
+          [
+            140,
+            560
+          ],
+          [
+            140,
+            850
+          ],
+          [
+            580,
+            850
+          ],
+          [
+            580,
+            1080
+          ]
+        ],
+        "slots": [
+          [
+            210,
+            120
+          ],
+          [
+            210,
+            220
+          ],
+          [
+            430,
+            210
+          ],
+          [
+            490,
+            390
+          ],
+          [
+            660,
+            430
+          ],
+          [
+            300,
+            470
+          ],
+          [
+            230,
+            650
+          ],
+          [
+            480,
+            650
+          ],
+          [
+            300,
+            760
+          ],
+          [
+            490,
+            960
+          ]
+        ],
+        "source": "src/lib/td/maps.ts",
+        "sha256": "09c61b90c5b100d518eabdf6f123411de2175f582786c8c23215ff7e52e7b543",
+        "pathWidth": 74,
+        "slotRadius": 30,
+        "breadClearance": 115,
+        "projectedPath": [
+          [
+            120,
+            -0.0001
+          ],
+          [
+            120,
+            299.9999
+          ],
+          [
+            580,
+            299.9999
+          ],
+          [
+            580,
+            559.9999
+          ],
+          [
+            140,
+            559.9999
+          ],
+          [
+            140,
+            849.9999
+          ],
+          [
+            580,
+            849.9999
+          ],
+          [
+            580,
+            1079.9999
+          ]
+        ],
+        "projectedSlots": [
+          [
+            210,
+            119.9999
+          ],
+          [
+            210,
+            219.9999
+          ],
+          [
+            430,
+            209.9999
+          ],
+          [
+            490,
+            389.9999
+          ],
+          [
+            660,
+            429.9999
+          ],
+          [
+            300,
+            469.9999
+          ],
+          [
+            230,
+            649.9999
+          ],
+          [
+            480,
+            649.9999
+          ],
+          [
+            300,
+            759.9999
+          ],
+          [
+            490,
+            959.9999
+          ]
+        ]
+      }
+    },
+    "map-3": {
+      "file": "map-3.webp",
+      "frameSize": [
+        720,
+        1080
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 100,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        0,
+        0
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            720,
+            1080
+          ],
+          "anchor": [
+            0,
+            0
+          ],
+          "contentBounds": [
+            0,
+            0,
+            720,
+            1080
+          ]
+        }
+      ],
+      "bytes": 22392,
+      "map": {
+        "name": "Proofing walk",
+        "path": [
+          [
+            0,
+            180
+          ],
+          [
+            500,
+            180
+          ],
+          [
+            500,
+            420
+          ],
+          [
+            240,
+            420
+          ],
+          [
+            240,
+            700
+          ],
+          [
+            620,
+            700
+          ],
+          [
+            620,
+            960
+          ],
+          [
+            120,
+            960
+          ],
+          [
+            120,
+            1080
+          ]
+        ],
+        "slots": [
+          [
+            140,
+            270
+          ],
+          [
+            340,
+            270
+          ],
+          [
+            590,
+            320
+          ],
+          [
+            330,
+            510
+          ],
+          [
+            150,
+            580
+          ],
+          [
+            430,
+            610
+          ],
+          [
+            530,
+            790
+          ],
+          [
+            310,
+            790
+          ],
+          [
+            210,
+            870
+          ],
+          [
+            440,
+            1040
+          ]
+        ],
+        "source": "src/lib/td/maps.ts",
+        "sha256": "09c61b90c5b100d518eabdf6f123411de2175f582786c8c23215ff7e52e7b543",
+        "pathWidth": 74,
+        "slotRadius": 30,
+        "breadClearance": 115,
+        "projectedPath": [
+          [
+            0,
+            180
+          ],
+          [
+            500,
+            180
+          ],
+          [
+            500,
+            419.9999
+          ],
+          [
+            240,
+            419.9999
+          ],
+          [
+            240,
+            699.9999
+          ],
+          [
+            620,
+            699.9999
+          ],
+          [
+            620,
+            959.9999
+          ],
+          [
+            120,
+            959.9999
+          ],
+          [
+            120,
+            1079.9999
+          ]
+        ],
+        "projectedSlots": [
+          [
+            140,
+            269.9999
+          ],
+          [
+            340,
+            269.9999
+          ],
+          [
+            590,
+            319.9999
+          ],
+          [
+            330,
+            509.9999
+          ],
+          [
+            150,
+            579.9999
+          ],
+          [
+            430,
+            609.9999
+          ],
+          [
+            530,
+            789.9999
+          ],
+          [
+            310,
+            789.9999
+          ],
+          [
+            210,
+            869.9999
+          ],
+          [
+            440,
+            1039.9998
+          ]
+        ]
+      }
+    },
+    "tower-pin-0": {
+      "file": "tower-pin-0.webp",
+      "frameSize": [
+        128,
+        144
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        64,
+        80.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            128,
+            144
+          ],
+          "anchor": [
+            64,
+            80.03
+          ],
+          "contentBounds": [
+            19,
+            41,
+            97,
+            74
+          ]
+        }
+      ],
+      "bytes": 4718
+    },
+    "tower-pin-1": {
+      "file": "tower-pin-1.webp",
+      "frameSize": [
+        128,
+        144
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        64,
+        80.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            128,
+            144
+          ],
+          "anchor": [
+            64,
+            80.03
+          ],
+          "contentBounds": [
+            19,
+            41,
+            97,
+            74
+          ]
+        }
+      ],
+      "bytes": 4780
+    },
+    "tower-pin-2": {
+      "file": "tower-pin-2.webp",
+      "frameSize": [
+        128,
+        144
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        64,
+        80.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            128,
+            144
+          ],
+          "anchor": [
+            64,
+            80.03
+          ],
+          "contentBounds": [
+            19,
+            32,
+            97,
+            83
+          ]
+        }
+      ],
+      "bytes": 5148
+    },
+    "tower-sifter-0": {
+      "file": "tower-sifter-0.webp",
+      "frameSize": [
+        128,
+        144
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        64,
+        80.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            128,
+            144
+          ],
+          "anchor": [
+            64,
+            80.03
+          ],
+          "contentBounds": [
+            19,
+            29,
+            97,
+            86
+          ]
+        }
+      ],
+      "bytes": 5080
+    },
+    "tower-sifter-1": {
+      "file": "tower-sifter-1.webp",
+      "frameSize": [
+        128,
+        144
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        64,
+        80.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            128,
+            144
+          ],
+          "anchor": [
+            64,
+            80.03
+          ],
+          "contentBounds": [
+            19,
+            26,
+            97,
+            89
+          ]
+        }
+      ],
+      "bytes": 5406
+    },
+    "tower-sifter-2": {
+      "file": "tower-sifter-2.webp",
+      "frameSize": [
+        128,
+        144
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        64,
+        80.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            128,
+            144
+          ],
+          "anchor": [
+            64,
+            80.03
+          ],
+          "contentBounds": [
+            19,
+            22,
+            97,
+            93
+          ]
+        }
+      ],
+      "bytes": 5692
+    },
+    "tower-whisk-0": {
+      "file": "tower-whisk-0.webp",
+      "frameSize": [
+        128,
+        144
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        64,
+        80.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            128,
+            144
+          ],
+          "anchor": [
+            64,
+            80.03
+          ],
+          "contentBounds": [
+            19,
+            31,
+            97,
+            84
+          ]
+        }
+      ],
+      "bytes": 5312
+    },
+    "tower-whisk-1": {
+      "file": "tower-whisk-1.webp",
+      "frameSize": [
+        128,
+        144
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        64,
+        80.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            128,
+            144
+          ],
+          "anchor": [
+            64,
+            80.03
+          ],
+          "contentBounds": [
+            19,
+            36,
+            97,
+            79
+          ]
+        }
+      ],
+      "bytes": 5348
+    },
+    "tower-whisk-2": {
+      "file": "tower-whisk-2.webp",
+      "frameSize": [
+        128,
+        144
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        64,
+        80.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            128,
+            144
+          ],
+          "anchor": [
+            64,
+            80.03
+          ],
+          "contentBounds": [
+            19,
+            20,
+            97,
+            95
+          ]
+        }
+      ],
+      "bytes": 5784
+    },
+    "tower-oven-0": {
+      "file": "tower-oven-0.webp",
+      "frameSize": [
+        128,
+        144
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        64,
+        80.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            128,
+            144
+          ],
+          "anchor": [
+            64,
+            80.03
+          ],
+          "contentBounds": [
+            19,
+            26,
+            97,
+            89
+          ]
+        }
+      ],
+      "bytes": 4754
+    },
+    "tower-oven-1": {
+      "file": "tower-oven-1.webp",
+      "frameSize": [
+        128,
+        144
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        64,
+        80.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            128,
+            144
+          ],
+          "anchor": [
+            64,
+            80.03
+          ],
+          "contentBounds": [
+            19,
+            15,
+            97,
+            100
+          ]
+        }
+      ],
+      "bytes": 5014
+    },
+    "tower-oven-2": {
+      "file": "tower-oven-2.webp",
+      "frameSize": [
+        128,
+        144
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        64,
+        80.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            128,
+            144
+          ],
+          "anchor": [
+            64,
+            80.03
+          ],
+          "contentBounds": [
+            19,
+            15,
+            97,
+            100
+          ]
+        }
+      ],
+      "bytes": 5208
+    },
+    "pest-ant": {
+      "file": "pest-ant.webp",
+      "frameSize": [
+        112,
+        112
+      ],
+      "frameCount": 4,
+      "columns": 4,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 8,
+      "loop": true,
+      "anchor": [
+        56,
+        64.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            19,
+            36,
+            80,
+            50
+          ]
+        },
+        {
+          "rect": [
+            112,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            19,
+            35,
+            80,
+            51
+          ]
+        },
+        {
+          "rect": [
+            224,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            19,
+            36,
+            80,
+            50
+          ]
+        },
+        {
+          "rect": [
+            336,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            19,
+            36,
+            80,
+            50
+          ]
+        }
+      ],
+      "bytes": 14734,
+      "facing": {
+        "mode": "rotate",
+        "defaultDirection": "right",
+        "radians": "atan2(dy, dx)",
+        "pivot": "frame.anchor",
+        "shadow": "baked; rotates with sprite"
+      }
+    },
+    "pest-mouse": {
+      "file": "pest-mouse.webp",
+      "frameSize": [
+        112,
+        112
+      ],
+      "frameCount": 4,
+      "columns": 4,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 8,
+      "loop": true,
+      "anchor": [
+        56,
+        64.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            16,
+            34,
+            83,
+            51
+          ]
+        },
+        {
+          "rect": [
+            112,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            16,
+            34,
+            83,
+            51
+          ]
+        },
+        {
+          "rect": [
+            224,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            16,
+            34,
+            83,
+            51
+          ]
+        },
+        {
+          "rect": [
+            336,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            16,
+            34,
+            83,
+            51
+          ]
+        }
+      ],
+      "bytes": 12224,
+      "facing": {
+        "mode": "rotate",
+        "defaultDirection": "right",
+        "radians": "atan2(dy, dx)",
+        "pivot": "frame.anchor",
+        "shadow": "baked; rotates with sprite"
+      }
+    },
+    "pest-sparrow": {
+      "file": "pest-sparrow.webp",
+      "frameSize": [
+        112,
+        112
+      ],
+      "frameCount": 4,
+      "columns": 4,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 10,
+      "loop": true,
+      "anchor": [
+        56,
+        64.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            21,
+            15,
+            77,
+            70
+          ]
+        },
+        {
+          "rect": [
+            112,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            21,
+            9,
+            77,
+            76
+          ]
+        },
+        {
+          "rect": [
+            224,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            21,
+            22,
+            77,
+            63
+          ]
+        },
+        {
+          "rect": [
+            336,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            21,
+            30,
+            77,
+            56
+          ]
+        }
+      ],
+      "bytes": 13292,
+      "facing": {
+        "mode": "rotate",
+        "defaultDirection": "right",
+        "radians": "atan2(dy, dx)",
+        "pivot": "frame.anchor",
+        "shadow": "baked; rotates with sprite"
+      }
+    },
+    "pest-beetle": {
+      "file": "pest-beetle.webp",
+      "frameSize": [
+        112,
+        112
+      ],
+      "frameCount": 4,
+      "columns": 4,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 8,
+      "loop": true,
+      "anchor": [
+        56,
+        64.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            19,
+            35,
+            80,
+            51
+          ]
+        },
+        {
+          "rect": [
+            112,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            19,
+            35,
+            80,
+            51
+          ]
+        },
+        {
+          "rect": [
+            224,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            19,
+            35,
+            80,
+            51
+          ]
+        },
+        {
+          "rect": [
+            336,
+            0,
+            112,
+            112
+          ],
+          "anchor": [
+            56,
+            64.03
+          ],
+          "contentBounds": [
+            19,
+            36,
+            80,
+            50
+          ]
+        }
+      ],
+      "bytes": 12956,
+      "facing": {
+        "mode": "rotate",
+        "defaultDirection": "right",
+        "radians": "atan2(dy, dx)",
+        "pivot": "frame.anchor",
+        "shadow": "baked; rotates with sprite"
+      }
+    },
+    "proj-pin": {
+      "file": "proj-pin.webp",
+      "frameSize": [
+        64,
+        64
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        32,
+        40.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            64
+          ],
+          "anchor": [
+            32,
+            40.03
+          ],
+          "contentBounds": [
+            11,
+            23,
+            48,
+            32
+          ]
+        }
+      ],
+      "bytes": 1924
+    },
+    "proj-whisk": {
+      "file": "proj-whisk.webp",
+      "frameSize": [
+        64,
+        64
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        32,
+        40.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            64
+          ],
+          "anchor": [
+            32,
+            40.03
+          ],
+          "contentBounds": [
+            12,
+            19,
+            47,
+            36
+          ]
+        }
+      ],
+      "bytes": 2482
+    },
+    "proj-oven": {
+      "file": "proj-oven.webp",
+      "frameSize": [
+        64,
+        64
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        32,
+        40.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            64,
+            64
+          ],
+          "anchor": [
+            32,
+            40.03
+          ],
+          "contentBounds": [
+            10,
+            23,
+            49,
+            32
+          ]
+        }
+      ],
+      "bytes": 2170
+    },
+    "fx-hit": {
+      "file": "fx-hit.webp",
+      "frameSize": [
+        80,
+        80
+      ],
+      "frameCount": 4,
+      "columns": 4,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 16,
+      "loop": false,
+      "anchor": [
+        40,
+        48.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            80,
+            80
+          ],
+          "anchor": [
+            40,
+            48.03
+          ],
+          "contentBounds": [
+            20,
+            30,
+            47,
+            33
+          ]
+        },
+        {
+          "rect": [
+            80,
+            0,
+            80,
+            80
+          ],
+          "anchor": [
+            40,
+            48.03
+          ],
+          "contentBounds": [
+            20,
+            27,
+            47,
+            36
+          ]
+        },
+        {
+          "rect": [
+            160,
+            0,
+            80,
+            80
+          ],
+          "anchor": [
+            40,
+            48.03
+          ],
+          "contentBounds": [
+            19,
+            23,
+            48,
+            40
+          ]
+        },
+        {
+          "rect": [
+            240,
+            0,
+            80,
+            80
+          ],
+          "anchor": [
+            40,
+            48.03
+          ],
+          "contentBounds": [
+            15,
+            18,
+            52,
+            45
+          ]
+        }
+      ],
+      "bytes": 8750
+    },
+    "slot": {
+      "file": "slot.webp",
+      "frameSize": [
+        80,
+        80
+      ],
+      "frameCount": 1,
+      "columns": 1,
+      "rows": 1,
+      "pixelsPerMetre": 56,
+      "fps": 0,
+      "loop": false,
+      "anchor": [
+        40,
+        48.03
+      ],
+      "frames": [
+        {
+          "rect": [
+            0,
+            0,
+            80,
+            80
+          ],
+          "anchor": [
+            40,
+            48.03
+          ],
+          "contentBounds": [
+            10,
+            23,
+            62,
+            49
+          ]
+        }
+      ],
+      "bytes": 2538
+    }
+  }
+}
