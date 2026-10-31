@@ -9,7 +9,7 @@ describe("M3 engine", () => {
   it("uses the first six tiers, requires four, and exposes version/limits", () => {
     for (let n = 0; n < 4; n++) expect(() => createM3Game({ seed: "x", tiers: tiers(n) })).toThrow(RangeError);
     expect(createM3Game({ seed: "x", tiers: tiers(8) }).state()).toEqual(createM3Game({ seed: "x", tiers: tiers() }).state());
-    expect([MAX_MOVES, MIN_MOVE_GAP_MS, M3_ENGINE_VERSION, MAX_CASCADE_STEPS]).toEqual([30, 150, 2, 20]);
+    expect([MAX_MOVES, MIN_MOVE_GAP_MS, M3_ENGINE_VERSION, MAX_CASCADE_STEPS]).toEqual([30, 150, 3, 20]);
   });
 
   it.each([4, 5, 6])("starts with no matches and a legal move over 200 seeds (%i tiers)", (n) => {

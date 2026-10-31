@@ -1,10 +1,9 @@
 // S3: one 兔兔三连烤 run against the REAL engine and API (no mocks): start -> a greedy bot plays
-// all 30 moves through the page -> the server replays the moves and confirms the score -> the
+// a winning path through the page -> the server replays the moves and confirms the score -> the
 // leaderboard lists it. Also: fewer than six bread pieces -> start is refused.
 import { expect, test, type Page } from "@playwright/test";
 import { copy } from "../../src/copy";
-import { createM3Game, MIN_MOVE_GAP_MS, type M3Cell } from "../../src/lib/m3";
-import { chooseM3Move } from "../support/m3Bot";
+import { createM3Game, m3LevelWitness, MIN_MOVE_GAP_MS, type M3Cell } from "../../src/lib/m3";
 import { resetAndSeed, withDb } from "./support/seed";
 
 test.use({ browserName: "chromium" });
@@ -34,18 +33,18 @@ async function startRun(page: Page) {
 
 const cell = (page: Page, p: M3Cell) => page.getByTestId(`m3-cell-${p.r}-${p.c}`);
 
-test("real m3: 30 moves, the server confirms the score and the board lists it", async ({ page, request }) => {
+test("real m3: weekly level, the server confirms the score and the board lists it", async ({ page, request }) => {
   test.setTimeout(300_000);
   await seedPieces(6);
   const res = await startRun(page);
   expect(res.ok()).toBe(true);
-  const { seed, tiers } = await res.json();
-  expect(tiers).toHaveLength(6);
+  const rules = await res.json();
+  const { tiers } = rules;
+  expect(tiers).toHaveLength(4);
   await expect(page.getByTestId("m3-board")).toBeVisible();
 
-  const game = createM3Game({ seed, tiers });
-  while (!game.over) {
-    const move = chooseM3Move(game.state(), true, () => 0);
+  const game = createM3Game(rules);
+  for (const move of m3LevelWitness(rules)!) {
     game.swap(move.a, move.b);
     await cell(page, move.a).click();
     await cell(page, move.b).click();
@@ -60,7 +59,8 @@ test("real m3: 30 moves, the server confirms the score and the board lists it", 
   expect(shown).toBe(game.score);
   const board = await (await request.get("/api/game/m3/leaderboard")).json();
   expect(board.top[0].nickname).toBe("真玩家");
-  expect(board.top[0].score).toBe(shown);
+  expect(board.top[0].score).toBe(1);
+  await expect(page.getByTestId("m3-again")).toHaveText(copy.customer.m3.next);
 });
 
 test("real m3: fewer than six bread pieces -> start is refused, no board", async ({ page }) => {

@@ -377,6 +377,9 @@ model GameRun {
   id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   game          GameKind  @default(BIG)
   seed          String
+  /// Weekly level attempts; NULL preserves pre-level and other-game runs.
+  level         Int?
+  passedAt      DateTime? @db.Timestamptz(3)
   wechatId      String
   nickname      String
   tiersSnapshot Json
@@ -398,7 +401,7 @@ model GameRun {
   /// still counts on the board. M3 flags only a median move gap under 400 ms.
   playMs        Int?
   suspicious    Boolean   @default(false)
-  /// Monday (Chicago) of the week the run was finished in, "YYYY-MM-DD".
+  /// Chicago Monday, "YYYY-MM-DD". Level games set it at start; others on verified progress/finish.
   weekKey       String?
   ipHash        String?
   hidden        Boolean   @default(false)

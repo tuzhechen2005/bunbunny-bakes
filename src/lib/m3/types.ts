@@ -3,7 +3,7 @@ export const MIN_TIERS = 4;
 export const MAX_TIERS = 6;
 export const MAX_MOVES = 30;
 export const MIN_MOVE_GAP_MS = 150;
-export const M3_ENGINE_VERSION = 2;
+export const M3_ENGINE_VERSION = 3;
 export const REFILL_BIAS_PERCENT = 20;
 export const MAX_CASCADE_STEPS = 20;
 export const CELL_POINTS = 10;
@@ -43,6 +43,8 @@ export type M3Event =
   | { type: "shuffle"; board: number[][] }
   | { type: "over" };
 export interface M3Game {
+  /** Independent simulation branch, including both RNG positions. */
+  fork(): M3Game;
   state(): M3State;
   swap(a: M3Cell, b: M3Cell): M3Event[] | null;
   readonly score: number;
