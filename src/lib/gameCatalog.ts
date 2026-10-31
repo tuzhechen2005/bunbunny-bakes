@@ -10,6 +10,7 @@ export const GAME_CATALOG: readonly { kind: GameKind; name: string; href: string
   { kind: "M3", name: copy.customer.m3.title, href: "/game/m3" },
   { kind: "GRAB", name: copy.customer.grab.title, href: "/game/grab" },
   { kind: "RUN", name: copy.customer.run.title, href: "/game/run" },
+  { kind: "TD", name: copy.customer.td.title, href: "/game/td" },
 ];
 
 export interface GameHub {

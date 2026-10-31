@@ -358,6 +358,7 @@ enum GameKind {
   M3
   GRAB
   RUN
+  TD
 }
 
 enum GamePrizeChosenBy {

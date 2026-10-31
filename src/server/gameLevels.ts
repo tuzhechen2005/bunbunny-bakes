@@ -1,8 +1,8 @@
-// Reusable weekly level progression/ranking. No M3 engine or prize policy lives here.
+// Shared M3/TD weekly level progression/ranking. No engine or prize policy lives here.
 import { Prisma, type GameKind } from "@/generated/prisma/client";
 import type { DbClient } from "./db";
 
-export const isLevelGame = (game: GameKind) => game === "M3";
+export const isLevelGame = (game: GameKind) => game === "M3" || game === "TD";
 export const boardScore = (game: GameKind) => isLevelGame(game) ? Prisma.sql`r.level` : Prisma.sql`r.score`;
 export const boardTime = (game: GameKind) => isLevelGame(game) ? Prisma.sql`r."passedAt"` : Prisma.sql`COALESCE(r."finishedAt", r."updatedAt")`;
 export const levelEligibility = (game: GameKind) => isLevelGame(game) ? Prisma.sql`r."passedAt" IS NOT NULL AND r.level IS NOT NULL` : Prisma.sql`TRUE`;

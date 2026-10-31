@@ -242,12 +242,12 @@ function renderGameWinner(n: NotificationToRender): RenderedEmail {
   const g = t.gameWinner;
   const p = payloadObject(n) as unknown as GameWinnerPayload;
   if (!p.week || !p.winner) throw new Error(`GAME_WINNER notification ${n.id}: payload has no winner`);
-  const names: Record<GameWinnerPayload["game"], string> = { BIG: g.gameBig, TU: g.gameTu, M3: g.gameM3, GRAB: g.gameGrab, RUN: g.gameRun };
+  const names: Record<GameWinnerPayload["game"], string> = { BIG: g.gameBig, TU: g.gameTu, M3: g.gameM3, GRAB: g.gameGrab, TD: g.gameTd, RUN: g.gameRun };
   const name = names[p.game];
   if (!name) throw new Error(`GAME_WINNER notification ${n.id}: unknown game`);
   const weekHeader = fill(g.weekHeader, { start: dayLabel(p.week.start), end: dayLabel(p.week.end) });
-  const [first, ...rest] = winnerSections(p.winner, p.runnerUp, p.game === "M3");
-  const part = fill(p.game === "M3" ? g.levelSubjectPart : g.subjectPart, { game: name, nickname: p.winner.nickname, score: p.winner.score });
+  const [first, ...rest] = winnerSections(p.winner, p.runnerUp, (p.game === "M3" || p.game === "TD"));
+  const part = fill((p.game === "M3" || p.game === "TD") ? g.levelSubjectPart : g.subjectPart, { game: name, nickname: p.winner.nickname, score: p.winner.score });
   return {
     subject: fill(p.winner.ordered ? g.twoSubject : g.twoSubjectWarn, { games: part }),
     text: [[weekHeader], [fill(g.sectionTitle, { game: name }), ...first], ...rest,

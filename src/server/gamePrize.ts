@@ -2,7 +2,7 @@ import { randomInt } from "node:crypto";
 import { z } from "zod";
 import { addDays } from "@/domain/dates";
 import type { LocalDate } from "@/domain/types";
-import { eligiblePrizeGames, M3_PRIZE_FROM_WEEK, GRAB_PRIZE_FROM_WEEK, RUN_PRIZE_FROM_WEEK } from "@/lib/gamePrizePool";
+import { eligiblePrizeGames, M3_PRIZE_FROM_WEEK, GRAB_PRIZE_FROM_WEEK, RUN_PRIZE_FROM_WEEK, TD_PRIZE_FROM_WEEK } from "@/lib/gamePrizePool";
 import { GAME_CATALOG } from "@/lib/gameCatalog";
 import { loadTierConfigs } from "./gameTiers";
 import { AppError } from "./errors";
@@ -45,6 +45,9 @@ export async function getPrizeWeek(db: DbClient, now: Date, weekKey: LocalDate =
 export async function overridePrizeGame(db: DbClient, game: unknown, now: Date) {
   const input = parseGameInput(prizeBodySchema, { game });
   const weekKey = weekKeyOf(now);
+  if (input.game === "TD" && weekKey < TD_PRIZE_FROM_WEEK) {
+    throw new AppError("VALIDATION", { message: copy.customer.td.prizeNotReady });
+  }
   if (input.game === "RUN" && weekKey < RUN_PRIZE_FROM_WEEK) {
     throw new AppError("VALIDATION", { message: copy.customer.run.prizeNotReady });
   }
