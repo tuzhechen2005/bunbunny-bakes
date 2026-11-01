@@ -4,7 +4,7 @@ import { copy } from "../../src/copy";
 import { replayRun, type RunInput } from "../../src/lib/run";
 import { RUN_SAVE_KEY } from "../../src/components/run/runSave";
 import { perfectRun } from "../support/runBot";
-const SEED="v6.abcdef0123456789", g=copy.customer.game, t=copy.customer.run;
+const SEED="v7.abcdef0123456789", g=copy.customer.game, t=copy.customer.run;
 const BOARD={liveScores:true,week:{start:"2026-12-07",end:"2026-12-13"},top:[],lastWinner:null,allTime:{nickname:"Baker",wechatMasked:"ba***er",score:9000}};
 interface Log {runId:string;inputs:RunInput[];endTick:number}
 async function mockApi(page:Page) {

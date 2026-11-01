@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
-  LANES, ROW_GAP, MAX_SPEED, MIN_REACTION_TICKS, MIN_REACTION_DISTANCE,
+  LANES, ROW_GAP, MAX_SPEED, BASE_SPEED, MIN_REACTION_TICKS, MIN_REACTION_DISTANCE,
   LANE_CHANGE_TICKS, VISIBLE_DISTANCE, isRunObstacle,
 } from "@/lib/run";
 
 import { createRunTrack } from "@/lib/run/track";
-import { runGeometry, TRUCK_SPEED } from "@/lib/run/geometry";
-import { perfectRun } from "../support/runBot";
+import { runGeometry, TRUCK_SPEED, MAX_OBSTACLE_BACK } from "@/lib/run/geometry";
+import { perfectRun, groundOnlyRun, roofRun } from "../support/runBot";
 
 describe("run track solvability", () => {
   it("preserves a reachable open path across chunks over 1000 seeds, including maximum coffee speed", () => {
+    expect((Math.ceil((VISIBLE_DISTANCE + MAX_OBSTACLE_BACK) / BASE_SPEED) + 1) * TRUCK_SPEED).toBeLessThanOrEqual(12000);
     const kinds = new Set<string>();
     let twoLaneCrossings = 0;
     for (let seed = 0; seed < 1000; seed++) {
@@ -49,9 +50,9 @@ describe("run track solvability", () => {
           // the slowest base speed. Ramps do not block the protected ground route.
           const front = Math.max(...row.map(o => o.front + (o.kind === "truck" ? 12000 : 0)));
           const free = z - previousZ - front - previousBack;
-          const reaction = z <= 600000 ? MIN_REACTION_TICKS : 10;
+          const reaction = z <= 550000 ? MIN_REACTION_TICKS : 10;
           expect(free).toBeGreaterThanOrEqual(MAX_SPEED * (reaction + changes * LANE_CHANGE_TICKS + 1));
-          if (z <= 600000) expect(free - MAX_SPEED * changes * LANE_CHANGE_TICKS).toBeGreaterThanOrEqual(MIN_REACTION_DISTANCE);
+          if (z <= 550000) expect(free - MAX_SPEED * changes * LANE_CHANGE_TICKS).toBeGreaterThanOrEqual(MIN_REACTION_DISTANCE);
           else expect(changes).toBeLessThanOrEqual(1);
           previousBack = Math.max(...row.map(o => o.back));
           expect(VISIBLE_DISTANCE).toBeGreaterThanOrEqual(z - previousZ);
@@ -83,4 +84,46 @@ describe("run track solvability", () => {
     for (let i = 0; i < 10; i++) expect(a.next()).toEqual(b.next());
     expect(createRunTrack("same").next()).not.toEqual(c.next());
   });
+});
+
+
+it("gives the ground-only control at least 40% fewer bread than roof play on paired five-minute tracks", () => {
+  let groundBread = 0, roofBread = 0;
+  for (let n = 0; n < 100; n++) {
+    const seed = `reward${n}`;
+    const ground = groundOnlyRun(seed, 18001), roof = roofRun(seed, 18001);
+    expect(ground.over, seed).toBe(false);
+    expect(ground.peakY, seed).toBe(0);
+    expect(roof.peakY, seed).toBeGreaterThan(0);
+    expect(roof.over, seed).toBe(false);
+    groundBread += ground.state.bread; roofBread += roof.state.bread;
+    expect(ground.state.bread, seed).toBeLessThanOrEqual(roof.state.bread * 0.6);
+  }
+  expect(groundBread).toBeLessThanOrEqual(roofBread * 0.6);
+}, 60000);
+
+it("puts most mature bread on roofs, ends each separated van train with gold, and sometimes loads trucks", () => {
+  let roof = 0, ground = 0, loaded = 0, trucks = 0;
+  const track = createRunTrack("roof-distribution");
+  for (let i = 0; i < 100; i++) {
+    const { objects } = track.next();
+    for (const van of objects.filter(o => o.kind === "van")) {
+      const line = objects.filter(o => o.kind === "bread" && o.lane === van.lane && o.y === van.height && o.z > van.z - van.front && o.z < van.z + van.back);
+      expect(line.length).toBeGreaterThanOrEqual(3);
+      expect(line.filter(o => o.value === 5)).toHaveLength(1);
+      expect(line.at(-1)?.value).toBe(5);
+      const street = objects.filter(o => o.kind === "bread" && o.y === 0 && o.z >= van.z - 18000 && o.z <= van.z + 8000);
+      expect(street).toHaveLength(1);
+    }
+    for (const truck of objects.filter(o => o.kind === "truck")) {
+      trucks++;
+      if (objects.some(o => o.carrierId === truck.id)) loaded++;
+    }
+    if (i > 5) for (const bread of objects.filter(o => o.kind === "bread")) {
+      if (bread.y) roof++; else ground++;
+    }
+  }
+  expect(roof).toBeGreaterThan(ground);
+  expect(loaded).toBeGreaterThan(0);
+  expect(loaded).toBeLessThan(trucks);
 });
