@@ -11,7 +11,7 @@ import { getGameHub } from '@/server/gameHub';
 import { overridePrizeGame } from '@/server/gamePrize';
 import { nextGameLevel } from '@/server/gameLevels';
 import { prisma } from '@/server/db';
-import { replayTd, tdLevel } from '@/lib/td';
+import { replayTd, tdLevel, MAX_LEVEL_TICKS, type TdInput } from '@/lib/td';
 import { copy } from '@/copy';
 import { greedyTd } from '../support/tdBot';
 import { jsonRequest, getRequest } from './api.helpers';
@@ -44,9 +44,10 @@ it('replays terminal losses, rejects incomplete/forged/tail evidence, and claims
   expect(await finish(r,new Date(+LATER+10000))).toEqual(a);
   const row = await db.gameRun.findUniqueOrThrow({where:{id:r.runId}});
   expect(row).toMatchObject({game:'TD',level:1,passedAt:LATER,finishedAt:LATER,drops:win.inputs});
-  const failed = await start('bob'), loss = replayTd({seed:failed.seed,tierCount:failed.tiers.length},[]);
+  const lossInputs: TdInput[] = [{tick:0,type:'callWave',slot:-1}];
+  const failed = await start('bob'), loss = replayTd({seed:failed.seed,tierCount:failed.tiers.length},lossInputs);
   expect(loss.passed).toBe(false);
-  const result = await finishTdRun(db,{runId:failed.runId,inputs:[],endTick:loss.tick,score:999,passed:true},'ip',LATER);
+  const result = await finishTdRun(db,{runId:failed.runId,inputs:lossInputs,endTick:loss.tick,score:999,passed:true},'ip',LATER);
   expect(result).toMatchObject({passed:false,best:0,rank:null});
   expect((await start('bob')).level).toBe(1);
 });
@@ -96,7 +97,7 @@ it('routes expose masked boards, enforce body limits/versions/expiry and allow d
   const board = await (await boardGET(getRequest('/api/game/td/leaderboard?wechatId=WX_ROUTE'))).json();
   expect(board).toMatchObject({nextLevel:2,myBest:1,top:[{score:1,wechatMasked:'wx***te'}]});
   expect((await finishPOST(jsonRequest('/api/game/td/finish',{padding:'x'.repeat(TD_MAX_FINISH_BODY_BYTES)}))).status).toBe(422);
-  const bad = await start('old');await db.gameRun.update({where:{id:bad.runId},data:{seed:'v6.td.2026-10-19.1'}});
+  const bad = await start('old');await db.gameRun.update({where:{id:bad.runId},data:{seed:'v7.td.2026-10-19.1'}});
   await expect(finish(bad)).rejects.toMatchObject({message:copy.gameApi.runExpired});
   await expect(progressRun(db,'TD',{runId:bad.runId,log:[],endTick:60},LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
   const expired = await start('expired');await expect(finish(expired,new Date('2026-10-26T05:00:00Z'))).rejects.toMatchObject({message:copy.gameApi.runExpired});
@@ -133,4 +134,18 @@ it('accepts 3x wall time, including its exact slack boundary, but rejects faster
   const tick = 3600;
   const inputs = win.inputs.filter(i => i.tick <= tick);
   await progressRun(db, 'TD', { runId: progress.runId, log: inputs, endTick: tick }, new Date(+T + 20_000));
+});
+
+it('replays a long build phase through progress and finish without consuming the combat cap', async () => {
+  const r = await start('builder');
+  const delay = MAX_LEVEL_TICKS * 2;
+  const now = new Date(+T + 900_000);
+  expect(await progressRun(db, 'TD', { runId: r.runId, log: [], endTick: delay }, now)).toMatchObject({ score: 0 });
+  await expect(finishTdRun(db, { runId: r.runId, inputs: [], endTick: delay }, 'ip', now)).rejects.toMatchObject({ code: 'VALIDATION' });
+  const inputs = win.inputs.map(input => ({ ...input, tick: input.tick + delay }));
+  const endTick = win.state.tick + delay;
+  expect(replayTd({ seed: r.seed }, inputs, endTick)).toMatchObject({ startedTick: delay, passed: true });
+  expect(await finishTdRun(db, { runId: r.runId, inputs, endTick }, 'ip', now)).toMatchObject({ passed: true });
+  const forged = await start('forged_builder');
+  await expect(finishTdRun(db, { runId: forged.runId, inputs, endTick }, 'ip', T)).rejects.toMatchObject({ code: 'VALIDATION' });
 });

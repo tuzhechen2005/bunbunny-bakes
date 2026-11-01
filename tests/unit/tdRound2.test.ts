@@ -34,6 +34,7 @@ it('previews exact next-wave counts and puts exactly one boss in wave five', () 
 
 it('conserves bread through pickup, death, rollback and recovery, with detached snapshots', () => {
   const game = createTdGame({ level: tdLevel('2026-10-26', 1) });
+  game.apply({ tick: 0, type: 'callWave', slot: -1 });
   const events: TdEvent[] = [];
   let armed = false, disarmed = false;
   for (let tick = 1; tick <= MAX_LEVEL_TICKS && !game.over; tick++) {
@@ -79,6 +80,7 @@ it('gives every branch its distinct integer combat stats and makes the bot choos
 
 it('an empty pile remains alive while carriers are returning at 80 percent speed', () => {
   const game = createTdGame({ level: tdLevel('2026-10-26', 1) });
+  game.apply({ tick: 0, type: 'callWave', slot: -1 });
   let empty = false, returning = false;
   for (let tick = 1; tick < 6000 && !game.over; tick++) {
     const before = game.state();

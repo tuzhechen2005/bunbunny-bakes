@@ -1,4 +1,4 @@
-# 保卫大面包 — D7 engine v7
+# 保卫大面包 — D8 engine v8
 
 Pure deterministic TypeScript, shared by client saves and authoritative server replay.
 No DOM, clock, photos, frame delta, or global randomness enters simulation. The server
@@ -6,13 +6,13 @@ continues deriving the weekly level from the same Monday and level number.
 
 ## Inputs, versions and saves
 
-Canonical seed: `v7.td.<Monday YYYY-MM-DD>.<positive level>`. Versions 1–6 runs and saves
+Canonical seed: `v8.td.<Monday YYYY-MM-DD>.<positive level>`. Versions 1–7 runs and saves
 are rejected. `TD_ENGINE_VERSION` also drives the existing save key and server gate.
 Pass either `{ seed, tierCount }` or `{ level: tdLevel(week, n), tierCount }` to
 `createTdGame`; descriptors are regenerated from their seed, never trusted.
 `replayTd(options, inputs, endTick)` reconstructs the same detached snapshot.
 
-Inputs have exact keys, safe integer ticks (0–18000), and slots 0–10:
+Inputs have exact keys, nonnegative safe integer ticks (with 18,000 ticks of arithmetic headroom), and slots 0–10:
 
 ```ts
 { tick: 0, type: 'place', slot: 0, tower: 'rollingPin' }
@@ -56,8 +56,14 @@ remaining breads at once and drops the complete stack if killed.
 `nextWave` is `{ index, counts: { ant, mouse, sparrow, beetle, boss } }`, or `null`
 after wave five starts / game over. Boss is counted separately from ordinary mice.
 `waveTargetTier` is the most expensive pile tier when the wave starts, or -1 if empty.
-Waves auto-start after 600 prep ticks; calling early awards three coins per whole
-remaining second. The next prep period starts when the current wave finishes spawning.
+Wave one never starts automatically: `awaitingStart` is true and `nextWaveTick` /
+`startedTick` are null during unlimited building. `callWave` records `startedTick`,
+clears `awaitingStart`, and starts wave one without bonus coins. The 18,000-tick
+combat cap starts at `startedTick`; idle build gaps are skipped in constant time.
+Later waves auto-start after 600 prep ticks; calling early awards three coins per
+whole remaining second. Prep starts when the current wave finishes spawning.
+Replay defaults to the first call tick plus the combat cap; explicit observation
+ticks support saves and server progress during building.
 
 ## Combat and drawing contract
 
@@ -143,10 +149,11 @@ projectile impacts, tower attacks, clear check. Spawn exit beats damage on the s
 `tests/support/tdBot.ts` uses public geometry/stats at a 2 Hz purchase cadence.
 It scores coverage per coin, includes burn and flour support, and discounts
 repeated roles to value combinations. It saves for its best next purchase,
-chooses upgrade branches, and calls early only when no pests remain. Random
+chooses upgrade branches, starts wave one after placing, and calls later waves
+early only when no pests remain. Random
 purchases use an independent deterministic RNG. Neither bot reads future waves.
 
-Targets: greedy L1 100%, L3 ≈95%, L5 ≈85%, L10 ≈60%, L20 ≈25%; random
+Historical D7 targets: greedy L1 100%, L3 ≈95%, L5 ≈85%, L10 ≈60%, L20 ≈25%; random
 L1 ≥50%. Two disjoint 100-Monday windows start at 2026-01-05 and 2027-12-06.
 Approximate targets allow ±10 percentage points; all-four purchases must occur
 in a majority of runs, with sifters in at least 90%.
@@ -237,3 +244,36 @@ The final focused engine/identity check passes 27 tests. Version fixtures cover
 v7 seeds/save keys and v6 rejection in saves and server replay. E2E fixture
 assertions are updated but browsers were not run. No component/game page files
 were changed, and no commit was created.
+
+## D8 manual-start regression (v8 / D168)
+
+The first call no longer grants 30 coins. Combat stats, starting coins, and map
+geometry are unchanged. The previous D7 tuning bounds are historical; v8 tracks
+regression centers of 100/85/70/45/5 percent at L1/L3/L5/L10/L20 (±10 points,
+L1 exactly 100%, other levels at least 1%). Random L1 remains at least 50%.
+All-four purchases remain a majority except L10, whose v8 floor is 40%;
+sifter purchases retain the 90% floor. These are regression checks for the
+requested economy change, not compensating balance changes.
+
+The backend exposes the first-wave state for the frontend's start button. See
+`docs/TD_CLIENT.md` for the clock and input-throttle integration still needed
+outside this backend-only task.
+
+Measured v8 results (same two disjoint 100-Monday windows as D7):
+
+| Level | Greedy A | Greedy B | All four A / B |
+| --- | ---: | ---: | ---: |
+| 1 | 100% | 100% | 100% / 100% |
+| 3 | 83% | 83% | 100% / 100% |
+| 5 | 71% | 72% | 69% / 71% |
+| 10 | 46% | 45% | 43% / 45% |
+| 20 | 5% | 10% | 100% / 100% |
+
+Random L1 passes: 100% / 99%. Sifter purchases: 100% at all checkpoints.
+D8 validation uses `--configLoader runner` because this worktree links a shared,
+read-only `node_modules`. Database tests run only against the isolated local
+`bunbunny_td8_test` database (72 files, 829 tests passed). No browser was launched.
+
+TypeScript and ESLint passed. All 1,204 unit cases passed across the full run
+and the rerun of the ten updated D8 calibration cases; the latest manual-start
+regression also passed separately. E2E fixtures were updated but not executed.

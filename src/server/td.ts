@@ -6,7 +6,7 @@ import type { GameRun } from "@/generated/prisma/client";
 import { z } from "zod";
 import { copy } from "@/copy";
 import type { Prisma } from "@/generated/prisma/client";
-import { MAX_INPUTS, MAX_LEVEL_TICKS, replayTd, TD_ENGINE_VERSION, tdLevel, tdSeedVersion, validTdInput, type TdInput } from "@/lib/td";
+import { MAX_INPUTS, replayTd, TD_ENGINE_VERSION, tdLevel, tdSeedVersion, validTdInput, validTdTick, type TdInput } from "@/lib/td";
 import { isTdSuspicious, tdTierCount } from "./tdRules";
 import { isDeepStrictEqual } from "node:util";
 import type { DbClient } from "./db";
@@ -35,7 +35,7 @@ export type TdFinishResult = FinishResult & { level: number; passed: boolean };
 export const tdFinishSchema = z.object({
   runId: z.uuid(),
   inputs: z.array(z.custom<TdInput>(validTdInput)).max(MAX_INPUTS),
-  endTick: z.number().int().min(0).max(MAX_LEVEL_TICKS),
+  endTick: z.number().refine(validTdTick),
 });
 
 /** TierView photos, cheapest first. Unlinked game pieces retain owner order before priced breads. */

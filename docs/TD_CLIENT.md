@@ -25,7 +25,10 @@ D3 art is optional; no browser was used during implementation.
   pass time, shared bans/hidden scores, masked identities, crown, and `nextLevel`.
   Admin `?game=td`, awards and winner mail also use passed levels.
 
-TD accepts 2,000 inputs and 18,000 simulation ticks at most. Wall-clock plausibility
+TD accepts 2,000 inputs and at most 18,000 combat ticks after the first manual
+`callWave` (D168, engine v8). Building before `startedTick` is unlimited; snapshots
+expose `awaitingStart`, and the first call gives no bonus. Absolute observation
+ticks may exceed 18,000; wall time and monotonic progress still include building. Wall-clock plausibility
 allows the supported 2× scheduler plus shared slack. Pauses do not consume ticks.
 A sustained median gap below 120 ms (at least ten actions), or hitting the input cap,
 sets suspicious without excluding the score; a few same-tick purchases are legitimate.
@@ -135,3 +138,12 @@ and no commit were performed.
 D4 verification: TypeScript, repository ESLint, all 1,145 unit tests and all 826
 Postgres tests passed against `bunbunny_td4_test`. Playwright discovered the 12
 updated TD/live-score e2e cases without launching a browser. No commit was made.
+
+## D8 backend handoff
+
+The first-wave button must use `state.awaitingStart` and send `callWave`;
+`nextWaveTick === null` now also describes the initial build phase. Client clock
+limits must follow `startedTick + MAX_LEVEL_TICKS` after starting, and must not
+cap building at 18,000 absolute ticks. The rejected-input throttle must also allow
+the first call when `awaitingStart` is true. These component integrations are
+outside D8's backend-only scope; `src/components/**` was not changed.
