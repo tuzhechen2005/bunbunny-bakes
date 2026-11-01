@@ -120,3 +120,29 @@
 .td-card { background:linear-gradient(180deg,#fffaf1,#f3e7d3); box-shadow:0 3px 0 #d8c3a3, inset 0 2px 0 #fff; }
 .td-branch-a { background:linear-gradient(180deg,#fbe6d6,#f4d2bb); } .td-branch-b { background:linear-gradient(180deg,#e3edf5,#cfdfec); }
 .td-tray, .td-info { background:rgba(255,250,242,.97); box-shadow:0 6px 0 #e2cfb1, 0 18px 30px -12px rgba(60,30,10,.45); }
+/* Safari fix: grid percentage heights are indefinite there, so container units never resolved and
+   the 16:9 board grew past the screen. The board area is now absolutely sized from the play box. */
+.td-shell-playing .td-play { position:absolute; inset:0; height:auto; }
+.td-shell-playing .td-play > .td-field-wrap { position:absolute; left:max(8px,env(safe-area-inset-left)); top:max(6px,env(safe-area-inset-top)); bottom:max(6px,env(safe-area-inset-bottom)); right:calc(128px + 18px + env(safe-area-inset-right)); height:auto; container-type:size; display:flex; align-items:center; justify-content:center; }
+.td-shell-playing .td-field { width:min(100cqw, calc(100cqh * 16 / 9)); height:auto; max-height:100cqh; }
+.td-shell-playing .td-play { grid-template-columns:minmax(0,1fr) 128px; overflow:hidden; }
+@media (max-height:420px) {
+  .td-shell-playing .td-play { row-gap:4px; }
+  .td-shell-playing .td-hud .td-hud-level b { font-size:22px; }
+  .td-shell-playing .td-chip { padding:3px 10px 3px 4px; }
+  .td-shell-playing .td-chip b { font-size:16px; }
+  .td-shell-playing .td-chip i, .td-shell-playing .td-chip img { width:20px !important; height:20px !important; }
+  .td-shell-playing .td-next { margin-top:4px; } .td-shell-playing .td-next > span:first-child { display:none; }
+  .td-shell-playing .td-ctl { min-height:34px; font-size:14px; padding:0 10px; }
+  .td-shell-playing .td-ctl-info { font-size:12px; }
+  .td-shell-playing .td-controls { gap:6px; }
+}
+@media (max-height:330px) {
+  .td-shell-playing .td-ctl-info { display:none; } /* the tray keeps its own ? button */
+  .td-shell-playing .td-controls { flex-direction:row; }
+  .td-shell-playing .td-controls .td-ctl { flex:1; min-width:0; padding:0 6px; }
+  .td-shell-playing .td-play { grid-template-rows:40px auto auto minmax(0,1fr) auto; }
+  .td-shell-playing .td-waves i { width:9px; height:9px; }
+}
+.td-ctl { white-space:nowrap; }
+@media (max-height:330px) { .td-shell-playing .td-ctl-main { font-size:13px; } }
