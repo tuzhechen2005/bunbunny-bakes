@@ -1,0 +1,232 @@
+{
+  "asset_count": 32,
+  "total_bytes": 1151018,
+  "quality": 82,
+  "checks": "Dimensions, decode, alpha extrema, source presence, key art and icon budgets, total budget passed",
+  "assets": [
+    {
+      "file": "hub-hero.webp",
+      "width": 1080,
+      "height": 720,
+      "bytes": 29820,
+      "transparent": false
+    },
+    {
+      "file": "menu-big.webp",
+      "width": 1080,
+      "height": 1200,
+      "bytes": 61100,
+      "transparent": false
+    },
+    {
+      "file": "menu-tu.webp",
+      "width": 1080,
+      "height": 1200,
+      "bytes": 59162,
+      "transparent": false
+    },
+    {
+      "file": "menu-m3.webp",
+      "width": 1080,
+      "height": 1200,
+      "bytes": 55710,
+      "transparent": false
+    },
+    {
+      "file": "menu-grab.webp",
+      "width": 1080,
+      "height": 1200,
+      "bytes": 45302,
+      "transparent": false
+    },
+    {
+      "file": "menu-run.webp",
+      "width": 1080,
+      "height": 1200,
+      "bytes": 70700,
+      "transparent": false
+    },
+    {
+      "file": "menu-td.webp",
+      "width": 1600,
+      "height": 900,
+      "bytes": 53094,
+      "transparent": false
+    },
+    {
+      "file": "card-big.webp",
+      "width": 600,
+      "height": 600,
+      "bytes": 35282,
+      "transparent": true
+    },
+    {
+      "file": "card-tu.webp",
+      "width": 600,
+      "height": 600,
+      "bytes": 38110,
+      "transparent": true
+    },
+    {
+      "file": "card-m3.webp",
+      "width": 600,
+      "height": 600,
+      "bytes": 32628,
+      "transparent": true
+    },
+    {
+      "file": "card-grab.webp",
+      "width": 600,
+      "height": 600,
+      "bytes": 33192,
+      "transparent": true
+    },
+    {
+      "file": "card-run.webp",
+      "width": 600,
+      "height": 600,
+      "bytes": 43484,
+      "transparent": true
+    },
+    {
+      "file": "card-td.webp",
+      "width": 600,
+      "height": 600,
+      "bytes": 42320,
+      "transparent": true
+    },
+    {
+      "file": "result-win.webp",
+      "width": 800,
+      "height": 640,
+      "bytes": 59032,
+      "transparent": true
+    },
+    {
+      "file": "result-record.webp",
+      "width": 800,
+      "height": 640,
+      "bytes": 42896,
+      "transparent": true
+    },
+    {
+      "file": "result-lose.webp",
+      "width": 800,
+      "height": 640,
+      "bytes": 32242,
+      "transparent": true
+    },
+    {
+      "file": "icon-coin.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 10716,
+      "transparent": true
+    },
+    {
+      "file": "icon-star.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 8776,
+      "transparent": true
+    },
+    {
+      "file": "icon-crown.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 9600,
+      "transparent": true
+    },
+    {
+      "file": "icon-bread.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 10000,
+      "transparent": true
+    },
+    {
+      "file": "icon-clock.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 10186,
+      "transparent": true
+    },
+    {
+      "file": "icon-moves.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 10030,
+      "transparent": true
+    },
+    {
+      "file": "icon-trophy.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 11534,
+      "transparent": true
+    },
+    {
+      "file": "icon-gift.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 11330,
+      "transparent": true
+    },
+    {
+      "file": "icon-help.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 9460,
+      "transparent": true
+    },
+    {
+      "file": "icon-sound-on.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 10694,
+      "transparent": true
+    },
+    {
+      "file": "icon-sound-off.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 8788,
+      "transparent": true
+    },
+    {
+      "file": "icon-back.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 6832,
+      "transparent": true
+    },
+    {
+      "file": "icon-pause.webp",
+      "width": 256,
+      "height": 256,
+      "bytes": 6890,
+      "transparent": true
+    },
+    {
+      "file": "bg-kitchen.webp",
+      "width": 1080,
+      "height": 1920,
+      "bytes": 23722,
+      "transparent": false
+    },
+    {
+      "file": "bg-counter.webp",
+      "width": 1080,
+      "height": 1920,
+      "bytes": 37832,
+      "transparent": false
+    },
+    {
+      "file": "bg-tray.webp",
+      "width": 1080,
+      "height": 1920,
+      "bytes": 230554,
+      "transparent": false
+    }
+  ]
+}
