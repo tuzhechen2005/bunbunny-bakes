@@ -73,7 +73,7 @@ function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind) {
       }
       state = game.state();
     }
-    if (state.nextWaveTick !== null && state.pests.length === 0 && !state.spawning) {
+    if (state.awaitingStart || state.nextWaveTick !== null && state.pests.length === 0 && !state.spawning) {
       apply({ tick: state.tick, type: "callWave", slot: -1 });
     }
     game.step(Math.min(MAX_LEVEL_TICKS, state.tick + 30));

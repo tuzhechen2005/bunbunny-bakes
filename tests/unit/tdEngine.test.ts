@@ -10,7 +10,7 @@ const level = () => tdLevel("2026-10-26", 1);
 
 describe("TD deterministic level and geometry", () => {
   it("pins the version and generates five shared weekly waves", () => {
-    expect(TD_ENGINE_VERSION).toBe(7);
+    expect(TD_ENGINE_VERSION).toBe(8);
     expect(tdSeedVersion(level().seed)).toBe(TD_ENGINE_VERSION);
     expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([340, 240, 298, 820, 820]);
     expect(level()).toEqual(level());
@@ -46,7 +46,7 @@ describe("TD deterministic level and geometry", () => {
       expect(() => tdLevel(week, 1)).toThrow();
     }
     for (const n of [0, -1, 1.1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) expect(() => tdLevel("2026-10-26", n)).toThrow();
-    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v4.td.2026-10-26.1", "v5.td.2026-10-26.1", "v6.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
+    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v4.td.2026-10-26.1", "v5.td.2026-10-26.1", "v6.td.2026-10-26.1", "v7.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
       expect(() => createTdGame({ seed })).toThrow();
     }
     for (const tierCount of [0, 101, 1.5, NaN]) expect(() => createTdGame({ level: level(), tierCount })).toThrow();
@@ -129,13 +129,13 @@ describe("TD input and replay contract", () => {
     const invalid: unknown[] = [null, [], {}, { tick: 0, type: "place", slot: 0 },
       { tick: 0, type: "callWave", slot: 0 }, { tick: 0, type: "callWave", slot: -1, speed: 2 },
       { tick: 0, type: "sell", slot: 11 }, { tick: 0, type: "place", slot: 0, tower: "toString" },
-      ...[-1, 1.5, NaN, Infinity, MAX_LEVEL_TICKS + 1].map(tick => ({ tick, type: "sell", slot: 0 }))];
+      ...[-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1].map(tick => ({ tick, type: "sell", slot: 0 }))];
     for (const input of invalid) expect(g.apply(input as TdInput)).toBe(false);
     expect(g.state()).toMatchObject({ tick: 0, inputsRejected: invalid.length, inputsAccepted: 0 });
     expect(g.state().coins).toBe(level().startCoins);
     g.step(10);
     expect(g.apply({ tick: 9, type: "sell", slot: 0 })).toBe(false);
-    for (const tick of [9, NaN, Infinity, 10.5, MAX_LEVEL_TICKS + 1]) expect(() => g.step(tick)).toThrow();
+    for (const tick of [9, NaN, Infinity, 10.5, Number.MAX_SAFE_INTEGER + 1]) expect(() => g.step(tick)).toThrow();
   });
 
   it("rejects unaffordable purchases without creating or upgrading a tower", () => {
@@ -159,8 +159,9 @@ describe("TD input and replay contract", () => {
     expect(() => replayTd({ level: level() }, Array(MAX_INPUTS + 1).fill({ tick: 0, type: "sell", slot: 0 }))).toThrow();
     expect(() => replayTd({ level: level() }, Array(MAX_IGNORED_INPUTS + 1).fill({ tick: 0, type: "sell", slot: 0 }))).toThrow();
     expect(replayTd({ level: level() }, [], 0)).toEqual(createTdGame({ level: level() }).state());
-    const end = replayTd({ level: level() }, []).tick;
-    expect(() => replayTd({ level: level() }, [{ tick: end, type: "sell", slot: 0 }])).toThrow(/game over/);
+    const start: TdInput = { tick: 0, type: "callWave", slot: -1 };
+    const end = replayTd({ level: level() }, [start]).tick;
+    expect(() => replayTd({ level: level() }, [start, { tick: end, type: "sell", slot: 0 }])).toThrow(/game over/);
     const g = createTdGame({ level: level() });
     for (let i = 0; i < MAX_INPUTS; i++) g.apply({ tick: 0, type: "sell", slot: 0 });
     expect(g.apply({ tick: 0, type: "place", slot: 0, tower: "rollingPin" })).toBe(false);
@@ -207,22 +208,24 @@ describe("TD input and replay contract", () => {
 });
 
 describe("TD combat and waves", () => {
-  it("auto-starts waves, awards bounded early bonuses, and forbids spawning-wave spam", () => {
+  it("manually starts wave one, auto-starts later waves, awards bounded early bonuses, and forbids spawning-wave spam", () => {
     const auto = createTdGame({ level: level() });
-    auto.step(599); expect(auto.state().wave).toBe(0);
-    auto.step(600); expect(auto.state()).toMatchObject({ wave: 1, spawning: true, nextWaveTick: null });
+    auto.step(600); expect(auto.state()).toMatchObject({ wave: 0, awaitingStart: true, nextWaveTick: null });
+    auto.apply({ tick: 600, type: "callWave", slot: -1 });
     expect(auto.state().events).toContainEqual({ type: "waveStart", tick: 600, wave: 1, targetTier: 5, bonus: 0 });
-    auto.step(601); expect(auto.state().pests).toHaveLength(1);
+    const next = 601 + (level().waves[0].pests.length - 1) * level().waves[0].interval + 600;
+    auto.step(next - 1); expect(auto.state().wave).toBe(1);
+    auto.step(next); expect(auto.state()).toMatchObject({ wave: 2, startedTick: 600, spawning: true });
     const early = createTdGame({ level: level() });
     expect(early.apply({ tick: 0, type: "callWave", slot: -1 })).toBe(true);
-    expect(early.state().coins).toBe(level().startCoins + 30);
+    expect(early.state().coins).toBe(level().startCoins);
     expect(early.apply({ tick: 0, type: "callWave", slot: -1 })).toBe(false);
     const lastSpawn = 1 + (level().waves[0].pests.length - 1) * level().waves[0].interval;
     early.step(lastSpawn);
     expect(early.state().nextWaveTick).toBe(lastSpawn + 600);
     expect(early.state().pests.length).toBeGreaterThan(0);
     expect(early.apply({ tick: lastSpawn, type: "callWave", slot: -1 })).toBe(true);
-    expect(early.state()).toMatchObject({ wave: 2, coins: level().startCoins + 60 });
+    expect(early.state()).toMatchObject({ wave: 2, coins: level().startCoins + 30 });
     expect(early.apply({ tick: lastSpawn, type: "callWave", slot: -1 })).toBe(false);
   });
 
@@ -230,6 +233,7 @@ describe("TD combat and waves", () => {
     const g = createTdGame({ level: level(), tierCount: 12 });
     const initial = g.state().breadTiers;
     expect(initial[0]).toBe(0); expect(initial.at(-1)).toBe(11);
+    g.apply({ tick: 0, type: "callWave", slot: -1 });
     const events = g.step(MAX_LEVEL_TICKS);
     const thefts = events.filter(e => e.type === "pickup");
     expect(thefts.flatMap(e => e.tiers)).toEqual([...initial].reverse());
@@ -283,7 +287,7 @@ describe("TD combat and waves", () => {
     const events = g.step(shot.hitTick);
     expect(events.filter(e => e.type === "hit")).toHaveLength(1);
     expect(events.filter(e => e.type === "kill")).toHaveLength(1);
-    expect(g.state().coins).toBe(level().startCoins - 150 + 30 + 75 + level().waves[0].pests[0].bounty);
+    expect(g.state().coins).toBe(level().startCoins - 150 + 75 + level().waves[0].pests[0].bounty);
     const hit = events.find(e => e.type === "hit")!;
     hit.tick = -1;
     expect(g.state().events.every(e => e.tick === shot.hitTick)).toBe(true);
@@ -298,7 +302,7 @@ describe("TD combat and waves", () => {
     expect(hits.some(a => hits.some(b => b !== a && a.projectile === b.projectile && a.pest !== b.pest))).toBe(true);
     const kills = events.filter(e => e.type === "kill");
     expect(new Set(kills.map(e => e.pest)).size).toBe(kills.length);
-    expect(splash.state().coins).toBe(level().startCoins - 100 + 30 + kills.reduce((sum, k) => sum + k.bounty, 0));
+    expect(splash.state().coins).toBe(level().startCoins - 100 + kills.reduce((sum, k) => sum + k.bounty, 0));
     const armor = createTdGame({ level: tdLevel("2026-10-26", 8) });
     armor.apply({ tick: 0, type: "place", slot: 0, tower: "rollingPin" });
     armor.apply({ tick: 0, type: "upgrade", slot: 0 });

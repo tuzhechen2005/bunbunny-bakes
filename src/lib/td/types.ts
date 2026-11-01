@@ -1,4 +1,4 @@
-export const TD_ENGINE_VERSION = 7;
+export const TD_ENGINE_VERSION = 8;
 export const TICKS_PER_SECOND = 60;
 export const FIELD_WIDTH = 1440;
 export const FIELD_HEIGHT = 810;
@@ -65,6 +65,7 @@ export type TdEvent =
 export interface TdState {
   tick: number; seed: string; level: number; map: number; coins: number;
   bread: number; breadTiers: number[]; wave: number; waveTargetTier: number;
+  awaitingStart: boolean; startedTick: number | null;
   nextWaveTick: number | null; nextWave: TdWavePreview | null; dropped: TdDroppedBread[]; lost: number; spawning: boolean;
   batterPuddles: TdBatterPuddle[];
   pests: TdPest[]; towers: TdTower[]; projectiles: TdProjectile[];

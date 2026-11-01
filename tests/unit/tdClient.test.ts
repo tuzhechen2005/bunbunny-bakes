@@ -16,12 +16,13 @@ it('settles old speed, excludes paused/hidden time, caps time and resumes exact 
 });
 it('restores only canonical unexpired replayable saves, including completed retry evidence', () => {
   const now=Date.parse('2026-10-20T12:00:00Z');
-  expect(TD_SAVE_KEY).toBe('bb_td_save_v7');
+  expect(TD_SAVE_KEY).toBe('bb_td_save_v8');
   expect(parseTdSave(JSON.stringify(save),now)).toEqual(save);
-  for (const patch of [{score:999},{endTick:-1},{seed:'v1.td.2026-10-19.1'},{seed:'v5.td.2026-10-19.1'},{seed:'v6.td.2026-10-19.1'},{level:2},{tiers:[]},{inputs:[{tick:500,type:'sell',slot:0}]}]) expect(parseTdSave(JSON.stringify({...save,...patch}),now)).toBeNull();
+  for (const patch of [{score:999},{endTick:-1},{seed:'v1.td.2026-10-19.1'},{seed:'v5.td.2026-10-19.1'},{seed:'v6.td.2026-10-19.1'},{seed:'v7.td.2026-10-19.1'},{level:2},{tiers:[]},{inputs:[{tick:500,type:'sell',slot:0}]}]) expect(parseTdSave(JSON.stringify({...save,...patch}),now)).toBeNull();
   expect(parseTdSave(JSON.stringify(save),Date.parse(save.expiresAt))).toBeNull();
-  const terminal=replayTd({seed,tierCount:1},[]);
-  expect(parseTdSave(JSON.stringify({...save,endTick:terminal.tick,score:terminal.wave}),now)?.endTick).toBe(terminal.tick);
+  const inputs: TdInput[] = [{tick:0,type:'callWave',slot:-1}];
+  const terminal=replayTd({seed,tierCount:1},inputs);
+  expect(parseTdSave(JSON.stringify({...save,inputs,endTick:terminal.tick,score:terminal.wave}),now)?.endTick).toBe(terminal.tick);
 });
 it('has the full D3 + boss name contract and falls back when the manifest is absent', async () => {
   expect(TD_ASSET_NAMES).toHaveLength(25);
@@ -42,10 +43,11 @@ it('decodes RUN-format rectangles and anchors while missing entries remain optio
 it('caps rejected client attempts at 100 while valid actions stay replayable, including after resume', () => {
   let game = createTdGame({ seed });
   const inputs: TdInput[] = [];
+  expect(applyTdClientInput(game, inputs, {tick: 0, type: 'callWave', slot: -1})).toBe(true);
   const invalid: TdInput = { tick: 0, type: 'sell', slot: 0 };
   for (let i = 0; i < 150; i++) applyTdClientInput(game, inputs, invalid);
   expect(game.inputsRejected).toBe(100);
-  expect(inputs).toHaveLength(100);
+  expect(inputs).toHaveLength(101);
   game = createTdGame({ seed });
   for (const input of inputs) game.apply(input);
   applyTdClientInput(game, inputs, invalid);
@@ -58,9 +60,16 @@ it('caps rejected client attempts at 100 while valid actions stay replayable, in
     {tick: 0, type: 'upgrade', slot: 1},
   ] as TdInput[]) expect(applyTdClientInput(game, inputs, input)).toBe(false);
   expect(applyTdClientInput(game, inputs, {tick: 0, type: 'sell', slot: 0})).toBe(true);
-  expect(applyTdClientInput(game, inputs, {tick: 0, type: 'callWave', slot: -1})).toBe(true);
   expect(applyTdClientInput(game, inputs, {tick: 0, type: 'callWave', slot: -1})).toBe(false);
   expect(game.inputsRejected).toBe(100);
   game.step(60);
   expect(replayTd({seed}, inputs, 60)).toEqual(game.state());
+});
+
+it('restores a long build phase and reconstructs its manual start', () => {
+  const now = Date.parse('2026-10-20T12:00:00Z');
+  const endTick = 36000;
+  expect(parseTdSave(JSON.stringify({ ...save, endTick }), now)?.endTick).toBe(endTick);
+  const inputs: TdInput[] = [{ tick: endTick, type: 'callWave', slot: -1 }];
+  expect(parseTdSave(JSON.stringify({ ...save, endTick, inputs, score: 1 }), now)?.inputs).toEqual(inputs);
 });

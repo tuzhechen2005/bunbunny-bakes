@@ -65,7 +65,7 @@ for(const width of [320,390]) test.describe(`TD ${width}`,()=>{
   });
   test('failed completed save retries exact run after reload, win offers next level',async({page})=>{
     const api=await mockApi(page),bot=greedyTd(tdLevel(weekKey,1));
-    expect(TD_ENGINE_VERSION).toBe(7);
+    expect(TD_ENGINE_VERSION).toBe(8);
     expect(seed.startsWith(`v${TD_ENGINE_VERSION}.td.`)).toBe(true);
     expect(bot.inputs.some(i=>i.type==='upgrade' && i.branch)).toBe(true);
     const save={v:1,runId:'00000000-0000-4000-8000-000000000099',seed,level:1,weekKey,tiers,nickname:'Baker',expiresAt:'2099-01-01T00:00:00Z',inputs:bot.inputs,endTick:bot.state.tick,score:bot.state.wave};
@@ -79,7 +79,7 @@ for(const width of [320,390]) test.describe(`TD ${width}`,()=>{
     expect(await page.evaluate(k=>localStorage.getItem(k),TD_SAVE_KEY)).toBeNull();
   });
   test('undefended failure offers retry and stops simulation',async({page})=>{
-    const api=await mockApi(page);await page.clock.install();await page.goto('/game/td');await begin(page);await page.getByTestId('td-speed').click();await page.clock.runFor(90000);
+    const api=await mockApi(page);await page.clock.install();await page.goto('/game/td');await begin(page);await page.getByTestId('td-call-wave').click();await page.getByTestId('td-speed').click();await page.clock.runFor(90000);
     await expect(page.getByTestId('td-over-sheet')).toBeVisible();await expect(page.getByTestId('td-again')).toHaveText(t.retry);expect(api.finishes).toHaveLength(1);
     const tick=await page.getByTestId('td-board').getAttribute('data-tick');await page.clock.runFor(5000);await expect(page.getByTestId('td-board')).toHaveAttribute('data-tick',tick!);
   });

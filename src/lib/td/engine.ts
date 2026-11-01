@@ -8,7 +8,8 @@ import {
   type TdBatterPuddle, type TdProjectile, type TdState, type TdTower,
 } from "./types";
 
-export const validTdTick = (tick: number): boolean => Number.isSafeInteger(tick) && tick >= 0 && tick <= MAX_LEVEL_TICKS;
+/** Leave headroom for scheduled combat ticks without imposing a build-phase duration. */
+export const validTdTick = (tick: number): boolean => Number.isSafeInteger(tick) && tick >= 0 && tick <= Number.MAX_SAFE_INTEGER - MAX_LEVEL_TICKS;
 
 /** JSON-shaped exact keys; callWave uses slot -1 because it has no build slot. */
 export function validTdInput(input: unknown): input is TdInput {
@@ -32,7 +33,8 @@ export function createTdGame(opts: TdOptions): TdGame {
   const map = TD_MAPS[level.map], end = pathLength(map);
   const breadTiers = Array.from({ length: START_BREAD }, (_, i) => Math.floor(i * (tierCount - 1) / (START_BREAD - 1)));
   let tick = 0, coins = level.startCoins, wave = 0, waveTargetTier = breadTiers.at(-1) ?? -1;
-  let nextWaveTick: number | null = PREP_TICKS;
+  let nextWaveTick: number | null = null;
+  let startedTick: number | null = null;
   let spawnIndex = 0, spawnTick: number | null = null;
   let inputsAccepted = 0, inputsRejected = 0, over = false, passed = false;
   let nextPest = 1, nextProjectile = 1;
@@ -48,7 +50,8 @@ export function createTdGame(opts: TdOptions): TdGame {
     events.push({ type: "over", tick, passed, reason });
   };
   const startWave = (early: boolean) => {
-    const bonus = early ? Math.floor((nextWaveTick! - tick) / 60) * 3 : 0;
+    const bonus = early && nextWaveTick !== null ? Math.floor((nextWaveTick - tick) / 60) * 3 : 0;
+    if (startedTick === null) startedTick = tick;
     coins += bonus;
     wave++;
     waveTargetTier = breadTiers.at(-1) ?? -1;
@@ -115,13 +118,15 @@ export function createTdGame(opts: TdOptions): TdGame {
     }
   };
   const advance = (toTick: number) => {
+    // No simulation runs during the unlimited build phase, even for huge replay gaps.
+    if (startedTick === null) { tick = toTick; return; }
     // Inputs cannot change towers during an advance; reuse their stats across ticks.
     const combat = towers.map(tower => ({ tower, stats: towerStats(tower.kind, tower.level, tower.branch) }));
     sifters = combat.filter(({ tower }) => tower.kind === "flourSifter");
     while (!over && tick < toTick) {
       tick++;
       // Timeout wins all ties; spawn exits resolve before damage.
-      if (tick === MAX_LEVEL_TICKS) { finish("timeout"); break; }
+      if (tick - startedTick === MAX_LEVEL_TICKS) { finish("timeout"); break; }
       if (nextWaveTick !== null && tick >= nextWaveTick) startWave(false);
       if (spawnTick !== null && tick >= spawnTick) {
         const spec = level.waves[wave - 1].pests[spawnIndex++];
@@ -234,7 +239,7 @@ export function createTdGame(opts: TdOptions): TdGame {
       counts[pest.boss ? "boss" : pest.kind]++; return counts;
     }, { ant: 0, mouse: 0, sparrow: 0, beetle: 0, boss: 0 }) } : null,
     dropped: dropped.map(b => ({ ...b })), lost,
-    nextWaveTick, spawning: spawnTick !== null, over, passed, inputsAccepted, inputsRejected,
+    awaitingStart: startedTick === null, startedTick, nextWaveTick, spawning: spawnTick !== null, over, passed, inputsAccepted, inputsRejected,
     pests: pests.map(p => ({ ...p, carriedTiers: [...p.carriedTiers] })), towers: towers.map(t => ({ ...t,
       target: pests.some(p => p.id === t.target) ? t.target : null,
       cooldownProgress: t.lastAttackTick === null ? 100 : Math.min(100, Math.floor((tick - t.lastAttackTick) * 100 / Math.max(1, t.readyTick - t.lastAttackTick))),
@@ -245,7 +250,7 @@ export function createTdGame(opts: TdOptions): TdGame {
   return {
     state,
     step(toTick) {
-      if (!validTdTick(toTick) || toTick < tick) throw new RangeError("td: step needs a nondecreasing tick within the level cap");
+      if (!validTdTick(toTick) || toTick < tick) throw new RangeError("td: step needs a nondecreasing safe tick");
       events = []; advance(toTick); return cloneEvents();
     },
     apply(input) {
@@ -255,7 +260,7 @@ export function createTdGame(opts: TdOptions): TdGame {
       advance(input.tick);
       if (over) return reject();
       if (input.type === "callWave") {
-        if (nextWaveTick === null) return reject();
+        if (startedTick !== null && nextWaveTick === null) return reject();
         startWave(true);
       } else {
         const tower = towers.find(t => t.slot === input.slot);
