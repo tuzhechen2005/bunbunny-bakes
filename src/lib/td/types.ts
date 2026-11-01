@@ -1,4 +1,4 @@
-export const TD_ENGINE_VERSION = 6;
+export const TD_ENGINE_VERSION = 7;
 export const TICKS_PER_SECOND = 60;
 export const FIELD_WIDTH = 1440;
 export const FIELD_HEIGHT = 810;
@@ -33,10 +33,11 @@ export type TdInput =
   | { tick: number; type: "callWave"; slot: -1 };
 export interface TdPest extends TdPestSpec, TdPoint {
   id: number; wave: number; distance: number; maxHp: number; slowed: boolean; heading: number; carrying: number; carriedTiers: number[]; returning: boolean;
-  flourUntil: number; flourDamage: number; flourTower: number; flourChip: number;
+  stunnedUntil: number; floured: boolean; burning: boolean; vulnerability: number;
   burnUntil: number; burnTick: number; burnDamage: number; burnTower: number;
 }
 export interface TdTower extends TdPoint {
+  hitCount: number;
   slot: number; kind: TowerKind; level: number; spent: number; readyTick: number; tier: number; branch: TdBranch | null; target: number | null; cooldownProgress: number; lastAttackTick: number | null;
 }
 export interface TdProjectile extends TdPoint {
@@ -44,6 +45,7 @@ export interface TdProjectile extends TdPoint {
   fromX: number; fromY: number; targetX: number; targetY: number;
   bornTick: number; hitTick: number; damage: number; splash: number; strikes: number; knockback: number; burn: number; pierce: number;
 }
+export interface TdBatterPuddle extends TdPoint { radius: number; until: number }
 export interface TdDroppedBread extends TdPoint { id: number; distance: number; tier: number }
 export interface TdWavePreview { index: number; counts: Record<PestKind | "boss", number> }
 export type TdEvent =
@@ -64,6 +66,7 @@ export interface TdState {
   tick: number; seed: string; level: number; map: number; coins: number;
   bread: number; breadTiers: number[]; wave: number; waveTargetTier: number;
   nextWaveTick: number | null; nextWave: TdWavePreview | null; dropped: TdDroppedBread[]; lost: number; spawning: boolean;
+  batterPuddles: TdBatterPuddle[];
   pests: TdPest[]; towers: TdTower[]; projectiles: TdProjectile[];
   over: boolean; passed: boolean; inputsAccepted: number; inputsRejected: number;
   /** Detached events from the latest step/apply. Reading never drains them. */

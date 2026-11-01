@@ -40,13 +40,13 @@ it('burn continues after selling its source and pierce hits nearby additional pe
   burn.apply({ tick: 25, type: 'sell', slot: 0 });
   const ticks = burn.step(205).filter(e => e.type === 'hit');
   expect(ticks).toHaveLength(6);
-  expect(ticks.every(e => e.tower === 0 && e.damage === 16)).toBe(true);
+  expect(ticks.every(e => e.tower === 0 && e.damage === 28)).toBe(true);
   fixture.level!.waves[0].pests = Array.from({ length: 4 }, () => ({ kind: 'mouse', hp: 10000, armor: 0, speed: 32, bounty: 10 }));
   fixture.level!.waves[0].interval = 1;
   const pierce = setup('oven', 'b');
   const hits = pierce.step(25).filter(e => e.type === 'hit');
-  expect(hits).toHaveLength(3);
-  expect(new Set(hits.map(e => e.pest)).size).toBe(3);
+  expect(hits).toHaveLength(2);
+  expect(new Set(hits.map(e => e.pest)).size).toBe(2);
 });
 it('a boss takes three highest tiers, drops the whole stack, and dropped bread ignores passing thieves', () => {
   const spec: TdPestSpec = { kind: 'mouse', hp: 80, armor: 8, speed: 400, bounty: 80, boss: true };
@@ -86,22 +86,7 @@ it('clears five waves with dropped bread still in transit instead of waiting for
   expect(game.state().dropped.length).toBeGreaterThan(0);
 });
 
-it('sifter chips at exact tier DPS and coating lasts one second after sale', () => {
-  fixture.level!.waves[0].pests[0].speed = 16;
-  const game = setup('flourSifter', 'a');
-  let tick = 0;
-  while ((game.state().pests[0]?.y ?? 0) < 210) game.step(++tick);
-  const hp = game.state().pests[0].hp;
-  game.step(tick + 60);
-  expect(game.state().pests[0]).toMatchObject({ hp: hp - 16, slowed: true });
-  game.apply({ tick: tick + 60, type: 'sell', slot: 0 });
-  game.step(tick + 120);
-  expect(game.state().pests[0]).toMatchObject({ hp: hp - 32, slowed: true });
-  game.step(tick + 121);
-  expect(game.state().pests[0].slowed).toBe(false);
-});
-
-it.each([0, 1, 2])('sifter tier %i deals 6/10/16 DPS through armor and never hits sparrows', tier => {
+it.each([0, 1, 2])('sifter tier %i grounds birds and does not deal chip damage', tier => {
   fixture.level!.waves[0] = { interval: 1, pests: [
     { kind: 'beetle', hp: 10000, armor: 6, speed: 16, bounty: 1 },
     { kind: 'sparrow', hp: 10000, armor: 0, speed: 16, bounty: 1 },
@@ -111,43 +96,8 @@ it.each([0, 1, 2])('sifter tier %i deals 6/10/16 DPS through armor and never hit
   if (tier > 0) game.apply({ tick: 0, type: 'upgrade', slot: 0 });
   if (tier > 1) game.apply({ tick: 0, type: 'upgrade', slot: 0, branch: 'b' });
   game.apply({ tick: 0, type: 'callWave', slot: -1 });
-  // Measure a complete second inside the first vertical-run aura.
-  let tick = 0;
-  while ((game.state().pests[0]?.y ?? 0) < 210) game.step(++tick);
-  const before = game.state().pests;
-  game.step(tick + 60);
-  const after = game.state().pests;
-  expect(before[0].hp - after[0].hp).toBe([6, 10, 16][tier]);
-  expect(after[1]).toMatchObject({ hp: 10000, slowed: false });
-});
-
-it('branch a coating expires 60 ticks after the last tick inside its aura', () => {
-  fixture.level!.waves[0].pests[0].speed = 400;
-  const game = setup('flourSifter', 'a');
-  let lastInside = 0, outsideSlowed = false, expired = false;
-  for (let tick = 1; tick <= 150; tick++) {
-    const previous = game.state().pests[0];
-    if (previous && (previous.x - TD_MAPS[0].slots[0].x) ** 2 + (previous.y - TD_MAPS[0].slots[0].y) ** 2 <= 200 ** 2) lastInside = tick;
-    game.step(tick);
-    if (previous && lastInside && tick > lastInside) {
-      expect(game.state().pests[0].slowed).toBe(tick <= lastInside + 60);
-      outsideSlowed ||= tick <= lastInside + 60;
-      expired ||= tick > lastInside + 60;
-    }
-  }
-  expect([outsideSlowed, expired]).toEqual([true, true]);
-});
-
-it.each([0, 1])('overlapping tier-0 and tier-%i sifters apply only the strongest chip rate', tier => {
-  fixture.level!.waves[0].pests[0].speed = 16;
-  const game = createTdGame({ seed: 'combat-fixture' });
-  for (const slot of [0, 1]) game.apply({ tick: 0, type: 'place', slot, tower: 'flourSifter' });
-  if (tier) game.apply({ tick: 0, type: 'upgrade', slot: 1 });
-  game.apply({ tick: 0, type: 'callWave', slot: -1 });
-  let tick = 0;
-  while ((game.state().pests[0]?.y ?? 0) < 270 && tick < 1000) game.step(++tick);
-  const before = game.state().pests[0];
-  expect(before.y).toBe(270);
-  game.step(tick + 60);
-  expect(before.hp - game.state().pests[0].hp).toBe(tier ? 10 : 6);
+  game.step(400);
+  for (const pest of game.state().pests.slice(0, 2)) expect(pest).toMatchObject({ hp: 10000, floured: true, slowed: true, vulnerability: 25 });
+  game.apply({ tick: 400, type: 'sell', slot: 0 }); game.step(401);
+  expect(game.state().pests.every(p => !p.floured && !p.slowed && p.vulnerability === 0)).toBe(true);
 });

@@ -1,4 +1,4 @@
-# 保卫大面包 — L2 engine v6
+# 保卫大面包 — D7 engine v7
 
 Pure deterministic TypeScript, shared by client saves and authoritative server replay.
 No DOM, clock, photos, frame delta, or global randomness enters simulation. The server
@@ -6,7 +6,7 @@ continues deriving the weekly level from the same Monday and level number.
 
 ## Inputs, versions and saves
 
-Canonical seed: `v6.td.<Monday YYYY-MM-DD>.<positive level>`. Versions 1–5 runs and saves
+Canonical seed: `v7.td.<Monday YYYY-MM-DD>.<positive level>`. Versions 1–6 runs and saves
 are rejected. `TD_ENGINE_VERSION` also drives the existing save key and server gate.
 Pass either `{ seed, tierCount }` or `{ level: tdLevel(week, n), tierCount }` to
 `createTdGame`; descriptors are regenerated from their seed, never trusted.
@@ -24,7 +24,7 @@ Inputs have exact keys, safe integer ticks (0–18000), and slots 0–10:
 
 Branch is required only for the second upgrade; supplying it earlier is rejected.
 There is no hero skill. Sell refunds half the total spend, floored. Upgrade retains
-the current cooldown. A sold tower's existing shots and burns remain active.
+the current cooldown. A sold tower's existing shots, puddles and burns remain active.
 Malformed inputs do not advance time; legal-shaped rejected actions advance first.
 Replay validates the entire log, including its tail, before simulation. Limits remain
 2000 inputs, 120 ignored actions, five minutes, 60 ticks/second. Same-tick log order
@@ -48,7 +48,7 @@ and snapshots use integers. Failure occurs at ten lost pieces (or timeout). Pass
 requires all five waves complete, no living pests, and ≥1 bread (including drops
 still rolling home).
 
-Wave five contains exactly one **大胃王鼠**: `kind: 'mouse', boss: true`, speed 20,
+Wave five contains exactly one **大胃王鼠**: `kind: 'mouse', boss: true`, speed 16,
 bounty 80. L1–L3 use armor 4 and HP `400 + 120 * (level - 1)`; later levels
 use armor 8 and HP `600 + 180 * min(level - 1, 999)`. It takes up to three highest
 remaining breads at once and drops the complete stack if killed.
@@ -66,31 +66,67 @@ from the top-left, running down/up/down as they sweep left to right, and ending 
 spaced slots; every slot covers path within the shortest base tower range (150).
 `TD_SLOT_RADIUS = 42` remains a 21 CSS-pixel radius at a 720-pixel-wide board.
 Map rotation remains `floor((level - 1) / 4) % 3`.
-Damage towers retain their previous tier stats. Sifters slow by 40% / 50% / 60% and
-chip ground pests for 6 / 10 / 16 DPS, ignoring armor. Integer accumulation preserves
-exact DPS without fractional HP. Tier 2 adds these branch effects:
+D7 gives every base tower a role, retained through both upgrades:
 
-| Tower | a | b |
-| --- | --- | --- |
-| Rolling pin | Two armored hits per attack | Push target 48 field units against its travel direction |
-| Flour sifter | 65% ground slow, retained for 1 second after leaving the aura | 310-unit aura |
-| Whisk | 140-unit splash | 24-tick attack interval |
-| Oven | 16 damage every 30 ticks for 180 ticks; refreshes without stacking | 430 range and two extra targets in a 40-unit half-width, 150-unit continuation corridor |
+| Tower | Base mechanic | Tier 2 a | Tier 2 b |
+| --- | --- | --- | --- |
+| Rolling pin | Fast single target; every third successful strike stuns for 24 ticks | Two separately armored strikes | Push 48 field units against travel direction |
+| Whisk | Splash; impact leaves 30% slow batter for 120 ticks | 140-unit splash/puddle | 24-tick attack interval |
+| Flour sifter | 40% slow and +25% damage taken; grounds birds | 65% slow and +40% damage taken | 310-unit aura |
+| Oven | Long range, big hit; 8/12/16 burn damage every 30 ticks for 180 ticks | 28 burn damage | 430 range; primary plus one target in line |
 
-Sparrows ignore flour auras. Only the strongest slow and chip rate apply, including overlapping auras and lingering
-coating. Coating persists after selling the source too. Armor subtracts per
-hit (minimum one damage). Stable targeting prefers greatest path distance, then
-oldest pest ID; towers fire in slot order. Projectile stats are fixed at firing.
+Tier 1 retains each mechanic and improves its numbers. Base damage is rounded up
+from a 30% increase: pin 24, whisk 29, oven 124. Sifter no longer chips HP.
+Armor subtracts per hit (minimum one). Flour vulnerability is applied afterward
+with integer flooring, including burns.
+Overlapping flour uses the strongest slow and vulnerability, never adds them.
+Batter and flour slow use the maximum. Flour ends immediately outside its aura;
+grounded sparrows use the mouse-to-sparrow speed ratio (34/56), then slow applies.
+Unfloured sparrows can only be hit by pin and oven; whisk checks this both when
+choosing a target and at impact. Batter cannot slow an unfloured bird.
+
+A burning death spreads to exactly one living pest within 120 units, nearest then
+oldest ID. Burn refreshes without stacking or postponing its next damage tick;
+stronger active burn wins. A lethal oven hit can spread its newly applied burn.
+Burn and shots survive sale. Pin hit counts belong to the firing tower, even when
+its slot is sold/replaced. Double strikes count independently; dead targets do not
+count. Stun prevents movement while `tick < stunnedUntil`.
+
+Stable targeting prefers greatest path distance, then oldest pest ID; towers fire
+in slot order. Projectile stats are fixed at firing. Pierce continues beyond the
+target in a 40-unit half-width, 150-unit corridor, choosing the closest projection
+then oldest ID. All simulation arithmetic and snapshot numbers are integers.
+
+### UI copy (each line at most 16 characters)
+
+```text
+擀面杖：每打3下，晕一下
+a：一下打两次
+b：把害虫往回推
+打蛋器：溅一片，面糊减速
+a：溅得更大一片
+b：打得更快
+筛粉器：减速，多挨25%伤
+麻雀沾粉就落地
+a：更慢，多挨40%伤
+b：撒粉范围更大
+烤箱：重击烧伤，死后传火
+a：烧得更疼
+b：一发穿两只，打更远
+```
 
 Pests expose `x`, `y`, `heading` (screen degrees, 0=right, 90=down), `hp`, `maxHp`,
-`carrying`, `carriedTiers`, `slowed`, `returning`, and optional `boss: true`.
+`carrying`, `carriedTiers`, `slowed`, `returning`, `stunnedUntil` (tick),
+`floured` and `burning` (booleans), and optional `boss: true`.
+The top-level `batterPuddles` array contains detached `{ x, y, radius, until }`
+objects; puddles expire when `tick >= until`.
 Towers expose `kind`, `tier`, `branch` (null before tier 2), `slot`, `target` (pest ID
 or null), `cooldownProgress` (integer 0–100, 100=ready), `lastAttackTick` (null before
-first shot), plus retained `level`, position, spend and ready-tick fields.
+first shot), `hitCount` (successful pin strikes, starts at zero), plus retained `level`, position, spend and ready-tick fields.
 
 Drawing events include:
 
-- `hit { pest, tower, damage, projectile }` (`tower` is its slot; burn/flour projectile is 0).
+- `hit { pest, tower, damage, projectile }` (`tower` is its slot; burn projectile is 0).
 - `kill { pest, bounty, x, y }`.
 - `pickup`, `drop`, `lose { pest, tiers, x, y }`; `recover { bread, tier, x, y }`.
 - `place`, `upgrade { slot, tower, tier, branch }`, `sell { slot, refund }`.
@@ -99,48 +135,55 @@ Drawing events include:
 Every event also has `tick`. Events and nested arrays are detached from engine state.
 `step` / `apply` return or expose only that operation's events; reading does not drain
 or advance anything. Do not consume both returned and snapshot event batches.
-Per tick: timeout, start/spawn, recover rolling bread, move/pickup/lose, flour chip damage, burn damage,
+Per tick: timeout, start/spawn, recover rolling bread, move/pickup/lose, refresh flour membership, burn damage,
 projectile impacts, tower attacks, clear check. Spawn exit beats damage on the same tick.
 
 ## Calibration and verification
 
-`tests/support/tdBot.ts` uses public geometry/stats and a 2 Hz purchase cadence. It
-scores damage coverage per coin, saves for the best next purchase instead of spending
-every 60 coins on a cheap filler tower, chooses between both branches, values flour
-chip DPS and nearby ground-tower support, and calls the next wave early only when no pests remain. Random purchases use
-a deterministic independent RNG and choose branches too. Tuning uses 100 Monday seeds
-starting 2026-01-05; a second disjoint regression window uses the following 100 Mondays.
+`tests/support/tdBot.ts` uses public geometry/stats at a 2 Hz purchase cadence.
+It scores coverage per coin, includes burn and flour support, and discounts
+repeated roles to value combinations. It saves for its best next purchase,
+chooses upgrade branches, and calls early only when no pests remain. Random
+purchases use an independent deterministic RNG. Neither bot reads future waves.
 
-L2 targets supersede D161/D162: greedy L1 100%, L3 approximately 90%, L5
-approximately 75%, L10 approximately 50%, L20 approximately 20%; random L1 ≥30%.
-Both 100-week windows must meet these targets (±10 percentage points except L1).
-Random later-level wins no longer have a near-zero gate; ≥90% of greedy runs
-must still build a sifter. The same public-information bot is used without strategy changes.
+Targets: greedy L1 100%, L3 ≈95%, L5 ≈85%, L10 ≈60%, L20 ≈25%; random
+L1 ≥50%. Two disjoint 100-Monday windows start at 2026-01-05 and 2027-12-06.
+Approximate targets allow ±10 percentage points; all-four purchases must occur
+in a majority of runs, with sifters in at least 90%.
 
-Measured v6 greedy passes (100 Mondays per window):
+Pest speed is 80% of v6 (integer floor), including the boss (20 → 16).
+L1–L5 ordinary wave counts are 70% of the former formula, rounded down.
+HP growth starts at 50 rather than 65; the late growth increment remains bounded.
+The L3 layout pressure is softened from 156 to 125. L5–L8 layout multipliers are 115→100 to account for the new splash/control
+combination on that board. Starting coins are 340 through L5, 240 through L10,
+then +58 per level up to 820 at L20. This replaces v6's large opening subsidy;
+bounties are unchanged. Map geometry is unchanged.
 
-| Level | Window A | Window B | Target |
+Measured v7 results (100 Mondays per window):
+
+| Level | Greedy A | Greedy B | Target |
 | --- | ---: | ---: | ---: |
-| 1 | 100% | 100% | 100% |
-| 3 | 88% | 93% | ≈90% |
-| 5 | 78% | 76% | ≈75% |
-| 10 | 45% | 43% | ≈50% |
-| 20 | 17% | 22% | ≈20% |
+| 1 | 100% | 100% | ≈100% |
+| 3 | 97% | 98% | ≈95% |
+| 5 | 87% | 84% | ≈85% |
+| 10 | 68% | 52% | ≈60% |
+| 20 | 22% | 20% | ≈25% |
 
-Random L1 passes are 100% in both windows. All greedy checkpoint runs build a
-sifter. Intermediate levels were also sampled in ten-week batches to remove
-severe cliffs after map changes; individual weeks and map transitions need not
-produce a strictly decreasing win rate. Splash-only play can now win favorable
-late weeks, while pin-only, sifter-only and oven-only regression strategies still
-fail the late mixed-wave checks.
+Random L1 passes: 99% in both windows. Tower mix below is the percentage of
+greedy runs buying at least one of each kind (A / B), not a forced purchase quota.
 
-Opening coins are 340 (previously 300), plus the existing temporary +100 combo
-allowance centered on L10 and late +102/level ramp through L20. Ordinary L1–L3
-pests award one extra coin. HP growth starts at 65 rather than 79; the early
-mixed-swarm term is reduced from 454 to 300. Layout multipliers interpolate between
-anchors in `level.ts`, accounting for different route lengths and firing windows.
-The early boss is softer; tower statistics, five-wave curriculum, preparation,
-bread recovery and authoritative replay rules remain intact.
+| Level (map) | Pin | Whisk | Sifter | Oven | All four |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 (1) | 100 / 100 | 100 / 100 | 100 / 100 | 100 / 100 | 100 / 100 |
+| 3 (1) | 100 / 100 | 100 / 100 | 100 / 100 | 100 / 100 | 100 / 100 |
+| 5 (2) | 100 / 100 | 87 / 85 | 100 / 100 | 100 / 100 | 87 / 85 |
+| 10 (3) | 99 / 100 | 68 / 51 | 100 / 100 | 100 / 100 | 68 / 51 |
+| 20 (2) | 100 / 100 | 100 / 100 | 100 / 100 | 100 / 100 | 100 / 100 |
+
+Each map has a majority of runs using all four roles in both windows.
+D7 permits pin-only and oven-only wins on favorable weeks; the former blanket
+single-kind failure assertion is replaced by combat interaction coverage and the
+measured four-role mix. A sifter-only defense cannot clear.
 
 ## L2 vertical-S layout
 
@@ -171,7 +214,7 @@ towers along one side of a gap and upgrading ovens for the opposite run.
 ![Five vertical runs](../../../assets-src/td/map-3-overview.svg)
 
 The five-level curriculum introduces ants, mice, mixed ants/mice, sparrows and
-beetles in L1–L5. Sparrows follow the route but ignore flour slow/chip. Each level
+beetles in L1–L5. Sparrows follow the route and are grounded inside flour auras. Each level
 uses demonstration, pressure, combinations, recovery, then a mixed boss finale.
 Beetle armor starts at 6 in L5, rises by 10/level and caps at 54; HP remains 20% of
 the ordinary species curve. Map rotation is still four levels per board.
@@ -186,11 +229,11 @@ Geometry tests cover run count/direction, rounded vertices, spacing, coverage an
 plate clearance; asset packing rejects stale coordinates or source hashes.
 No browser is used and `src/components/**` / `src/app/game/**` are not edited.
 
-Verified on 2026-11-01: TypeScript and ESLint pass. Both TD 100-week regression
-windows pass. The full unit run has 1,179 passing tests and two unrelated failures
-in the unchanged `tests/unit/m3Interactions.test.ts` (edge/short touch cases;
-its board stub lacks `getBoundingClientRect`, also producing two unhandled errors).
-No M3 UI files were changed. All 828 DB tests pass against `bunbunny_lvl2_test`;
-the 10 TD integration/migration tests also pass after final tuning. Docker Blender
-and packing validate all 25 atlases / 43 frames at 250,353 bytes; the decoded preview
-was inspected offline. No browser or commit was used.
+Verified 2026-11-01: TypeScript and ESLint pass. All 1,185 non-calibration unit
+tests pass; all ten 100-week calibration cases pass (L5 cases rerun after the
+final L5-only adjustment: 87% / 84%). All 828 DB tests pass against
+`bunbunny_d7_test`; the nine TD integration tests pass again after engine changes.
+The final focused engine/identity check passes 27 tests. Version fixtures cover
+v7 seeds/save keys and v6 rejection in saves and server replay. E2E fixture
+assertions are updated but browsers were not run. No component/game page files
+were changed, and no commit was created.

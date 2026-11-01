@@ -26,7 +26,7 @@ it('previews exact next-wave counts and puts exactly one boss in wave five', () 
     const events = game.step(game.state().tick + 1 + (level.waves[wave].pests.length - 1) * level.waves[wave].interval);
     if (wave === 4) {
       expect(events.filter(e => e.type === 'bossSpawn')).toHaveLength(1);
-      expect(game.state().pests.find(p => p.boss)).toMatchObject({ kind: 'mouse', armor: 4, speed: 20, carrying: 0 });
+      expect(game.state().pests.find(p => p.boss)).toMatchObject({ kind: 'mouse', armor: 4, speed: 16, carrying: 0 });
     }
   }
   expect(game.state().nextWave).toBeNull();
@@ -73,7 +73,7 @@ it('gives every branch its distinct integer combat stats and makes the bot choos
   expect(towerStats('whisk', 2, 'a').splash).toBeGreaterThan(towerStats('whisk', 2, 'b').splash);
   expect(towerStats('whisk', 2, 'b').cooldown).toBeLessThan(towerStats('whisk', 2, 'a').cooldown);
   expect(towerStats('oven', 2, 'a').burn).toBeGreaterThan(0);
-  expect(towerStats('oven', 2, 'b').pierce).toBe(2);
+  expect(towerStats('oven', 2, 'b').pierce).toBe(1);
   expect(greedyTd(tdLevel('2026-10-26', 1)).inputs.some(i => i.type === 'upgrade' && i.branch)).toBe(true);
 });
 

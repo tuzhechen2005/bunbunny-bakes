@@ -2,25 +2,28 @@ import { expect, it } from "vitest";
 import { tdLevel } from "@/lib/td";
 import { greedyTd, randomTd, tdBotWeeks } from "../support/tdBot";
 
-it.each([0, 100])("keeps landscape progression and random play inside the tuning bounds (week offset %i)", (offset) => {
-  const rates = [1, 3, 5, 10, 20].map(n => {
-    const weeks = tdBotWeeks(100, offset);
-    const greedy = weeks.map(week => greedyTd(tdLevel(week, n)));
-    const random = n === 1 ? weeks.map(week => randomTd(tdLevel(week, n)).state) : [];
-    const rate = {
-      level: n, greedy: greedy.filter(s => s.state.passed).length,
-      random: n === 1 ? random.filter(s => s.passed).length : null,
-      sifters: greedy.filter(s => s.inputs.some(i => i.type === "place" && i.tower === "flourSifter")).length,
-    };
-    process.stdout.write(`TD checkpoint: ${JSON.stringify({ offset, ...rate })}\n`);
-    return rate;
-  });
-  process.stdout.write(`TD passes / 100 weeks: ${JSON.stringify(rates)}\n`);
-  for (const rate of rates) expect(rate.sifters).toBeGreaterThanOrEqual(90);
-  expect(rates[0].greedy).toBe(100);
-  expect(rates[0].random).toBeGreaterThanOrEqual(30);
-  for (const [index, target] of [[1, 90], [2, 75], [3, 50], [4, 20]]) {
-    expect(rates[index].greedy).toBeGreaterThanOrEqual(target - 10);
-    expect(rates[index].greedy).toBeLessThanOrEqual(target + 10);
+const checkpoints = [0, 100].flatMap(offset => [[1, 100], [3, 95], [5, 85], [10, 60], [20, 25]]
+  .map(([level, target]) => ({ offset, level, target })));
+
+it.each(checkpoints)("keeps level $level inside tuning bounds (week offset $offset)", ({ offset, level, target }) => {
+  const weeks = tdBotWeeks(100, offset);
+  const greedy = weeks.map(week => greedyTd(tdLevel(week, level)));
+  const random = level === 1 ? weeks.map(week => randomTd(tdLevel(week, level)).state) : [];
+  const rate = {
+    level, greedy: greedy.filter(s => s.state.passed).length,
+    random: level === 1 ? random.filter(s => s.passed).length : null,
+    mix: Object.fromEntries(['rollingPin', 'whisk', 'flourSifter', 'oven'].map(kind => [kind,
+      greedy.filter(s => s.inputs.some(i => i.type === 'place' && i.tower === kind)).length])),
+    allFour: greedy.filter(s => new Set(s.inputs.filter(i => i.type === 'place').map(i => i.tower)).size === 4).length,
+  };
+  process.stdout.write(`TD checkpoint: ${JSON.stringify({ offset, ...rate })}\n`);
+  expect(rate.mix.flourSifter).toBeGreaterThanOrEqual(90);
+  expect(rate.allFour).toBeGreaterThan(50);
+  if (level === 1) {
+    expect(rate.greedy).toBe(100);
+    expect(rate.random).toBeGreaterThanOrEqual(50);
+  } else {
+    expect(rate.greedy).toBeGreaterThanOrEqual(target - 10);
+    expect(rate.greedy).toBeLessThanOrEqual(target + 10);
   }
-}, 600_000);
+}, 180_000);
