@@ -204,7 +204,7 @@ export function createRunGL(canvas: HTMLCanvasElement, art: RunArt): RunView | n
         if (s.powerUps.magnetTicks > 0 && z < 14) x += (bunnyX - x) * Math.min(1, (14 - z) / 10);
         const a = manifest.assets["loaf-spin"], f = a.frames[quiet ? 0 : Math.floor((s.tick + o.id * 3) / 5) % a.frames.length];
         shadow(x, z, .9, .5, .7);
-        billboard("loaf-spin", f, x, .55 + bob, z, SIZES.bread);
+        billboard("loaf-spin", f, x, (o.y ?? 0) / 1000 + .55 + bob, z, SIZES.bread * (o.value === 5 ? 1.6 : 1));
         return;
       }
       case "paper-bag": case "coffee": {

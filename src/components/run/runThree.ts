@@ -99,6 +99,14 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   // ---- props pool keyed by engine object id ----------------------------------------
   const templates = new Map<string, THREE.Group>();
   for (const node of new Set(Object.values(KIND_NODE))) { const o = propsG.scene.getObjectByName(node); if (o) templates.set(node, bake(o)); }
+  // Golden loaf (value 5): the bread mesh, bigger, in glowing gold.
+  const breadT = templates.get("bread");
+  if (breadT) {
+    const gold = breadT.clone(true); gold.scale.setScalar(1.6);
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xf2c14e, emissive: 0xc98a1a, emissiveIntensity: .55, roughness: .35, metalness: .3 });
+    gold.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) m.material = goldMat; });
+    templates.set("breadGold", gold);
+  }
   const puddle = templates.get("puddle");
   puddle?.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) m.material = new THREE.MeshStandardMaterial({ color: 0x3f8fd0, emissive: 0x2a6ea8, emissiveIntensity: .45, roughness: .1, metalness: .1 }); });
   const free = new Map<string, THREE.Object3D[]>();
@@ -114,7 +122,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   let width = 1, height = 1, last = performance.now(), lastTick = -1;
 
   function placeObject(o: RunObject, s: RunState, bunnyX: number) {
-    const node = KIND_NODE[o.kind]; if (!node || !templates.has(node)) return;
+    const node = o.kind === "bread" && o.value === 5 ? "breadGold" : KIND_NODE[o.kind]; if (!node || !templates.has(node)) return;
     let entry = live.get(o.id);
     if (!entry) { entry = { node, o: take(node), shadow: takeShadow() }; live.set(o.id, entry); }
     seen.add(o.id);
@@ -122,10 +130,10 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
     const z = o.z * MM;
     if (o.kind === "bread") {
       if (s.powerUps.magnetTicks > 0 && z < 6) x += (bunnyX - x) * Math.min(1, (6 - z) / 4);
-      y = .5 + Math.sin((s.tick + o.id * 13) * .12) * .08;
+      y = (o.y ?? 0) * MM + .5 + Math.sin((s.tick + o.id * 13) * .12) * .08;
       entry.o.rotation.y = s.tick * .06 + o.id;
     } else if (o.kind === "paper-bag" || o.kind === "coffee") {
-      y = .45 + Math.sin((s.tick + o.id * 13) * .12) * .1; entry.o.rotation.y = s.tick * .04;
+      y = (o.y ?? 0) * MM + .45 + Math.sin((s.tick + o.id * 13) * .12) * .1; entry.o.rotation.y = s.tick * .04;
     }
     entry.o.position.set(x, y, z);
     // Vans/trucks/ramps stretch along Z to the engine footprint (models are 6 m / 2 m long).
@@ -138,7 +146,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
     const kind: string = o.kind; // v5 adds ramp/van/truck
     const big = kind === "cart" || kind === "van" || kind === "truck";
     entry.shadow.visible = kind !== "puddle" && kind !== "ramp";
-    entry.shadow.position.set(x, .03, z); entry.shadow.scale.set(big ? 2.2 : .9, 1, big ? 2.4 : .6);
+    entry.shadow.position.set(x, (o.y ?? 0) * MM + .03, z); entry.shadow.scale.set(big ? 2.2 : .9, 1, big ? 2.4 : .6);
   }
 
   function draw(s: RunState, quiet: boolean, crashFrame: number | null) {
