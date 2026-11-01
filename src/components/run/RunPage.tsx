@@ -12,13 +12,12 @@ import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import { useGameHub } from "@/components/game/useGameHub";
 import { useLiveProgress } from "@/components/game/useLiveProgress";
-import { GameMenuHero, GameRegistrationField, GameShell as Shell, SpeakerButton, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
+import { GameMenuHero, GameRegistrationField, GameResultArt, GameShell as Shell, SpeakerButton, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { copy } from "@/copy";
 import { elapsedTick } from "./runClock";
 import { fetchMenu } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { RunBoard, type RunProgress } from "./RunBoard";
-import { RunRules } from "./RunArt";
 import type { RunInput } from "@/lib/run";
 import { preloadRunArt } from "./runAssets";
 import { fetchRunLeaderboard, finishRun, startRun } from "./runApi";
@@ -328,7 +327,6 @@ export function RunPage() {
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
           <GameMenuHero game="run" title={t.title} hint={t.startHint} />
-          <RunRules />
           {formError ? <p role="alert" className="text-sm text-c-red">{formError}</p> : null}
           <p className="mt-2 text-xs leading-relaxed text-c-grey">{t.rules}</p>
           {/* Keep the full line's space, including wrapping, while the hub loads or fails. */}
@@ -545,6 +543,7 @@ export function RunPage() {
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
+          <GameResultArt record={finish.state === "ok" && !!finish.result.newRecord} />
           <h2 className="font-display m-0 text-center text-[28px] leading-none tracking-[-0.03em]">{g.overTitle}</h2>
           <p className="m-0 mt-5 text-center text-xs font-bold text-c-grey">{g.finalScore}</p>
           <p className="font-num m-0 text-center text-[56px] leading-[1.1]" data-testid="run-final-score">

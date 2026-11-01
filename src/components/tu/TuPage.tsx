@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { GameMenuHero, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
+import { GameMenuHero, GameResultArt, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { GameTutorial } from "@/components/game/GameTutorial";
 import { fill } from "@/components/customer/format";
 import { LeaderboardView } from "@/components/game/LeaderboardView";
@@ -568,6 +568,7 @@ export function TuPage() {
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
+          <GameResultArt record={finish.state === "ok" && !!finish.result.newRecord} />
           <h2 className="font-display m-0 text-center text-[28px] leading-none tracking-[-0.03em]">{g.overTitle}</h2>
           {capReached ? (
             <p className="m-0 mt-3 text-center text-sm text-c-grey" data-testid="tu-cap-reason">{t.capReached}</p>

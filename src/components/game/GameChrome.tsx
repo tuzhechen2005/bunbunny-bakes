@@ -51,3 +51,10 @@ export function GameMenuHero({ game, title, hint, compact = false, children }: {
     </div>
   </header>;
 }
+
+/** Result-screen clay art: a crown for a new record, a cheer for a good run, a cute sigh otherwise. */
+export function GameResultArt({ record = false, lose = false }: { record?: boolean; lose?: boolean }) {
+  const name = record ? 'record' : lose ? 'lose' : 'win';
+  // eslint-disable-next-line @next/next/no-img-element -- static clay art
+  return <img className={`game-result-art game-result-${name}`} src={`/brand/art/result-${name}.webp`} alt="" draggable={false} />;
+}

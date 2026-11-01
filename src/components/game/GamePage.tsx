@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { GameMenuHero, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
+import { GameMenuHero, GameResultArt, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { GameTutorial } from "@/components/game/GameTutorial";
 import { RollNumber } from "@/components/customer/checkout/RollNumber";
 import { fill } from "@/components/customer/format";
@@ -610,6 +610,7 @@ export function GamePage() {
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
+          <GameResultArt record={finish.state === "ok" && !!finish.result.newRecord} />
           <h2 className="font-display m-0 text-center text-[28px] leading-none tracking-[-0.03em]">{t.overTitle}</h2>
           <p className="m-0 mt-5 text-center text-xs font-bold text-c-grey">{t.finalScore}</p>
           <p className="font-num m-0 text-center text-[56px] leading-[1.1]" data-testid="game-final-score">

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { GameTutorial } from '@/components/game/GameTutorial';
 import { TopBar } from '@/components/ui/TopBar';
 import { focusRing } from '@/components/ui/focus';
-import { GameShell, SpeakerButton, GameRegistrationField, GameMenuHero, gamePrimary, gameSecondary } from '@/components/game/GameChrome';
+import { GameShell, SpeakerButton, GameRegistrationField, GameMenuHero, GameResultArt, gamePrimary, gameSecondary } from '@/components/game/GameChrome';
 import { copy } from '@/copy';
 import { fill } from '@/components/customer/format';
 import { readRemembered, writeRemembered, isRetryable } from '@/components/game/gameApi';
@@ -134,6 +134,7 @@ export function TdPage() {
       <button className={gameSecondary} data-testid="td-keep-playing" onClick={() => setDialog(null)}>{g.keepPlaying}</button>
     </Sheet>}
     {phase === 'over' && showResult && <Sheet label={result?.passed ?? localPassed ? t.win : t.fail} onClosed={() => setShowResult(false)} panelTestId="td-over-sheet" className="td-sheet">
+      <GameResultArt record={!!result?.newRecord} lose={!(result?.passed ?? localPassed)} />
       <h2>{(result?.passed ?? localPassed) ? t.win : t.fail}</h2>
       {submitting ? <p role="status">{g.submitting}</p> : error ? <><p role="alert" className="m-0 text-sm text-c-red">{error}</p>{retry && <button className={gameSecondary} data-testid="td-retry" onClick={() => void submit(progress.current)}>{g.retry}</button>}</> : result && <>
         <p data-testid="td-confirmed">{g.confirmed}</p><p>{t.levels} <b>{result.best}</b></p>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { GameMenuHero, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
+import { GameMenuHero, GameResultArt, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { GameTutorial } from "@/components/game/GameTutorial";
 import { fill } from "@/components/customer/format";
 import { LeaderboardView } from "@/components/game/LeaderboardView";
@@ -604,6 +604,7 @@ export function M3Page() {
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
+          <GameResultArt lose={!passed} />
           <h2 className="font-display m-0 text-center text-[28px] leading-none tracking-[-0.03em]">{passed ? t.win : t.fail}</h2>
           <p className="m-0 mt-5 text-center text-xs font-bold text-c-grey">{g.finalScore}</p>
           <p className="font-num m-0 text-center text-[56px] leading-[1.1]" data-testid="m3-final-score">
