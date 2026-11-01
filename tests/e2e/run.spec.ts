@@ -55,9 +55,10 @@ for(const width of [320,390])test.describe(`RUN ${width}px`,()=>{
   const boxes=await Promise.all(["big","tu","m3","grab","run","td"].map(k=>page.getByTestId(`hub-game-${k}`).boundingBox()));
   expect(boxes[0]!.y).toBe(boxes[1]!.y);expect(boxes[2]!.y).toBe(boxes[3]!.y);expect(boxes[4]!.y).toBeGreaterThan(boxes[3]!.y);expect(boxes[4]!.width).toBe(boxes[0]!.width);expect(boxes[4]!.y).toBe(boxes[5]!.y);
   expect(boxes[4]!.height).toBeGreaterThanOrEqual(boxes[0]!.height*.9);
-  const icon=runner.locator("img");
-  await expect(icon).toHaveAttribute("src","/brand/run.svg");
-  await expect(icon).toHaveJSProperty("naturalWidth",56);
+  // D167: hub cards show the clay card art (the flat icon stays only as a fallback).
+  const icon=runner.locator("img").first();
+  await expect(icon).toHaveAttribute("src","/brand/art/card-run.webp");
+  await expect(icon).toHaveJSProperty("naturalWidth",600);
   const iconBox=(await icon.boundingBox())!,titleBox=(await runner.getByRole("heading").boundingBox())!,bestBox=(await runner.getByTestId("hub-best").boundingBox())!;
   expect(titleBox.y).toBeGreaterThanOrEqual(iconBox.y+iconBox.height);
   expect(bestBox.x).toBe(titleBox.x);expect(bestBox.y).toBeGreaterThanOrEqual(titleBox.y+titleBox.height);
