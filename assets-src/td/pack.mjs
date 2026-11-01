@@ -141,7 +141,7 @@ async function thumb(id, frame, x, y, width, height) {
     { fit: 'contain', background: '#00000000' }).png().toBuffer(), left: x, top: y });
 }
 label('BUNBUNNY / BAKERY DEFENSE', 32, 46, 30);
-label('L1 · Blender clay · 55° camera · 2x render + Lanczos · decoded WebP review', 32, 80, 18);
+label('L2 vertical S · Blender clay · 55° camera · 2x render + Lanczos · decoded WebP review', 32, 80, 18);
 for (let i = 0; i < 3; i++) {
   const x = 32+i*490;
   label(['01 / MAPLE KITCHEN COUNTER', '02 / TILED BAKERY SHOP', '03 / BACK HERB GARDEN'][i], x, 116, 18);
@@ -151,6 +151,8 @@ for (let i = 0; i < 3; i++) {
   const sx = 284/1440, sy = 160/810;
   const end = data.path.at(-1), prev = data.path.at(-2);
   const plate = end.map((v, axis) => v - Math.sign(v - prev[axis]) * 40);
+  const overview = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 810" role="img" aria-label="${data.name}: ${i+3} vertical runs and numbered tower slots"><rect width="1440" height="810" fill="#faf2e6"/>${[86,74].map((width,j) => `<polyline points="${data.path.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${j ? '#e4d4be' : '#bda38c'}" stroke-width="${width}" stroke-linejoin="round"/>`).join('')}<circle cx="${plate[0]}" cy="${plate[1]}" r="75" fill="#fff" stroke="#ac7c63" stroke-width="4"/><text x="${plate[0]}" y="${plate[1]+10}" text-anchor="middle" font-family="sans-serif" font-size="26">Plate</text>${data.slots.map(([px,py],slot)=>`<circle cx="${px}" cy="${py}" r="${slotRadius}" fill="#d3e5da" stroke="#376657" stroke-width="3"/><text x="${px}" y="${py+11}" text-anchor="middle" font-family="sans-serif" font-size="30">${slot+1}</text>`).join('')}</svg>`;
+  await writeFile(resolve(root, `map-${i+1}-overview.svg`), overview+'\n');
   const overlay = `<svg width="284" height="160"><polyline points="${data.path.map(([px, py]) => `${px*sx},${py*sy}`).join(' ')}" fill="none" stroke="#d13c52" stroke-width="1.4"/><circle cx="${plate[0]*sx}" cy="${plate[1]*sy}" r="15" fill="#fff8" stroke="#a36b43"/>${data.slots.map(([px, py], slot) => `<circle cx="${px*sx}" cy="${py*sy}" r="${slotRadius*sx}" fill="#e8f0e9" stroke="#26636b" stroke-width="1"/><text x="${px*sx}" y="${py*sy+3}" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#17453e">${slot+1}</text>`).join('')}</svg>`;
   const small = await sharp(thumbs.get(`map-${i+1}:0`)).resize(284, 160).composite([{ input: Buffer.from(overlay) }]).png().toBuffer();
   review.push({ input: small, left: x+85, top: 430 });

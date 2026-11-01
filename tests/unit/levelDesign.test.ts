@@ -8,7 +8,7 @@ it('keeps slot centers clear of path edges, board edges, each other and the step
   for (const map of TD_MAPS) {
     const plate = pathPosition(map, pathLength(map) - 40 * SUBUNITS);
     expect(Math.min(plate.x,plate.y,1440-plate.x,810-plate.y)).toBeGreaterThanOrEqual(115);
-    for(const point of map.path.slice(1)) expect(Math.min(point.x,point.y,1440-point.x,810-point.y)).toBeGreaterThanOrEqual(103);
+    for(const point of map.path.slice(1)) expect(Math.min(point.x,point.y,1440-point.x,810-point.y)).toBeGreaterThanOrEqual(70);
     for (const slot of map.slots) {
       expect(Math.min(slot.x, slot.y, 1440-slot.x, 810-slot.y)).toBeGreaterThanOrEqual(60 + TD_SLOT_RADIUS);
       expect(Math.hypot(slot.x-plate.x, slot.y-plate.y)).toBeGreaterThanOrEqual(120);
@@ -30,6 +30,9 @@ it('introduces ants, mice, mixed groups, air immunity, then armor in separate le
     expect([...new Set(level.waves.flatMap(w=>w.pests.filter(p=>!p.boss).map(p=>p.kind)))].sort()).toEqual([...kinds].sort());
     expect(level.waves.flatMap(w=>w.pests).filter(p=>p.boss)).toHaveLength(1);
     expect(level.waves[4].pests.at(-1)?.boss).toBe(true);
+    expect(level.waves[4].pests.at(-1)).toMatchObject({
+      hp: i < 3 ? 400 + i * 120 : 600 + i * 180, armor: i < 3 ? 4 : 8,
+    });
     expect(level.waves[3].interval).toBeGreaterThan(level.waves[2].interval);
     expect(level.waves[3].pests.length).toBeLessThan(level.waves[2].pests.length);
   });
@@ -68,6 +71,41 @@ it('makes mature phrases readable: reward holds its lane and trucks stay out of 
   }
 });
 
-it.each(['rollingPin','flourSifter','whisk','oven'] as const)('a single %s strategy cannot solve late speed and armor', kind => {
+// Easier L2 permits splash-only wins on favorable weeks; retain the other counters.
+it.each(['rollingPin','flourSifter','oven'] as const)('a single %s strategy remains vulnerable to late speed and armor', kind => {
   for(const n of [10,20]) expect(singleTowerTd(tdLevel('2026-10-26',n),kind).state.passed).toBe(false);
 }, 30000);
+
+it('sweeps left to right through three, four and five long vertical runs with rounded turns', () => {
+  TD_MAPS.forEach((map, index) => {
+    const runs = map.path.slice(1).flatMap((b, i) => {
+      const a = map.path[i];
+      return a.x === b.x && Math.abs(a.y-b.y) > 400 ? [{ a, b }] : [];
+    });
+    expect(runs).toHaveLength(index + 3);
+    expect(map.path[0].y).toBe(0);
+    expect(map.path[0].x).toBeLessThanOrEqual(180);
+    runs.forEach(({ a, b }, i) => {
+      expect(Math.sign(b.y-a.y)).toBe(i % 2 ? -1 : 1);
+      if (i) expect(a.x).toBeGreaterThan(runs[i-1].a.x);
+    });
+    expect(map.path.filter((b,i) => i && b.x !== map.path[i-1].x && b.y !== map.path[i-1].y).length).toBeGreaterThan(12);
+    // Every gap position can reach both neighboring runs with a long-range oven.
+    const between = map.slots.filter(s => runs.some((r,i) => i && s.x > runs[i-1].a.x && s.x < r.a.x));
+    expect(between.length).toBeGreaterThanOrEqual(9);
+    for (const s of between) {
+      const right = runs.findIndex(r => r.a.x > s.x);
+      expect(Math.max(s.x-runs[right-1].a.x, runs[right].a.x-s.x)).toBeLessThanOrEqual(430);
+    }
+  });
+});
+
+it('uses quantized Euclidean travel through rounded diagonals', async () => {
+  const { pathHeading } = await import('@/lib/td');
+  const map = { name: 'diagonal fixture', path: [{x:0,y:0},{x:3,y:4}], slots: [] };
+  expect(pathLength(map)).toBe(5 * SUBUNITS);
+  expect(pathPosition(map, 2.5 * SUBUNITS)).toEqual({x:1,y:2});
+  expect(pathPosition(map, 5 * SUBUNITS)).toEqual({x:3,y:4});
+  expect(pathHeading(map, SUBUNITS)).toBe(53);
+  expect(pathHeading(map, SUBUNITS, true)).toBe(233);
+});

@@ -197,7 +197,7 @@ def disk_pixels(name, x, y, radius, z, mat):
 
 def stroke_pixels(name, path, width, z, mat):
     # One non-overlapping surface: round OUTER joins, miter inner joins. The exact
-    # engine polyline remains centered in the band; never smooth the centerline.
+    # engine polyline already samples rounded turns; retain those exact vertices.
     normals = []
     for a, b in zip(path, path[1:]):
         dx, dy = b[0]-a[0], b[1]-a[1]

@@ -26,7 +26,7 @@ it('previews exact next-wave counts and puts exactly one boss in wave five', () 
     const events = game.step(game.state().tick + 1 + (level.waves[wave].pests.length - 1) * level.waves[wave].interval);
     if (wave === 4) {
       expect(events.filter(e => e.type === 'bossSpawn')).toHaveLength(1);
-      expect(game.state().pests.find(p => p.boss)).toMatchObject({ kind: 'mouse', armor: 8, speed: 20, carrying: 0 });
+      expect(game.state().pests.find(p => p.boss)).toMatchObject({ kind: 'mouse', armor: 4, speed: 20, carrying: 0 });
     }
   }
   expect(game.state().nextWave).toBeNull();
@@ -89,7 +89,9 @@ it('an empty pile remains alive while carriers are returning at 80 percent speed
       const old = before.pests.find(p => p.id === pest.id);
       if (old?.carrying && old.distance > pest.speed) {
         expect(old.distance - pest.distance).toBe(Math.floor(pest.speed * 80 / 100));
-        expect([0, 90, 180, 270]).toContain(pest.heading);
+        expect(Number.isInteger(pest.heading)).toBe(true);
+        expect(pest.heading).toBeGreaterThanOrEqual(0);
+        expect(pest.heading).toBeLessThan(360);
         returning = true;
       }
     }

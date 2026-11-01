@@ -87,33 +87,35 @@ it('clears five waves with dropped bread still in transit instead of waiting for
 });
 
 it('sifter chips at exact tier DPS and coating lasts one second after sale', () => {
+  fixture.level!.waves[0].pests[0].speed = 16;
   const game = setup('flourSifter', 'a');
-  // Stationary fixture starts within the slot-0 aura.
-  const pest = fixture.level!.waves[0].pests[0];
-  pest.speed = 0;
-  game.step(60);
-  expect(game.state().pests[0]).toMatchObject({ hp: 9984, slowed: true });
-  game.apply({ tick: 60, type: 'sell', slot: 0 });
-  game.step(120);
-  expect(game.state().pests[0]).toMatchObject({ hp: 9968, slowed: true });
-  game.step(121);
+  let tick = 0;
+  while ((game.state().pests[0]?.y ?? 0) < 210) game.step(++tick);
+  const hp = game.state().pests[0].hp;
+  game.step(tick + 60);
+  expect(game.state().pests[0]).toMatchObject({ hp: hp - 16, slowed: true });
+  game.apply({ tick: tick + 60, type: 'sell', slot: 0 });
+  game.step(tick + 120);
+  expect(game.state().pests[0]).toMatchObject({ hp: hp - 32, slowed: true });
+  game.step(tick + 121);
   expect(game.state().pests[0].slowed).toBe(false);
 });
 
 it.each([0, 1, 2])('sifter tier %i deals 6/10/16 DPS through armor and never hits sparrows', tier => {
   fixture.level!.waves[0] = { interval: 1, pests: [
-    { kind: 'beetle', hp: 10000, armor: 6, speed: 0, bounty: 1 },
-    { kind: 'sparrow', hp: 10000, armor: 0, speed: 0, bounty: 1 },
+    { kind: 'beetle', hp: 10000, armor: 6, speed: 16, bounty: 1 },
+    { kind: 'sparrow', hp: 10000, armor: 0, speed: 16, bounty: 1 },
   ] };
   const game = createTdGame({ seed: 'combat-fixture' });
   game.apply({ tick: 0, type: 'place', slot: 0, tower: 'flourSifter' });
   if (tier > 0) game.apply({ tick: 0, type: 'upgrade', slot: 0 });
   if (tier > 1) game.apply({ tick: 0, type: 'upgrade', slot: 0, branch: 'b' });
   game.apply({ tick: 0, type: 'callWave', slot: -1 });
-  // The slow-moving fixture reaches the redesigned first aura by tick 1200.
-  game.step(1200);
+  // Measure a complete second inside the first vertical-run aura.
+  let tick = 0;
+  while ((game.state().pests[0]?.y ?? 0) < 210) game.step(++tick);
   const before = game.state().pests;
-  game.step(1260);
+  game.step(tick + 60);
   const after = game.state().pests;
   expect(before[0].hp - after[0].hp).toBe([6, 10, 16][tier]);
   expect(after[1]).toMatchObject({ hp: 10000, slowed: false });
@@ -143,9 +145,9 @@ it.each([0, 1])('overlapping tier-0 and tier-%i sifters apply only the strongest
   if (tier) game.apply({ tick: 0, type: 'upgrade', slot: 1 });
   game.apply({ tick: 0, type: 'callWave', slot: -1 });
   let tick = 0;
-  while ((game.state().pests[0]?.x ?? 0) < 260 && tick < 1000) game.step(++tick);
+  while ((game.state().pests[0]?.y ?? 0) < 270 && tick < 1000) game.step(++tick);
   const before = game.state().pests[0];
-  expect(before.x).toBe(260);
+  expect(before.y).toBe(270);
   game.step(tick + 60);
   expect(before.hp - game.state().pests[0].hp).toBe(tier ? 10 : 6);
 });

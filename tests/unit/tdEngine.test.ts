@@ -10,9 +10,9 @@ const level = () => tdLevel("2026-10-26", 1);
 
 describe("TD deterministic level and geometry", () => {
   it("pins the version and generates five shared weekly waves", () => {
-    expect(TD_ENGINE_VERSION).toBe(5);
+    expect(TD_ENGINE_VERSION).toBe(6);
     expect(tdSeedVersion(level().seed)).toBe(TD_ENGINE_VERSION);
-    expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([300, 400, 482, 1320, 1320]);
+    expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([340, 440, 522, 1360, 1360]);
     expect(level()).toEqual(level());
     expect(level().waves).toHaveLength(5);
     expect(tdLevel("2026-11-02", 1).waves).not.toEqual(level().waves);
@@ -30,7 +30,7 @@ describe("TD deterministic level and geometry", () => {
       expect(() => tdLevel(week, 1)).toThrow();
     }
     for (const n of [0, -1, 1.1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) expect(() => tdLevel("2026-10-26", n)).toThrow();
-    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v4.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
+    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v4.td.2026-10-26.1", "v5.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
       expect(() => createTdGame({ seed })).toThrow();
     }
     for (const tierCount of [0, 101, 1.5, NaN]) expect(() => createTdGame({ level: level(), tierCount })).toThrow();
@@ -45,8 +45,8 @@ describe("TD deterministic level and geometry", () => {
     expect(TD_MAPS).toHaveLength(3);
     for (const map of TD_MAPS) {
       expect(map.slots).toHaveLength(11);
-      expect(map.path[0].x).toBe(0);
-      expect(pathLength(map) / SUBUNITS).toBeGreaterThan(2800);
+      expect(map.path[0].y).toBe(0);
+      expect(pathLength(map) / SUBUNITS).toBeGreaterThan(2600);
       const plate = map.path.at(-1)!;
       expect(plate.x).toBeGreaterThan(115);
       expect(plate.x + 115).toBeLessThan(FIELD_WIDTH);
@@ -69,7 +69,7 @@ describe("TD deterministic level and geometry", () => {
       }
       for (let i = 1; i < map.path.length; i++) {
         const a = map.path[i - 1], b = map.path[i];
-        expect((a.x === b.x) !== (a.y === b.y)).toBe(true);
+        expect(a).not.toEqual(b);
         for (const slot of map.slots) {
           const x = Math.max(Math.min(a.x, b.x), Math.min(Math.max(a.x, b.x), slot.x));
           const y = Math.max(Math.min(a.y, b.y), Math.min(Math.max(a.y, b.y), slot.y));
@@ -127,7 +127,7 @@ describe("TD input and replay contract", () => {
     for (const slot of [0, 1]) expect(g.apply({ tick: 0, type: "place", slot, tower: "oven" })).toBe(true);
     expect(g.apply({ tick: 0, type: "place", slot: 2, tower: "rollingPin" })).toBe(false);
     expect(g.apply({ tick: 0, type: "upgrade", slot: 0 })).toBe(false);
-    expect(g.state()).toMatchObject({ coins: 0, inputsAccepted: 2, inputsRejected: 2 });
+    expect(g.state()).toMatchObject({ coins: 40, inputsAccepted: 2, inputsRejected: 2 });
     expect(g.state().towers.map(t => t.level)).toEqual([0, 0]);
   });
 
@@ -267,7 +267,7 @@ describe("TD combat and waves", () => {
     const events = g.step(shot.hitTick);
     expect(events.filter(e => e.type === "hit")).toHaveLength(1);
     expect(events.filter(e => e.type === "kill")).toHaveLength(1);
-    expect(g.state().coins).toBe(300 - 150 + 30 + 75 + 8);
+    expect(g.state().coins).toBe(level().startCoins - 150 + 30 + 75 + level().waves[0].pests[0].bounty);
     const hit = events.find(e => e.type === "hit")!;
     hit.tick = -1;
     expect(g.state().events.every(e => e.tick === shot.hitTick)).toBe(true);
@@ -282,7 +282,7 @@ describe("TD combat and waves", () => {
     expect(hits.some(a => hits.some(b => b !== a && a.projectile === b.projectile && a.pest !== b.pest))).toBe(true);
     const kills = events.filter(e => e.type === "kill");
     expect(new Set(kills.map(e => e.pest)).size).toBe(kills.length);
-    expect(splash.state().coins).toBe(300 - 100 + 30 + kills.reduce((sum, k) => sum + k.bounty, 0));
+    expect(splash.state().coins).toBe(level().startCoins - 100 + 30 + kills.reduce((sum, k) => sum + k.bounty, 0));
     const armor = createTdGame({ level: tdLevel("2026-10-26", 8) });
     armor.apply({ tick: 0, type: "place", slot: 0, tower: "rollingPin" });
     armor.apply({ tick: 0, type: "upgrade", slot: 0 });

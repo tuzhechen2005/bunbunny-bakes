@@ -1,4 +1,4 @@
-# Bakery defense artwork — L1 level design
+# Bakery defense artwork — L2 vertical serpentines
 
 Original procedural Blender clay models, without downloaded models, textures, fonts,
 or runtime 3D. The palette, AgX +0.6 EV, warm sun, cool ambient fill and matte clay
@@ -127,11 +127,10 @@ This compensates both the oblique camera and raised surfaces. Blender projects e
 path vertex and slot center back to pixels, asserting an error below **0.01px**.
 The final manifest records these checks and the SHA-256 of the actual map source.
 
-The route is one continuous 74px-wide surface with an 86px outer border. Its straight
-centerlines and orthogonal bends follow the engine exactly. Only the outside edges
-of corners are rounded; the centerline is never smoothed. Eleven 42-unit-radius slot clearances remain in manifest metadata for alignment, but no pads are baked. Props reject path and slot clearances, and
+The route is one continuous 74px-wide surface with an 86px outer border. Its integer sampled rounded
+centerline follows the engine exactly, including the diagonal turn segments. Eleven 42-unit-radius slot clearances remain in manifest metadata for alignment, but no pads are baked. Props reject path and slot clearances, and
 the final 115px-radius endpoint apron stays empty for the game's bread pile. There is
-**no baked bread**. Routes enter the left edge and end in the interior with the entire 115px-radius
+**no baked bread**. Routes enter the top edge near the left and end in the interior with the entire 115px-radius
 plate clearance inside the board. No plate is baked into the background.
 
 Changing `maps.ts` requires rerendering **all three maps**. The packer refuses stale
@@ -151,27 +150,30 @@ tier both enlarged and at 56px frame width, every pest pose, projectiles and hit
 Review it with a local image viewer; no browser or application server is needed.
 The preview and source/cache files are not included in the runtime download budget.
 
-Verified shipped total: **235,633 bytes**, including the manifest (25 atlases,
+Verified shipped total: **250,353 bytes**, including the manifest (25 atlases,
 43 frames). The offline preview was inspected after WebP encoding; all tower tiers,
 pest poses, path/slot overlays and transparency margins pass review.
 
-L1 rerendered all three landscape backgrounds using Docker Blender; the existing
+L2 rerendered all three landscape backgrounds using Docker Blender; the existing
 boss and other sprite models are retained. The
 packer and decoded contact sheet verify eleven slot clearances, no baked pads, four
 unique right-facing boss poses, unclipped alpha, unchanged version-3 manifest format,
 and the public size budget. No browser or carried-bread marker is used.
 
 
-## L1 layout review
+## L2 layout review
 
-The backgrounds have been rerendered with Docker Blender from the v5 route and
-slot coordinates. The preview overlays show numbered slots and the actual plate
-center (40 units back along the last segment). No slot pads or plates are baked.
+Docker Blender renders all three backgrounds from v6 coordinates. The packer
+regenerates numbered SVGs and `preview.png` from the same source; preview insets
+show the actual plate center, 40 units back along the final vertical segment.
+No pads or plates are baked. All routes descend first and sweep left to right,
+with turns at y=70/740, a constant 74-unit surface / 86-unit border, and 11 slots
+between runs. Map 3 includes one tighter lower turn (55 vs 70-unit corner radius).
 
-![Cooling rack: wide S](map-1-overview.svg)
-![Dough folds: inward loop](map-2-overview.svg)
-![Proofing walk: long switchback](map-3-overview.svg)
+![Cooling rack: three vertical runs](map-1-overview.svg)
+![Dough folds: four vertical runs](map-2-overview.svg)
+![Proofing walk: five vertical runs](map-3-overview.svg)
 
-See `src/lib/td/README.md` for each numbered slot's tactical role. The geometry
-regression checks pairwise spacing, board clearance, path-edge clearance, shortest
-tower reach, nonintersecting segments, and the stepped-back plate's exclusion zone.
+See `src/lib/td/README.md` for numbered slot roles and measured bot rates. Geometry
+regression enforces ≥126 center spacing, ≥60 slot-rim board clearance, ≥60 path-edge
+clearance, shortest-tower reach, two-run long-range coverage and ≥120 plate clearance.

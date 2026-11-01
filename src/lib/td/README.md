@@ -1,4 +1,4 @@
-# 保卫大面包 — L1 engine v5
+# 保卫大面包 — L2 engine v6
 
 Pure deterministic TypeScript, shared by client saves and authoritative server replay.
 No DOM, clock, photos, frame delta, or global randomness enters simulation. The server
@@ -6,7 +6,7 @@ continues deriving the weekly level from the same Monday and level number.
 
 ## Inputs, versions and saves
 
-Canonical seed: `v5.td.<Monday YYYY-MM-DD>.<positive level>`. Versions 1–4 runs and saves
+Canonical seed: `v6.td.<Monday YYYY-MM-DD>.<positive level>`. Versions 1–5 runs and saves
 are rejected. `TD_ENGINE_VERSION` also drives the existing save key and server gate.
 Pass either `{ seed, tierCount }` or `{ level: tdLevel(week, n), tierCount }` to
 `createTdGame`; descriptors are regenerated from their seed, never trusted.
@@ -49,7 +49,8 @@ requires all five waves complete, no living pests, and ≥1 bread (including dro
 still rolling home).
 
 Wave five contains exactly one **大胃王鼠**: `kind: 'mouse', boss: true`, speed 20,
-armor 8, bounty 80, HP `600 + 180 * min(level - 1, 999)`. It takes up to three highest
+bounty 80. L1–L3 use armor 4 and HP `400 + 120 * (level - 1)`; later levels
+use armor 8 and HP `600 + 180 * min(level - 1, 999)`. It takes up to three highest
 remaining breads at once and drops the complete stack if killed.
 
 `nextWave` is `{ index, counts: { ant, mouse, sparrow, beetle, boss } }`, or `null`
@@ -60,8 +61,8 @@ remaining second. The next prep period starts when the current wave finishes spa
 
 ## Combat and drawing contract
 
-The three maps use a 1440 × 810 landscape field, with longer winding routes entering
-from the left and ending at an inset plate position. Each has eleven
+The three maps use a 1440 × 810 landscape field, with rounded vertical serpentines entering
+from the top-left, running down/up/down as they sweep left to right, and ending at an inset right-side plate. Each has eleven
 spaced slots; every slot covers path within the shortest base tower range (150).
 `TD_SLOT_RADIUS = 42` remains a 21 CSS-pixel radius at a 720-pixel-wide board.
 Map rotation remains `floor((level - 1) / 4) % 3`.
@@ -110,92 +111,86 @@ chip DPS and nearby ground-tower support, and calls the next wave early only whe
 a deterministic independent RNG and choose branches too. Tuning uses 100 Monday seeds
 starting 2026-01-05; a second disjoint regression window uses the following 100 Mondays.
 
-Measured v5 greedy passes (100 weeks per window):
+L2 targets supersede D161/D162: greedy L1 100%, L3 approximately 90%, L5
+approximately 75%, L10 approximately 50%, L20 approximately 20%; random L1 ≥30%.
+Both 100-week windows must meet these targets (±10 percentage points except L1).
+Random later-level wins no longer have a near-zero gate; ≥90% of greedy runs
+must still build a sifter. The same public-information bot is used without strategy changes.
 
-| Level | Window A | Window B |
-| --- | ---: | ---: |
-| 1 | 100% | 100% |
-| 3 | 75% | 64% |
-| 10 | 27% | 22% |
-| 20 | 7% | 7% |
+Measured v6 greedy passes (100 Mondays per window):
 
-Every checkpoint's greedy runs built a sifter. Random passes were 0% / 0% at
-L3 and L10, and 2% / 1% at L20. The separate 100-week L2 check passed 3%.
+| Level | Window A | Window B | Target |
+| --- | ---: | ---: | ---: |
+| 1 | 100% | 100% | 100% |
+| 3 | 88% | 93% | ≈90% |
+| 5 | 78% | 76% | ≈75% |
+| 10 | 45% | 43% | ≈50% |
+| 20 | 17% | 22% | ≈20% |
 
-The regression gates are ≥95%, 60–80%, 20–40%, and 5–10% respectively in **both**
-windows, with random ≤3% from L2 and sifter purchases in ≥90% of greedy runs. HP growth is `79 + floor(min(10, max(0, level - 10)) * 14 / 10)`;
-normal pest HP uses that growth with level, wave and seeded weekly pressure. L2–L9
-also receive a tapering early mixed-swarm pressure (see `earlyPressure` in `level.ts`).
-Pest count grows by 1.5 per level, capped at 96 per wave; sparrows and beetles appear
-at L4 and L5 respectively. Bounties fall by one coin every three levels, capped at four fewer coins at L13.
-Boss rewards remain 80. Opening
-coins start at 300, with a temporary combo allowance peaking at +100 in L10
-and tapering by 20 coins per level on either side. The late ramp adds 102 per
-level from L11 through L20, capped at 1020 extra.
-The regression requires sifters in at least 90% of greedy runs. Random L1 play remains
-deliberately forgiving; later levels reward tower choices.
+Random L1 passes are 100% in both windows. All greedy checkpoint runs build a
+sifter. Intermediate levels were also sampled in ten-week batches to remove
+severe cliffs after map changes; individual weeks and map transitions need not
+produce a strictly decreasing win rate. Splash-only play can now win favorable
+late weeks, while pin-only, sifter-only and oven-only regression strategies still
+fail the late mixed-wave checks.
 
-Run `npx vitest run --configLoader runner --project unit --maxWorkers 1`, `npx tsc --noEmit`,
-`npm run lint`, and `npx vitest run --configLoader runner --project db` (only a
-validated `*_test` database). E2E fixtures use the current seed and branch-aware bot;
-no browser is required for this backend change.
+Opening coins are 340 (previously 300), plus the existing temporary +100 combo
+allowance centered on L10 and late +102/level ramp through L20. Ordinary L1–L3
+pests award one extra coin. HP growth starts at 65 rather than 79; the early
+mixed-swarm term is reduced from 454 to 300. Layout multipliers interpolate between
+anchors in `level.ts`, accounting for different route lengths and firing windows.
+The early boss is softer; tower statistics, five-wave curriculum, preparation,
+bread recovery and authoritative replay rules remain intact.
 
-## L1 level-design pass
+## L2 vertical-S layout
 
-Coordinates below are authoritative field units. Numbered markers are **1-based**
-(engine inputs remain 0–10). Slot centers are at least 126 apart, at least 103
-from a route centerline (60 beyond its 43-unit outer edge), and slot rims have
-60 units of board clearance. The plate is 40 units back from the last vertex;
-all slot centers stay at least 120 away. Map edges are only crossed at spawn.
+All three boards are 1440 × 810. Routes enter the top edge at x ≤180, descend first,
+then alternate direction across increasing x. Turns reach y=70/740 and use 70-unit
+corner radii; map 3 has a tighter 55-unit lower turn between runs 3 and 4. Centerlines
+are integer sampled arcs, shared literally by engine, Blender and overview SVGs.
+Segment lengths are Euclidean, rounded once to movement subunits; position and
+heading use the same segments, including diagonal turn tangents. Width is 74 units
+with an 86-unit outer border throughout.
 
-![Wide S and numbered slots](../../../assets-src/td/map-1-overview.svg)
+Slot centers are ≥126 apart and ≥103 from every centerline (60 beyond the border).
+Slot rims retain ≥60 board clearance. The plate is 40 units back from the endpoint;
+its 115-unit apron fits inside the board and all slot centers are ≥120 away.
+Every slot reaches a route with the shortest base range (150). Every slot is in a
+vertical gap, so long-range ovens cover both neighboring runs; map 3's narrower
+gaps let even basic towers cover both. Wide map 1 teaches placing short-range
+towers along one side of a gap and upgrading ovens for the opposite run.
 
-Cooling rack is a broad S: 1–3 teach early coverage, 4–5 cover the first turn,
-6 guards the plate approach, 7 and 11 cover the lower hairpin, 8–9 cover the
-return straight, and 10 joins the final choke. Sifter plus whisk at the hairpin
-trades early damage for a second firing opportunity; ovens can reach the other arm.
+| Map | Vertical x coordinates | Numbered slot roles | Plate |
+| --- | --- | --- | --- |
+| 1, Cooling rack | 180, 700, 1220 | 1–4 cover entry/return; 5 backs up the climb; 6–9 cover climb/final descent; 10–11 guard the final run, with 11 near the plate | (1220,650) |
+| 2, Dough folds | 120, 510, 900, 1290 | 1–3 cover first gap; 4–6 cover middle gap; 7–9 cover last gap; 10–11 reinforce plate approach, with 10 nearest plate | (1290,160) |
+| 3, Proofing walk | 100, 390, 680, 970, 1260 | 1–3, 4–6, 7–9 each cover two runs; 9 supports the tighter lower turn; 10–11 cover final gap and 11 guards plate approach | (1260,650) |
 
-![Inward loop and numbered slots](../../../assets-src/td/map-2-overview.svg)
+![Three vertical runs](../../../assets-src/td/map-1-overview.svg)
+![Four vertical runs](../../../assets-src/td/map-2-overview.svg)
+![Five vertical runs](../../../assets-src/td/map-3-overview.svg)
 
-Dough folds circles inward: 1 covers entry, 2–4 cover the top traversal,
-5–6 the outer descent, 7–8 the bottom turn, 9–10 the inner hairpin,
-and 3 also guards the plate. 11 catches returning thieves at the entrance.
-The central space now carries the final route and plate instead of being dead space.
+The five-level curriculum introduces ants, mice, mixed ants/mice, sparrows and
+beetles in L1–L5. Sparrows follow the route but ignore flour slow/chip. Each level
+uses demonstration, pressure, combinations, recovery, then a mixed boss finale.
+Beetle armor starts at 6 in L5, rises by 10/level and caps at 54; HP remains 20% of
+the ordinary species curve. Map rotation is still four levels per board.
 
-![Long vertical switchback and numbered slots](../../../assets-src/td/map-3-overview.svg)
+## Offline checks
 
-Proofing walk uses a long vertical switchback: 1–2 are entry positions,
-3–5 defend the first descent, 6 is the double-arm choke, 7–8 cover the climb
-and top turn, 10–11 defend the final descent and 9 is the plate guard.
-The central pair rewards slow plus splash; the right-side guards cover late leaks.
+Run `npx tsc --noEmit`, `npm run lint`,
+`npx vitest run --configLoader runner --project unit --maxWorkers 1`, and
+`npx vitest run --configLoader runner --project db` against a validated `*_test`
+database. Version tests cover seeds, saves, server rejection and e2e fixtures.
+Geometry tests cover run count/direction, rounded vertices, spacing, coverage and
+plate clearance; asset packing rejects stale coordinates or source hashes.
+No browser is used and `src/components/**` / `src/app/game/**` are not edited.
 
-The five-level curriculum introduces ants in L1, mice in L2, ant/mouse mixes in
-L3, sparrows in L4, and armored beetles in L5. Sparrows **follow the route but
-ignore flour slow/chip**, retaining a readable single route and existing drawing
-contract. Each level uses demonstration squads, pressure, interleaved combinations,
-a smaller/slower recovery wave, then a mixed finale with exactly one boss.
-The existing ten-second spawn-free preparation interval remains; players can call
-it early for coins. Later finales alternate speed and armor instead of randomly
-turning into a single-species wave. Weekly randomness changes pressure and support
-waves without hiding a new species.
-
-Beetle armor starts at 6 in L5, rises by 10 per level, and caps at 54. Their HP is
-20% of the ordinary species curve: shells punish repeated small hits without
-turning the wave into a slow damage sponge. Flour chip ignores armor and ovens
-retain their large single-hit advantage; unarmored fast escorts still need coverage.
-
-The HP anchors follow the map rotation's firing windows. Each new map gets an
-approach level before pressure rises; returning to the broad S at L13 no longer
-resets the difficulty. Intermediate levels were also probed, including the first
-flyer lesson and the end of each four-level map block. This is a tuning curve,
-not a promise that every player's win rate decreases at each individual level.
-
-`tests/unit/levelDesign.test.ts` verifies the same early RUN inputs in both engine
-modes, TD geometry and teaching order, recovery-wave pacing, mature RUN phrases,
-and failure of each single-tower strategy at L10/L20 on the regression week.
-
-Final offline validation: TypeScript and ESLint passed; all 1,181 unit tests
-passed (including both 100-week windows and the L2 check). All 828 DB tests
-passed against `bunbunny_lvl_test`, with TD/RUN integration tests rerun after
-fixture/version changes. Blender packing validated all 25 atlases / 43 frames
-at 235,633 bytes. No browser was run and no frontend game files were edited.
+Verified on 2026-11-01: TypeScript and ESLint pass. Both TD 100-week regression
+windows pass. The full unit run has 1,179 passing tests and two unrelated failures
+in the unchanged `tests/unit/m3Interactions.test.ts` (edge/short touch cases;
+its board stub lacks `getBoundingClientRect`, also producing two unhandled errors).
+No M3 UI files were changed. All 828 DB tests pass against `bunbunny_lvl2_test`;
+the 10 TD integration/migration tests also pass after final tuning. Docker Blender
+and packing validate all 25 atlases / 43 frames at 250,353 bytes; the decoded preview
+was inspected offline. No browser or commit was used.

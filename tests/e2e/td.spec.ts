@@ -58,7 +58,7 @@ for(const width of [320,390]) test.describe(`TD ${width}`,()=>{
   });
   test('failed completed save retries exact run after reload, win offers next level',async({page})=>{
     const api=await mockApi(page),bot=greedyTd(tdLevel(weekKey,1));
-    expect(TD_ENGINE_VERSION).toBe(5);
+    expect(TD_ENGINE_VERSION).toBe(6);
     expect(seed.startsWith(`v${TD_ENGINE_VERSION}.td.`)).toBe(true);
     expect(bot.inputs.some(i=>i.type==='upgrade' && i.branch)).toBe(true);
     const save={v:1,runId:'00000000-0000-4000-8000-000000000099',seed,level:1,weekKey,tiers,nickname:'Baker',expiresAt:'2099-01-01T00:00:00Z',inputs:bot.inputs,endTick:bot.state.tick,score:bot.state.wave};
