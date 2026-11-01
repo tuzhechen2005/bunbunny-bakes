@@ -1,136 +1,175 @@
-# R9 — real-time clay runner assets
+# R12 — sculpted clay-toy runner assets
 
-Original procedural Blender geometry; no downloaded models, fonts or textures.
-This pipeline produces `public/brand/run3d/{bunny,props,town}.glb` and a game-camera
-`preview.png`. It does not change the frontend, install runtime packages, or bake
-lighting into the GLBs. The materials reuse the warm R6 sprite palette.
+Original procedural Blender geometry, rebuilt against `public/brand/logo.webp`,
+`public/brand/art/menu-run.webp`, `card-run.webp`, and direction A in
+`docs/GAME_ART.md`. No downloaded geometry, fonts, generated image textures, or
+application changes. All source and delivery changes stay in the two run3d asset
+folders.
 
-## Reproduce without a browser
+## Delivered assets
 
-Run from the repository root with Docker. The base Dockerfile is reused unchanged;
-the small R9 layer adds NumPy, required by Debian Blender's glTF exporter.
+- `bunny.glb`: toast-slice head with a warm crust rim, long splayed pink-lined ears,
+  dot eyes, tiny sculpted ω mouth, rosy cheeks, cream body, cocoa apron with straps,
+  pocket and buttons, and a folded kraft backpack containing scored bread.
+  The toast volumes, body, limbs, ears and apron forms use **applied level-2
+  Catmull–Clark subdivision**; geometry has smooth shading and molded bevels.
+- `props.glb`: thirteen independent library roots. Rounded delivery vehicles have
+  inset windows, wheel arches, tires and hubcaps, door seams, handles, bumpers,
+  lamps and sculpted loaf signs. The ramp has individual wooden planks, stringers,
+  battens and pegs. Other props have scored loaves, folded paper, turned cup/lamp
+  profiles, curved bench supports and clustered foliage.
+- `town.glb`: six facade variants with recessed glazing, deep jambs/lintels/sills,
+  mullions, flower boxes, scalloped striped awnings, icon signboards, doorsteps,
+  shop displays and individual terracotta eave tiles. Sidewalk tiles include
+  bevelled curbs and planter boxes. Road cobbles are modeled, staggered, rounded,
+  subtly varied in pigment, and repeat with the lane marks.
+- `preview.png`: **480 × 600**, imported GLBs in a street, from the existing game
+  camera: `(0, 4.6, -7.5)` looking at `(0, 1.2, 3)`, perspective 32 mm. The bunny
+  faces forward, away from the camera, in a run pose.
+- `bunny-closeup.png`: **512 × 608**, front three-quarter review of the imported
+  bunny in its rest pose. Both PNGs use 256-colour palettes to fit the delivery
+  budget; this does not change the GLBs or their vertex colours.
+
+`validation.json` is the authoritative byte/count/bounds report. The budget is
+**3,500,000 bytes for all three GLBs and both review PNGs combined**.
+
+## Unchanged renderer contract
+
+Authoring helpers map game metres `(x,y,z)` to Blender `(x,-z,y)`; glTF export is
+**+Y up, +Z forward**. Scene/library roots have identity transforms and start at
+world ground centre. No runtime axis correction or new loader setup is required.
+
+Bunny rest feet touch Y=0 and its nominal standing height remains **1.60 m**.
+The existing conversion is **1 m = 2.125 game units**, giving 3.4 game units of
+standing height. Gameplay collision geometry remains separate from visual meshes.
+
+### Bunny rig and actions
+
+`BunnyClay` is one skinned mesh with **24,744 triangles**. `BunnyRig` retains the
+same eight joints: `body`, `head`, `earL`, `earR`, `legL`, `legR`, `armL`, `armR`.
+Rigid part weights retain the clay-toy articulation. These are still two scene
+roots: load/transform the **whole glTF scene**, and clone with a skeleton-aware
+clone. Do not extract the mesh alone.
+
+| Action | Keys per channel | Duration at 24 fps | Behavior |
+| --- | ---: | ---: | --- |
+| `run` | 25 | 1 s | Loop; alternating limbs, body bounce, volume-preserving squash/stretch, delayed ear motion |
+| `jump` | 25 | 1 s | Once; anticipation squash, extension, tucked legs, ear recoil; engine supplies world jump height |
+| `slide` | 25 | 1 s | Loop; lowered, compressed torso, extended legs, raised head and folded ears |
+| `leanL` | 13 | 0.5 s | Once, hold; local -X lean with head/ear counterbalance |
+| `leanR` | 13 | 0.5 s | Once, hold; local +X lean with head/ear counterbalance |
+| `crash` | 21 | 0.8333 s | Once, hold; backward tumble, splayed arms, ear recoil |
+| `idle` | 49 | 2 s | Loop; breathing scale, tiny head/ear sway |
+
+All loop endpoints match. Animation stays in place; it contains joint transforms,
+not world travel or collision changes. A small ground clearance is applied when
+needed at authored keys. `validate_poses.py` reimports the shipped GLB and checks
+**every key and every half-key pose** for finite skinning and ground penetration.
+Its SHA-256 identifies the exact tested GLB in `validation.json`.
+
+With a camera behind a +Z-facing bunny, screen-left is +X; keep the existing lane
+input mapping. Use `idle` or the rest pose for reduced motion.
+
+### Prop roots
+
+Every named root is at the origin and has one child mesh named `<root>Mesh`.
+Select or clone the root and its child; the library deliberately overlaps all
+props at the origin. Every prop is within **2,000–8,000 triangles**.
+
+| Root | Preserved scale/use |
+| --- | --- |
+| `cart` | 1.8 m wide × approximately 1.4 m tall, display and striped canopy |
+| `flour` | 0.9 m high sack pile |
+| `awning` | 1.8 m wide; valance underside near Y=1.1; two posts |
+| `puddle` | 1.7 × 1.1 m footprint, 0.024 m high, opaque blue |
+| `ramp` | 1.7 m wide × 2 m long; low end Z=-1, high end Z=+1, maximum Y=1.3 |
+| `van` | Sage, 1.9 × 6 m footprint, flat central walkable roof at Y=1.3 |
+| `truck` | Rose, same footprint and roof height |
+| `bread` | 0.45 m wide scored loaf |
+| `bag` | Folded kraft bag, bread and round bakery seal |
+| `coffee` | Tapered cream cup, kraft sleeve, molded cocoa lid |
+| `lamp` | Approximately 3.16 m high |
+| `tree` | Rounded foliage in a terracotta planter |
+| `bench` | 1.6 m wide, rounded wooden slats and curved supports |
+
+The vehicles intentionally retain the elongated gameplay footprint and low flat
+roof. Their decorative wheels, arches, signs and lights stay inside the footprint.
+Place the ramp high end against the vehicle's rear roof edge.
+
+### Town roots
+
+The roots remain `bakery`, `cafe`, `flower_shop`, `book_shop`, `house_rose`,
+`house_sage`, `sidewalk`, and `road`, each with one `<root>Mesh` child.
+
+Facades have a **6 m wide × 7 m tall × 4 m deep** shell/roof envelope. Details
+project from the **+Z front**, up to approximately 2.61 m from the origin. Repeat
+at 6 m intervals along Z; rotate ±90° around Y to face into the street and align
+bases with the sidewalk's Y=0.18 surface. The six variants have different pigments,
+icon signs and shop/window-box arrangements.
+
+`sidewalk` keeps a **2 × 6 m footprint** and **0.18 m walking surface**. Decorative
+planters rise above it; they are not a new collision surface. `road` keeps an
+**8 × 6 m footprint** and base surface at Y=0. Modeled stones rise to Y=0.012;
+lane marks at X=±1.3333 rise to Y=0.024. Both tiles repeat in exact 6 m steps;
+staggered cobbles and dashes are periodic, with no end markings.
+
+## Materials, packing and budget
+
+Clay uses PBR base colour and roughness **0.75** (opaque water: **0.22**). Pigment
+is baked into `COLOR_0`: darker undersides/recesses, lighter tops, and very subtle
+spatial variation. Separate darker recess geometry reinforces depth. There are
+**no image textures, external resources, alpha sorting, or baked lighting** in
+any GLB.
+
+Neither `gltfpack` nor `gltf-transform` is installed in the available
+`bunbunny-run3d` Docker image. Delivery therefore uses **plain glTF 2.0**, with no
+Meshopt, Draco, or mesh-quantization extension and **no decoder requirement**.
+`pack.py` stores colours as standard normalized RGBA8, stores the exact rigid skin
+weights as normalized RGBA8, and shares identical binary streams. Positions,
+normals, joints, geometry and every animation sample remain intact. The standard
+optional `KHR_materials_specular` extension describes the subdued clay specular
+response; it requires no decoder and is supported by the existing GLTFLoader.
+
+## Reproduce and validate
+
+Run from the repository root. Geometry and rendering use Docker Blender **4.3.2**,
+NumPy, Cycles CPU, seed 12, 96 samples, AgX and warm studio lighting. The Debian ARM
+build has no OpenImageDenoise. PNG packing uses Python/Pillow **11.3.0**. Khronos
+validation uses Node and the isolated package below; application dependencies are
+not modified.
 
 ```sh
 mkdir -p assets-src/run3d/.cache
-# Skip this first build if the existing R6 image is already available.
+# Only needed when the existing renderer images are absent:
 BUILDX_CONFIG="$PWD/assets-src/run3d/.cache/buildx" \
   docker build -t bunbunny-run-render -f assets-src/run/Dockerfile assets-src/run
 BUILDX_CONFIG="$PWD/assets-src/run3d/.cache/buildx" \
   docker build -t bunbunny-run3d -f assets-src/run3d/Dockerfile assets-src/run3d
+
+# Generate, pack, then render the ACTUAL packed GLBs.
 docker run --rm --network none \
-  -v "$PWD:/work:ro" \
-  -v "$PWD/public/brand/run3d:/work/public/brand/run3d" \
-  bunbunny-run3d
-# Optional Khronos validator, isolated from application dependencies:
+  -v "$PWD:/work:ro" -v "$PWD/public/brand/run3d:/work/public/brand/run3d" \
+  bunbunny-run3d -- --models-only
+python3 assets-src/run3d/pack.py
+docker run --rm --network none \
+  -v "$PWD:/work:ro" -v "$PWD/public/brand/run3d:/work/public/brand/run3d" \
+  bunbunny-run3d -- --preview-only
+python3 assets-src/run3d/optimize_previews.py
+
+# Validate the shipped rig, then structural contracts and the complete budget.
+docker run --rm --network none --entrypoint blender -v "$PWD:/work:ro" \
+  bunbunny-run3d -b --factory-startup --python-exit-code 1 \
+  --python assets-src/run3d/validate_poses.py > assets-src/run3d/.cache/poses.log
 npm install --prefix assets-src/run3d/.cache/validator \
   --cache assets-src/run3d/.cache/npm --no-package-lock gltf-validator@2.0.0-dev.3.10
 node assets-src/run3d/validate.mjs
-docker run --rm --network none --entrypoint blender -v "$PWD:/work:ro" \
-  bunbunny-run3d -b --factory-startup --python-exit-code 1 \
-  --python assets-src/run3d/validate_poses.py
 ```
 
-Blender 4.3.2 / Cycles CPU, fixed seed 9, 128 samples, AgX, no denoiser (the Debian
-ARM build has no OpenImageDenoise). Preview is 480 × 600, perspective 32 mm lens,
-camera at `(0, 4.6, -7.5)` looking at `(0, 1.2, 3)` in exported metre coordinates.
-It is behind and above the bunny. The preview imports the exported GLBs, rather
-than rendering a separate high-detail model. Lights and camera are preview-only.
-Append `-- --preview-only` to the Docker command to rerender the scene from existing GLBs.
-Full regeneration replaces only these four output files. `.cache` is ignored.
-No `.blend` file is necessary. Identical source/settings reproduce the geometry;
-PNG noise and GLB byte ordering can vary between Blender/platform versions.
-
-## Coordinate and scale contract
-
-All exported assets use **metres, +Y up, +Z forward**, with roots at ground centre
-and identity transforms. Blender source helpers convert `(x,y,z)` to `(x,-z,y)`;
-the standard glTF Y-up exporter performs the final conversion. No runtime axis
-correction is needed. Bunny rest feet touch Y=0; total standing height is **1.60 m**.
-
-The engine uses game units: **1 m = 2.125 game units**, so the bunny's standing
-height is **3.4 game units**. Apply that uniform scale once to the loaded scene or
-instance parent. Keep gameplay collision geometry separate from decorative details.
-
-### Bunny
-
-`bunny.glb` contains `BunnyClay` (3,936 triangles) and one `BunnyRig` armature,
-with eight joints and rigid per-part skin weights. The head, ears, arms, legs,
-body, tail and bread backpack are all part of one skinned mesh. The two scene roots
-are intentional: a root skinned mesh avoids ambiguous inherited transforms in glTF.
-Load/transform the **whole glTF scene**, preserving the skeleton. Clone animated
-instances with a skeleton-aware clone. Do not extract only the mesh.
-
-| Action | Keys per channel | Duration at 24 fps | Playback |
-| --- | ---: | ---: | --- |
-| `run` | 25 | 1 s | Loop; opposing legs/arms, body bounce, ear follow-through |
-| `jump` | 25 | 1 s | Once; tuck then extend; engine supplies world jump height |
-| `slide` | 25 | 1 s | Loop; lowered torso and extended legs; blend in/out |
-| `leanL` | 13 | 0.5 s | Once, hold; local -X lean |
-| `leanR` | 13 | 0.5 s | Once, hold; local +X lean |
-| `crash` | 21 | 0.8333 s | Once, hold; backward tumble |
-| `idle` | 49 | 2 s | Loop; subtle breathing |
-
-Loop endpoints match. Per-key ground correction prevents the posed skin from
-penetrating the floor; `validate_poses.py` checks every exported animation key after
-reimporting the GLB into Blender. Clips contain bone transforms, not world travel or gameplay
-collision changes. Run motion is in-place; the engine supplies forward movement.
-With a camera behind a +Z-facing character, screen-left is +X; map lane input to
-local lean accordingly. Switch to `idle` or a rest pose for reduced motion.
-
-### Props
-
-`props.glb` is a library, **not a pre-laid-out scene**. Its thirteen root nodes all
-start at `(0,0,0)`; select or clone a named root and its child mesh.
-
-| Root node | Dimensions / use (metres) |
-| --- | --- |
-| `cart` | 1.8 wide × 1.4 tall; bread display and striped canopy |
-| `flour` | Sack pile, 0.9 tall |
-| `awning` | 1.8 wide; underside of hanging valance at Y=1.1; two posts |
-| `puddle` | 1.7 × 1.1 footprint, 0.024 tall, glossy opaque blue, no alpha sorting |
-| `ramp` | 1.7 wide × 2 long; runs from Y=0 at Z=-1 to Y=1.3 at Z=+1 |
-| `van` | 1.9 wide × 6 long; sage; flat walkable roof at Y=1.3 |
-| `truck` | Same roof/footprint; rose body, cream headlights and rear lights |
-| `bread` | 0.45 wide loaf with flour scores |
-| `bag` | Kraft paper bag, bread, folded rim and bakery seal |
-| `coffee` | Cream cup, kraft sleeve and brown lid |
-| `lamp` | Street lantern, approximately 3.16 tall |
-| `tree` | Round clay canopy in a terracotta planter |
-| `bench` | 1.6 wide slatted wood seat and back |
-
-Place a ramp with its high end touching the vehicle's rear roof edge. Vehicle
-wheels, lights and side emblems stay within the 1.9 × 6 footprint. The roof slab's
-central top is planar; its perimeter has a small clay bevel.
-
-### Town
-
-`town.glb` is also a library of overlapping, independent root nodes:
-`bakery`, `cafe`, `flower_shop`, `book_shop`, `house_rose`, `house_sage`, `sidewalk`,
-and `road`. Each facade has a **6 wide × 7 tall × 4 deep main block**, a roof,
-windows, a door, striped awning and sculpted shop/plaque sign. Fronts face +Z;
-window frames and awnings project beyond the 4 m shell (maximum depth 4.71 m).
-Rotate facades ±90° around Y to face into either side of the street, then repeat
-at **6 m intervals along Z**. Align their bases to the sidewalk top (Y=0.18).
-
-`sidewalk` is 2 wide × 6 long, with a 0.18 m curb/paving height. `road` is
-8 wide × 6 long, with three lanes and dividers at X=±1.3333. Its base surface
-is Y=0; shallow cobbles and lane marks rise to Y=0.024. Both tiles repeat along Z
-in exact 6 m steps. The cobble/dash pattern is periodic at the tile boundary;
-there are no end caps or unique end markings. Facade shell side faces meet at joins.
-
-## Validation and budget
-
-`validate.mjs` checks binary container integrity, self-contained buffers, no images
-or Draco, all root names, bunny height/feet/triangle budget, one skin, exact action
-names, run key count, loop endpoints, dimensions and the total delivery budget.
-It runs Khronos `gltf-validator` when installed and rejects errors **and warnings**.
-The checked-in `validation.json` records measured bounds, counts and validator
-results; regenerate it after changing assets.
-
-All materials are simple baseColor/roughness PBR, with zero texture bytes. Water
-uses roughness 0.16; clay uses 0.82. There is no Draco, quantization, extension-based
-compression, external resource, or runtime decoder requirement. Architecture uses
-low-poly hard surfaces while character/prop silhouettes retain rounded geometry.
-The budget check includes **all three GLBs plus preview.png**, capped at 1,500,000
-bytes. Preview lighting is illustrative; real-time shadows, collision and device
-performance are the frontend's responsibility. No browser was used.
+If Pillow is unavailable, install it in an isolated environment under `.cache`.
+`validate.mjs` checks GLB integrity, self-contained buffers, all root names and
+identity transforms, scale bounds, triangle budgets, vertex colours, one skin,
+seven exact action names, run key count, loop endpoints, matte materials, the
+pose-check hash, and all five output files against the 3.5 MB limit. Khronos
+validation rejects errors **and warnings**. Geometry and settings are reproducible;
+PNG noise and binary ordering can vary by Blender/platform version. Intermediate
+renders and logs stay in ignored `.cache/`. No `.blend` file is required.
