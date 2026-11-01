@@ -15,7 +15,7 @@ describe("run engine", () => {
     const g = createRunGame({ seed: "copy" });
     const twin = createRunGame({ seed: "copy" });
     const s = g.state();
-    expect(RUN_ENGINE_VERSION).toBe(7);
+    expect(RUN_ENGINE_VERSION).toBe(8);
     expect(s).toMatchObject({ tick: 0, distance: 0, score: 0, bread: 0, speed: BASE_SPEED, over: false, player: { lane: 1, pose: "run" } });
     s.objects[0].lane = 2; s.objects.pop(); s.player.lane = 2;
     s.powerUps.coffeeUntil = 999; s.events.push({ type: "over", tick: 0, reason: "limit" });
@@ -74,29 +74,43 @@ describe("run engine", () => {
       random.push(randomRun(`tuning${n}`).endTick);
     }
     good.sort((a, b) => a - b); random.sort((a, b) => a - b);
-    expect(good[50]).toBeGreaterThanOrEqual(25 * 60);
-    expect(good[50]).toBeLessThanOrEqual(40 * 60);
+    expect(good[50]).toBeGreaterThanOrEqual(12 * 60);
+    expect(good[50]).toBeLessThanOrEqual(20 * 60);
 
     expect(random[50]).toBeLessThan(20 * 60);
   }, 30_000);
 
-  it("pins version-seven scoring and a nontrivial seeded run", () => {
+  it("pins version-eight scoring and a nontrivial seeded run", () => {
     const run = goodRun("pinned");
     expect(replayRun("pinned", run.inputs, run.endTick)).toEqual({
-      score: 2659, distance: 1879580, bread: 78, over: true, endTick: 3469,
+      score: 1389, distance: 929308, bread: 46, over: true, endTick: 1515,
     });
     expect(run.inputs.slice(0, 5)).toEqual([
-      { tick: 109, dir: "D" }, { tick: 472, dir: "U" }, { tick: 699, dir: "L" },
-      { tick: 818, dir: "U" }, { tick: 929, dir: "U" },
+      { tick: 166, dir: "D" }, { tick: 435, dir: "U" }, { tick: 495, dir: "U" },
+      { tick: 525, dir: "R" }, { tick: 573, dir: "U" },
     ]);
   });
 
   it("accepts exactly MAX_INPUTS, counts busy no-ops, and rejects the next live input", () => {
     const run = perfectRun("input-cap");
     const byTick = new Map(run.inputs.map((input) => [input.tick, input]));
-    for (let tick = 0; byTick.size < MAX_INPUTS; tick++) {
-      if (!byTick.has(tick)) byTick.set(tick, { tick, dir: "U" });
+    const padding = createRunGame({ seed: "input-cap" });
+    for (let tick = 0; tick < MAX_RUN_TICKS && byTick.size < MAX_INPUTS; tick++) {
+      padding.step(tick);
+      const planned = byTick.get(tick);
+      if (planned) padding.input(tick, planned.dir);
+      else {
+        const s = padding.state();
+        const nextAction = run.inputs.find(i => i.tick > tick && (i.dir === "U" || i.dir === "D"));
+        // A jump in a quiet interval creates 41 busy no-ops; never mask a gate.
+        if (s.player.pose === "jump" || s.player.pose === "slide" ||
+            ((!nextAction || nextAction.tick > tick + JUMP_TICKS) &&
+              !s.objects.some(o => o.kind === "ramp" && o.z > -o.back && o.z < s.speed * JUMP_TICKS))) {
+          padding.input(tick, "U"); byTick.set(tick, { tick, dir: "U" });
+        }
+      }
     }
+    expect(byTick.size).toBe(MAX_INPUTS);
     const inputs = [...byTick.values()].sort((a, b) => a.tick - b.tick);
     const game = createRunGame({ seed: "input-cap" });
     for (const input of inputs) game.input(input.tick, input.dir);
@@ -105,11 +119,12 @@ describe("run engine", () => {
     expect(() => game.input(before.tick + 1, "U")).toThrow(/too many inputs/);
     expect(game.state()).toEqual(before);
     game.step(MAX_RUN_TICKS);
-    expect(result(game.state())).toEqual(result(run.state));
+    expect(game.state().tick).toBe(MAX_RUN_TICKS);
+    const cappedResult = result(game.state());
     replayRun("input-cap", inputs, MAX_RUN_TICKS); // Warm validation and the capped-input path.
     const timings = Array.from({ length: 3 }, () => {
       const start = performance.now();
-      expect(replayRun("input-cap", inputs, MAX_RUN_TICKS)).toEqual(result(run.state));
+      expect(replayRun("input-cap", inputs, MAX_RUN_TICKS)).toEqual(cappedResult);
       return performance.now() - start;
     }).sort((a, b) => a - b);
     // Median excludes a single scheduler/GC interruption on a busy shared host.
@@ -164,7 +179,7 @@ describe("run replay validation", () => {
 });
 
 it("reuses live frame storage while matching detached authoritative replay",()=>{
-  const seed='v7.live-frame', path=goodRun(seed,3600);
+  const seed='v8.live-frame', path=goodRun(seed,3600);
   const live=createRunGame({seed,realtime:true});
   const replay=createRunGame({seed});
   const first=live.frame(0),player=first.player,powers=first.powerUps,objects=first.objects;

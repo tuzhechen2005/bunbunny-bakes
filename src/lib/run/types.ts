@@ -1,12 +1,12 @@
-export const RUN_ENGINE_VERSION = 7;
+export const RUN_ENGINE_VERSION = 8;
 export const TICK_RATE = 60;
 export const UNITS_PER_METRE = 1000;
 export const MAX_RUN_TICKS = 15 * 60 * TICK_RATE;
 export const MAX_INPUTS = 20_000;
 /** Speeds are integer millimetres per tick. */
-export const BASE_SPEED = 420;
-export const CAP_SPEED = 620;
-export const RAMP_TICKS = 45 * TICK_RATE;
+export const BASE_SPEED = 480;
+export const CAP_SPEED = 680;
+export const RAMP_TICKS = 35 * TICK_RATE;
 export const MAX_SPEED = CAP_SPEED * 3 / 2;
 export const JUMP_TICKS = 42;
 export const SLIDE_TICKS = 36;
@@ -15,7 +15,7 @@ export const MAGNET_TICKS = 8 * TICK_RATE;
 export const COFFEE_TICKS = 6 * TICK_RATE;
 export const MIN_REACTION_TICKS = 30;
 export const MIN_REACTION_DISTANCE = MAX_SPEED * MIN_REACTION_TICKS;
-export const ROW_GAP = 54_000;
+export const ROW_GAP = 60_000;
 export const VISIBLE_DISTANCE = 90_000;
 export const LANES = [0, 1, 2] as const;
 export type RunLane = typeof LANES[number];

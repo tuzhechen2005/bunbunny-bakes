@@ -24,7 +24,16 @@ const GOOD_LOOKAHEAD_TICKS = 44;
 /** Search a time/lane graph using only public snapshots. Each edge is a legal
  * 12-tick lane change or wait, with swept occupancy checked on both halves. */
 export function searchDirection(s: RunState): RunDirection | null {
-  const hazards = s.objects.filter(o => isRunObstacle(o.kind) && o.kind !== "ramp");
+  const ramps = s.objects.filter(o => o.kind === "ramp");
+  const vans = s.objects.filter(o => o.kind === "van");
+  const roofSafe = (o: RunState["objects"][number]): boolean => o.kind === "van" &&
+    (ramps.some(r => r.lane === o.lane && r.z + r.back === o.z - o.front) ||
+      (s.player.lane === o.lane && s.player.surface === "roof" && o.z - o.front <= 0) ||
+      vans.some(v => v.lane === o.lane && v.z < o.z && v.z + v.back === o.z - o.front && roofSafe(v)));
+  const actionGate = (o: RunState["objects"][number]) =>
+    (o.kind === "flour" || o.kind === "awning") &&
+    s.objects.filter(h => h.z === o.z && h.kind === "cart").length === 2;
+  const hazards = s.objects.filter(o => isRunObstacle(o.kind) && o.kind !== "ramp" && !actionGate(o) && !roofSafe(o));
   const failed = new Set<string>();
   const travel = [0];
   for (let t = 1; t <= 120; t++) travel[t] = travel[t - 1] + runSpeed(s.tick + t, s.powerUps.coffeeUntil > s.tick + t);
@@ -40,7 +49,9 @@ export function searchDirection(s: RunState): RunDirection | null {
     for (const target of [lane, lane - 1, lane + 1]) {
       if (target < 0 || target > 2) continue;
       if (!safe(lane, t + 1, t + (target === lane ? 12 : 5)) ||
-          (target !== lane && !safe(target as RunLane, t + 6, t + 12))) continue;
+          (target !== lane && (!safe(target as RunLane, t + 6, t + 12) ||
+            s.objects.some(o => roofSafe(o) && o.lane === target &&
+              o.z - travel[t + 6] < o.front + 4000 && o.z - travel[t + 6] > -o.back)))) continue;
       const rest = search(target as RunLane, t + 12);
       if (rest) return [target === lane ? null : target < lane ? "L" : "R", ...rest];
     }
@@ -70,7 +81,11 @@ function run(seed: string, limit: number, mode: "good" | "random" | "perfect" | 
         nextRandom = s.tick + 12 + rng.int(25);
       }
     } else if (mode === "perfect" || mode === "ground") {
-      if (!s.player.laneChange && s.tick % 12 === 0) {
+      const gate = s.objects.find(o =>
+        (o.kind === "flour" || o.kind === "awning") && o.z > 0 && o.z <= s.speed * 18 &&
+        s.objects.filter(h => h.z === o.z && h.kind === "cart").length === 2);
+      if (gate && s.player.pose !== "jump" && s.player.pose !== "slide") swipe(gate.kind === "awning" ? "D" : "U");
+      else if (!s.player.laneChange && s.tick % 6 === 0) {
         const dir = searchDirection(mode === "ground" ? { ...s, objects: s.objects.map(o => o.kind === "ramp" ? { ...o, kind: "van" as const } : o) } : s);
         if (dir) swipe(dir);
       }
@@ -116,29 +131,5 @@ export const casualRun = goodRun;
 /** Ground control uses the same snapshot search but never enters a ramp. */
 export const groundOnlyRun = (seed: string, limit = MAX_RUN_TICKS) => run(seed, limit, "ground");
 
-/** Seek visible ramped roofs after the preceding row has cleared; otherwise use
- * the same ground search. No reserved-route metadata or future track access. */
-export function roofRun(seed: string, limit = MAX_RUN_TICKS): RunBotResult {
-  const game = createRunGame({ seed });
-  const inputs: RunInput[] = [];
-  let s = game.state();
-  let peakY = 0;
-  let targetId: number | undefined;
-  while (!s.over && s.tick < limit) {
-    if (!s.player.laneChange) {
-      let target = s.objects.find(o => o.id === targetId);
-      if (!target || target.z < -target.back) target = undefined;
-      if (!target) {
-        target = s.objects.find(o => o.kind === "van" && o.z - o.front > 14000 && o.z - o.front < 30000 &&
-          !s.objects.some(h => isRunObstacle(h.kind) && h.kind !== "ramp" && h.id !== o.id &&
-            h.z < o.z && h.z + h.back >= -2000));
-        targetId = target?.id;
-      }
-      const dir = target ? (target.lane === s.player.lane ? null : target.lane < s.player.lane ? "L" : "R") : searchDirection(s);
-      if (dir) { game.input(s.tick, dir); inputs.push({ tick: s.tick, dir }); }
-    }
-    game.step(s.tick + 1); s = game.state();
-    peakY = Math.max(peakY, s.player.y);
-  }
-  return { inputs, state: s, endTick: s.tick, over: s.over, peakY };
-}
+/** Roof routes are mandatory in v8; the snapshot search includes ramp support. */
+export const roofRun = perfectRun;

@@ -107,18 +107,17 @@ for a width that fits the place it is shown (rope, grid, detail: `sizes` in `src
 | `docs/TASKS.md` | Milestones |
 | `docs/HANDOFF.md` | Where things stand |
 
-### Dawn delivery runner (R7)
+### Dawn delivery runner (R13)
 
-`/game/run` uses engine/replay **v4**: starts at 320 mm/tick (19.2 m/s), reaches the
-500 mm/tick cap in 75 seconds, and retains coffee ×1.5 (maximum 750 mm/tick).
-Continuous obstacle depth, visible jump/slide clearance, and midpoint lane occupancy share geometry with the Canvas renderer and Blender.
-Old unfinished v1/v2/v3 runs/saves are rejected; stored finished scores remain unchanged.
-The rebuilt dawn-town art uses 256-sample, supersampled Blender renders and whole building
-sprites, with all shipped run assets capped at 1.5 MB. See [RUN client](docs/RUN_CLIENT.md),
-[engine rules](src/lib/run/README.md), and [art pipeline](assets-src/run/README.md).
-
-R7 checks: `npx tsc --noEmit --incremental false`, `npm run lint`,
-`npx vitest run --configLoader runner --project unit`. No browser execution in this task.
+`/game/run` uses engine/replay **v8**: starts at 480 mm/tick (28.8 m/s), reaches
+680 mm/tick (40.8 m/s) in 35 seconds, and coffee caps at 1020. Rows are 60m apart;
+obstacles begin around second 3, trucks around 15–16 seconds, with mandatory
+jump/slide-and-change gates and roof-only van trains. After about 60 seconds,
+every row requires an action or a roof route. Coffee is four times rarer per eligible row.
+The fixed casual bot median is **17.88s** (target 12–20s); snapshot search survives
+more than five minutes across 100 seeds. Old unfinished v1–v7 runs/saves are rejected;
+finished scores remain unchanged. See [engine rules and verification](src/lib/run/README.md)
+and [RUN client](docs/RUN_CLIENT.md). No components or browser execution in R13.
 
 ## 三连烤 weekly levels (S9)
 

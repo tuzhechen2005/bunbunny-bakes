@@ -1,7 +1,7 @@
-# Run engine — R10 / engine v7
+# Run engine — R13 / engine v8
 
-Pure deterministic TypeScript shared by replay and the client. `RUN_ENGINE_VERSION = 7`;
-new seeds and saves use `v7.`. Unfinished v1–v6 runs/saves are rejected, with existing
+Pure deterministic TypeScript shared by replay and the client. `RUN_ENGINE_VERSION = 8`;
+new seeds and saves use `v8.`. Unfinished v1–v7 runs/saves are rejected, with existing
 scores unchanged. Rendering is a separate frontend task: its object/art mapping must
 add `ramp`, `van`, and `truck` and use the new elevation/geometry fields.
 
@@ -25,7 +25,7 @@ Score remains `floor(distance / 1000) + bread * 10`, including roof bread.
 Every object exposes `id`, `kind`, `lane`, relative centre `z`, `front` and `back`
 (nonnegative extents from that centre), and `height`, all in mm. Trucks additionally
 expose `speed` in mm/tick; collectibles expose `y` for their road/roof placement.
-Objects sort by current z then id. Roof bread can extend up to 9m beyond a chunk's
+Objects sort by current z then id. Roof bread can extend up to 16m beyond a chunk's
 nominal end; the following chunk's first object remains farther ahead.
 
 `player.y` is integer feet height above the road. `surface` is `ground | roof`;
@@ -66,79 +66,73 @@ standing/sliding heights, jump apex (3600 mm), and projection constants.
 
 ## Patterns and tuning
 
-Base speed is 420 mm/tick, rising to 620 over 2700 ticks (45 seconds); coffee caps
-at 930. The independent seeded track stream is `${seed}:run:track:v1` (the enclosing
-v7 seed pins the rules). Three 54m pattern centres form each 162m chunk.
+Base speed is 480 mm/tick (28.8 m/s), rising to 680 (40.8 m/s) over
+2100 ticks (35 seconds); coffee caps at 1020. The independent seeded track stream
+is `${seed}:run:track:v1`; the enclosing v8 seed pins these rules. Three 60m rows
+form each 180m chunk, with a 30m initial offset. The first wall is at 90m, reached
+at about second 3.
 
-`RUN_PATTERNS` transitions from friendly street obstacles after 550m (about 20s
-without coffee) to mature density at 850m (about 30s). Mature draws are 45% ramp/van,
-25% truck and 30% street before phrase overrides. Every other phrase opens calmly,
-the middle permits trucks, and the exit holds the open lane and converts trucks to
-ramped vans. Powers remain in the introductory section.
+Density ramps from 240m to 720m. Ordinary draws reach 45% van, 25% truck, 30%
+street, before authored phrase overrides. Trucks are eligible from 480m, in middle
+rows (first possible centre 510m, encountered around 16s). Other truck draws become
+ramped vans, preserving recovery space after gates. Routes may change every row,
+but move at most one lane after 240m.
 
-Most mature bread objects are on vehicle roofs. Each separated ramp/van train has
-an ordinary roof line and ends with one golden loaf worth five bread, 2m before the
-roof ends. Rows with vans have only one ground loaf, with no ground exit bonus.
-Roughly half the truck draws carry three ordinary roof loaves. Magnet pulls ground,
-roof and golden bread in all lanes; scoring remains distance metres + bread ×10.
+From 360m, alternating phrases put an action gate in their middle or final row:
+two carts block the side lanes, flour or an awning fills the remaining lane, and a
+cart follows that lane 18m later. This requires a jump/slide and then a lane change.
+From 2340m (about 62s without coffee), every non-roof row has this combination,
+leaving no empty lane at its centre. At cap speed the follow-up arrives 0.44s later.
+This is the mechanical pressure target for experienced humans; no human playtest
+was performed for this backend task.
 
-The 45m spacing failed the higher-speed reaction invariant, so rows are now 54m.
-Early street rows leave at least 51.4m: enough at 930 mm/tick for 30 reaction ticks,
-two 12-tick changes and a one-tick margin (51.15m). Mature rows reserve a route that
-moves at most one lane. Using the conservative 12m truck-travel envelope, the worst
-free interval is 54m − 9m preceding rear − 18m truck front = 27m, exceeding the
-21.39m needed for 10 reaction ticks + 12 change ticks + one tick margin. Ramps are
-optional; no survival proof depends on roof use or powers.
+From 1260m, every third phrase requires roofs: three rows each have two touching
+12m vans in the route lane, one approach ramp, and carts in both other lanes.
+There is no ground route through the wall. Each 24m train ends in a golden loaf
+worth five bread; ordinary ramped vans also retain roof lines and a final gold.
+Most mature bread remains on roofs. Vehicle/action rows have one ground guide loaf;
+action rows no longer award a free ground exit line. Some trucks carry three loaves.
+Coffee is now 1/96 per introductory row (formerly 1/24); only the first three rows
+can have powers. Magnet has the same 1/96 draw and still attracts both elevations.
 
-Tests inspect 1,000 seeds × 12 chunks, execute early routes over 1,000 seeds, and run
-100 independent mature tracks for more than five minutes. `perfectRun` searches a
-120-tick time/lane graph using only public snapshots and swept lane occupancy; it
-never reads reserved-route metadata or depends on powers to bypass obstacles.
-`casualRun` (`goodRun` compatibility alias) samples at 10 Hz, waits 15 ticks, chooses
-randomly among apparently open lanes, and times jumps/slides from visible hazards.
-`randomRun` swipes random directions every 12–36 ticks.
+The 60m spacing preserves the maximum-coffee-speed bound. Early rows leave at
+least 57.4m, exceeding 1020 × (30 reaction + 24 crossing + 1 margin) = 56.1m.
+Mature routes move at most one lane. A roof train ends 18m after its row; the
+conservative truck envelope begins 18m before the next, leaving at least 24m,
+exceeding 1020 × (10 + 12 + 1) = 23.46m. Following an action row, trucks are
+excluded; its 19.4m rear and the next ramp's 13m approach leave 27.6m.
+The gate-to-follow-up gap leaves over 15m for a 12-tick lane change even at 1020.
+Consecutive action centres are at least 58 ticks apart, longer than either action.
+The next route is visible before choosing which side to take around the follow-up.
+These bounds supplement executed paths; roofs/actions are now part of the proof.
+
+Tests inspect 1,000 seeds × 16 chunks, execute early routes over 1,000 seeds, and run
+100 independent mature tracks for 18,001 ticks (>5 minutes). Another 100 paired
+tracks verify that ground-only control dies while roof-capable search survives.
+The former R10 requirement that ground-only play survive is intentionally replaced.
+`perfectRun` searches a 120-tick lane graph from public snapshots, treats contiguous
+ramped roofs as support, and schedules mandatory jump/slide gates from visible
+geometry. It never reads reserved-route metadata. Mature sections have no powers.
+`casualRun` is unchanged: 10 Hz samples, 15-tick motor delay, random choice among
+apparently open lanes, and visible jump/slide timing. `randomRun` swipes every 12–36 ticks.
 
 100 fixed `tuning0..tuning99` seeds, seconds (sorted index floor(N*p)):
 
 | Bot | p10 | Median | p90 |
 | --- | ---: | ---: | ---: |
-| Casual | 22.93 | 31.27 | 51.62 |
+| Casual | 12.58 | 17.88 | 21.27 |
 
-Calibration requires a casual median of 25–40 seconds. On 100 paired `reward0..99`
-tracks of 18,001 ticks, the ground-only bot collects 27,115 bread versus the roof
-bot's 113,348 (76.08% fewer). Both survive every track; each pair must satisfy
-≥40% fewer ground bread. The ground bot uses the snapshot search with ramps blocked
-and asserts zero elevation throughout; the roof bot seeks visible ramped vans.
-Full 15-minute perfect logs also exercise bounded replay, input caps and time-limit
-termination. The warmed capped-input replay median (three samples) must stay below
-100 ms; the ordinary full-run replay also retains its 100 ms check. Roof tests cover seams, front collisions, timed landings, slides, bread,
-falling and moving-truck batch/live equivalence. Existing queue, power, geometry,
-invalid-log, detached-state and seed/save/server checks remain in place.
+The calibration assertion is 12–20 seconds median. Full 15-minute search logs
+exercise bounded replay, input caps, and time-limit termination. Capped-input
+padding inserts busy action no-ops and quiet-interval jumps without masking gates.
+Replay retains the 100ms budget. Existing queue, collision, roof seam, moving truck,
+live/lazy equivalence, invalid-log, detached-state, seed/save/server checks remain.
+The e2e SEED is v8; browser execution is excluded from this task.
 
 ```sh
+npx prisma generate
 npx tsc --noEmit --incremental false
 npx eslint
 npx vitest run --configLoader runner --project unit --maxWorkers 1
-TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_run7_test npx vitest run --configLoader runner --project db
+TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_run8_test npx vitest run --configLoader runner --project db
 ```
-
-No browser checks are part of this backend task.
-
-
-## L1 authored track phrases and early-input regression
-
-After the 550m introduction, three-row phrases alternate calm approaches and
-vehicle bursts. Every other phrase opens with street obstacles, the middle row
-allows oncoming trucks, and the exit keeps the middle row's open lane and converts
-truck draws into ramped vans. A three-loaf ground reward follows exits without vans. Each van still
-has a contiguous 4m approach ramp and a roof-height bread line. Ground bread
-identifies the safe lane; side loaves appear only alongside an early paper bag.
-The truck visibility window stays 90m and the reserved-lane/reaction-distance proof
-still covers its full movement envelope, including maximum coffee speed.
-
-The reported tick-six regression is not a v5 collision or input rule: both left
-and right inputs on `v5.abcdef0123456789` work in lazy and realtime engines, complete
-by tick 18, and survive replay/resume. The page gates input on asynchronous renderer
-readiness. The e2e fixture now advances its installed clock while waiting for a
-positive simulation tick before sending a gesture. Unit tests reproduce both old
-and new seeds at ticks 6, 21 and 27; no browser was used for this work.

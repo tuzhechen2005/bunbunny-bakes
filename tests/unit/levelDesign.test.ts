@@ -38,7 +38,7 @@ it('introduces ants, mice, mixed groups, air immunity, then armor in separate le
   });
 });
 
-it.each(['v5.abcdef0123456789', 'v6.abcdef0123456789', 'v7.abcdef0123456789'])('accepts tick-six swipes in realtime, lazy replay and resume: %s', seed => {
+it.each(['v5.abcdef0123456789', 'v6.abcdef0123456789', 'v7.abcdef0123456789', 'v8.abcdef0123456789'])('accepts tick-six swipes in realtime, lazy replay and resume: %s', seed => {
   for (const dir of ['L','R'] as const) {
     const live=createRunGame({seed,realtime:true}), lazy=createRunGame({seed});
     live.frame(6); lazy.step(6);
@@ -54,22 +54,30 @@ it.each(['v5.abcdef0123456789', 'v6.abcdef0123456789', 'v7.abcdef0123456789'])('
 });
 
 
-it('makes mature phrases readable: reward holds its lane and trucks stay out of the exit', () => {
+it('allows mature exit lane changes, removes free gate rewards, and keeps trucks out of exits', () => {
+  let changes = 0, gates = 0;
   for (let seed=0;seed<100;seed++) {
     const track=createRunTrack(`phrase${seed}`);
     for(let index=0;index<20;index++) {
       const chunk=track.next();
-      if(chunk.start<550000) continue;
+      if(chunk.start<240000) continue;
       const mid=chunk.start+2*ROW_GAP, exit=chunk.end;
       const midLane=chunk.objects.find(o=>o.kind==='bread' && o.y===0 && o.z===mid-12000)!.lane;
       const exitLine=chunk.objects.filter(o=>o.kind==='bread' && o.y===0 && o.z===exit-12000);
-      expect(exitLine.map(o=>o.lane)).toEqual([midLane]);
+      expect(exitLine).toHaveLength(1);
+      const exitLane = exitLine[0].lane;
+      expect(Math.abs(exitLane - midLane)).toBeLessThanOrEqual(1);
+      if (exitLane !== midLane) changes++;
       expect(chunk.objects.some(o=>o.kind==='truck' && o.z===exit)).toBe(false);
       const hasVan = chunk.objects.some(o=>o.kind==='van' && o.z===exit);
-      expect(chunk.objects.filter(o=>o.kind==='bread' && o.y===0 && o.z>=exit && o.lane===midLane)).toHaveLength(hasVan ? 0 : 3);
-      if(index%2===0) expect(chunk.objects.some(o=>['truck','van'].includes(o.kind)&&o.z===chunk.start+ROW_GAP)).toBe(false);
+      const gate = chunk.objects.some(o=>o.lane===exitLane && o.z===exit && ['awning','flour'].includes(o.kind));
+      if (gate) gates++;
+      expect(chunk.objects.filter(o=>o.kind==='bread' && o.y===0 && o.z>=exit && o.lane===exitLane)).toHaveLength(hasVan || gate ? 0 : 3);
+      if (exit >= 2340000) expect(hasVan || gate).toBe(true);
     }
   }
+  expect(changes).toBeGreaterThan(0);
+  expect(gates).toBeGreaterThan(0);
 });
 
 // D7 makes all damage towers independently useful; support alone cannot win.
