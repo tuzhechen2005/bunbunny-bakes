@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createTdGame, replayTd, tdLevel, tdSeedVersion, TD_ENGINE_VERSION,
   FIELD_WIDTH, FIELD_HEIGHT, TD_SLOT_RADIUS, SUBUNITS, MAX_LEVEL_TICKS, MAX_INPUTS, MAX_IGNORED_INPUTS, TD_MAPS, pathLength, pathPosition,
-  towerStats, distanceSquared, type TdEvent, type TdInput,
+  towerStats, PESTS, distanceSquared, type TdEvent, type TdInput,
 } from "@/lib/td";
 import { greedyTd, randomTd } from "../support/tdBot";
 
@@ -10,9 +10,9 @@ const level = () => tdLevel("2026-10-26", 1);
 
 describe("TD deterministic level and geometry", () => {
   it("pins the version and generates five shared weekly waves", () => {
-    expect(TD_ENGINE_VERSION).toBe(6);
+    expect(TD_ENGINE_VERSION).toBe(7);
     expect(tdSeedVersion(level().seed)).toBe(TD_ENGINE_VERSION);
-    expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([340, 440, 522, 1360, 1360]);
+    expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([340, 240, 298, 820, 820]);
     expect(level()).toEqual(level());
     expect(level().waves).toHaveLength(5);
     expect(tdLevel("2026-11-02", 1).waves).not.toEqual(level().waves);
@@ -25,12 +25,28 @@ describe("TD deterministic level and geometry", () => {
     }
   });
 
+  it("reduces movement and early counts while preserving integer tower damage", () => {
+    for (const n of [1, 3, 5, 10, 20]) {
+      const l = tdLevel("2026-10-26", n);
+      for (const [wave, w] of l.waves.entries()) {
+        const ordinary = w.pests.filter(p => !p.boss);
+        const baseCount = Math.min(96, 9 + Math.floor((n - 1) * 1.5) + [0, 3, 6, 2, 12][wave]);
+        const percent = n <= 5 ? 70 : 100;
+        expect(ordinary.length).toBeGreaterThanOrEqual(Math.floor(baseCount * percent / 100));
+        expect(ordinary.length).toBeLessThanOrEqual(Math.floor((baseCount + 2) * percent / 100));
+        for (const p of ordinary) expect(p.speed).toBe(Math.floor(PESTS[p.kind].speed * (100 + Math.min(150, (n - 1) * 3)) * 80 / 10000));
+        for (const p of w.pests.filter(p => p.boss)) expect(p.speed).toBe(16);
+      }
+    }
+    expect(["rollingPin", "whisk", "oven"].map(k => towerStats(k as "rollingPin" | "whisk" | "oven").damage)).toEqual([24, 29, 124]);
+  });
+
   it("validates canonical weekly seeds and regenerates untrusted descriptors", () => {
     for (const week of ["2026-10-27", "2026-02-30", "2026-13-01", "2026-00-01", "0000-01-01", "week"]) {
       expect(() => tdLevel(week, 1)).toThrow();
     }
     for (const n of [0, -1, 1.1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) expect(() => tdLevel("2026-10-26", n)).toThrow();
-    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v4.td.2026-10-26.1", "v5.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
+    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v4.td.2026-10-26.1", "v5.td.2026-10-26.1", "v6.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
       expect(() => createTdGame({ seed })).toThrow();
     }
     for (const tierCount of [0, 101, 1.5, NaN]) expect(() => createTdGame({ level: level(), tierCount })).toThrow();
@@ -226,7 +242,7 @@ describe("TD combat and waves", () => {
     expect(g.apply({ tick: end, type: "callWave", slot: -1 })).toBe(false);
   });
 
-  it("applies only the strongest ground slow; sparrows fly along the same path unslowed", () => {
+  it("applies strongest aura slow and grounds sparrows without stacking", () => {
     const g = createTdGame({ level: tdLevel("2026-10-26", 4) });
     for (const slot of [0, 1]) g.apply({ tick: 0, type: "place", slot, tower: "flourSifter" });
     g.apply({ tick: 0, type: "callWave", slot: -1 });
@@ -237,9 +253,9 @@ describe("TD combat and waves", () => {
         const prev = before.pests.find(q => q.id === p.id);
         if (!prev) continue;
         const auras = before.towers.filter(t => distanceSquared(prev, t) <= towerStats(t.kind).range ** 2);
-        const slow = auras.length && p.kind !== "sparrow" ? 40 : 0;
-        expect(p.distance - prev.distance).toBe(Math.floor(p.speed * (100 - slow) / 100));
-        expect(p.slowed).toBe(slow > 0);
+        const slow = auras.length ? 40 : 0;
+        expect(p.distance - prev.distance).toBe(Math.floor((p.kind === "sparrow" && auras.length ? Math.floor(p.speed * 34 / 56) : p.speed) * (100 - slow) / 100));
+        expect(p.floured).toBe(g.state().towers.some(t => distanceSquared(p, t) <= towerStats(t.kind).range ** 2));
         expect({ x: p.x, y: p.y }).toEqual(pathPosition(TD_MAPS[0], p.distance));
         if (slow) slowed = true;
         if (auras.length && p.kind === "sparrow") flyingInAura = true;

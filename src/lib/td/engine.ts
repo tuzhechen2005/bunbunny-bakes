@@ -5,7 +5,7 @@ import {
   BREAD_ROLL_SPEED, type TdDroppedBread,
   MAX_INPUTS, MAX_LEVEL_TICKS, PREP_TICKS, START_BREAD, WAVE_COUNT,
   type TdEvent, type TdGame, type TdInput, type TdOptions, type TdPest,
-  type TdProjectile, type TdState, type TdTower,
+  type TdBatterPuddle, type TdProjectile, type TdState, type TdTower,
 } from "./types";
 
 export const validTdTick = (tick: number): boolean => Number.isSafeInteger(tick) && tick >= 0 && tick <= MAX_LEVEL_TICKS;
@@ -37,7 +37,9 @@ export function createTdGame(opts: TdOptions): TdGame {
   let inputsAccepted = 0, inputsRejected = 0, over = false, passed = false;
   let nextPest = 1, nextProjectile = 1;
   let pests: TdPest[] = [], projectiles: TdProjectile[] = [];
+  let batterPuddles: TdBatterPuddle[] = [];
   const towers: TdTower[] = [];
+  const shotOwners = new Map<number, TdTower>();
   let dropped: TdDroppedBread[] = [], lost = 0, nextBread = 1;
   let events: TdEvent[] = [];
 
@@ -53,12 +55,49 @@ export function createTdGame(opts: TdOptions): TdGame {
     spawnIndex = 0; spawnTick = tick + 1; nextWaveTick = null;
     events.push({ type: "waveStart", tick, wave, targetTier: waveTargetTier, bonus });
   };
+  let sifters: { tower: TdTower; stats: ReturnType<typeof towerStats> }[] = [];
+  const aura = (pest: TdPest) => {
+    let slow = 0;
+    pest.floured = false; pest.vulnerability = 0;
+    for (const { tower, stats } of sifters) if (distanceSquared(pest, tower) <= stats.range ** 2) {
+      pest.floured = true;
+      slow = Math.max(slow, stats.slowPercent);
+      pest.vulnerability = Math.max(pest.vulnerability, stats.vulnerability);
+    }
+    if (pest.kind !== "sparrow" || pest.floured) for (const puddle of batterPuddles) {
+      if (distanceSquared(pest, puddle) <= puddle.radius ** 2) slow = Math.max(slow, 30);
+    }
+    pest.slowed = slow > 0;
+    return slow;
+  };
   const hit = (pest: TdPest, shot: Pick<TdProjectile, "id" | "slot" | "damage" | "knockback" | "burn">) => {
     if (pest.hp <= 0) return;
-    const damage = Math.min(pest.hp, Math.max(1, shot.damage - pest.armor));
+    const tower = shotOwners.get(shot.id);
+    if (shot.id && tower?.kind === "rollingPin") {
+      tower.hitCount++;
+      if (tower.hitCount % 3 === 0) pest.stunnedUntil = tick + 24;
+    }
+    // Vulnerability applies after armor, including burn ticks; never stacks.
+    const damage = Math.min(pest.hp, Math.floor(Math.max(1, shot.damage - pest.armor) * (100 + pest.vulnerability) / 100));
+    if (shot.burn) {
+      pest.burnUntil = tick + 180;
+      if (!pest.burning) pest.burnTick = tick + 30;
+      pest.burnDamage = Math.max(pest.burning ? pest.burnDamage : 0, shot.burn);
+      pest.burnTower = shot.slot; pest.burning = true;
+    }
     pest.hp -= damage;
     events.push({ type: "hit", tick, projectile: shot.id, pest: pest.id, tower: shot.slot, damage });
     if (pest.hp === 0) {
+      if (pest.burning) {
+        const neighbor = pests.filter(p => p.id !== pest.id && p.hp > 0 && distanceSquared(p, pest) <= 120 ** 2)
+          .sort((a, b) => distanceSquared(a, pest) - distanceSquared(b, pest) || a.id - b.id)[0];
+        if (neighbor) {
+          neighbor.burnDamage = Math.max(neighbor.burning ? neighbor.burnDamage : 0, pest.burnDamage);
+          neighbor.burnUntil = tick + 180;
+          if (!neighbor.burning) neighbor.burnTick = tick + 30;
+          neighbor.burnTower = pest.burnTower; neighbor.burning = true;
+        }
+      }
       coins += pest.bounty;
       if (pest.carrying) {
         events.push({ type: "drop", tick, pest: pest.id, tiers: [...pest.carriedTiers], x: pest.x, y: pest.y });
@@ -71,14 +110,14 @@ export function createTdGame(opts: TdOptions): TdGame {
         pest.distance = Math.max(0, Math.min(end, pest.distance + (pest.returning ? 1 : -1) * shot.knockback));
         Object.assign(pest, pathPosition(map, pest.distance));
         pest.heading = pathHeading(map, pest.distance, pest.returning);
+        aura(pest);
       }
-      if (shot.burn) { pest.burnUntil = tick + 180; pest.burnTick = tick + 30; pest.burnDamage = shot.burn; pest.burnTower = shot.slot; }
     }
   };
   const advance = (toTick: number) => {
     // Inputs cannot change towers during an advance; reuse their stats across ticks.
     const combat = towers.map(tower => ({ tower, stats: towerStats(tower.kind, tower.level, tower.branch) }));
-    const sifters = combat.filter(({ tower }) => tower.kind === "flourSifter");
+    sifters = combat.filter(({ tower }) => tower.kind === "flourSifter");
     while (!over && tick < toTick) {
       tick++;
       // Timeout wins all ties; spawn exits resolve before damage.
@@ -86,7 +125,7 @@ export function createTdGame(opts: TdOptions): TdGame {
       if (nextWaveTick !== null && tick >= nextWaveTick) startWave(false);
       if (spawnTick !== null && tick >= spawnTick) {
         const spec = level.waves[wave - 1].pests[spawnIndex++];
-        const pest: TdPest = { ...spec, ...pathPosition(map, 0), id: nextPest++, wave, distance: 0, maxHp: spec.hp, slowed: false, heading: pathHeading(map, 0), carrying: 0, carriedTiers: [], returning: false, flourUntil: 0, flourDamage: 0, flourTower: -1, flourChip: 0, burnUntil: 0, burnTick: 0, burnDamage: 0, burnTower: -1 };
+        const pest: TdPest = { ...spec, ...pathPosition(map, 0), id: nextPest++, wave, distance: 0, maxHp: spec.hp, slowed: false, heading: pathHeading(map, 0), carrying: 0, carriedTiers: [], returning: false, stunnedUntil: 0, floured: false, burning: false, vulnerability: 0, burnUntil: 0, burnTick: 0, burnDamage: 0, burnTower: -1 };
         pests.push(pest);
         if (pest.boss) events.push({ type: "bossSpawn", tick, pest: pest.id, wave });
         events.push({ type: "spawn", tick, pest: pest.id, kind: pest.kind, wave });
@@ -105,24 +144,13 @@ export function createTdGame(opts: TdOptions): TdGame {
         }
       }
       dropped = dropped.filter(b => b.distance < end);
+      batterPuddles = batterPuddles.filter(p => p.until > tick);
       for (const pest of pests) {
-        let slow = 0, chip = 0, source = -1;
-        if (pest.kind !== "sparrow") for (const { tower, stats } of sifters) {
-          if (distanceSquared(pest, tower) <= stats.range ** 2) {
-            slow = Math.max(slow, stats.slowPercent);
-            if (stats.chipDps > chip) { chip = stats.chipDps; source = tower.slot; }
-            if (stats.linger) { pest.flourUntil = tick + stats.linger; pest.flourDamage = stats.chipDps; pest.flourTower = tower.slot; }
-          }
-        }
-        // Strongest aura wins; branch-a coating persists for 60 ticks after exit.
-        if (pest.flourUntil >= tick) {
-          slow = Math.max(slow, 65);
-          if (pest.flourDamage > chip) { chip = pest.flourDamage; source = pest.flourTower; }
-        }
-        pest.flourChip += chip;
-        pest.flourTower = source;
-        pest.slowed = slow > 0;
-        const speed = Math.max(1, Math.floor(pest.speed * (100 - slow) * (pest.carrying ? 80 : 100) / 10000));
+        const slow = aura(pest);
+        pest.burning = pest.burnUntil >= tick && pest.burnDamage > 0;
+        // Grounded birds use the mouse species speed ratio before slowing.
+        const baseSpeed = pest.kind === "sparrow" && pest.floured ? Math.floor(pest.speed * 34 / 56) : pest.speed;
+        const speed = pest.stunnedUntil > tick ? 0 : Math.max(1, Math.floor(baseSpeed * (100 - slow) * (pest.carrying ? 80 : 100) / 10000));
         pest.distance = Math.max(0, Math.min(end, pest.distance + (pest.returning ? -speed : speed)));
         Object.assign(pest, pathPosition(map, pest.distance));
         if (!pest.returning && pest.distance === end) {
@@ -139,12 +167,8 @@ export function createTdGame(opts: TdOptions): TdGame {
       }
       pests = pests.filter(p => !(p.returning && p.distance === 0));
       if (lost === START_BREAD) { finish("bread"); break; }
-      for (const pest of pests) if (pest.flourChip >= 60) {
-        const damage = Math.floor(pest.flourChip / 60);
-        pest.flourChip %= 60;
-        // Fine flour chips ignore armor; integer accumulation gives exact tier DPS.
-        hit(pest, { id: 0, slot: pest.flourTower, damage: damage + pest.armor, knockback: 0, burn: 0 });
-      }
+      // Damage and snapshots use membership at the resulting position.
+      for (const pest of pests) aura(pest);
       for (const pest of pests) if (pest.burnUntil >= tick && pest.burnDamage && tick >= pest.burnTick) {
         hit(pest, { id: 0, slot: pest.burnTower, damage: pest.burnDamage, knockback: 0, burn: 0 });
         pest.burnTick = tick + 30;
@@ -158,7 +182,8 @@ export function createTdGame(opts: TdOptions): TdGame {
         shot.y = shot.fromY + Math.trunc((shot.targetY - shot.fromY) * age / flight);
         if (tick >= shot.hitTick) {
           if (shot.splash) {
-            for (const pest of pests) if (distanceSquared(pest, { x: shot.targetX, y: shot.targetY }) <= shot.splash ** 2) hit(pest, shot);
+            batterPuddles.push({ x: shot.targetX, y: shot.targetY, radius: shot.splash, until: tick + 120 });
+            for (const pest of pests) if ((pest.kind !== "sparrow" || pest.floured) && distanceSquared(pest, { x: shot.targetX, y: shot.targetY }) <= shot.splash ** 2) hit(pest, shot);
           } else if (target) {
             for (let strike = 0; strike < shot.strikes; strike++) hit(target, shot);
             if (shot.pierce) {
@@ -176,6 +201,7 @@ export function createTdGame(opts: TdOptions): TdGame {
           }
         }
       }
+      for (const shot of projectiles) if (shot.hitTick <= tick) shotOwners.delete(shot.id);
       projectiles = projectiles.filter(p => p.hitTick > tick);
       pests = pests.filter(p => p.hp > 0);
 
@@ -183,7 +209,7 @@ export function createTdGame(opts: TdOptions): TdGame {
       for (const { tower, stats } of combat) {
         if (tower.kind === "flourSifter" || tower.readyTick > tick) continue;
         let target: TdPest | undefined;
-        for (const pest of pests) if (distanceSquared(tower, pest) <= stats.range ** 2
+        for (const pest of pests) if ((tower.kind !== "whisk" || pest.kind !== "sparrow" || pest.floured) && distanceSquared(tower, pest) <= stats.range ** 2
           && (!target || pest.distance > target.distance || (pest.distance === target.distance && pest.id < target.id))) target = pest;
         tower.target = target?.id ?? null;
         if (!target) continue;
@@ -193,6 +219,7 @@ export function createTdGame(opts: TdOptions): TdGame {
           bornTick: tick, hitTick: tick + stats.flight, damage: stats.damage, splash: stats.splash, strikes: stats.strikes, knockback: stats.knockback, burn: stats.burn, pierce: stats.pierce,
         };
         tower.target = target.id; tower.lastAttackTick = tick;
+        shotOwners.set(shot.id, tower);
         projectiles.push(shot); tower.readyTick = tick + stats.cooldown;
         events.push({ type: "shot", tick, projectile: shot.id, slot: tower.slot, target: target.id });
       }
@@ -212,6 +239,7 @@ export function createTdGame(opts: TdOptions): TdGame {
       target: pests.some(p => p.id === t.target) ? t.target : null,
       cooldownProgress: t.lastAttackTick === null ? 100 : Math.min(100, Math.floor((tick - t.lastAttackTick) * 100 / Math.max(1, t.readyTick - t.lastAttackTick))),
     })),
+    batterPuddles: batterPuddles.map(p => ({ ...p })),
     projectiles: projectiles.map(p => ({ ...p })), events: cloneEvents(),
   });
   return {
@@ -235,7 +263,7 @@ export function createTdGame(opts: TdOptions): TdGame {
           const cost = towerStats(input.tower).cost;
           if (tower || coins < cost) return reject();
           coins -= cost;
-          towers.push({ ...map.slots[input.slot], slot: input.slot, kind: input.tower, level: 0, spent: cost, readyTick: tick + 1, tier: 0, branch: null, target: null, cooldownProgress: 100, lastAttackTick: null });
+          towers.push({ ...map.slots[input.slot], slot: input.slot, kind: input.tower, level: 0, spent: cost, readyTick: tick + 1, tier: 0, branch: null, target: null, cooldownProgress: 100, lastAttackTick: null, hitCount: 0 });
           towers.sort((a, b) => a.slot - b.slot);
           events.push({ type: "place", tick, slot: input.slot, tower: input.tower, tier: 0, branch: null });
         } else if (input.type === "upgrade") {

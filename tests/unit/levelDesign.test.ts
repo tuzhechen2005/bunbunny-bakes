@@ -71,9 +71,9 @@ it('makes mature phrases readable: reward holds its lane and trucks stay out of 
   }
 });
 
-// Easier L2 permits splash-only wins on favorable weeks; retain the other counters.
-it.each(['rollingPin','flourSifter','oven'] as const)('a single %s strategy remains vulnerable to late speed and armor', kind => {
-  for(const n of [10,20]) expect(singleTowerTd(tdLevel('2026-10-26',n),kind).state.passed).toBe(false);
+// D7 makes all damage towers independently useful; support alone cannot win.
+it('a sifter-only strategy cannot clear without a damage tower', () => {
+  for (const n of [1, 10, 20]) expect(singleTowerTd(tdLevel('2026-10-26', n), 'flourSifter').state.passed).toBe(false);
 }, 30000);
 
 it('sweeps left to right through three, four and five long vertical runs with rounded turns', () => {

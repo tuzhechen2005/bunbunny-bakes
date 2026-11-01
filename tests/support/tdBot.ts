@@ -21,7 +21,7 @@ function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind) {
   };
   const strength = (slot: number, kind: TowerKind, tier: number, branch?: TdBranch) => {
     const stats = towerStats(kind, tier, branch);
-    return coverage(slot, kind, tier, branch) * (stats.damage * stats.strikes + stats.burn * 4 + stats.chipDps * 3) * (kind === "whisk" ? (stats.splash > 100 ? 4 : 3) : kind === "oven" ? (stats.pierce ? 1.8 : 0.8) : 1) / Math.max(60 * Number(kind === "flourSifter"), stats.cooldown);
+    return coverage(slot, kind, tier, branch) * (stats.damage * stats.strikes + stats.burn * 4 + stats.vulnerability * 2) * (kind === "whisk" ? (stats.splash > 100 ? 4 : 3) : kind === "oven" ? (stats.pierce ? 1.8 : 0.8) : 1) / Math.max(60 * Number(kind === "flourSifter"), stats.cooldown);
   };
   const values = map.slots.map((_, slot) => Object.fromEntries(TOWER_KINDS.map(kind => [kind,
     [0, 1, 2].map(tier => strength(slot, kind, tier)),
@@ -44,18 +44,20 @@ function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind) {
           if (onlyKind && kind !== onlyKind) continue;
           let value = values[slot][kind][0];
           if (kind === "flourSifter") {
-            // Extra firing time, discounted for air units and partial range overlap.
+            // Extra firing time plus vulnerability, discounted for partial overlap.
             value += state.towers.filter(t => t.kind !== "flourSifter" && distanceSquared(t, map.slots[slot]) < 400 ** 2)
-              .reduce((sum, t) => sum + values[t.slot][t.kind][t.level], 0) * 0.25;
+              .reduce((sum, t) => sum + values[t.slot][t.kind][t.level], 0) * 0.65;
             if (state.towers.some(t => t.kind === "flourSifter" && distanceSquared(t, map.slots[slot]) < 340 ** 2)) value = 0;
           }
+          // Diminishing role value: control, splash and armor coverage complement each other.
+          value /= 1 + state.towers.filter(t => t.kind === kind).length * 1.5;
           const cost = towerStats(kind).cost;
           candidates.push({ input: { tick: state.tick, type: "place", slot, tower: kind }, cost, value: value / cost });
         } else if (tower.level < 2) {
           const cost = towerStats(tower.kind, tower.level + 1).cost;
           for (const branch of tower.level === 1 ? ["a", "b"] as const : [undefined]) {
             candidates.push({ input: { tick: state.tick, type: "upgrade", slot, ...(branch ? { branch } : {}) }, cost,
-              value: ((branch ? branchValues[slot][tower.kind][branch] : values[slot][tower.kind][tower.level + 1]) - values[slot][tower.kind][tower.level]) / cost });
+              value: ((branch ? branchValues[slot][tower.kind][branch] : values[slot][tower.kind][tower.level + 1]) - values[slot][tower.kind][tower.level]) / cost / (1 + state.towers.filter(t => t.kind === tower.kind).length * 1.5) });
           }
         }
       }
