@@ -61,7 +61,7 @@ export function SpecialMark({ kind }: { kind: "roll" | "big" }) {
   return <span className={`m3-special m3-special-${kind}`} aria-hidden="true">
     {/* Static SVGs carry the illustration palette and stay crisp at board size. */}
     {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img src={`/brand/m3/${kind}.svg`} alt="" width={64} height={64} draggable={false} />
+    <img src={`/brand/art/game/m3-${kind}.webp`} alt="" width={64} height={64} draggable={false} />
   </span>;
 }
 

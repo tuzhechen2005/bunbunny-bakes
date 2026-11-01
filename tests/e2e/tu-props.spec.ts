@@ -120,7 +120,7 @@ test("orders are labelled and show their reward; the props bar shows counts and 
     await expect(page.getByTestId(`tu-prop-count-${k}`)).toHaveText("1");
     const box = (await page.getByTestId(`tu-prop-${k}`).boundingBox())!;
     expect(Math.min(box.width, box.height)).toBeGreaterThanOrEqual(44);
-    await expect(page.getByTestId(`tu-prop-${k}`).locator("svg")).toHaveCount(1);
+    await expect(page.getByTestId(`tu-prop-${k}`).locator("img")).toHaveCount(1); // D167 clay prop art
   }
   await shot(page, "props-bar");
   await shot(page, "order-labels");

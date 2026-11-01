@@ -13,7 +13,7 @@
 .grab-hud p:last-child { text-align:right; }
 .grab-hud b { display:block; color:var(--c-ink); font-size:38px; line-height:1.15; font-weight:400; }
 .grab-bakery { position:relative; height:76px; flex-shrink:0; pointer-events:none; z-index:2; }
-.grab-bunny { position:absolute; height:94px; width:108px; bottom:calc(100% - 11px); left:50%; pointer-events:none; z-index:3; transform:translateX(-50%); }
+.grab-bunny { position:absolute; height:96px; width:110px; object-fit:contain; bottom:calc(100% - 11px); left:50%; pointer-events:none; z-index:3; transform:translateX(-50%); }
 .grab-board { display:block; position:relative; isolation:isolate; height:100%; width:100%; padding:0; border:0; border-radius:22px 22px 30px 30px; overflow:hidden; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; cursor:pointer;
   background:
     radial-gradient(130% 70% at 50% 0%, rgba(255,238,210,.5), transparent 62%),
@@ -23,7 +23,7 @@
   box-shadow:inset 0 16px 20px -12px rgba(74,38,14,.5), inset 0 0 0 1px rgba(96,54,22,.28), 0 14px 26px -16px rgba(74,38,14,.55); }
 .grab-board:focus-visible { outline:2px solid var(--c-ink); outline-offset:3px; }
 .grab-board > * { pointer-events:none; }
-.grab-oven { position:absolute; width:18%; height:auto; right:1%; top:2%; transition:opacity 180ms; opacity:.85; }
+.grab-oven { position:absolute; width:19%; height:auto; right:1%; top:2%; transition:opacity 180ms; opacity:.85; }
 .grab-oven-warm { opacity:1; }
 .grab-item { position:absolute; display:block; transform:translate(-50%,-50%); }
 /* Parchment under each bread: static shadow, painted once (no per-frame filters). */

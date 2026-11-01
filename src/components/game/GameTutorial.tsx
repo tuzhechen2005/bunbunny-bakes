@@ -11,7 +11,7 @@ const t = copy.customer.tutorial;
 const KEY = (g: TutorialGame) => `bb_tutorial_${g}_v1`;
 
 const Img = ({ src, className = "" }: { src: string; className?: string }) => <img src={src} alt="" draggable={false} className={className} />;
-const Tap = ({ className = "" }: { className?: string }) => <span className={`tut-tap ${className}`} aria-hidden="true" />;
+const Tap = ({ className = "" }: { className?: string }) => <span className={`tut-tap ${className}`} aria-hidden="true"><img src="/brand/art/game/tut-finger.webp" alt="" draggable={false} /></span>;
 const Swipe = ({ dir }: { dir: "x" | "up" | "down" }) => <span className={`tut-swipe tut-swipe-${dir}`} aria-hidden="true" />;
 const Tile = ({ tone, className = "" }: { tone: number; className?: string }) =>
   <span className={`tut-tile tut-tone-${tone} ${className}`}><Img src="/brand/grab/bread.svg" /></span>;
@@ -24,19 +24,19 @@ const SCENES: Record<TutorialGame, ReactNode[]> = {
     <><span className="tut-topline" /><span className="tut-pile">{[0, 1, 2, 3, 4].map(i => <Img key={i} src="/brand/grab/bread.svg" />)}</span></>,
   ],
   tu: [
-    <><span className="tut-stack"><Tile tone={1} /><Tile tone={2} className="tut-under" /></span><Tap className="tut-at-stack" /><Img src="/brand/bag.webp" className="tut-bag" /></>,
-    <><span className="tut-row"><Tile tone={1} className="tut-pack" /><Tile tone={1} className="tut-pack" /><Tile tone={1} className="tut-pack" /></span><Img src="/brand/bag.webp" className="tut-bag" /></>,
+    <><span className="tut-stack"><Tile tone={1} /><Tile tone={2} className="tut-under" /></span><Tap className="tut-at-stack" /><Img src="/brand/art/game/tu-bag.webp" className="tut-bag" /></>,
+    <><span className="tut-row"><Tile tone={1} className="tut-pack" /><Tile tone={1} className="tut-pack" /><Tile tone={1} className="tut-pack" /></span><Img src="/brand/art/game/tu-bag.webp" className="tut-bag" /></>,
     <><span className="tut-order"><Tile tone={3} /><b>×3</b><i>+</i></span></>,
   ],
   m3: [
     <><span className="tut-grid"><Tile tone={1} /><Tile tone={2} className="tut-swap-a" /><Tile tone={1} className="tut-swap-b" /><Tile tone={1} /></span><Swipe dir="x" /></>,
-    <><Img src="/brand/m3/roll.svg" className="tut-hop" /><Img src="/brand/m3/big.svg" className="tut-hop tut-late" /></>,
+    <><Img src="/brand/art/game/m3-roll.webp" className="tut-hop" /><Img src="/brand/art/game/m3-big.webp" className="tut-hop tut-late" /></>,
     <><span className="tut-meter"><i /></span><b className="tut-count font-num">9</b></>,
   ],
   grab: [
-    <><Img src="/brand/grab/bunny.svg" className="tut-bunny" /><span className="tut-arm"><Img src="/brand/grab/tongs.svg" /></span><Tap className="tut-at-bottom" /></>,
+    <><Img src="/brand/art/game/grab-bunny.webp" className="tut-bunny" /><span className="tut-arm"><Img src="/brand/art/game/grab-tongs.webp" /></span><Tap className="tut-at-bottom" /></>,
     <><span className="tut-row"><Tile tone={4} className="tut-raw" /><Tile tone={1} className="tut-gold" /><Tile tone={5} className="tut-burnt" /></span></>,
-    <><Img src="/brand/grab/flour.svg" className="tut-heavy" /><Img src="/brand/grab/clock.svg" className="tut-hop" /></>,
+    <><Img src="/brand/art/game/grab-flour.webp" className="tut-heavy" /><Img src="/brand/art/game/grab-clock.webp" className="tut-hop" /></>,
   ],
   run: [
     <><span className="tut-lanes" /><Img src="/brand/run.svg" className="tut-runner tut-lane-move" /><Swipe dir="x" /></>,

@@ -9,7 +9,7 @@ import { haptic } from '@/lib/motion/react';
 import { applyTdClientInput } from './tdInput';
 import { createTdClock } from './tdClock';
 import { preloadTdArt } from './tdAssets';
-import { breadImages, createTdRenderer, type TdView } from './tdRenderer';
+import { breadImages, createTdRenderer, loadTdDeco, type TdView } from './tdRenderer';
 import type { TdSave } from './tdSave';
 
 const t = copy.customer.td;
@@ -112,9 +112,9 @@ export function TdBoard({ save, paused, soundOn, reduced, onProgress, onOver }: 
       publish(true);
     };
     document.addEventListener('visibilitychange', visibility, true); window.addEventListener('pagehide', stop, true);
-    void Promise.all([preloadTdArt(), breadImages(save.tiers)]).then(([art, photos]) => {
+    void Promise.all([preloadTdArt(), breadImages(save.tiers), loadTdDeco()]).then(([art, photos, deco]) => {
       if (!alive || !canvas.current) return;
-      view.current = createTdRenderer(canvas.current, state.current.map, art, save.tiers, photos, reduced);
+      view.current = createTdRenderer(canvas.current, state.current.map, art, save.tiers, photos, reduced, deco);
       resize(); setReady(true); publish(true); start();
     });
     return () => {

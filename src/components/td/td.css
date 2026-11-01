@@ -108,3 +108,15 @@
 .td-dot-a { background:#e07a3f; } .td-dot-b { background:#4f8fc0; }
 .td-info .td-ctl-main { align-self:center; min-width:140px; }
 .td-ctl-info { font-family:inherit; font-size:13px; font-weight:700; background:transparent; border:1.5px solid var(--c-line); }
+/* Clay pass (D167): controls, chips and cards follow the shared kit. */
+.td-shell { background:transparent; }
+.td-ctl { background:linear-gradient(180deg,#fffaf1,#f3e7d3); color:#5a4232; box-shadow:0 4px 0 #d8c3a3, inset 0 2px 0 #fff; transition:transform 90ms ease-out, box-shadow 90ms ease-out; }
+.td-ctl:active:not(:disabled) { transform:translateY(3px); box-shadow:0 1px 0 #d8c3a3; }
+.td-ctl[aria-pressed=true] { background:linear-gradient(180deg,#a9b89c,#8fa082); color:#fff; box-shadow:0 4px 0 #6d7d61; }
+.td-ctl-main { background:linear-gradient(180deg,#d4927a,#c27a5f); color:#fff8ec; box-shadow:0 5px 0 #8f5440, inset 0 2px 0 rgba(255,255,255,.28); }
+.td-ctl-main:active:not(:disabled) { box-shadow:0 1px 0 #8f5440; }
+.td-ctl-info { background:transparent; box-shadow:none; border:1.5px solid #e2cfb1; }
+.td-chip { background:#fff8ec; box-shadow:0 3px 0 #e2cfb1; }
+.td-card { background:linear-gradient(180deg,#fffaf1,#f3e7d3); box-shadow:0 3px 0 #d8c3a3, inset 0 2px 0 #fff; }
+.td-branch-a { background:linear-gradient(180deg,#fbe6d6,#f4d2bb); } .td-branch-b { background:linear-gradient(180deg,#e3edf5,#cfdfec); }
+.td-tray, .td-info { background:rgba(255,250,242,.97); box-shadow:0 6px 0 #e2cfb1, 0 18px 30px -12px rgba(60,30,10,.45); }

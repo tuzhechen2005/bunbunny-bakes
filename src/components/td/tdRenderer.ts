@@ -21,7 +21,14 @@ export async function breadImages(tiers: TierView[]): Promise<(HTMLImageElement 
 
 export interface TdView { draw(s: TdState, selected: number | null, preview: TowerKind | null): void; ingest(events: TdEvent[], s: TdState): void; resize(): void }
 
-export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, art: TdArt, tiers: TierView[], photos: (HTMLImageElement | null)[], reduced: boolean): TdView {
+export interface TdDeco { slot?: HTMLImageElement | null; plate?: HTMLImageElement | null }
+export async function loadTdDeco(): Promise<TdDeco> {
+  const one = async (src: string) => { try { const i = new Image(); i.src = src; await i.decode(); return i; } catch { return null; } };
+  const [slot, plate] = await Promise.all([one('/brand/art/game/td-slot.webp'), one('/brand/art/game/td-plate.webp')]);
+  return { slot, plate };
+}
+
+export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, art: TdArt, tiers: TierView[], photos: (HTMLImageElement | null)[], reduced: boolean, deco: TdDeco = {}): TdView {
   const ctx = canvas.getContext('2d')!;
   const map = TD_MAPS[mapIndex], last = map.path[map.path.length - 1];
   // The path exits the board; the plate sits just inside so the whole pile stays visible.
@@ -44,6 +51,7 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
   bg.fillStyle = vig; bg.fillRect(0, 0, W, H);
   // Slot pads: stone discs with a dashed rim, drawn by the frontend (no baked pads).
   for (const slot of map.slots) {
+    if (deco.slot) { const d = (TD_SLOT_RADIUS + 8) * 2; bg.drawImage(deco.slot, slot.x - d / 2, slot.y - d * .42, d, d * .84); continue; }
     bg.save(); bg.translate(slot.x, slot.y); bg.scale(1, .82);
     bg.fillStyle = 'rgba(60,30,10,.25)'; bg.beginPath(); bg.arc(0, 8, TD_SLOT_RADIUS + 4, 0, 7); bg.fill();
     const g = bg.createRadialGradient(-12, -14, 4, 0, 0, TD_SLOT_RADIUS + 4);
@@ -53,11 +61,12 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
     bg.restore();
   }
   // Plate at the path end where the bread pile sits.
-  bg.save(); bg.translate(end.x, end.y); bg.scale(.78, .78 * .62);
+  if (deco.plate) bg.drawImage(deco.plate, end.x - 92, end.y - 46, 184, 115);
+  else { bg.save(); bg.translate(end.x, end.y); bg.scale(.78, .78 * .62);
   bg.fillStyle = 'rgba(60,30,10,.28)'; bg.beginPath(); bg.arc(0, 14, 92, 0, 7); bg.fill();
   bg.fillStyle = '#fbf6ee'; bg.beginPath(); bg.arc(0, 0, 88, 0, 7); bg.fill();
   bg.strokeStyle = '#e7d9c4'; bg.lineWidth = 6; bg.beginPath(); bg.arc(0, 0, 70, 0, 7); bg.stroke();
-  bg.restore();
+  bg.restore(); }
 
   // Rounded photo tokens with a cream rim and shadow, one per tier.
   const tokens = tiers.map((_, i) => {

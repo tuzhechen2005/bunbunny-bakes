@@ -111,3 +111,5 @@
 .tut-on { background:#3b2a1f; color:#fbf3e6; animation:tut-bob 1400ms ease-in-out infinite; }
 @keyframes tut-bob { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-5px); } }
 @media (prefers-reduced-motion:reduce) { .tut-backdrop *, .tut-backdrop { animation:none !important; } }
+.tut-tap img { position:absolute; width:52px; left:16px; top:14px; animation:tut-press 1400ms ease-in-out infinite; }
+@keyframes tut-press { 0%,100% { transform:translate(6px,6px); } 30% { transform:none; } }

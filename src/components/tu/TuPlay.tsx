@@ -25,29 +25,10 @@ const SEEN_KEY = "bb_tu_orders_seen_v1";
 const MAX_SLOTS = 7;
 
 /** Our own line icons, ink colour: magnifier, paper bag with a plus, two swap arrows. */
+const PROP_ART: Record<PropKind, string> = { peek: "tu-peek", bag: "tu-bag-plus", swap: "tu-swap" };
 function PropIcon({ kind }: { kind: PropKind }) {
-  const common = { viewBox: "0 0 24 24", className: "size-6", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
-  if (kind === "peek")
-    return (
-      <svg {...common}>
-        <circle cx="10.5" cy="10.5" r="6" />
-        <path d="M15 15l5 5" />
-      </svg>
-    );
-  if (kind === "bag")
-    return (
-      <svg {...common}>
-        <path d="M5.5 8.5h13l-1 11.5h-11z" />
-        <path d="M9 8.5V7a3 3 0 0 1 6 0v1.5" />
-        <path d="M12 11.8v5M9.5 14.3h5" />
-      </svg>
-    );
-  return (
-    <svg {...common}>
-      <path d="M4 8h15M15.5 4.5L19 8l-3.5 3.5" />
-      <path d="M20 16H5M8.5 12.5L5 16l3.5 3.5" />
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element -- static clay prop art
+  return <img src={`/brand/art/game/${PROP_ART[kind]}.webp`} alt="" aria-hidden="true" draggable={false} className="size-8 object-contain" />;
 }
 
 /** One bread tile face: the tier colour, the photo inside, the first character when there is no photo. */

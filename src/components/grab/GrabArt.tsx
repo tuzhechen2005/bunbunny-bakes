@@ -4,10 +4,12 @@ import { photoUrl } from "@/lib/photo";
 import type { GrabItem } from "@/lib/grab";
 import type { TierView } from "@/components/game/types";
 
+// D167 clay sprites; anything without a clay version keeps its original SVG.
+const CLAY = new Set(["bunny", "oven", "tongs", "arm", "flour", "butter", "clock", "sparkle"]);
+export const grabArtSrc = (name: string) => CLAY.has(name) ? `/brand/art/game/grab-${name}.webp` : `/brand/grab/${name}.svg`;
 export function GrabArt({ name, className = "" }: { name: string; className?: string }) {
-  // Illustration colors live in the original SVG assets.
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={`/brand/grab/${name}.svg`} alt="" draggable={false} className={className} />;
+  return <img src={grabArtSrc(name)} alt="" draggable={false} className={className} />;
 }
 export function GrabFace({ item, tiers }: { item: GrabItem; tiers: TierView[] }) {
   const [broken, setBroken] = useState(false);

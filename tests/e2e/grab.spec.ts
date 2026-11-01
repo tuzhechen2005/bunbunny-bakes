@@ -95,7 +95,7 @@ for(const width of [320,390]) {
    const boxes=await Promise.all(["big","tu","m3","grab"].map(k=>page.getByTestId(`hub-game-${k}`).boundingBox()));
    expect(boxes[0]!.y).toBe(boxes[1]!.y);expect(boxes[2]!.y).toBe(boxes[3]!.y);expect(boxes[2]!.y).toBeGreaterThan(boxes[0]!.y);
    await page.getByTestId("hub-game-grab").click();await expect(page.getByRole("heading",{level:1})).toHaveText(t.title);
-   for(const art of ["tongs","bread","clock"]) await expect(page.getByTestId(`grab-help-${art}`).locator("img")).toHaveAttribute("src",`/brand/grab/${art}.svg`);
+   for(const art of ["tongs","bread","clock"]) await expect(page.getByTestId(`grab-help-${art}`).locator("img")).toHaveAttribute("src",art==="bread"?"/brand/grab/bread.svg":`/brand/art/game/grab-${art}.webp`);
    await expect(page.getByTestId("grab-prize-line")).toHaveText(g.prizeLine);
    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
    await page.getByTestId("grab-open-board").click();await expect(page.getByTestId("game-all-time")).toContainText("9000");await page.getByTestId("grab-board-close").click();
