@@ -146,3 +146,39 @@
 }
 .td-ctl { white-space:nowrap; }
 @media (max-height:330px) { .td-shell-playing .td-ctl-main { font-size:13px; } }
+/* ---- Big board (owner 11/01 "太小了"): the 16:9 board takes the whole screen height; the HUD lives in
+   the left strip, buttons and the top bar in the right strip beside it. ---- */
+.td-shell-playing .td-play { display:block; }
+.td-shell-playing .td-play > .td-field-wrap { left:calc(86px + env(safe-area-inset-left)); right:calc(86px + env(safe-area-inset-right)); top:max(4px,env(safe-area-inset-top)); bottom:max(4px,env(safe-area-inset-bottom)); }
+.td-shell-playing .td-play > .td-hud { position:absolute; left:calc(6px + env(safe-area-inset-left)); top:max(8px,env(safe-area-inset-top)); width:76px; display:flex; flex-direction:column; align-items:stretch; gap:8px; padding:0; }
+.td-shell-playing .td-hud-level { justify-content:center; }
+.td-shell-playing .td-waves { flex-wrap:wrap; gap:4px; justify-content:center; }
+.td-shell-playing .td-waves i { width:10px; height:10px; }
+.td-shell-playing .td-chip { justify-content:center; padding:4px 8px 4px 4px; }
+.td-shell-playing .td-chip b { font-size:16px; min-width:0; }
+.td-shell-playing .td-play > .td-next { position:absolute; left:calc(6px + env(safe-area-inset-left)); bottom:max(8px,env(safe-area-inset-bottom)); width:76px; margin:0; flex-direction:column; align-items:center; gap:2px; height:auto; }
+.td-shell-playing .td-next > span:first-child { display:block; width:auto; font-size:11px; }
+.td-shell-playing .td-next-pest { font-size:13px; }
+.td-shell-playing .td-next .td-pest-icon { width:26px; height:26px; }
+.td-shell-playing > div:first-child { width:76px; right:calc(6px + env(safe-area-inset-right)); }
+.td-shell-playing [data-testid=top-bar] { height:auto !important; flex-direction:column; align-items:center; gap:4px; padding:4px 0 0 !important; }
+.td-shell-playing [data-testid=top-bar] > span.flex-1 { display:none; }
+.td-shell-playing [data-testid=top-bar] > div { flex-direction:column; gap:4px; }
+.td-shell-playing [data-testid=top-bar] a, .td-shell-playing [data-testid=top-bar] button { background:#fff8ec; box-shadow:0 3px 0 #e2cfb1; border-radius:999px; min-height:38px; }
+.td-shell-playing .td-play > .td-controls { position:absolute; right:calc(6px + env(safe-area-inset-right)); bottom:max(8px,env(safe-area-inset-bottom)); width:76px; flex-direction:column; align-items:stretch; gap:7px; padding:0; }
+.td-shell-playing .td-controls .td-ctl { min-height:40px; padding:0 4px; font-size:15px; }
+.td-shell-playing .td-ctl-main { font-size:13px; min-height:52px; }
+.td-shell-playing .td-ctl-hold, .td-shell-playing .td-ctl-info { font-family:inherit; font-weight:900; }
+.td-ctl-hold[aria-pressed=true] { background:linear-gradient(180deg,#a9b89c,#8fa082); color:#fff; box-shadow:0 4px 0 #6d7d61; }
+.td-hold-cover { position:absolute; inset:0; z-index:6; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(60,35,20,.35); backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); }
+.td-hold-cover b { font-size:26px; color:#fff8ec; text-shadow:0 2px 0 rgba(60,35,20,.5); }
+.td-hold-cover .td-ctl-main { min-width:150px; min-height:50px; font-size:17px; }
+/* Short screens: these override the earlier compact rules so nothing stacks over the board. */
+@media (max-height:420px) {
+  .td-shell-playing .td-play > .td-controls { flex-direction:column; }
+  .td-shell-playing .td-ctl-info { display:block !important; }
+  .td-shell-playing .td-controls .td-ctl { flex:none; min-height:34px; }
+  .td-shell-playing .td-ctl-main { min-height:42px; }
+  .td-shell-playing .td-hud { gap:5px; }
+}
+@media (max-height:330px) { .td-shell-playing .td-next { display:none; } .td-shell-playing .td-ctl-info { display:none !important; } }

@@ -27,7 +27,7 @@ function BranchCard({ kind, branch, coins, onPick }: { kind: TowerKind; branch: 
     <span>{t.branches[kind][branch]}</span><b className="font-num">{cost}</b></button>;
 }
 
-export function TdBoard({ save, paused, soundOn, reduced, onProgress, onOver }: Props) {
+export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress, onOver }: Props) {
   const [game] = useState(() => {
     const g = createTdGame({ seed: save.seed, tierCount: save.tiers.length });
     for (const input of save.inputs) g.apply(input);
@@ -40,6 +40,8 @@ export function TdBoard({ save, paused, soundOn, reduced, onProgress, onOver }: 
   const [preview, setPreview] = useState<TowerKind | null>(null);
   const [boss, setBoss] = useState(false);
   const [info, setInfo] = useState(false);
+  const [hold, setHold] = useState(false);
+  const paused = pagePaused || hold;
   const canvas = useRef<HTMLCanvasElement>(null), wrapper = useRef<HTMLDivElement>(null);
   const state = useRef<TdState>(hud), inputs = useRef([...save.inputs]);
   const reported = useRef(false), action = useRef<(a: Action) => void>(() => {});
@@ -182,10 +184,15 @@ export function TdBoard({ save, paused, soundOn, reduced, onProgress, onOver }: 
         </div>)}</div>
         <button className="td-ctl td-ctl-main" onClick={() => setInfo(false)}>{t.infoClose}</button>
       </div>}
-      {(!ready || paused || hidden) && <p className="td-overlay" role="status">{!ready ? t.loading : t.paused}</p>}
+      {hold && !hud.over && <div className="td-hold-cover" role="dialog" aria-label={t.paused}>
+        <b className="font-display">{t.paused}</b>
+        <button className="td-ctl td-ctl-main" data-testid="td-hold-resume" onClick={() => setHold(false)}>{t.resume}</button>
+      </div>}
+      {(!ready || (pagePaused && !hold) || hidden) && <p className="td-overlay" role="status">{!ready ? t.loading : t.paused}</p>}
     </div></div>
     <div className="td-controls">
-      <button className="td-ctl td-ctl-info" data-testid="td-info-side" onClick={() => setInfo(true)} aria-label={t.infoOpen}>? {t.infoOpen}</button>
+      <button className="td-ctl td-ctl-hold" data-testid="td-hold" aria-pressed={hold} aria-label={hold ? t.resume : t.pause} disabled={pagePaused || hidden || hud.over || !ready} onClick={() => setHold(h => !h)}>{hold ? '▶' : 'Ⅱ'}</button>
+      <button className="td-ctl td-ctl-info" data-testid="td-info-side" onClick={() => setInfo(true)} aria-label={t.infoOpen}>?</button>
       <button className="td-ctl" data-testid="td-speed" aria-pressed={speed > 1} disabled={disabled} onClick={() => { const value = speed === 3 ? 1 : speed === 1 ? 2 : 3; clock.speed(value, performance.now()); setSpeed(value); }}>{speed === 1 ? t.speedOne : speed === 2 ? t.speedTwo : t.speedThree}</button>
       <button className="td-ctl td-ctl-main" data-testid="td-call-wave" disabled={disabled || hud.nextWaveTick === null} onClick={() => action.current({ type: 'callWave', slot: -1 })}>{t.nextWave}</button>
     </div>
