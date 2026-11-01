@@ -19,7 +19,7 @@ export interface TdProgress { inputs: TdInput[]; endTick: number; score: number;
 type Action = { type: 'place'; slot: number; tower: TowerKind } | { type: 'upgrade'; slot: number; branch?: TdBranch } | { type: 'sell'; slot: number } | { type: 'callWave'; slot: -1 };
 interface Props { save: TdSave; paused: boolean; soundOn: boolean; reduced: boolean; onProgress: (p: TdProgress) => void; onOver: (p: TdProgress) => void }
 
-const hudKey = (s: TdState) => `${s.coins}|${s.wave}|${s.bread}|${s.towers.map(v => `${v.slot}${v.level}${v.branch ?? ''}`).join(',')}|${s.inputsAccepted}|${s.inputsRejected}|${s.nextWaveTick === null}|${s.over}|${s.nextWave?.index ?? -1}|${s.waveTargetTier}`;
+const hudKey = (s: TdState) => `${s.coins}|${s.wave}|${s.bread}|${s.towers.map(v => `${v.slot}${v.level}${v.branch ?? ''}`).join(',')}|${s.inputsAccepted}|${s.inputsRejected}|${s.nextWaveTick === null}|${s.over}|${s.nextWave?.index ?? -1}|${s.waveTargetTier}|${s.awaitingStart}`;
 
 function BranchCard({ kind, branch, coins, onPick }: { kind: TowerKind; branch: TdBranch; coins: number; onPick: (b: TdBranch) => void }) {
   const cost = towerStats(kind, 2, branch).cost;
@@ -156,6 +156,7 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
         style={{ left: `${slot.x / FIELD_WIDTH * 100}%`, top: `${slot.y / FIELD_HEIGHT * 100}%`, width: `${TD_SLOT_RADIUS * 2.3 / FIELD_WIDTH * 100}%` }} aria-label={fill(t.slot, { n: i + 1 })} aria-expanded={selected === i}
         onClick={() => { if (selected === i) close(); else { setSelected(i); setPreview(null); } }} />)}
       {boss && <p className="td-boss" role="status">{t.boss}</p>}
+      {hud.awaitingStart && ready && selected === null && !hold && <p className="td-start-hint font-display" role="status">{t.startHint2}</p>}
       {selected !== null && !disabled && <div className={`td-tray${slots[selected].y > FIELD_HEIGHT * .57 ? " td-tray-top" : ""}`} role="group" aria-label={fill(t.slot, { n: selected + 1 })}>
         {tower ? <>
           <div className="td-tray-head"><img src={`/brand/td/${towerFile[tower.kind]}-${tower.level}.webp`} alt="" /><b>{t.towers[tower.kind]}</b></div>
@@ -194,7 +195,7 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
       <button className="td-ctl td-ctl-hold" data-testid="td-hold" aria-pressed={hold} aria-label={hold ? t.resume : t.pause} disabled={pagePaused || hidden || hud.over || !ready} onClick={() => setHold(h => !h)}>{hold ? '▶' : 'Ⅱ'}</button>
       <button className="td-ctl td-ctl-info" data-testid="td-info-side" onClick={() => setInfo(true)} aria-label={t.infoOpen}>?</button>
       <button className="td-ctl" data-testid="td-speed" aria-pressed={speed > 1} disabled={disabled} onClick={() => { const value = speed === 3 ? 1 : speed === 1 ? 2 : 3; clock.speed(value, performance.now()); setSpeed(value); }}>{speed === 1 ? t.speedOne : speed === 2 ? t.speedTwo : t.speedThree}</button>
-      <button className="td-ctl td-ctl-main" data-testid="td-call-wave" disabled={disabled || hud.nextWaveTick === null} onClick={() => action.current({ type: 'callWave', slot: -1 })}>{t.nextWave}</button>
+      <button className={`td-ctl td-ctl-main${hud.awaitingStart ? ' td-ctl-go' : ''}`} data-testid="td-call-wave" disabled={disabled || (hud.nextWaveTick === null && !hud.awaitingStart)} onClick={() => action.current({ type: 'callWave', slot: -1 })}>{hud.awaitingStart ? t.startWave : t.nextWave}</button>
     </div>
     {hud.inputsAccepted + hud.inputsRejected >= MAX_INPUTS && <p role="status">{t.inputLimit}</p>}
   </section>;

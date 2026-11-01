@@ -435,7 +435,7 @@ export const copy = {
         oven: { base: "重击带烧伤，烧死了火会传给旁边", a: "烧得更疼", b: "一发穿两只，打得更远" },
       },
       infoTitle: "厨具介绍", infoOpen: "厨具介绍", infoClose: "知道了",
-      maxed: "满级", nextWaveLabel: "下一波", lastWave: "最后一波", boss: "大胃王鼠来了！",
+      maxed: "满级", startWave: "开始", startHint2: "先摆好厨具，再点开始", nextWaveLabel: "下一波", lastWave: "最后一波", boss: "大胃王鼠来了！",
       slot: "炮位 {n}", closePicker: "收起厨具", boardLabel: "面包防守小路",
       win: "守住了！", fail: "面包被偷走了", next: "下一关", retry: "再来一次",
       pause: "暂停", paused: "已暂停", resume: "继续", speedOne: "1×", speedTwo: "2×", speedThree: "3×",
