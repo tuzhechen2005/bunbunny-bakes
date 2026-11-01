@@ -266,3 +266,16 @@
     transition: none;
   }
 }
+
+/* Prop explanation: tap a prop to read what it does, then use it or go back. */
+.tu-prop-info { position:absolute; left:12px; right:12px; bottom:calc(100% - 4px); z-index:45; display:grid; grid-template-columns:auto 1fr; column-gap:12px; align-items:center; padding:14px 14px 12px; border-radius:20px; background:var(--c-paper); box-shadow:0 0 0 1px var(--c-line), 0 12px 30px -10px rgba(40,24,14,.35); animation:tu-prop-in 160ms ease-out both; }
+.tu-prop-info-icon { grid-row:span 2; display:grid; place-items:center; width:48px; height:48px; border-radius:50%; background:var(--c-wash); color:var(--c-ink); }
+.tu-prop-info b { font-size:17px; color:var(--c-ink); }
+.tu-prop-info p { margin:2px 0 0; font-size:13px; color:var(--c-grey-text); }
+.tu-prop-info > div { grid-column:1 / -1; display:flex; gap:8px; margin-top:12px; }
+.tu-prop-info button { flex:1; height:44px; border:0; border-radius:999px; font-size:15px; cursor:pointer; }
+.tu-prop-back { background:var(--c-wash); color:var(--c-ink); }
+.tu-prop-use { background:var(--c-ink); color:var(--c-paper); }
+.tu-prop-use:disabled { opacity:.35; cursor:default; }
+@keyframes tu-prop-in { from { opacity:0; transform:translateY(8px); } }
+@media (prefers-reduced-motion:reduce) { .tu-prop-info { animation:none; } }

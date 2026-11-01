@@ -136,9 +136,13 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
   const [snap, setSnapRaw] = useState<TuState | null>(null);
   /** The bounding box of the board, kept while a batch is being dealt. */
   const [geo, setGeo] = useState({ minX: 0, minY: 0, bw: 7, bh: 8 });
+  // The board keeps its dealt size for the whole batch: clearing tiles never zooms it in.
+  const geoBatch = useRef<number | null>(null);
   const setSnap = useCallback((st: TuState) => {
     setSnapRaw(st);
     if (st.tiles.length === 0) return;
+    const sameBatch = geoBatch.current === st.batch;
+    geoBatch.current = st.batch;
     let minX = Infinity,
       maxX = -Infinity,
       minY = Infinity,
@@ -149,6 +153,14 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
       minY = Math.min(minY, x.y);
       maxY = Math.max(maxY, x.y + 1);
     }
+    if (sameBatch) {
+      setGeo(g => {
+        const nx = Math.min(g.minX, minX), ny = Math.min(g.minY, minY);
+        const mx = Math.max(g.minX + g.bw, maxX), my = Math.max(g.minY + g.bh, maxY);
+        return nx === g.minX && ny === g.minY && mx === g.minX + g.bw && my === g.minY + g.bh ? g : { minX: nx, minY: ny, bw: mx - nx, bh: my - ny };
+      });
+      return;
+    }
     setGeo({ minX, minY, bw: maxX - minX, bh: maxY - minY });
   }, []);
   const [view, setView] = useState<View | null>(null);
@@ -156,6 +168,7 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
   const [popIn, setPopIn] = useState<number[]>([]);
   const [pulse, setPulse] = useState(false);
   const [peeking, setPeeking] = useState(false);
+  const [propInfo, setPropInfo] = useState<PropKind | null>(null);
   const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bonusRef = useRef(0);
   const view0 = useRef<View | null>(null);
@@ -520,6 +533,19 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
             <span className="rounded-full bg-c-paper px-3 py-1 shadow-[0_0_0_1px_var(--c-line)]">{view.toast.text}</span>
           </p>
         ) : null}
+        {propInfo && view ? (() => {
+          const n = view.props[propInfo];
+          const off = n <= 0 || snap.over || (propInfo === "bag" && view.bagSize >= 7) || (propInfo === "peek" && peeking);
+          return <div className="tu-prop-info" role="dialog" aria-label={t.propNames[propInfo]} data-testid="tu-prop-info">
+            <span className="tu-prop-info-icon"><PropIcon kind={propInfo} /></span>
+            <b className="font-display">{t.propNames[propInfo]}</b>
+            <p>{t.propInfo[propInfo]}</p>
+            <div>
+              <button type="button" className="tu-prop-back" data-testid="tu-prop-back" onClick={() => setPropInfo(null)}>{t.propBack}</button>
+              <button type="button" className="tu-prop-use font-display" data-testid="tu-prop-use" disabled={off} onClick={() => { setPropInfo(null); spendProp(propInfo); }}>{t.propUse}</button>
+            </div>
+          </div>;
+        })() : null}
         <div className="mb-2 flex justify-center gap-5" role="group" aria-label={t.propsLabel} data-testid="tu-props">
           {PROP_KINDS.map((k) => {
             const n = view.props[k];
@@ -529,7 +555,7 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
                 key={k}
                 type="button"
                 disabled={off}
-                onClick={() => spendProp(k)}
+                onClick={() => setPropInfo(k)}
                 aria-label={fill(propLabel[k], { n: String(n) })}
                 className="relative grid size-11 place-items-center rounded-full border border-c-line bg-c-paper text-c-ink disabled:opacity-35"
                 data-testid={`tu-prop-${k}`}

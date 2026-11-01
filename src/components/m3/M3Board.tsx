@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { fill } from "@/components/customer/format";
 import { sound } from "@/components/game/sound";
 import type { TierView } from "@/components/game/types";
@@ -20,6 +20,21 @@ interface Props {
   tiers: TierView[]; seed: string; initialMoves?: M3Move[]; soundOn: boolean; reduced: boolean;
   onProgress: (p: M3Progress) => void; onOver: (p: M3Progress) => void; onShowResult?: () => void;
 }
+
+/** One board cell. Memoised: an animation frame re-renders only the cells it moves. */
+const Cell = memo(function Cell({ r, c, code, tier, effect, dx, dy, ms, hinted, pressed, busy, onTap }: {
+  r: number; c: number; code: number; tier: TierView | undefined; effect: string; dx: number; dy: number; ms: number;
+  hinted: boolean; pressed: boolean; busy: boolean; onTap: (r: number, c: number) => void;
+}) {
+  return <div className={`m3-cell${(r + c) % 2 ? " m3-cell-alt" : ""}`} style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%` }}>
+    {code >= 0 && tier && <span className={`m3-piece ${effect} ${hinted ? "m3-hint" : ""}`} style={{ "--dx": `${dx}%`, "--dy": `${dy}%`, "--duration": `${ms}ms` } as CSSProperties}>
+      <PieceFace tier={tier} kind={code >= ROLL_BASE ? code >= BIG_BASE ? "big" : "roll" : undefined} />
+    </span>}
+    <button type="button" className="m3-target" data-cell={`${r},${c}`} data-testid={`m3-cell-${r}-${c}`} data-code={code} aria-pressed={pressed} disabled={busy}
+      aria-label={fill(t.tileLabel, { r: String(r + 1), c: String(c + 1), name: tier?.name ?? "", special: code >= BIG_BASE ? t.big : code >= ROLL_BASE ? t.roll : "" })}
+      onClick={() => onTap(r, c)} />
+  </div>;
+});
 
 export function M3Board({ level, rules, tiers, seed, initialMoves = [], soundOn, reduced, onProgress, onOver, onShowResult }: Props) {
   const { degraded } = useMotionPrefs();
@@ -168,6 +183,17 @@ export function M3Board({ level, rules, tiers, seed, initialMoves = [], soundOn,
     };
   }, [attempt, game]);
 
+  const selectedRef = useRef(selected);
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
+  const tap = useCallback((r: number, c: number) => {
+    if (locked.current) return;
+    if (game.over) { onShowResult?.(); return; }
+    const p = { r, c }, sel = selectedRef.current;
+    setHint(null); setActivity(n => n + 1);
+    if (sel && adjacent(sel, p)) attempt(sel, p);
+    else setSelected(sameCell(sel, p) ? null : p);
+  }, [attempt, game, onShowResult]);
+
   const event = frame?.event;
   const view = frame ? ["refill", "special", "order", "shuffle", "over"].includes(frame.event.type) ? frame.after : frame.before : snap;
   const display = frame?.after ?? snap;
@@ -205,21 +231,9 @@ export function M3Board({ level, rules, tiers, seed, initialMoves = [], soundOn,
           if (event?.type === "refill" && event.tiles.some(tile => sameCell(tile, p))) { dy = -(r + 1) * 100; effect = "m3-refill"; }
           if (event?.type === "match" && event.cells.some(cell => sameCell(cell, p))) effect = "m3-pop";
           if (event?.type === "special" && sameCell(event.cell, p)) effect = "m3-flash";
-          const tier = tiers[tierOf(code)];
-          return <div key={`${r}-${c}`} className={`m3-cell${(r + c) % 2 ? " m3-cell-alt" : ""}`} style={{ left: `${c * 12.5}%`, top: `${r * 12.5}%` }}>
-            {code >= 0 && <span className={`m3-piece ${effect} ${!quiet && hint && (sameCell(hint.a, p) || sameCell(hint.b, p)) ? "m3-hint" : ""}`} style={{ "--dx": `${dx}%`, "--dy": `${dy}%`, "--duration": `${invalid ? 360 : frame?.ms ?? 180}ms` } as CSSProperties}>
-              <PieceFace tier={tier} kind={code >= ROLL_BASE ? code >= BIG_BASE ? "big" : "roll" : undefined} />
-            </span>}
-            <button type="button" className="m3-target" data-cell={`${r},${c}`} data-testid={`m3-cell-${r}-${c}`} data-code={code} aria-pressed={sameCell(selected, p)} disabled={busy}
-              aria-label={fill(t.tileLabel, { r: String(r + 1), c: String(c + 1), name: tier?.name ?? "", special: code >= BIG_BASE ? t.big : code >= ROLL_BASE ? t.roll : "" })}
-              onClick={() => {
-                if (locked.current) return;
-                if (game.over) { onShowResult?.(); return; }
-                setHint(null); setActivity(n => n + 1);
-                if (selected && adjacent(selected, p)) attempt(selected, p);
-                else setSelected(sameCell(selected, p) ? null : p);
-              }} />
-          </div>;
+          return <Cell key={`${r}-${c}`} r={r} c={c} code={code} tier={tiers[tierOf(code)]} effect={effect} dx={dx} dy={dy}
+            ms={invalid ? 360 : frame?.ms ?? 180} hinted={!quiet && !!hint && (sameCell(hint.a, p) || sameCell(hint.b, p))}
+            pressed={sameCell(selected, p)} busy={busy} onTap={tap} />;
         }))}
       </div>
     </div>

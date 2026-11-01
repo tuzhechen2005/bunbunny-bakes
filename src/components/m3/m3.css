@@ -44,9 +44,10 @@
 .m3-cell { position:absolute; width:12.5%; height:12.5%; }
 .m3-cell-alt { background:rgba(138,90,51,.07); }
 .m3-piece { position:absolute; inset:0; padding:3px; pointer-events:none; }
-.m3-face { position:relative; display:grid; place-items:center; width:100%; height:100%; border-radius:24%; overflow:hidden; font-size:20px; box-shadow:0 3px 0 rgba(74,38,14,.28), 0 4px 6px -2px rgba(74,38,14,.3); }
-.m3-face::after { content:""; position:absolute; inset:0; border-radius:inherit; box-shadow:inset 0 2px 0 rgba(255,255,255,.45), inset 0 -2px 0 rgba(74,38,14,.12); pointer-events:none; }
+.m3-face { position:relative; display:grid; place-items:center; width:100%; height:100%; border-radius:24%; overflow:hidden; font-size:20px; box-shadow:0 3px 0 rgba(74,38,14,.26); }
+.m3-face::after { content:""; position:absolute; inset:0 0 auto; height:36%; border-radius:inherit; background:linear-gradient(rgba(255,255,255,.28),rgba(255,255,255,0)); pointer-events:none; }
 .m3-face img { width:100%; height:100%; object-fit:cover; }
+.m3-face-photo { position:absolute; inset:0; background-size:cover; background-position:center; }
 .m3-piece-face, .m3-piece-bounce { position:relative; display:block; width:100%; height:100%; }
 .m3-piece-face-special { animation:var(--m3-breathe, none) 1.6s ease-in-out var(--m3-idle-phase, 0s) infinite; transform-origin:center; }
 .m3-piece-face-special > .m3-piece-bounce { transform-origin:50% 100%; animation:var(--m3-hop, none) 2.4s ease-in-out var(--m3-idle-phase, 0s) infinite; }

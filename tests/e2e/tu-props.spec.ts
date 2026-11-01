@@ -136,7 +136,7 @@ test("empty inventory disables props and the game still works", async ({ page })
 test("peek shows the hidden tile for 3 s, spends one, and logs nothing broken", async ({ page }) => {
   await setup(page);
   await expect(page.getByTestId("tu-tile-1")).toHaveCount(0);
-  await page.getByTestId("tu-prop-peek").click();
+  await page.getByTestId("tu-prop-peek").click(); await page.getByTestId("tu-prop-use").click();
   await expect(page.getByTestId("tu-tile-1")).toHaveAttribute("data-hidden", "1");
   await expect(page.getByTestId("tu-tile-1")).toBeDisabled();
   await expect(page.getByTestId("tu-prop-count-peek")).toHaveText("0");
@@ -151,7 +151,7 @@ test("bag prop adds a 7th slot, once; swap changes both orders", async ({ page }
   await setup(page);
   await expect(page.getByTestId("tu-slot-6")).toHaveCount(0);
   await expect(page.getByTestId("tu-bag")).toHaveAttribute("aria-label", "纸袋，装了 0 个，一共 6 格");
-  await page.getByTestId("tu-prop-bag").click();
+  await page.getByTestId("tu-prop-bag").click(); await page.getByTestId("tu-prop-use").click();
   await expect(page.getByTestId("tu-slot-6")).toBeVisible();
   await expect(page.getByTestId("tu-bag")).toHaveAttribute("aria-label", "纸袋，装了 0 个，一共 7 格");
   await expect(page.getByTestId("tu-prop-bag")).toBeDisabled();
@@ -163,7 +163,7 @@ test("bag prop adds a 7th slot, once; swap changes both orders", async ({ page }
   await expect(page.getByTestId("tu-slot-6")).toHaveAttribute("data-tier", "3");
   await shot(page, "bag-7-slots");
   await page.waitForTimeout(200);
-  await page.getByTestId("tu-prop-swap").click();
+  await page.getByTestId("tu-prop-swap").click(); await page.getByTestId("tu-prop-use").click();
   await expect(page.getByTestId("tu-order-0")).toHaveAttribute("data-tier", "3");
   await expect(page.getByTestId("tu-order-1")).toHaveAttribute("data-tier", "1");
   await expect(page.getByTestId("tu-prop-swap")).toBeDisabled();
@@ -195,7 +195,7 @@ test("320 px: no sideways scroll with the props bar and a 7-slot bag", async ({ 
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 320, height: 640 });
   await setup(page);
-  await page.getByTestId("tu-prop-bag").click();
+  await page.getByTestId("tu-prop-bag").click(); await page.getByTestId("tu-prop-use").click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
   for (const k of ["peek", "bag", "swap"]) {
     const box = (await page.getByTestId(`tu-prop-${k}`).boundingBox())!;
@@ -209,7 +209,7 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
     await page.emulateMedia({ reducedMotion });
     await setup(page, { dealOnTap: true });
     await page.clock.install();
-    await page.getByTestId("tu-prop-peek").click();
+    await page.getByTestId("tu-prop-peek").click(); await page.getByTestId("tu-prop-use").click();
     await expect(page.getByTestId("tu-tile-1")).toHaveCount(1);
     await page.clock.runFor(200);
     await page.getByTestId("tu-tile-3").click();
@@ -218,7 +218,7 @@ for (const reducedMotion of ["reduce", "no-preference"] as const) {
     await expect(page.getByTestId("tu-board")).not.toHaveAttribute("data-peek", "1");
     await expect(page.getByTestId("tu-tile-101")).toHaveCount(0);
     // The cancelled timer must not shorten a new peek in the next batch.
-    await page.getByTestId("tu-prop-peek").click();
+    await page.getByTestId("tu-prop-peek").click(); await page.getByTestId("tu-prop-use").click();
     await page.clock.runFor(1800);
     await expect(page.getByTestId("tu-tile-101")).toHaveCount(1);
     await page.clock.runFor(1200);

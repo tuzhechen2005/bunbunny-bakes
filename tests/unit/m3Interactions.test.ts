@@ -144,7 +144,9 @@ describe("M3 abandoned touches", () => {
     const render = () => hooks.render(() => M3Board({ seed: "save", tiers, soundOn: false, reduced: true, onProgress: vi.fn(), onOver: vi.fn() }), tree => {
       target(tree, "m3-board").ref!.current = board;
     });
-    let tree = render(); target(tree, "m3-cell-2-2").onClick!(); tree = render();
+    // Cells are memoised components: address them by their r/c props and use onTap.
+    const cell = (tree: ReactNode) => nodes(tree).find(p => (p as Record<string, unknown>).r === 2 && (p as Record<string, unknown>).c === 2) as unknown as { onTap: (r: number, c: number) => void };
+    let tree = render(); cell(tree).onTap(2, 2); tree = render();
     const touch = (type: string, x: number, count = 1) => {
       const e = new Event(type, { cancelable: true });
       Object.defineProperties(e, {
@@ -159,7 +161,7 @@ describe("M3 abandoned touches", () => {
     if (kind === "multitouch") touch("touchstart", 30, 2);
     touch(kind === "cancel" ? "touchcancel" : "touchend", 30, 0);
     tree = render();
-    const selected = nodes(tree).filter(p => (p as Record<string, unknown>)["aria-pressed"] === true);
+    const selected = nodes(tree).filter(p => (p as Record<string, unknown>).pressed === true);
     expect(selected).toHaveLength(kind === "tap" || kind === "short" ? 1 : 0);
   });
 });

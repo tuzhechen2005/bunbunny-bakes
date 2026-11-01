@@ -409,6 +409,8 @@ export const copy = {
       propBag: "加个纸袋，还有 {n} 个",
       propSwap: "换订单，还有 {n} 个",
       propNames: { peek: "偷看", bag: "加个纸袋", swap: "换订单" },
+      propInfo: { peek: "把压在下面的面包翻开，看几秒", bag: "纸袋多一格，能多放一个", swap: "两张订单都换成新的" },
+      propUse: "使用", propBack: "返回",
       orderDone: "订单完成 +{n}",
       gainProp: "得到 {name}",
       /** Result sheet: points for props left unused. */
