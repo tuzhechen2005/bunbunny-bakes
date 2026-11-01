@@ -86,3 +86,8 @@ export const sound = {
     tone("sine", freq(-12), t + 0.15, 0.7, 0.25, freq(-24));
   },
 };
+
+/** The shared context for longer audio (background music). Null until a user gesture allows it. */
+export function audioContext(): AudioContext | null {
+  return ensure();
+}

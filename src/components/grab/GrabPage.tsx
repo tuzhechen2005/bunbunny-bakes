@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useBgm } from "@/components/game/bgm";
 import { GameTutorial } from "@/components/game/GameTutorial";
 import { fill } from "@/components/customer/format";
 import { LeaderboardView } from "@/components/game/LeaderboardView";
@@ -262,6 +263,9 @@ export function GrabPage() {
     // Pausing can deliver the final active tick and end the run.
     if (phaseRef.current === "playing") setDialog("exit");
   };
+
+  // Background music only while actually playing with sound on (pause sheets keep it quiet).
+  useBgm("grab", soundOn && phase === "playing" && dialog === null);
 
   const top = (
     <div onClickCapture={e => {

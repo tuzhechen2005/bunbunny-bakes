@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useBgm } from "@/components/game/bgm";
 import { GameMenuHero, GameResultArt, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { GameTutorial } from "@/components/game/GameTutorial";
 import { fill } from "@/components/customer/format";
@@ -282,6 +283,9 @@ export function M3Page() {
     afterSheet.current = fn;
     sheetRef.current?.close();
   };
+
+  // Background music only while actually playing with sound on (pause sheets keep it quiet).
+  useBgm("m3", soundOn && phase === "playing" && dialog === null);
 
   const top = (
     <TopBar

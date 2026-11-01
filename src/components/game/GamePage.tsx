@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useBgm } from "@/components/game/bgm";
 import { GameMenuHero, GameResultArt, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { GameTutorial } from "@/components/game/GameTutorial";
 import { RollNumber } from "@/components/customer/checkout/RollNumber";
@@ -257,6 +258,9 @@ export function GamePage() {
         {t.exit}
       </button>
     ) : null;
+
+  // Background music only while actually playing with sound on (pause sheets keep it quiet).
+  useBgm("big", soundOn && phase === "playing" && dialog === null);
 
   const top = (
     <TopBar

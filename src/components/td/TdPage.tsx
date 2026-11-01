@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useBgm } from '@/components/game/bgm';
 import { GameTutorial } from '@/components/game/GameTutorial';
 import { TopBar } from '@/components/ui/TopBar';
 import { focusRing } from '@/components/ui/focus';
@@ -96,6 +97,7 @@ export function TdPage() {
     const value = !soundOn; setSoundOn(value); writeRemembered({sound:value});
     if (value) { unlockAudio(); sound.drop(); }
   };
+  useBgm('td', soundOn && phase === 'playing' && dialog === null);
   const playing = phase === 'playing' || phase === 'over';
   return <GameShell className={`td-shell ${playing ? 'td-shell-playing' : ''}`}>
     <div onClickCapture={e => {
