@@ -1,0 +1,162 @@
+{
+  "soundfont_sha256": "74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0",
+  "tracks": {
+    "big": {
+      "bpm": 112,
+      "bars": 32,
+      "loop_frames": 3023998,
+      "duration_seconds": 68.57138321995465,
+      "master_sample_peak_dbfs": -2.778039872646332,
+      "master_seam_step_dbfs": -49.43490028381348,
+      "encodings": {
+        "m4a": {
+          "bytes": 844703,
+          "integrated_lufs": -16.03,
+          "true_peak_dbtp": -2.1,
+          "duration_seconds": 68.572,
+          "sha256": "41dd96def91511c9763c7afe4c17c6bbf14fe46f4e252c30ab7bc82daff5ddc1",
+          "decoded_loop_seam_step_dbfs": -42.253302543042686
+        },
+        "ogg": {
+          "bytes": 737951,
+          "integrated_lufs": -16.0,
+          "true_peak_dbtp": -2.31,
+          "duration_seconds": 68.571383,
+          "sha256": "242b386f4df9071128df2d324899469a9a953720156f6710f4bd06e7d1222ec6",
+          "decoded_loop_seam_step_dbfs": -48.77947529964962
+        }
+      }
+    },
+    "tu": {
+      "bpm": 100,
+      "bars": 28,
+      "loop_frames": 2963520,
+      "duration_seconds": 67.2,
+      "master_sample_peak_dbfs": -3.666526973247528,
+      "master_seam_step_dbfs": -56.17907524108887,
+      "encodings": {
+        "m4a": {
+          "bytes": 835386,
+          "integrated_lufs": -16.03,
+          "true_peak_dbtp": -3.56,
+          "duration_seconds": 67.2,
+          "sha256": "d2e693adb41bca61600fd652cd97f224ad4577474758af0393f12aef974b6e6b",
+          "decoded_loop_seam_step_dbfs": -41.630720386506624
+        },
+        "ogg": {
+          "bytes": 860827,
+          "integrated_lufs": -15.97,
+          "true_peak_dbtp": -3.61,
+          "duration_seconds": 67.2,
+          "sha256": "9f119a5d71dfa11c2550efb92aa5b934c721ccf22336869c9034890c5e078870",
+          "decoded_loop_seam_step_dbfs": -59.70914366415122
+        }
+      }
+    },
+    "m3": {
+      "bpm": 88,
+      "bars": 24,
+      "loop_frames": 2886545,
+      "duration_seconds": 65.45453514739229,
+      "master_sample_peak_dbfs": -3.8396677374839783,
+      "master_seam_step_dbfs": -78.52616310119629,
+      "encodings": {
+        "m4a": {
+          "bytes": 808080,
+          "integrated_lufs": -16.03,
+          "true_peak_dbtp": -3.66,
+          "duration_seconds": 65.455,
+          "sha256": "f5205291ee51eb2a393d23eb6daf016589fccc38634836435c0b15a456f43ea1",
+          "decoded_loop_seam_step_dbfs": -56.831018569314516
+        },
+        "ogg": {
+          "bytes": 703286,
+          "integrated_lufs": -16.0,
+          "true_peak_dbtp": -4.0,
+          "duration_seconds": 65.454535,
+          "sha256": "85b182dd189c3b2e724178eba149c08a8ed9aa4c0251b3abbf44b5f7d55f04b5",
+          "decoded_loop_seam_step_dbfs": -75.6559929237428
+        }
+      }
+    },
+    "grab": {
+      "bpm": 128,
+      "bars": 36,
+      "loop_frames": 2976750,
+      "duration_seconds": 67.5,
+      "master_sample_peak_dbfs": -3.214889168739319,
+      "master_seam_step_dbfs": -51.19166374206543,
+      "encodings": {
+        "m4a": {
+          "bytes": 842938,
+          "integrated_lufs": -16.03,
+          "true_peak_dbtp": -3.16,
+          "duration_seconds": 67.5,
+          "sha256": "771c0f3511f258bfd4db5fae07a6c5fda5ff2e08d9070edc9261cbfd5081402f",
+          "decoded_loop_seam_step_dbfs": -49.60334343741284
+        },
+        "ogg": {
+          "bytes": 840975,
+          "integrated_lufs": -16.0,
+          "true_peak_dbtp": -3.03,
+          "duration_seconds": 67.5,
+          "sha256": "05e340ab4ff43c04976c5b218e521ff0ac72692ca8dedb19930e11ec71c3dec5",
+          "decoded_loop_seam_step_dbfs": -55.411612460486765
+        }
+      }
+    },
+    "run": {
+      "bpm": 140,
+      "bars": 40,
+      "loop_frames": 3023997,
+      "duration_seconds": 68.57136054421768,
+      "master_sample_peak_dbfs": -3.078039288520813,
+      "master_seam_step_dbfs": -62.827863693237305,
+      "encodings": {
+        "m4a": {
+          "bytes": 848712,
+          "integrated_lufs": -16.02,
+          "true_peak_dbtp": -2.66,
+          "duration_seconds": 68.572,
+          "sha256": "d82e43ff91da77daa3a93c08b5b9de4c3a790a1bb75b1edc2393453b31c8c4e8",
+          "decoded_loop_seam_step_dbfs": -41.526444289795904
+        },
+        "ogg": {
+          "bytes": 932602,
+          "integrated_lufs": -15.98,
+          "true_peak_dbtp": -2.9,
+          "duration_seconds": 68.571361,
+          "sha256": "1f1c0e2c7637cf78b33e682bb49d03a11b05efeac2a181c941af3dd3d0e898a3",
+          "decoded_loop_seam_step_dbfs": -58.168764682576715
+        }
+      }
+    },
+    "td": {
+      "bpm": 104,
+      "bars": 28,
+      "loop_frames": 2849538,
+      "duration_seconds": 64.61537414965986,
+      "master_sample_peak_dbfs": -5.636462569236755,
+      "master_seam_step_dbfs": -59.46455001831055,
+      "encodings": {
+        "m4a": {
+          "bytes": 789848,
+          "integrated_lufs": -16.04,
+          "true_peak_dbtp": -5.65,
+          "duration_seconds": 64.616,
+          "sha256": "51826941416f4fddb7f504ebe77e9fce8b5408435d79bbfd511e2abb30f3914e",
+          "decoded_loop_seam_step_dbfs": -53.963846635962256
+        },
+        "ogg": {
+          "bytes": 800844,
+          "integrated_lufs": -15.98,
+          "true_peak_dbtp": -5.75,
+          "duration_seconds": 64.615374,
+          "sha256": "737d05e29eb6749284adf2c28710c3fa731fcf8d72dc0114d0568b6b5cb0e584",
+          "decoded_loop_seam_step_dbfs": -47.92238104805336
+        }
+      }
+    }
+  },
+  "tools": "ffmpeg 7:5.1.9-0+deb12u1\nfluid-soundfont-gm 3.1-5.3\nfluidsynth 2.3.1-2\npython3 3.11.2-1+b1\npython3-numpy 1:1.24.2-1+deb12u1\n"
+}
