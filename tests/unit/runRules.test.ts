@@ -5,7 +5,7 @@ import {
   type RunGame, type RunLane, type RunEvent, type RunObstacleKind,
 } from "@/lib/run";
 import { runGeometry } from "@/lib/run/geometry";
-import { createRunTrack } from "@/lib/run/track";
+import { createRunTrack, TRACK_LEAD } from "@/lib/run/track";
 
 function moveTo(game: RunGame, lane: RunLane) {
   let s = game.state();
@@ -19,9 +19,9 @@ function collisionFixture(kind: RunObstacleKind, adjacent = false) {
   for (let n = 0; n < 100; n++) {
     const seed = `collision${n}`;
     const objects = createRunTrack(seed).next().objects;
-    const obstacle = objects.find((o) => o.z === ROW_GAP && o.kind === kind);
+    const obstacle = objects.find((o) => o.z === TRACK_LEAD + ROW_GAP && o.kind === kind);
     if (!obstacle) continue;
-    const open = LANES.find((lane) => !objects.some((o) => o.z === ROW_GAP && isRunObstacle(o.kind) && o.lane === lane))!;
+    const open = LANES.find((lane) => !objects.some((o) => o.z === TRACK_LEAD + ROW_GAP && isRunObstacle(o.kind) && o.lane === lane))!;
     if (adjacent && Math.abs(open - obstacle.lane) !== 1) continue;
     const game = createRunGame({ seed });
     moveTo(game, obstacle.lane);
@@ -38,7 +38,7 @@ function powerFixture(kind: "paper-bag" | "coffee") {
     const track = createRunTrack(seed);
     const objects = Array.from({ length: 4 }, () => track.next()).flatMap((c) => c.objects);
     const powers = objects.filter((o) => o.kind === kind);
-    if (powers.length !== 1 || powers[0].z !== ROW_GAP - 24_000) continue;
+    if (powers.length !== 1 || powers[0].z !== TRACK_LEAD + ROW_GAP - 24_000) continue;
     const game = createRunGame({ seed });
     moveTo(game, powers[0].lane);
     while (game.state().distance < powers[0].z) game.step(game.state().tick + 1);
@@ -87,7 +87,7 @@ describe("run collision rules", () => {
   it("lane occupancy switches exactly at the visual midpoint", () => {
     for (const offset of [LANE_CHANGE_TICKS / 2 - 1, LANE_CHANGE_TICKS / 2]) {
       const { game, tick, obstacle } = collisionFixture("cart", true);
-      const row = game.state().objects.filter((o) => o.z + game.state().distance === ROW_GAP && isRunObstacle(o.kind));
+      const row = game.state().objects.filter((o) => o.z + game.state().distance === TRACK_LEAD + ROW_GAP && isRunObstacle(o.kind));
       const open = LANES.find((l) => !row.some((o) => o.lane === l))!;
       // Fixture has the cart adjacent to the open lane.
       expect(Math.abs(open - obstacle.lane)).toBe(1);
@@ -117,7 +117,7 @@ describe("run power-ups and timing", () => {
     expect(game.state().speed).toBe(runSpeed(acquired, true));
     const obstacle = game.state().objects.find((o) => isRunObstacle(o.kind))!;
     moveTo(game, obstacle.lane);
-    while (game.state().distance < ROW_GAP) game.step(game.state().tick + 1);
+    while (game.state().distance < TRACK_LEAD + ROW_GAP) game.step(game.state().tick + 1);
     expect(game.state().over).toBe(false);
     safelyAdvance(game, acquired + COFFEE_TICKS - 1);
     expect(game.state().powerUps.coffeeTicks).toBe(1);
@@ -131,14 +131,14 @@ describe("run power-ups and timing", () => {
     for (let n = 0; n < 20_000; n++) {
       const seed = `refresh${n}`;
       const powers = createRunTrack(seed).next().objects.filter((o) => o.kind === kind);
-      if (powers.length === 2 && powers[0].z === ROW_GAP - 24_000 && powers[1].z === 2 * ROW_GAP - 24_000) {
+      if (powers.length === 2 && powers[0].z === TRACK_LEAD + ROW_GAP - 24_000 && powers[1].z === TRACK_LEAD + 2 * ROW_GAP - 24_000) {
         fixture = { seed, first: powers[0].lane, secondZ: powers[1].z }; break;
       }
     }
     expect(fixture).toBeDefined();
     const game = createRunGame({ seed: fixture!.seed });
     moveTo(game, fixture!.first);
-    while (game.state().distance < ROW_GAP - 24_000) game.step(game.state().tick + 1);
+    while (game.state().distance < TRACK_LEAD + ROW_GAP - 24_000) game.step(game.state().tick + 1);
     const duration = kind === "coffee" ? COFFEE_TICKS : MAGNET_TICKS;
     const oldUntil = game.state().tick + duration;
     while (game.state().distance < fixture!.secondZ) safelyAdvance(game, game.state().tick + 1);
@@ -149,13 +149,13 @@ describe("run power-ups and timing", () => {
     expect(until).toBeLessThan(oldUntil + duration);
   });
 
-  it("caps the base speed at 45 seconds, with no floating point accumulation", () => {
-    expect(RAMP_TICKS).toBe(45 * 60);
-    expect(runSpeed(0)).toBe(420);
-    expect(runSpeed(RAMP_TICKS / 2)).toBe(520);
+  it("caps the base speed at 35 seconds, with no floating point accumulation", () => {
+    expect(RAMP_TICKS).toBe(35 * 60);
+    expect(runSpeed(0)).toBe(480);
+    expect(runSpeed(RAMP_TICKS / 2)).toBe(580);
     expect(runSpeed(RAMP_TICKS - 1)).toBe(CAP_SPEED - 1);
     expect(runSpeed(RAMP_TICKS)).toBe(CAP_SPEED);
     expect(runSpeed(RAMP_TICKS * 2)).toBe(CAP_SPEED);
-    expect(runSpeed(RAMP_TICKS * 2, true)).toBe(930);
+    expect(runSpeed(RAMP_TICKS * 2, true)).toBe(1020);
   });
 });

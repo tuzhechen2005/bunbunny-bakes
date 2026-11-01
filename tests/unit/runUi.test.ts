@@ -26,10 +26,10 @@ it("excludes paused wall time", () => {
   c.resume(10000); expect(elapsedTick(c.read(10500))).toBe(120);
 });
 it("replay-validates active and completed saves, expiry and canonical terminal time", () => {
-  const seed="v7.abcdef", outcome=replayRun(seed,[],54000);
+  const seed="v8.abcdef", outcome=replayRun(seed,[],54000);
   const save: RunSave={v:1,runId:"run",seed,inputs:[],elapsedMs:outcome.endTick*1000/60,score:outcome.score,nickname:"N",expiresAt:"2099-01-01T00:00:00Z"};
   expect(parseRunSave(JSON.stringify(save),0)).toEqual(save);
-  for(const change of [{v:2},{seed:"v1.abcdef"},{seed:"v2.abcdef"},{seed:"v3.abcdef"},{seed:"v4.abcdef"},{seed:"v5.abcdef"},{seed:"v6.abcdef"},{seed:"v999.abc"},{elapsedMs:-1},{elapsedMs:900001},{elapsedMs:900000},{inputs:[{tick:1,dir:"Q"}]},{inputs:[{tick:1,dir:"L"},{tick:1,dir:"R"}]},{score:-1},{expiresAt:"invalid"}]) expect(parseRunSave(JSON.stringify({...save,...change}),0)).toBeNull();
+  for(const change of [{v:2},{seed:"v1.abcdef"},{seed:"v2.abcdef"},{seed:"v3.abcdef"},{seed:"v4.abcdef"},{seed:"v5.abcdef"},{seed:"v6.abcdef"},{seed:"v7.abcdef"},{seed:"v999.abc"},{elapsedMs:-1},{elapsedMs:900001},{elapsedMs:900000},{inputs:[{tick:1,dir:"Q"}]},{inputs:[{tick:1,dir:"L"},{tick:1,dir:"R"}]},{score:-1},{expiresAt:"invalid"}]) expect(parseRunSave(JSON.stringify({...save,...change}),0)).toBeNull();
   expect(parseRunSave(JSON.stringify(save),Date.parse(save.expiresAt))).toBeNull();
   expect(parseRunSave("{",0)).toBeNull();
   expect(parseRunSave(JSON.stringify({...save,elapsedMs:0,score:0}),0)).not.toBeNull();
