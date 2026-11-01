@@ -27,3 +27,26 @@
 
 .run-fps { position: absolute; top: .5rem; left: .5rem; z-index: 2; padding: .15rem .4rem; background: var(--c-paper); color: var(--c-ink); font: 12px monospace; pointer-events: none; }
 .run-board-gl { background:linear-gradient(180deg,#9fcde6 0%,#cfe0e6 20%,#f6e0d1 38%,#f6e0d1 100%); }
+
+/* ---- full-bleed play screen (clay pass) ---- */
+.run-shell-play { position:fixed; inset:0; height:100dvh; max-width:none !important; background:#f3d9c2 !important; }
+.run-shell-play > div:first-child { position:absolute; inset:0 0 auto; z-index:5; padding-top:env(safe-area-inset-top); }
+.run-shell-play > div:first-child header, .run-shell-play > div:first-child > * { background:transparent !important; }
+.run-shell-play > div:first-child a, .run-shell-play > div:first-child button { background:rgba(255,248,236,.92); box-shadow:0 3px 0 #d8c3a3; border-radius:999px; }
+.run-shell-play .run-stage { position:absolute; inset:0; height:auto; }
+.run-shell-play .run-play { position:relative; padding:0; height:100%; }
+.run-shell-play .run-board { border:0; border-radius:0; }
+.run-shell-play .run-hud { position:absolute; z-index:3; left:12px; right:12px; top:calc(env(safe-area-inset-top) + 60px); padding:0; pointer-events:none; }
+.run-chip { display:flex; align-items:center; gap:6px; padding:6px 14px 6px 8px !important; border-radius:999px; background:rgba(255,248,236,.94); box-shadow:0 4px 0 #d8c3a3, 0 10px 20px -10px rgba(110,60,35,.5); }
+.run-chip span { font-size:11px; color:#8a6a55; }
+.run-chip b { font-size:24px !important; color:#4a3326 !important; line-height:1 !important; }
+.run-hud > p.run-chip::before { margin-right:0; }
+.run-board-gl { background:linear-gradient(180deg,#f7c9a8 0%,#f9dcc4 30%,#fbe8d6 48%,#f3e2cc 100%); }
+/* Coffee rush: soft speed streaks at the edges. */
+.run-board-rush::after { content:""; position:absolute; inset:0; pointer-events:none; background:
+  repeating-linear-gradient(100deg, transparent 0 46px, rgba(255,255,255,.35) 46px 48px, transparent 48px 96px),
+  repeating-linear-gradient(80deg, transparent 0 46px, rgba(255,255,255,.35) 46px 48px, transparent 48px 96px);
+  -webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 55%, transparent 55%, #000 100%); mask-image:radial-gradient(ellipse 60% 55% at 50% 55%, transparent 55%, #000 100%);
+  animation:run-rush 280ms linear infinite; }
+@keyframes run-rush { from { background-position:0 0, 0 0; } to { background-position:0 96px, 0 96px; } }
+@media (prefers-reduced-motion:reduce) { .run-board-rush::after { animation:none; } }

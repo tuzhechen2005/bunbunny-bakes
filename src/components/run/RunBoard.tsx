@@ -200,16 +200,16 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
   },[swipe]);
   return <section className="run-play">
     <div className="run-hud">
-      <p>{t.distance}<b className="font-num" data-testid="run-distance">{hud.distance}</b></p>
+      <p className="run-chip"><span>{t.distance}</span><b className="font-num" data-testid="run-distance">{hud.distance}</b></p>
       <div className="run-powers">
         {([{name:'paper-bag',label:t.bag,ticks:hud.magnetTicks,total:MAGNET_TICKS},{name:'coffee-cup',label:t.coffee,ticks:hud.coffeeTicks,total:COFFEE_TICKS}] as const).filter(p=>p.ticks>0).map(p=><div key={p.name} className="run-power" role="img" aria-label={`${p.label} ${Math.ceil(p.ticks/60)}`}>
           <svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="20" pathLength="1" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray={`${p.ticks/p.total} 1`} transform="rotate(-90 22 22)" /></svg>
           <RunSprite name={p.name} />
         </div>)}
       </div>
-      <p>{t.bread}<b className="font-num" data-testid="run-bread">{hud.bread}</b></p>
+      <p className="run-chip run-chip-end"><span>{t.bread}</span><b className="font-num" data-testid="run-bread">{hud.bread}</b></p>
     </div>
-    <div ref={wrapper} className={`run-board${webgl?" run-board-gl":""}`} role="application" aria-label={t.boardLabel} tabIndex={0} onClick={()=>{if(state.current.over)onShowResult?.();}} data-testid="run-board" >
+    <div ref={wrapper} className={`run-board${webgl?" run-board-gl":""}${hud.coffeeTicks>0?" run-board-rush":""}`} role="application" aria-label={t.boardLabel} tabIndex={0} onClick={()=>{if(state.current.over)onShowResult?.();}} data-testid="run-board" >
       <canvas ref={canvas} aria-hidden="true" />
       <output ref={fps} hidden className="run-fps" aria-hidden="true" />
       {!viewReady&&<p className="run-overlay" role="status">{t.loading}</p>}

@@ -451,7 +451,7 @@ export function RunPage() {
   const shownScore = finish.state === "ok" ? finish.result.score : finalScore;
   const sameScore = finish.state === "ok" && finish.result.score === finalScore;
   return (
-    <Shell>
+    <Shell className="run-shell-play">
       {top}
       <main className="run-stage relative flex flex-col">
         <RunBoard key={run.key} seed={run.seed} initialInputs={run.initialInputs} initialElapsedMs={run.initialElapsedMs} paused={dialog !== null || phase !== "playing"} soundOn={soundOn} reduced={reduced} onProgress={onProgress} onOver={onOver} onShowResult={phase === "over" ? () => setSheetOpen(true) : undefined} />

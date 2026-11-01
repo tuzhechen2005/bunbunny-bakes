@@ -10,7 +10,7 @@ import type { RunView } from "./runGL";
 
 const MM = 1 / 2125; // engine mm → metres
 const LANE = 2.6667, TILE = 6, AHEAD = 48, BEHIND = 10;
-const FOG = 0xf6e0d1;
+const FOG = 0xf7dcc6;
 const BUILDINGS = ["bakery", "cafe", "flower_shop", "book_shop", "house_rose", "house_sage"] as const;
 const KIND_NODE: Record<string, string> = { cart: "cart", flour: "flour", awning: "awning", puddle: "puddle", bread: "bread", "paper-bag": "bag", coffee: "coffee", ramp: "ramp", van: "van", truck: "truck" };
 const hash = (i: number) => { const x = Math.sin(i * 127.1 + 31.7) * 43758.5453; return x - Math.floor(x); };
@@ -43,13 +43,39 @@ function bake(root: THREE.Object3D): THREE.Group {
 export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView & { webgl: true }> {
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: (window.devicePixelRatio || 1) < 2, powerPreference: "high-performance" });
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
   renderer.setClearColor(0x000000, 0);
+  // Soft real shadows from one low dawn sun; the box only covers the play area near the bunny.
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(FOG, 30, AHEAD);
-  const camera = new THREE.PerspectiveCamera(55, 1, .3, 80);
-  scene.add(new THREE.HemisphereLight(0xfff4e6, 0xb9a48c, 1.6));
-  const sun = new THREE.DirectionalLight(0xffe2c0, 1.7); sun.position.set(-4, 9, -6); scene.add(sun);
+  scene.fog = new THREE.Fog(FOG, 34, AHEAD + 4);
+  const camera = new THREE.PerspectiveCamera(55, 1, .3, 120);
+  scene.add(new THREE.HemisphereLight(0xfff1df, 0xc9a98a, 1.25));
+  const sun = new THREE.DirectionalLight(0xffdcb4, 2.1); sun.position.set(-6, 11, -4);
+  sun.target.position.set(0, 0, 8); scene.add(sun.target);
+  sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); sun.shadow.bias = -0.0008; sun.shadow.normalBias = .03;
+  Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 22, bottom: -8, near: 1, far: 40 }); sun.shadow.camera.updateProjectionMatrix();
+  scene.add(sun);
+  const rim = new THREE.DirectionalLight(0xffb07a, .7); rim.position.set(3, 4, 18); scene.add(rim);
+
+  // Painted clay sky: warm gradient, round clouds and two rows of sage hills, far beyond the fog.
+  const skyTex = (() => {
+    const c = document.createElement("canvas"); c.width = 1024; c.height = 512; const x = c.getContext("2d")!;
+    const g = x.createLinearGradient(0, 0, 0, 512);
+    g.addColorStop(0, "#a9cfe0"); g.addColorStop(.45, "#f6cfb2"); g.addColorStop(.75, "#f7dcc6"); g.addColorStop(1, "#f7dcc6");
+    x.fillStyle = g; x.fillRect(0, 0, 1024, 512);
+    const cloud = (cx: number, cy: number, r: number) => { x.fillStyle = "rgba(255,247,238,.92)"; for (const [dx, dy, k] of [[0, 0, 1], [r * .9, r * .15, .8], [-r * .9, r * .2, .75], [r * .4, -r * .4, .7]]) { x.beginPath(); x.arc(cx + dx, cy + dy, r * k, 0, 7); x.fill(); } };
+    cloud(180, 120, 34); cloud(520, 80, 26); cloud(820, 140, 38);
+    const hills = (base: number, amp: number, color: string, seed: number) => {
+      x.fillStyle = color; x.beginPath(); x.moveTo(0, 512);
+      for (let i = 0; i <= 1024; i += 16) x.lineTo(i, base - Math.sin(i / 130 + seed) * amp - Math.sin(i / 55 + seed * 2) * amp * .3);
+      x.lineTo(1024, 512); x.fill();
+    };
+    hills(330, 34, "#c9ccae", 1); hills(360, 26, "#b4bc98", 3);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
+  const sky = new THREE.Mesh(new THREE.PlaneGeometry(220, 110), new THREE.MeshBasicMaterial({ map: skyTex, fog: false, depthWrite: false }));
+  sky.position.set(0, 30, AHEAD + 40); sky.rotation.y = Math.PI; scene.add(sky);
 
   const loader = new GLTFLoader();
   const [bunnyG, propsG, townG] = await Promise.all(["bunny", "props", "town"].map(n => loader.loadAsync(`/brand/run3d/${n}.glb`)));
@@ -61,7 +87,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
     const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, "rgba(60,35,20,.55)"); gr.addColorStop(1, "rgba(60,35,20,0)");
     x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
   })();
-  const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, fog: false });
+  const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, opacity: .45, depthWrite: false, fog: false });
   const shadowGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 
   // ---- street: road, sidewalks, facades, trees/lamps, pooled by tile slot ------------
@@ -73,8 +99,8 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   const street: Slot[] = [];
   for (let i = 0; i < slots; i++) {
     const g = new THREE.Group();
-    g.add(roadT.clone());
-    for (const side of [-1, 1]) { const w = walkT.clone(); w.position.x = side * 5; g.add(w); }
+    const road = roadT.clone(); road.traverse(o => { o.receiveShadow = true; }); g.add(road);
+    for (const side of [-1, 1]) { const w = walkT.clone(); w.position.x = side * 5; w.traverse(o => { o.receiveShadow = true; }); g.add(w); }
     const make = (side: number) => facades.map(f => {
       const b = f.clone(); b.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; b.position.set(side * 8.2, .18, 0); b.visible = false; g.add(b); return b;
     });
@@ -85,6 +111,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
 
   // ---- bunny -----------------------------------------------------------------------
   const bunny = bunnyG.scene; scene.add(bunny);
+  bunny.traverse(o => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
   const mixer = new THREE.AnimationMixer(bunny);
   const clip = (n: string) => mixer.clipAction(THREE.AnimationClip.findByName(bunnyG.animations, n)!);
   const act = { run: clip("run"), jump: clip("jump"), slide: clip("slide"), leanL: clip("leanL"), leanR: clip("leanR"), crash: clip("crash"), idle: clip("idle") };
@@ -113,7 +140,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   const live = new Map<number, { node: string; o: THREE.Object3D; shadow: THREE.Mesh }>();
   const take = (node: string) => {
     const list = free.get(node); if (list?.length) { const o = list.pop()!; o.visible = true; return o; }
-    const o = templates.get(node)!.clone(); scene.add(o); return o;
+    const o = templates.get(node)!.clone(); o.traverse(m => { m.castShadow = node !== "puddle"; }); scene.add(o); return o;
   };
   const shadowPool: THREE.Mesh[] = [];
   const takeShadow = () => { const s = shadowPool.pop() ?? new THREE.Mesh(shadowGeo, shadowMat); s.visible = true; if (!s.parent) scene.add(s); return s; };
@@ -166,8 +193,9 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
         sl.index = idx;
         const l = Math.floor(hash(idx * 2) * BUILDINGS.length), r = Math.floor(hash(idx * 2 + 1) * BUILDINGS.length);
         sl.left.forEach((b, k) => { b.visible = k === l; }); sl.right.forEach((b, k) => { b.visible = k === r; });
-        const d = hash(idx * 7.3);
-        sl.deco.forEach((o, k) => { o.visible = d < .5 ? (k === 0 || k === 1) && idx % 2 === 0 : (k === 2 || k === 3) && idx % 3 === 0; });
+        // Deco: [tree L, tree R, lamp L, lamp R] — alternate per tile so both pavements always feel lived-in.
+        const even = idx % 2 === 0;
+        sl.deco.forEach((o, k) => { o.visible = k < 2 ? (k === 0 ? even : !even) : (k === 2 ? !even : even); });
       }
     }
 
@@ -202,6 +230,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
     camera.aspect = width / height; camera.updateProjectionMatrix();
     camera.position.set(bunnyX * .8 + shake, 4.6 + lift * .5, -7.2);
     camera.lookAt(bunnyX * .6, 1.1 + lift * .4, 7);
+    sky.position.x = camera.position.x;
     renderer.render(scene, camera);
   }
 
