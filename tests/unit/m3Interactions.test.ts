@@ -138,6 +138,7 @@ describe("M3 finish handoff", () => {
 });
 
 describe("M3 abandoned touches", () => {
+  // A sub-threshold jitter ("short") is a tap, not an abandoned drag: the selection survives.
   it.each(["edge", "short", "cancel", "multitouch", "tap"])("resets selection for %s, preserving genuine taps", kind => {
     const board = Object.assign(new EventTarget(), { querySelectorAll: () => [] });
     const render = () => hooks.render(() => M3Board({ seed: "save", tiers, soundOn: false, reduced: true, onProgress: vi.fn(), onOver: vi.fn() }), tree => {
@@ -159,6 +160,6 @@ describe("M3 abandoned touches", () => {
     touch(kind === "cancel" ? "touchcancel" : "touchend", 30, 0);
     tree = render();
     const selected = nodes(tree).filter(p => (p as Record<string, unknown>)["aria-pressed"] === true);
-    expect(selected).toHaveLength(kind === "tap" ? 1 : 0);
+    expect(selected).toHaveLength(kind === "tap" || kind === "short" ? 1 : 0);
   });
 });

@@ -130,7 +130,7 @@ export function M3Board({ level, rules, tiers, seed, initialMoves = [], soundOn,
     };
     // Direction is decided only once the finger has clearly travelled along one axis, and the
     // swap fires as soon as it crosses ~40% of a cell — jitter and taps never swap.
-    const cellSize = () => el.getBoundingClientRect().width / 8;
+    const cellSize = () => (el.getBoundingClientRect?.().width || 360) / 8;
     const move = (e: TouchEvent) => {
       if (!gesture) return;
       if (e.touches.length !== 1) { cancel(); return; }
