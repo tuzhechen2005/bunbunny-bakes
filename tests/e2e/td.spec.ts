@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { copy } from '../../src/copy';
-import { tdLevel, replayTd, TD_ENGINE_VERSION, type TdInput } from '../../src/lib/td';
+import { tdLevel, replayTd, towerStats, TD_ENGINE_VERSION, type TdInput } from '../../src/lib/td';
 import { greedyTd } from '../support/tdBot';
 import { TD_SAVE_KEY } from '../../src/components/td/tdSave';
 // File-level browser selection: never override browserName inside a describe.
@@ -39,10 +39,17 @@ for(const width of [320,390]) test.describe(`TD ${width}`,()=>{
     expect(await page.evaluate(()=>document.documentElement.scrollHeight)).toBeLessThanOrEqual(700);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     const c=page.locator('canvas');expect(await c.evaluate(el=>(el as HTMLCanvasElement).width/el.getBoundingClientRect().width)).toBeLessThanOrEqual(2.01);
-    await page.getByTestId('td-slot-0').tap();await page.getByTestId('td-build-oven').tap();await expect(page.getByTestId('td-coins')).toHaveText('150');
-    await page.getByTestId('td-slot-0').tap();await expect(page.getByTestId('td-upgrade')).toBeDisabled();await page.getByTestId('td-sell').tap();await expect(page.getByTestId('td-coins')).toHaveText('225');
-    await page.getByTestId('td-slot-0').tap();await page.getByTestId('td-build-rollingPin').tap();await page.getByTestId('td-slot-0').tap();await page.getByTestId('td-upgrade').tap();await expect(page.getByTestId('td-coins')).toHaveText('90');
-    await page.getByTestId('td-slot-1').tap();await expect(page.getByTestId('td-build-oven')).toBeDisabled();await page.getByRole('button',{name:t.closePicker}).click();
+    // Coin arithmetic follows the current balance (start coins and costs come from the engine).
+    const c0=tdLevel(weekKey,1).startCoins,oven=towerStats('oven').cost,pin=towerStats('rollingPin').cost,pinUp=towerStats('rollingPin',1).cost;
+    const c1=c0-oven,c2=c1+Math.floor(oven/2),c3=c2-pin-pinUp;
+    await page.getByTestId('td-slot-0').tap();await page.getByTestId('td-build-oven').tap();await expect(page.getByTestId('td-coins')).toHaveText(String(c1));
+    await page.getByTestId('td-slot-0').tap();
+    if(c1<towerStats('oven',1).cost) await expect(page.getByTestId('td-upgrade')).toBeDisabled(); else await expect(page.getByTestId('td-upgrade')).toBeEnabled();
+    await page.getByTestId('td-sell').tap();await expect(page.getByTestId('td-coins')).toHaveText(String(c2));
+    await page.getByTestId('td-slot-0').tap();await page.getByTestId('td-build-rollingPin').tap();await page.getByTestId('td-slot-0').tap();await page.getByTestId('td-upgrade').tap();await expect(page.getByTestId('td-coins')).toHaveText(String(c3));
+    await page.getByTestId('td-slot-1').tap();
+    if(c3<oven) await expect(page.getByTestId('td-build-oven')).toBeDisabled(); else await expect(page.getByTestId('td-build-oven')).toBeEnabled();
+    await page.getByRole('button',{name:t.closePicker}).click();
     await page.getByTestId('td-speed').click();await expect(page.getByTestId('td-speed')).toHaveText('2×');await page.getByTestId('td-call-wave').click();await expect(page.getByTestId('td-wave')).toHaveText('1/5');
   });
   test('pause/hidden time stops; save resumes without another start, discard and reduced motion',async({page})=>{
