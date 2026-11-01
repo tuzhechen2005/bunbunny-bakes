@@ -183,7 +183,9 @@
 }
 @media (max-height:330px) { .td-shell-playing .td-next { display:none; } .td-shell-playing .td-ctl-info { display:none !important; } }
 
-.td-ctl-go { animation:td-go 1.2s ease-in-out infinite; font-size:17px !important; }
-@keyframes td-go { 0%,100% { transform:scale(1); } 50% { transform:scale(1.06); } }
+.td-ctl-go { position:relative; font-size:17px !important; }
+/* Glow ring pulses around the button; the button itself never moves (taps and tests stay stable). */
+.td-ctl-go::after { content:""; position:absolute; inset:-4px; border-radius:inherit; box-shadow:0 0 0 3px rgba(242,193,78,.9), 0 0 16px 4px rgba(242,193,78,.6); animation:td-go 1.2s ease-in-out infinite; pointer-events:none; }
+@keyframes td-go { 0%,100% { opacity:.25; } 50% { opacity:1; } }
 .td-start-hint { position:absolute; left:50%; top:10px; z-index:2; margin:0; padding:7px 16px; border-radius:999px; background:rgba(59,42,31,.82); color:#fff3dc; font-size:14px; white-space:nowrap; transform:translateX(-50%); pointer-events:none; }
-@media (prefers-reduced-motion:reduce) { .td-ctl-go { animation:none; } }
+@media (prefers-reduced-motion:reduce) { .td-ctl-go::after { animation:none; } }
