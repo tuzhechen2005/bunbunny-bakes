@@ -112,7 +112,7 @@ export function M3Board({ level, rules, tiers, seed, initialMoves = [], soundOn,
   useEffect(() => {
     const el = board.current;
     if (!el) return;
-    let gesture: { a: M3Cell; x: number; y: number; direction: SwipeDirection | null; dragged: boolean; dx: number; dy: number } | null = null;
+    let gesture: { a: M3Cell; x: number; y: number; direction: SwipeDirection | null; dragged: boolean; fired: boolean; dx: number; dy: number } | null = null;
     let suppressClickUntil = 0;
     const cancel = () => {
       gesture = null;
@@ -125,28 +125,36 @@ export function M3Board({ level, rules, tiers, seed, initialMoves = [], soundOn,
       const target = (e.target as Element).closest<HTMLElement>("[data-cell]");
       if (!target) return;
       const [r, c] = target.dataset.cell!.split(",").map(Number);
-      gesture = { a: { r, c }, x: e.touches[0].clientX, y: e.touches[0].clientY, direction: null, dragged: false, dx: 0, dy: 0 };
+      gesture = { a: { r, c }, x: e.touches[0].clientX, y: e.touches[0].clientY, direction: null, dragged: false, fired: false, dx: 0, dy: 0 };
       setHint(null); setActivity(n => n + 1);
     };
+    // Direction is decided only once the finger has clearly travelled along one axis, and the
+    // swap fires as soon as it crosses ~40% of a cell — jitter and taps never swap.
+    const cellSize = () => el.getBoundingClientRect().width / 8;
     const move = (e: TouchEvent) => {
       if (!gesture) return;
       if (e.touches.length !== 1) { cancel(); return; }
+      e.preventDefault();
       gesture.dx = e.touches[0].clientX - gesture.x; gesture.dy = e.touches[0].clientY - gesture.y;
-      gesture.direction ??= swipeDirection(gesture.dx, gesture.dy);
-      if (gesture.direction) {
-        e.preventDefault();
-        if (!gesture.dragged) setSelected(null);
+      const ax = Math.abs(gesture.dx), ay = Math.abs(gesture.dy), major = Math.max(ax, ay), minor = Math.min(ax, ay);
+      if (!gesture.direction && major >= Math.max(8, cellSize() * .18) && major >= minor * 1.5) {
+        gesture.direction = swipeDirection(gesture.dx, gesture.dy);
+        setSelected(null);
         gesture.dragged = true;
       }
-    };
-    const end = () => {
-      if (gesture?.dragged && gesture.direction) {
-        suppressClickUntil = Date.now() + 500;
-        if (Math.max(Math.abs(gesture.dx), Math.abs(gesture.dy)) >= 12) {
+      if (gesture.direction && !gesture.fired) {
+        const along = gesture.direction === "left" || gesture.direction === "right" ? ax : ay;
+        if (along >= cellSize() * .4) {
+          gesture.fired = true;
+          suppressClickUntil = Date.now() + 500;
           const b = swipeTarget(gesture.a, gesture.direction);
           if (b) attempt(gesture.a, b);
         }
       }
+    };
+    const end = () => {
+      // A drag that never committed (too short or too diagonal) is neither a swap nor a tap.
+      if (gesture?.dragged || (gesture && Math.max(Math.abs(gesture.dx), Math.abs(gesture.dy)) >= 10)) suppressClickUntil = Date.now() + 400;
       gesture = null;
     };
     const click = (e: MouseEvent) => { if (Date.now() < suppressClickUntil) { e.preventDefault(); e.stopPropagation(); } };

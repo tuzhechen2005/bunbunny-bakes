@@ -37,7 +37,7 @@
 .m3-order progress::-webkit-progress-bar { background:rgba(74,38,14,.1); }
 .m3-order progress::-webkit-progress-value { background:#cf8a3c; }
 .m3-order progress::-moz-progress-bar { background:#cf8a3c; }
-.m3-board { position:relative; isolation:isolate; width:100%; aspect-ratio:1; padding:0; border-radius:20px; overflow:hidden; touch-action:pan-y; user-select:none; -webkit-user-select:none;
+.m3-board { position:relative; isolation:isolate; width:100%; aspect-ratio:1; padding:0; border-radius:20px; overflow:hidden; touch-action:none; user-select:none; -webkit-user-select:none;
   background:#f3e6d2; box-shadow:0 0 0 6px #8a5a33, 0 0 0 7px #6f4524, 0 14px 24px -12px rgba(74,38,14,.6), inset 0 3px 8px rgba(74,38,14,.25); }
 .m3-board-wrap { padding:7px; }
 .m3-paper { position:absolute; inset:0; width:100%; height:100%; }
