@@ -428,6 +428,13 @@ export const copy = {
         rollingPin: { a: "连击", b: "击退" }, flourSifter: { a: "更慢", b: "更大" },
         whisk: { a: "大范围", b: "更快" }, oven: { a: "烧灼", b: "穿透" },
       },
+      info: {
+        rollingPin: { base: "每打 3 下，晕一下", a: "一下打两次", b: "把害虫往回推" },
+        whisk: { base: "溅一片，地上留面糊减速", a: "溅得更大一片", b: "打得更快" },
+        flourSifter: { base: "减速，沾粉的多挨 25% 伤；麻雀沾粉就落地", a: "更慢，多挨 40% 伤", b: "撒粉范围更大" },
+        oven: { base: "重击带烧伤，烧死了火会传给旁边", a: "烧得更疼", b: "一发穿两只，打得更远" },
+      },
+      infoTitle: "厨具介绍", infoOpen: "厨具介绍", infoClose: "知道了",
       maxed: "满级", nextWaveLabel: "下一波", lastWave: "最后一波", boss: "大胃王鼠来了！",
       slot: "炮位 {n}", closePicker: "收起厨具", boardLabel: "面包防守小路",
       win: "守住了！", fail: "面包被偷走了", next: "下一关", retry: "再来一次",

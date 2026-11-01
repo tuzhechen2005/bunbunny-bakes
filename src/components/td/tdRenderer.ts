@@ -152,6 +152,14 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
       ctx.drawImage(token(d.tier), -PHOTO, -PHOTO, PHOTO * 2, PHOTO * 2); ctx.restore();
     }
 
+    // Whisk batter: sticky yellow puddles on the path.
+    for (let i = 0; i < s.batterPuddles.length; i++) {
+      const b = s.batterPuddles[i], left = Math.max(0, Math.min(1, (b.until - tick) / 30));
+      ctx.globalAlpha = .55 * left + .2;
+      ctx.fillStyle = '#f3d27a'; ctx.beginPath(); ctx.ellipse(b.x, b.y, b.radius, b.radius * .62, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(b.x - b.radius * .3, b.y - b.radius * .15, b.radius * .25, b.radius * .1, -.3, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     // Towers: shadow, placement bounce, attack recoil, tier pips.
     for (let i = 0; i < s.towers.length; i++) {
       const t = s.towers[i];
@@ -188,9 +196,30 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
         ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .55 * (1 - (tick - hit) / 6);
         sprite(s0, frame, p.x, p.y - lift, w, flip, tilt); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
       }
-      if (p.slowed) {
-        ctx.fillStyle = 'rgba(255,255,255,.85)';
-        for (let d = 0; d < 3; d++) { const a = (tick * .08 + d * 2.1 + p.id); ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * w * .24, p.y - lift - 10 + Math.sin(a) * 8, 3.5, 0, 7); ctx.fill(); }
+      if (p.floured) {
+        // Flour dust: pale motes circling the pest (it takes extra damage).
+        ctx.fillStyle = 'rgba(255,255,255,.9)';
+        for (let d = 0; d < 4; d++) { const a = (tick * .08 + d * 1.57 + p.id); ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * w * .26, p.y - lift - 12 + Math.sin(a) * 9, 4, 0, 7); ctx.fill(); }
+      } else if (p.slowed) {
+        ctx.fillStyle = 'rgba(255,255,255,.7)';
+        for (let d = 0; d < 2; d++) { const a = (tick * .08 + d * 3.1 + p.id); ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * w * .24, p.y - lift - 10 + Math.sin(a) * 8, 3, 0, 7); ctx.fill(); }
+      }
+      if (p.burning && !reduced) {
+        // Flicker of flame above the back.
+        const f = .7 + .3 * Math.sin(tick * .6 + p.id);
+        const g = ctx.createRadialGradient(p.x, p.y - lift - w * .25, 0, p.x, p.y - lift - w * .25, w * .3 * f);
+        g.addColorStop(0, 'rgba(255,220,120,.95)'); g.addColorStop(.5, 'rgba(255,140,50,.7)'); g.addColorStop(1, 'rgba(255,90,30,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y - lift - w * .25, w * .3 * f, 0, 7); ctx.fill();
+      }
+      if (tick < p.stunnedUntil) {
+        // Stun: three little stars orbiting the head.
+        ctx.fillStyle = GOLD; ctx.strokeStyle = '#a8701f'; ctx.lineWidth = 1.5;
+        for (let d = 0; d < 3; d++) {
+          const a = tick * .2 + d * 2.09, sx = p.x + Math.cos(a) * w * .22, sy = p.y - lift - w * .42 + Math.sin(a) * 6;
+          ctx.beginPath();
+          for (let k = 0; k < 10; k++) { const r = k % 2 ? 3 : 7, t2 = k * Math.PI / 5 - Math.PI / 2; ctx.lineTo(sx + Math.cos(t2) * r, sy + Math.sin(t2) * r); }
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+        }
       }
       // Carried bread rides above the thief.
       for (let c = 0; c < p.carriedTiers.length; c++) {
