@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { GameTutorial } from '@/components/game/GameTutorial';
 import { TopBar } from '@/components/ui/TopBar';
 import { focusRing } from '@/components/ui/focus';
-import { GameShell, SpeakerButton, GameRegistrationField, gamePrimary, gameSecondary } from '@/components/game/GameChrome';
+import { GameShell, SpeakerButton, GameRegistrationField, GameMenuHero, gamePrimary, gameSecondary } from '@/components/game/GameChrome';
 import { copy } from '@/copy';
 import { fill } from '@/components/customer/format';
 import { readRemembered, writeRemembered, isRetryable } from '@/components/game/gameApi';
@@ -14,7 +14,6 @@ import { useLiveProgress } from '@/components/game/useLiveProgress';
 import { Sheet } from '@/components/ui/Sheet';
 import { useMotionPrefs } from '@/lib/motion/react';
 import { TdBoard, type TdProgress } from './TdBoard';
-import { TdArt } from './TdArt';
 import { fetchTdLeaderboard, finishTd, startTd, type TdFinish } from './tdApi';
 import { clearTdSave, readTdSave, writeTdSave, type TdSave } from './tdSave';
 import './td.css';
@@ -109,8 +108,9 @@ export function TdPage() {
         </div>} />
     </div>
     {phase === 'menu' && <main className="td-menu">
-      <h1>{t.title}</h1><p className="td-level" data-testid="td-menu-level">{fill(t.level,{n:saved?.level ?? nextLevel})}</p>
-      <p className="td-hint">{t.startHint}</p><TdArt /><p className="td-muted">{t.rules}</p>
+      <GameMenuHero game="td" title={t.title} hint={t.startHint}>
+        <p className="game-hero-badge font-display" data-testid="td-menu-level">{fill(t.level,{n:saved?.level ?? nextLevel})}</p>
+      </GameMenuHero><p className="td-muted">{t.rules}</p>
       <p className={`font-display mt-6 text-center text-[15px] leading-snug ${hasPrize ? "" : "invisible"}`} aria-hidden={!hasPrize} data-testid={hasPrize ? "td-prize-line" : undefined}>{g.prizeLine}</p>
       {saved ? <><button className={gamePrimary} data-testid="td-resume" onClick={() => { const s = readTdSave(); if (s) activate(s); else setSaved(null); }}>{g.resume}</button>
         <button className={gameSecondary} data-testid="td-restart" onClick={() => setDialog('restart')}>{g.restart}</button></>
@@ -118,7 +118,7 @@ export function TdPage() {
       <button className={gameSecondary} data-testid="td-open-board" onClick={() => setPhase('board')}>{g.viewBoard}</button>
       <GameTutorial game="td" />
     </main>}
-    {phase === 'form' && <main className="td-menu td-form-page"><h1>{t.title}</h1><form onSubmit={begin} noValidate className="mt-6 flex flex-col gap-4" data-testid="td-form">
+    {phase === 'form' && <main className="td-menu td-form-page"><GameMenuHero game="td" title={t.title} compact /><form onSubmit={begin} noValidate className="mt-6 flex flex-col gap-4" data-testid="td-form">
       <GameRegistrationField kind="wechat" testId="td-wechat" value={wechat} onChange={e => setWechat(e.target.value)} error={errors.wechat} errorId="td-wechat-err" />
       <GameRegistrationField kind="nickname" testId="td-nickname" value={nickname} onChange={e => setNickname(e.target.value)} error={errors.nick} errorId="td-nick-err" />
       {error && <p role="alert" className="m-0 text-sm text-c-red">{error}</p>}<button className={gamePrimary} data-testid="td-start" disabled={starting}>{starting ? g.starting : g.start}</button>

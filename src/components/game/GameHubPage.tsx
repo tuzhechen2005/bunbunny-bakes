@@ -8,23 +8,37 @@ import { GAME_CATALOG } from "@/lib/gameCatalog";
 import { LiveBadge } from "./LiveBadge";
 import { GameIcon } from "./GameIcon";
 import { useGameHub } from "./useGameHub";
+import "./clay.css";
 
 const t = copy.customer.gameHub;
 const g = copy.customer.game;
+
+const ART: Record<string, string> = { BIG: "big", TU: "tu", M3: "m3", GRAB: "grab", RUN: "run", TD: "td" };
+/** The clay card art; falls back to the flat icon until the art ships. */
+function HubArt({ kind }: { kind: string }) {
+  const key = ART[kind];
+  return <span className="hub-card-art">
+    {/* eslint-disable-next-line @next/next/no-img-element -- static clay card art */}
+    {key ? <img src={`/brand/art/card-${key}.webp`} alt="" draggable={false} onError={e => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling?.removeAttribute("hidden"); }} /> : null}
+    <span hidden={!!key}><GameIcon kind={kind as never} /></span>
+  </span>;
+}
 
 export function GameHubPage() {
   const { data, error, reload } = useGameHub(true, { refresh: true });
   // Links stay usable while scores load, or when the connection fails.
   const games = data?.games ?? GAME_CATALOG.map((game) => ({ ...game, weekBest: null, live: false }));
   return (
-    <div className="flex flex-1 flex-col bg-c-wash text-c-ink">
-      <div className="mx-auto flex w-full max-w-[430px] flex-1 flex-col bg-c-paper">
+    <div className="game-skin flex flex-1 flex-col text-c-ink">
+      <div className="game-skin-inner mx-auto flex w-full max-w-[430px] flex-1 flex-col">
         <TopBar backHref="/" backLabel={g.backLabel} title={t.title} titleAs="h1" />
-        <main className="px-5 pt-5 pb-[calc(24px+env(safe-area-inset-bottom))]" data-testid="game-hub">
+        <main className="px-5 pt-1 pb-[calc(24px+env(safe-area-inset-bottom))]" data-testid="game-hub">
+          {/* eslint-disable-next-line @next/next/no-img-element -- static clay key art */}
+          <img className="hub-hero" src="/brand/art/hub-hero.webp" alt="" draggable={false} onError={e => { e.currentTarget.style.display = "none"; }} />
           <div className="grid grid-cols-2 gap-3">
             {games.map((game) => (
-              <Link key={game.kind} href={game.href} className={`relative flex min-w-0 rounded-3xl bg-c-wash px-4 flex-col items-start pt-9 pb-3 ${focusRing}`} data-testid={`hub-game-${game.kind.toLowerCase()}`}>
-                <GameIcon kind={game.kind} />
+              <Link key={game.kind} href={game.href} className={`hub-card clay-panel relative flex min-w-0 px-4 flex-col items-start pt-2 pb-3 ${focusRing}`} data-testid={`hub-game-${game.kind.toLowerCase()}`}>
+                <HubArt kind={game.kind} />
                 <div className="mt-2">
                   {data?.prizeGame === game.kind ? (
                     <span className="absolute top-3 left-4 text-[11px] font-bold text-c-grey" data-testid="hub-prize">{t.prizeBadge}</span>

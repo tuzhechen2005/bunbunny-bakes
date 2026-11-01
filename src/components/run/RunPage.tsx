@@ -12,7 +12,7 @@ import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import { useGameHub } from "@/components/game/useGameHub";
 import { useLiveProgress } from "@/components/game/useLiveProgress";
-import { GameShell as Shell, SpeakerButton, GameRegistrationField, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
+import { GameMenuHero, GameRegistrationField, GameShell as Shell, SpeakerButton, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { copy } from "@/copy";
 import { elapsedTick } from "./runClock";
 import { fetchMenu } from "@/lib/api";
@@ -327,8 +327,7 @@ export function RunPage() {
       <Shell>
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
-          <h1 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.title}</h1>
-          <p className="m-0 mt-2 text-sm leading-relaxed text-c-grey">{t.startHint}</p>
+          <GameMenuHero game="run" title={t.title} hint={t.startHint} />
           <RunRules />
           {formError ? <p role="alert" className="text-sm text-c-red">{formError}</p> : null}
           <p className="mt-2 text-xs leading-relaxed text-c-grey">{t.rules}</p>
@@ -429,7 +428,7 @@ export function RunPage() {
       <Shell>
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
-          <h1 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.title}</h1>
+          <GameMenuHero game="run" title={t.title} compact />
           <form onSubmit={begin} noValidate className="mt-6 flex flex-col gap-4" data-testid="run-form">
             <GameRegistrationField kind="wechat" testId="run-wechat" value={wechatId} onChange={(e) => setWechatId(e.target.value)} error={errors.wechat} errorId="run-wechat-err" />
             <GameRegistrationField kind="nickname" testId="run-nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} error={errors.nick} errorId="run-nick-err" />

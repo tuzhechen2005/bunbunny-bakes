@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { GameMenuHero, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { GameTutorial } from "@/components/game/GameTutorial";
 import { fill } from "@/components/customer/format";
 import { LeaderboardView } from "@/components/game/LeaderboardView";
@@ -301,8 +302,8 @@ export function M3Page() {
     />
   );
 
-  const primary = `font-display h-14 w-full rounded-full bg-c-ink text-lg text-c-paper ${focusRing}`;
-  const secondary = `min-h-11 w-full rounded-full bg-c-wash text-[15px] font-bold ${focusRing}`;
+  const primary = gamePrimary;
+  const secondary = gameSecondary;
 
   // ---------------- leaderboard ----------------
   if (phase === "board") {
@@ -339,9 +340,9 @@ export function M3Page() {
       <Shell>
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
-          <h1 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.title}</h1>
-          <p className="font-display mt-3 text-xl" data-testid="m3-menu-level">{fill(t.level, { n: String(save?.level ?? nextLevel) })}</p>
-          <p className="m-0 mt-2 text-sm leading-relaxed text-c-grey">{t.startHint}</p>
+          <GameMenuHero game="m3" title={t.title} hint={t.startHint}>
+            <p className="game-hero-badge font-display" data-testid="m3-menu-level">{fill(t.level, { n: String(save?.level ?? nextLevel) })}</p>
+          </GameMenuHero>
           <div className="m3-help-cards">
             {(["roll", "big"] as const).map(kind => <div key={kind} className="m3-help-card" data-testid={`m3-help-${kind}`}>
               <span className="m3-help-art"><SpecialMark kind={kind} /></span>
@@ -448,7 +449,7 @@ export function M3Page() {
       <Shell>
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
-          <h1 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.title}</h1>
+          <GameMenuHero game="m3" title={t.title} compact />
           <form onSubmit={begin} noValidate className="mt-6 flex flex-col gap-4" data-testid="m3-form">
             <label className="block">
               <span className="mb-1.5 block text-[13px] font-bold">{g.wechatLabel}</span>

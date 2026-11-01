@@ -1,14 +1,15 @@
 import type { InputHTMLAttributes, ReactNode } from 'react';
 import { copy } from '@/copy';
 import { focusRing } from '@/components/ui/focus';
+import './clay.css';
 
 const g = copy.customer.game;
-export const gamePrimary = `font-display h-14 w-full rounded-full bg-c-ink text-lg text-c-paper ${focusRing}`;
-export const gameSecondary = `min-h-11 w-full rounded-full bg-c-wash text-[15px] font-bold ${focusRing}`;
+export const gamePrimary = `clay-btn font-display h-14 w-full text-lg ${focusRing}`;
+export const gameSecondary = `clay-btn-2 min-h-12 w-full text-[15px] font-bold ${focusRing}`;
 
 export function GameShell({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className="flex flex-1 flex-col bg-c-wash text-c-ink">
-    <div className={`mx-auto flex w-full max-w-[430px] flex-1 flex-col overflow-x-clip bg-c-paper ${className}`}>{children}</div>
+  return <div className="game-skin flex flex-1 flex-col text-c-ink">
+    <div className={`game-skin-inner mx-auto flex w-full max-w-[430px] flex-1 flex-col overflow-x-clip ${className}`}>{children}</div>
   </div>;
 }
 
@@ -35,4 +36,18 @@ export function GameRegistrationField({ kind, testId, error, errorId, ...props }
       data-testid={testId} />
     {error && <span id={errorId} role="alert" className="mt-1 block text-[13px] text-c-red">{error}</span>}
   </label>;
+}
+
+export type GameArtKey = 'big' | 'tu' | 'm3' | 'grab' | 'run' | 'td';
+/** Menu header: the game's clay key art, full bleed, with the title set into its empty top. */
+export function GameMenuHero({ game, title, hint, compact = false, children }: { game: GameArtKey; title: ReactNode; hint?: ReactNode; compact?: boolean; children?: ReactNode }) {
+  return <header className={`game-hero${compact ? ' game-hero-compact' : ''}`}>
+    {/* eslint-disable-next-line @next/next/no-img-element -- static art, already sized WebP */}
+    <img className="game-hero-art" src={`/brand/art/menu-${game}.webp`} alt="" draggable={false} onError={e => { e.currentTarget.style.visibility = 'hidden'; }} />
+    <div className="game-hero-text">
+      <h1 className="font-display">{title}</h1>
+      {hint ? <p>{hint}</p> : null}
+      {children}
+    </div>
+  </header>;
 }

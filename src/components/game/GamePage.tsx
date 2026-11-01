@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { GameMenuHero, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { GameTutorial } from "@/components/game/GameTutorial";
 import { RollNumber } from "@/components/customer/checkout/RollNumber";
 import { fill } from "@/components/customer/format";
@@ -303,13 +304,12 @@ export function GamePage() {
   // ---------------- menu (D110) ----------------
   if (phase === "menu") {
     const rules = hasPrize ? [t.rules, owner ? fill(t.rulesContact, { id: owner }) : ""].join("") : copy.customer.gameHub.rules;
-    const secondary = `min-h-11 w-full rounded-full bg-c-wash text-[15px] font-bold ${focusRing}`;
+    const secondary = gameSecondary;
     return (
       <Shell>
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
-          <h2 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.startTitle}</h2>
-          <p className="m-0 mt-2 text-sm leading-relaxed text-c-grey">{t.startHint}</p>
+          <GameMenuHero game="big" title={t.startTitle} hint={t.startHint} />
           {/* Keep the full line's space, including wrapping, while the hub loads or fails. */}
           <p
             className={`font-display m-0 mt-6 text-center text-[15px] leading-snug text-c-ink ${hasPrize ? "" : "invisible"}`}
@@ -343,7 +343,7 @@ export function GamePage() {
                   setFormError(null);
                   setPhase("form");
                 }}
-                className={`font-display h-14 w-full rounded-full bg-c-ink text-lg text-c-paper ${focusRing}`}
+                className={gamePrimary}
                 data-testid="game-menu-start"
               >
                 {t.start}
@@ -391,7 +391,7 @@ export function GamePage() {
                     setPhase("form");
                   })
                 }
-                className={`font-display h-14 w-full rounded-full bg-c-ink text-lg text-c-paper ${focusRing}`}
+                className={gamePrimary}
                 data-testid="game-restart-confirm"
               >
                 {t.restartConfirm}
@@ -414,7 +414,7 @@ export function GamePage() {
       <Shell>
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
-          <h2 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.startTitle}</h2>
+          <GameMenuHero game="big" title={t.startTitle} compact />
           <form onSubmit={begin} noValidate className="mt-6 flex flex-col gap-4" data-testid="game-form">
             <label className="block">
               <span className="mb-1.5 block text-[13px] font-bold">{t.wechatLabel}</span>
@@ -564,7 +564,7 @@ export function GamePage() {
                   toMenu();
                 })
               }
-              className={`font-display h-14 w-full rounded-full bg-c-ink text-lg text-c-paper ${focusRing}`}
+              className={gamePrimary}
               data-testid="game-exit-save"
             >
               {t.exitSave}

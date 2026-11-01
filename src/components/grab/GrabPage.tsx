@@ -12,7 +12,7 @@ import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import { useGameHub } from "@/components/game/useGameHub";
 import { useLiveProgress } from "@/components/game/useLiveProgress";
-import { GameShell as Shell, SpeakerButton, GameRegistrationField, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
+import { GameMenuHero, GameRegistrationField, GameShell as Shell, SpeakerButton, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { copy } from "@/copy";
 import { elapsedTick } from "./grabClock";
 import { fetchMenu } from "@/lib/api";
@@ -324,8 +324,7 @@ export function GrabPage() {
       <Shell>
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
-          <h1 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.title}</h1>
-          <p className="m-0 mt-2 text-sm leading-relaxed text-c-grey">{t.startHint}</p>
+          <GameMenuHero game="grab" title={t.title} hint={t.startHint} />
           <GrabRules />
           <p className="mt-2 text-xs leading-relaxed text-c-grey">{t.rules}</p>
           {/* Keep the full line's space, including wrapping, while the hub loads or fails. */}
@@ -425,7 +424,7 @@ export function GrabPage() {
       <Shell>
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
-          <h1 className="font-display m-0 mt-2 text-[34px] leading-[1.1] tracking-[-0.04em]">{t.title}</h1>
+          <GameMenuHero game="grab" title={t.title} compact />
           <form onSubmit={begin} noValidate className="mt-6 flex flex-col gap-4" data-testid="grab-form">
             <GameRegistrationField kind="wechat" testId="grab-wechat" value={wechatId} onChange={(e) => setWechatId(e.target.value)} error={errors.wechat} errorId="grab-wechat-err" />
             <GameRegistrationField kind="nickname" testId="grab-nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} error={errors.nick} errorId="grab-nick-err" />
