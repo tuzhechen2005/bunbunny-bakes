@@ -33,7 +33,7 @@ export function createRunGame({ seed, realtime = false }: { seed: string; realti
   let y = 0, baseY = 0, fallSpeed = 0;
   let surface: "ground" | "roof" = "ground";
   const truckTravel = new Map<number, number>();
-  const position = (o: RunObject) => o.kind === "truck" ? o.z - (truckTravel.get(o.id) ?? 0) : o.z;
+  const position = (o: RunObject) => o.z - (truckTravel.get(o.carrierId ?? o.id) ?? 0);
   const front = (o: RunObject) => o.front;
   const back = (o: RunObject) => o.back;
   const height = (o: RunObject) => o.height;
@@ -159,7 +159,7 @@ export function createRunGame({ seed, realtime = false }: { seed: string; realti
       surface = support > 0 ? "roof" : "ground";
       for (let i = head; i < objects.length && objects[i].z <= collisionEnd; i++) {
         const obj = objects[i], z = position(obj) - distance;
-        const previousZ = z + distance - previousDistance + (obj.kind === "truck" ? runGeometry.truckSpeed : 0);
+        const previousZ = z + distance - previousDistance + (obj.kind === "truck" || obj.carrierId !== undefined ? runGeometry.truckSpeed : 0);
         if (isRunObstacle(obj.kind)) {
           if (obj.kind === "ramp" || obj.lane !== occupiedLane() || coffeeUntil > tick ||
               z > front(obj) - runGeometry.edgeGrace || previousZ < -back(obj) + runGeometry.edgeGrace) continue;
@@ -172,8 +172,8 @@ export function createRunGame({ seed, realtime = false }: { seed: string; realti
           }
         } else if (previousZ > 0 && z <= 0 &&
                    (obj.lane === occupiedLane() || (obj.kind === "bread" && magnetUntil > tick)) &&
-                   ((obj.y ?? 0) === 0 || Math.abs(y - (obj.y ?? 0)) < runGeometry.collectHeightTolerance || (obj.kind === "bread" && magnetUntil > tick))) {
-          if (obj.kind === "bread") bread++;
+                   ((obj.y ?? 0) === 0 || (surface === "roof" && Math.abs(y - (obj.y ?? 0)) < runGeometry.collectHeightTolerance) || (obj.kind === "bread" && magnetUntil > tick))) {
+          if (obj.kind === "bread") bread += obj.value ?? 1;
           else if (obj.kind === "paper-bag") magnetUntil = tick + MAGNET_TICKS;
           else coffeeUntil = tick + COFFEE_TICKS;
           collect(obj);
@@ -223,6 +223,10 @@ export function createRunGame({ seed, realtime = false }: { seed: string; realti
         const target=liveObjects[count] ?? (liveObjects[count] = {} as RunObject);
         target.id=object.id;target.lane=object.lane;target.kind=object.kind;
         target.z=position(object)-distance;target.front=front(object);target.back=back(object);target.height=height(object);
+        if(object.value !== undefined) target.value=object.value;
+        else delete target.value;
+        if(object.carrierId !== undefined) target.carrierId=object.carrierId;
+        else delete target.carrierId;
         if(object.speed !== undefined) target.speed=object.speed;
         if(object.y !== undefined) target.y=object.y;
         if(object.speed === undefined) delete target.speed;

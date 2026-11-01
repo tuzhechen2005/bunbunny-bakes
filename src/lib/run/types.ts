@@ -1,12 +1,12 @@
-export const RUN_ENGINE_VERSION = 6;
+export const RUN_ENGINE_VERSION = 7;
 export const TICK_RATE = 60;
 export const UNITS_PER_METRE = 1000;
 export const MAX_RUN_TICKS = 15 * 60 * TICK_RATE;
 export const MAX_INPUTS = 20_000;
 /** Speeds are integer millimetres per tick. */
-export const BASE_SPEED = 320;
-export const CAP_SPEED = 500;
-export const RAMP_TICKS = 75 * TICK_RATE;
+export const BASE_SPEED = 420;
+export const CAP_SPEED = 620;
+export const RAMP_TICKS = 45 * TICK_RATE;
 export const MAX_SPEED = CAP_SPEED * 3 / 2;
 export const JUMP_TICKS = 42;
 export const SLIDE_TICKS = 36;
@@ -15,7 +15,7 @@ export const MAGNET_TICKS = 8 * TICK_RATE;
 export const COFFEE_TICKS = 6 * TICK_RATE;
 export const MIN_REACTION_TICKS = 30;
 export const MIN_REACTION_DISTANCE = MAX_SPEED * MIN_REACTION_TICKS;
-export const ROW_GAP = 45_000;
+export const ROW_GAP = 54_000;
 export const VISIBLE_DISTANCE = 90_000;
 export const LANES = [0, 1, 2] as const;
 export type RunLane = typeof LANES[number];
@@ -35,6 +35,10 @@ export interface RunObject {
   speed?: number;
   /** Collectible elevation above the road. */
   y?: number;
+  /** Bread value; 5 marks a golden loaf. */
+  value?: 1 | 5;
+  /** Moving roof owner, so its bread shares the truck displacement. */
+  carrierId?: number;
 }
 export interface RunLaneChange { from: RunLane; to: RunLane; progress: number }
 export interface RunPlayer {

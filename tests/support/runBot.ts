@@ -13,6 +13,7 @@ export interface RunBotResult {
   state: RunState;
   endTick: number;
   over: boolean;
+  peakY: number;
 }
 export const BOT_REACTION_TICKS = 15;
 export const BOT_SAMPLE_TICKS = 6;
@@ -48,7 +49,7 @@ export function searchDirection(s: RunState): RunDirection | null {
   return search(s.player.lane, 0)?.[0] ?? null;
 }
 
-function run(seed: string, limit: number, mode: "good" | "random" | "perfect"): RunBotResult {
+function run(seed: string, limit: number, mode: "good" | "random" | "perfect" | "ground"): RunBotResult {
   const game = createRunGame({ seed });
   const rng = createRng(`${seed}:run:bot`);
   const inputs: RunInput[] = [];
@@ -56,6 +57,7 @@ function run(seed: string, limit: number, mode: "good" | "random" | "perfect"): 
   let handledRow = -1;
   let nextRandom = 0;
   let s = game.state();
+  let peakY = 0;
   function swipe(dir: RunDirection) {
     game.input(s.tick, dir);
     inputs.push({ tick: s.tick, dir });
@@ -67,9 +69,9 @@ function run(seed: string, limit: number, mode: "good" | "random" | "perfect"): 
         swipe((["L", "R", "U", "D"] as const)[rng.int(4)]);
         nextRandom = s.tick + 12 + rng.int(25);
       }
-    } else if (mode === "perfect") {
+    } else if (mode === "perfect" || mode === "ground") {
       if (!s.player.laneChange && s.tick % 12 === 0) {
-        const dir = searchDirection(s);
+        const dir = searchDirection(mode === "ground" ? { ...s, objects: s.objects.map(o => o.kind === "ramp" ? { ...o, kind: "van" as const } : o) } : s);
         if (dir) swipe(dir);
       }
     } else {
@@ -100,8 +102,9 @@ function run(seed: string, limit: number, mode: "good" | "random" | "perfect"): 
     }
     game.step(s.tick + 1);
     s = game.state();
+    peakY = Math.max(peakY, s.player.y);
   }
-  return { inputs, state: s, endTick: s.tick, over: s.over };
+  return { inputs, state: s, endTick: s.tick, over: s.over, peakY };
 }
 export const goodRun = (seed: string, limit = MAX_RUN_TICKS) => run(seed, limit, "good");
 export const randomRun = (seed: string, limit = MAX_RUN_TICKS) => run(seed, limit, "random");
@@ -109,3 +112,33 @@ export const perfectRun = (seed: string, limit = MAX_RUN_TICKS) => run(seed, lim
 
 /** Delayed, random choice among apparently open lanes; no future search. */
 export const casualRun = goodRun;
+
+/** Ground control uses the same snapshot search but never enters a ramp. */
+export const groundOnlyRun = (seed: string, limit = MAX_RUN_TICKS) => run(seed, limit, "ground");
+
+/** Seek visible ramped roofs after the preceding row has cleared; otherwise use
+ * the same ground search. No reserved-route metadata or future track access. */
+export function roofRun(seed: string, limit = MAX_RUN_TICKS): RunBotResult {
+  const game = createRunGame({ seed });
+  const inputs: RunInput[] = [];
+  let s = game.state();
+  let peakY = 0;
+  let targetId: number | undefined;
+  while (!s.over && s.tick < limit) {
+    if (!s.player.laneChange) {
+      let target = s.objects.find(o => o.id === targetId);
+      if (!target || target.z < -target.back) target = undefined;
+      if (!target) {
+        target = s.objects.find(o => o.kind === "van" && o.z - o.front > 14000 && o.z - o.front < 30000 &&
+          !s.objects.some(h => isRunObstacle(h.kind) && h.kind !== "ramp" && h.id !== o.id &&
+            h.z < o.z && h.z + h.back >= -2000));
+        targetId = target?.id;
+      }
+      const dir = target ? (target.lane === s.player.lane ? null : target.lane < s.player.lane ? "L" : "R") : searchDirection(s);
+      if (dir) { game.input(s.tick, dir); inputs.push({ tick: s.tick, dir }); }
+    }
+    game.step(s.tick + 1); s = game.state();
+    peakY = Math.max(peakY, s.player.y);
+  }
+  return { inputs, state: s, endTick: s.tick, over: s.over, peakY };
+}
