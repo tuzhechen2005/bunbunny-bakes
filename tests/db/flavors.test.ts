@@ -159,7 +159,7 @@ it("mixed independent flavours share the daily limit and summary/email breakdown
     const owner = await renderNotification(db, notification, now);
     expect(owner.text).toContain("泡芙：原味 5、抹茶 3，共 8");
     const summary = await renderNotification(db, { id: "summary", kind: "DAILY_SUMMARY", dedupeKey: "summary", payload: daily }, now);
-    expect(summary.text).toContain("泡芙：原味 5、抹茶 3，共 8");
+    expect(summary.text).toContain("泡芙：原味 5个、抹茶 3个，共 8个");
   } finally {
     if (previousSite === undefined) delete process.env.SITE_URL; else process.env.SITE_URL = previousSite;
   }
