@@ -604,10 +604,9 @@ export function GrabPage() {
           <p className="font-num m-0 text-center text-[56px] leading-[1.1]" data-testid="grab-final-score">
             {shownScore}
           </p>
-          <div className="mt-1 flex items-start justify-center gap-8 text-center text-sm font-bold">
-            <p className="m-0">{t.reached}<span className="font-num mt-0.5 block text-xl font-normal" data-testid="grab-reached">{shownLevel}</span></p>
-            <p className="m-0">{t.orders}<span className="font-num mt-0.5 block text-xl font-normal" data-testid="grab-orders-done">{shownOrders}</span></p>
-          </div>
+          <p className="m-0 mt-1 text-center text-sm font-bold">
+            {t.orders} <span className="font-num text-xl font-normal" data-testid="grab-orders-done">{shownOrders}</span>
+          </p>
           <div className="mt-2 min-h-[72px] text-center" aria-live="polite" data-testid="grab-finish">
             {finish.state === "submitting" ? (
               <p className="m-0 text-sm text-c-grey">{g.submitting}</p>

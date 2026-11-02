@@ -506,7 +506,7 @@ export const copy = {
       level: "第 {n} 关", target: "过关目标", progress: "{have}/{need}",
       levelClear: "第 {n} 关 过关", nextLevel: "下一关", nextTarget: "目标 {n}",
       failTitle: "第 {n} 关 没过", short: "还差 {n} 分",
-      reached: "到达关卡", orders: "完成订单", menuBest: "最高 第 {n} 关",
+      orders: "完成订单", menuBest: "最高 第 {n} 关",
       timer: "剩余时间", score: "得分", reward: "+{n}", bonus: "+5 秒",
       tongRule: "点一下伸出去", breadRule: "刚烤好分最高", clockRule: "+5 秒",
       tongs: "夹子", bread: "面包", clock: "闹钟", bomb: "炸弹", bombRule: "炸掉周围的面包，−5 秒", penalty: "−{n} 秒", paused: "已暂停", resume: "继续夹面包",

@@ -84,10 +84,11 @@
 .grab-quiet .grab-mouse { animation:none; }
 .grab-quiet .grab-item[data-golden] .grab-face::after, .grab-quiet .grab-strain, .grab-quiet .grab-chain, .grab-quiet .grab-check, .grab-quiet .grab-interlude-title { animation:none; }
 .grab-quiet .grab-item[data-golden] .grab-face::after { display:none; }
-.grab-quiet .grab-tag, .grab-quiet .grab-order-in, .grab-quiet .grab-order-leave, .grab-quiet .grab-order-pop { animation-name:grab-record-fade; }
+.grab-quiet .grab-tag, .grab-quiet .grab-order-in { animation-name:grab-record-fade; }
+.grab-quiet .grab-order-pop { animation-name:grab-fade; }
+.grab-quiet .grab-order-leave { display:none; }
 .grab-quiet .grab-tag { transform:translateX(-50%); }
 .grab-quiet .grab-order-in[data-next] { animation-delay:0ms; }
-.grab-quiet .grab-order-leave { animation-delay:0ms; animation-duration:600ms; }
 .grab-quiet .grab-order-pop { transform:translateX(-50%); animation-duration:900ms; }
 .grab-quiet .grab-level-bar i { transition:none; }
 .grab-quiet .grab-score-pop { animation-name:grab-fade; transform:translateX(-50%); }
@@ -152,7 +153,7 @@
 /* Mouse carrier: the TD mouse sheet (6 frames) scurrying under a small bread. */
 .grab-item[data-mouse]::before { display:none; }
 .grab-item[data-mouse] .grab-face { box-shadow:0 5px 8px -3px rgba(74,38,14,.55), inset 0 0 0 1px rgba(60,30,10,.1); }
-.grab-mouse { position:absolute; left:-85%; top:2%; width:270%; aspect-ratio:1; background:url("/brand/td/pest-mouse.webp") 0 0 / 600% 100% no-repeat; animation:grab-scurry 600ms steps(6) infinite; pointer-events:none; }
+.grab-mouse { position:absolute; left:-85%; top:-9%; width:270%; aspect-ratio:1; background:url("/brand/td/pest-mouse.webp") 0 0 / 600% 100% no-repeat; animation:grab-scurry 600ms steps(6) infinite; pointer-events:none; }
 .grab-item[data-dir="left"] .grab-mouse { transform:scaleX(-1); }
 @keyframes grab-scurry { to { background-position:120% 0; } }
 
@@ -174,9 +175,10 @@
 @media (prefers-reduced-motion:reduce) {
   .grab-mouse, .grab-strain, .grab-chain, .grab-check, .grab-interlude-title, .grab-item[data-golden] .grab-face::after { animation:none; }
   .grab-item[data-golden] .grab-face::after { display:none; }
-  .grab-tag, .grab-order-in, .grab-order-leave, .grab-order-pop { animation-name:grab-record-fade; }
+  .grab-tag, .grab-order-in { animation-name:grab-record-fade; }
+  .grab-order-pop { animation-name:grab-fade; }
+  .grab-order-leave { display:none; }
   .grab-tag, .grab-order-pop { transform:translateX(-50%); }
   .grab-order-in[data-next] { animation-delay:0ms; }
-  .grab-order-leave { animation-delay:0ms; animation-duration:600ms; }
   .grab-level-bar i { transition:none; }
 }
