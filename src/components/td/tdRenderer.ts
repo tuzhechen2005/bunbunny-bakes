@@ -526,8 +526,10 @@ export function createTdRenderer(canvas: HTMLCanvasElement, map: TdMap, art: TdA
   return {
     draw, ingest,
     resize() {
-      const rect = canvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
-      canvas.width = Math.max(1, Math.round(rect.width * dpr)); canvas.height = Math.max(1, Math.round(rect.height * dpr));
+      // Layout size, not getBoundingClientRect: in portrait the play screen is rotated 90°, and the rotated
+      // box would swap width and height and leave the board blurry (owner 11/02 "怎么这么糊").
+      const dpr = Math.min(3, window.devicePixelRatio || 1);
+      canvas.width = Math.max(1, Math.round(canvas.clientWidth * dpr)); canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr));
     },
   };
 }
