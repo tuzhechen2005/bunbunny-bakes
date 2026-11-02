@@ -1,5 +1,7 @@
 // Email rendering for outbox notifications (docs/NOTIFICATIONS.md §2–§5).
 // Contract between the outbox (sends) and the templates (render).
+import { flavorQuantities } from "@/domain/summary";
+import { flavorSummaryText } from "./flavorText";
 import { copy } from "@/copy";
 import { dayLabel, monthDay } from "@/domain/dates";
 import { formatCents } from "@/domain/pricing";
@@ -60,8 +62,16 @@ async function loadOrder(db: DbClient, notification: NotificationToRender) {
   return order;
 }
 
-function itemLines(items: { nameSnapshot: string; qty: number }[]): string[] {
-  return items.map((i) => fill(t.newOrder.itemLine, { name: i.nameSnapshot, qty: i.qty }));
+function itemLines(items: { productId: string; nameSnapshot: string; flavorId?: string | null; flavorName?: string | null; qty: number }[]): string[] {
+  const groups = new Map<string, typeof items>();
+  for (const item of items) groups.set(item.productId, [...(groups.get(item.productId) ?? []), item]);
+  return [...groups.values()].map(group => {
+    const name = group[0].nameSnapshot;
+    const qty = group.reduce((n, i) => n + i.qty, 0);
+    return group.some(i => i.flavorId)
+      ? flavorSummaryText(name, flavorQuantities(group), qty)
+      : fill(t.newOrder.itemLine, { name, qty });
+  });
 }
 
 async function renderNewOrder(db: DbClient, n: NotificationToRender): Promise<RenderedEmail> {
@@ -133,6 +143,7 @@ function batchSection(
     } else {
       core = fill(t.summary.batchLine, { unit: l.unitLabel, qty: l.qty, batches: l.batches, leftover: l.leftover });
     }
+    if (l.flavors?.length) return flavorSummaryText(l.name, l.flavors, l.qty) + "（" + core + "）";
     return fill(t.summary.batchNamePrefix, { name: l.name }) + core;
   });
   return [header, ...body];
@@ -167,7 +178,9 @@ function renderDailySummary(n: NotificationToRender): RenderedEmail {
     sections.push([
       breadHeader,
       ...breadLines.map((l) =>
-        l.rounds
+        l.flavors?.length
+          ? flavorSummaryText(l.name, l.flavors, l.qty) + (l.rounds ? "（" + fill(t.summary.breadLineRounds, { name: l.name, qty: l.qty, rounds: l.rounds.rounds, leftover: l.rounds.leftover }) + "）" : "")
+          : l.rounds
           ? fill(t.summary.breadLineRounds, {
               name: l.name,
               qty: l.qty,

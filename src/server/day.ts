@@ -1,7 +1,7 @@
 // Per-day database helpers used inside order transactions (DATA_MODEL.md §4).
 // Every function takes the transaction client; none opens its own transaction.
 
-import type { Setting } from "@/generated/prisma/client";
+import type { Setting, ProductFlavor } from "@/generated/prisma/client";
 import { parseLocalDate } from "@/domain/dates";
 import type {
   CapacityProduct,
@@ -82,6 +82,7 @@ export interface ProductInfo extends CapacityProduct {
   bundlePriceCents: Cents | null;
   sortOrder: number;
   batchYield: number | null;
+  flavors?: ProductFlavor[];
 }
 
 export type ProductInfoMap = Record<string, ProductInfo>;
@@ -91,11 +92,12 @@ export type ProductInfoMap = Record<string, ProductInfo>;
  * them, and capacity always uses current product settings.
  */
 export async function loadProductMap(tx: Tx): Promise<ProductInfoMap> {
-  const rows = await tx.product.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+  const rows = await tx.product.findMany({ include: { flavors: { orderBy: [{ sort: "asc" }, { id: "asc" }] } }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
   const map: ProductInfoMap = {};
   for (const p of rows) {
     map[p.id] = {
       id: p.id,
+      flavors: p.flavors,
       capacityMode: p.capacityMode,
       doughG: p.doughG,
       roundG: p.roundG,

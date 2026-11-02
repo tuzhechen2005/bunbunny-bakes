@@ -117,7 +117,7 @@ export async function loadCalendar(
       pickupDate: true,
       status: true,
       fulfillment: true,
-      items: { select: { productId: true, qty: true }, orderBy: { id: "asc" } },
+      items: { select: { productId: true, flavorId: true, flavorName: true, qty: true }, orderBy: { id: "asc" } },
     },
     orderBy: { seq: "asc" },
   });
@@ -138,7 +138,7 @@ export async function loadCalendar(
       id: o.id,
       status: o.status,
       fulfillment: o.fulfillment,
-      items: o.items.map((i) => ({ productId: i.productId, qty: i.qty })),
+      items: o.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, flavorName: i.flavorName, qty: i.qty })),
     });
     ordersByDate.set(d, list);
   }

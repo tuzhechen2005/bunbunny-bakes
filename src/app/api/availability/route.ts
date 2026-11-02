@@ -1,5 +1,6 @@
 // POST /api/availability (API_SPEC §2). Display only: reads, never locks or writes.
 
+import { currentLinePrice, validateFlavors } from "@/server/flavorPricing";
 import { connection, NextResponse } from "next/server";
 import { z } from "zod";
 import { listAvailability } from "@/domain/availability";
@@ -16,6 +17,7 @@ const Body = z.object({
     .array(
       z.object({
         productId: z.uuid(),
+        flavorId: z.uuid().nullable().optional(),
         qty: z.number().int().min(1).max(MAX_QTY_SCHEMA),
       }),
     )
@@ -42,10 +44,11 @@ export async function POST(request: Request): Promise<Response> {
       }),
       prisma.product.findMany({
         where: { id: { in: cart.map((l) => l.productId) }, status: { not: "ARCHIVED" } },
-        select: { id: true, unitPriceCents: true, bundleSize: true, bundlePriceCents: true },
+        include: { flavors: true },
       }),
     ]);
     const byId = new Map(products.map((p) => [p.id, p]));
+    validateFlavors(cart, Object.fromEntries(products.map(p => [p.id, p])));
     const pricing = priceCart(
       cart.flatMap((l) => {
         const p = byId.get(l.productId);
@@ -54,11 +57,7 @@ export async function POST(request: Request): Promise<Response> {
               {
                 productId: l.productId,
                 qty: l.qty,
-                price: {
-                  unitPriceCents: p.unitPriceCents,
-                  bundleSize: p.bundleSize,
-                  bundlePriceCents: p.bundlePriceCents,
-                },
+                ...currentLinePrice(l, p),
               },
             ]
           : [];

@@ -55,6 +55,7 @@ const pickupWeekdays = z
 
 /** Photos in display order (cover first) travel with every product the admin API returns. */
 export const PRODUCT_INCLUDE = {
+  flavors: { orderBy: [{ sort: "asc" }, { id: "asc" }] },
   images: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
 } satisfies Prisma.ProductInclude;
 export type ProductWithImages = Prisma.ProductGetPayload<{ include: typeof PRODUCT_INCLUDE }>;

@@ -28,7 +28,7 @@ export async function loadDailySummary(client: DbClient, now: Date): Promise<Dai
 
   const [settings, productRows, openDates, overrides, orders] = await Promise.all([
     client.setting.findUnique({ where: { id: 1 } }),
-    client.product.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
+    client.product.findMany({ include: { flavors: { select: { id: true } } }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
     client.openDate.findMany({ where: { date: range } }),
     client.openDateProductLimit.findMany({ where: { date: range } }),
     client.order.findMany({
@@ -40,7 +40,7 @@ export async function loadDailySummary(client: DbClient, now: Date): Promise<Dai
         pickupDate: true,
         status: true,
         fulfillment: true,
-        items: { select: { productId: true, qty: true }, orderBy: { id: "asc" } },
+        items: { select: { productId: true, flavorId: true, flavorName: true, qty: true }, orderBy: { id: "asc" } },
       },
       orderBy: { seq: "asc" },
     }),
@@ -51,6 +51,7 @@ export async function loadDailySummary(client: DbClient, now: Date): Promise<Dai
   for (const p of productRows) {
     products[p.id] = {
       id: p.id,
+      flavors: p.flavors,
       capacityMode: p.capacityMode,
       doughG: p.doughG,
       roundG: p.roundG,
@@ -78,7 +79,7 @@ export async function loadDailySummary(client: DbClient, now: Date): Promise<Dai
       wechatId: o.wechatId,
       status: o.status,
       fulfillment: o.fulfillment,
-      items: o.items.map((i) => ({ productId: i.productId, qty: i.qty })),
+      items: o.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, flavorName: i.flavorName, qty: i.qty })),
     });
     ordersByDate.set(date, list);
   }

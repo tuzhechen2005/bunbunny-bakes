@@ -72,7 +72,7 @@ describe("GET /api/o/{token}", () => {
         "totalCents",
       ].sort(),
     );
-    expect(Object.keys(j.items[0]).sort()).toEqual(["imageUrl", "lineTotalCents", "name", "qty"]);
+    expect(Object.keys(j.items[0]).sort()).toEqual(["flavorName", "imageUrl", "lineTotalCents", "name", "qty"]);
     expect(j.items[0].imageUrl).toBeNull();
     expect(j).toMatchObject({
       coinsOnPickup: Math.floor(o.subtotalCents / 100) * 10,

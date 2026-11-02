@@ -543,7 +543,13 @@ export const copy = {
   },
 
   /** Default `message` per API error code (API_SPEC.md §1, PAGES.md checkout errors). */
+  flavors: {
+    unspecified: "未选口味",
+    summary: "{name}：{flavors}，共 {qty}{unit}",
+  },
   errors: {
+    FLAVOR_REQUIRED: "请选择商品口味",
+    FLAVOR_UNAVAILABLE: "这个口味暂不可选，请重新选择",
     VALIDATION: "填写的内容有误，请检查后再提交",
     ORDERING_DISABLED: "暂未开放预订 🍞",
     DATE_CLOSED: "这一天不接受预订，请选择其他日期",

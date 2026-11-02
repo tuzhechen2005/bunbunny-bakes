@@ -189,3 +189,25 @@
 ### 三连烤周关卡（S9 / D151、D154）
 
 `/game/m3` 菜单显示「第 N 关」和开始/继续；服务器读取本周进度。关内显示关数、剩余步数、分数/目标和进度条。过关结果按钮「下一关」，失败「再来一次」，服务器确认前保留日志并禁用前进按钮；网络错误可重试提交。排行榜显示「关数」。逐步存档、退出确认、声音、减少动态效果、👑 与奖池提示保留；周一从第 1 关重新开始，v2 存档自动清除。
+
+## F1 flavour picker handoff (backend only; UI for Claude)
+
+- Use menu `priceFromCents` for the starting price. If `flavors.length > 0`, require a flavour
+  selection before adding to the bag. Show names/prices directly from flavors; do not use the
+  product base price or bundle promotion for a flavour line. Unflavoured products keep their flow.
+- Bag identity is `(productId, flavorId)`. Several flavours of one product may coexist; display
+  name, flavour, quantity and flavour price. Sum all flavours for the per-product quantity limit.
+- Quote with `/api/availability`; submit flavorId on every flavoured order line. Display server
+  messages for FLAVOR_REQUIRED/FLAVOR_UNAVAILABLE and ask for a new selection. Never silently
+  substitute flavours, delete lines, or accept client prices. Apply REDUCE/SPLIT by the same identity.
+- Token order views display the flavour-name snapshot. Admin product controls use the flavour
+  create/patch/reorder endpoints; deactivation replaces deletion. Admin create also requires a
+  valid flavour. Edits retain prices on the same flavour; changing flavour uses its current price.
+- Legacy null lines display the label in `copy.flavors.unspecified`. To retain one while editing,
+  explicitly send flavorId:null; this exemption belongs only to an existing null line, not a new order.
+- Production, tonight and daily summaries use the product line's flavours breakdown and total.
+  Keep existing units and show rounds/batches from the combined product quantity, never rounded
+  separately per flavour. The backend formatter accepts optional unit text for integration.
+
+Example display: 泡芙：原味 5、抹茶 3，共 8。Legacy label: 未选口味。
+Full shapes/errors are in API_SPEC.md, F1. No customer/admin UI is implemented in this task.

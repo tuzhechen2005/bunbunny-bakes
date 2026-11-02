@@ -49,6 +49,28 @@
 
 用 Zod 校验"方式 ↔ 必填字段"的对应关系，数据库层加 CHECK 约束兜底。
 
+### ProductFlavor（F1 / D175）
+
+`id uuid` 主键、`productId uuid → Product`、`name text`（trim 后 1–12 Unicode 字符）、
+`priceCents int`（0–1,000,000）、`active bool`（默认 true）、`sort int`（默认 0）、
+`createdAt / updatedAt timestamptz`。按 `(sort, id)` 排序，索引 `(productId, sort)`。
+所有口味共用商品名额；合并商品数量后才检查每单上限、面团、大圆包和独立限额。
+
+至少一个 active 口味时，新行必须选择该商品的 active 口味。口味行使用
+`qty × ProductFlavor.priceCents`，不使用商品套餐价；无 active 口味且未选择口味时沿用原价格/套餐。
+`Product.unitPriceCents` 保留作展示回退，不覆盖已选口味价格。
+
+口味修改在 Product 行排他锁下与 AuditLog 一起提交；下单/改单在原 OpenDate/Order 锁之后，
+按商品 UUID 升序取得 Product 共享锁，再校验口味及读取价格，直到业务事务提交。
+不提供硬删除接口（停用即下架）；订单对 `(flavorId, productId)` 的复合外键同时保证归属和 RESTRICT 删除。
+迁移 `20261101200000_product_flavors` 保留旧订单金额、行和快照，新增字段为 NULL。
+
+F1 回归：`tests/db/flavors.test.ts` 覆盖混合口味的整天取整、独立限额、并发下单/改单、
+数据库价格和快照、失效/跨商品/缺失口味、旧 NULL 行及汇总邮件；`flavors.api.test.ts`
+覆盖后台认证/Origin、CRUD/排序、报价、审计原子性；`migration.flavors.test.ts` 在独立
+`*_test` 库验证旧数据保留、归属外键、NULL/非 NULL 唯一性及禁止删除。
+现有 CAPACITY_RULES 单元例子继续运行，提示搜索另有混合口味与穷举最优结果的回归。
+
 ### ProductImage（D98）
 
 | 字段 | 类型 | 说明 |
@@ -108,9 +130,16 @@
 | orderId | uuid | |
 | productId | uuid | |
 | nameSnapshot | text | 下单时的商品名 |
+| flavorId | uuid? | → ProductFlavor；与 productId 复合外键保证口味归属；历史 NULL |
+| flavorName | text? | 下单时的口味名快照；历史 NULL；后台显示「未选口味」 |
 | qty | int | ≥ 1 |
 | unitPriceCents / bundleSize / bundlePriceCents | 快照 | 价格按快照算，以后改价不影响 |
 | lineTotalCents | int | |
+
+订单行 `(orderId, productId, flavorId)` 唯一，另有部分唯一索引限制每个订单商品最多一行 NULL 口味。
+重复购物车行只按商品＋口味合并。店主改单中同商品同口味沿用数据库中的价格/名称快照（D45），
+新口味取当前数据库价格且必须仍在售；已有商品＋口味行允许口味已停用，仍校验归属并保留快照。不传 items 的备注等编辑保留旧快照。
+原订单有 NULL 行的商品可以提交显式 `flavorId: null` 保留旧行，遗漏字段不代表保留许可。
 
 **名额按商品的当前设置计算，价格按快照计算。** 店主改了某个商品的克数或切法，是因为以后真的要这么做，所以已有订单也按新设置占面团。改完之后，日历上会把因此超限的日期标红。
 
