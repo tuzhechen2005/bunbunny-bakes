@@ -43,14 +43,23 @@ for(const width of [320,390]) test.describe(`TD ${width}`,()=>{
     const c=page.locator('canvas');expect(await c.evaluate(el=>(el as HTMLCanvasElement).width/el.getBoundingClientRect().width)).toBeLessThanOrEqual(2.01);
     // Coin arithmetic follows the current balance (start coins and costs come from the engine).
     const c0=tdLevel(weekKey,1).startCoins,pin=towerStats('rollingPin').cost,pinUp=towerStats('rollingPin',1).cost;
-    const c1=c0-pin,c2=c1+Math.floor(pin/2),c3=c2-pin-pinUp;
+    const c1=c0-pin,c2=c1+Math.floor(pin/2);
     await page.getByTestId('td-slot-0').tap();await page.getByTestId('td-build-rollingPin').tap();await expect(page.getByTestId('td-coins')).toHaveText(String(c1));
     await page.getByTestId('td-slot-0').tap();
     if(c1<towerStats('rollingPin',1).cost) await expect(page.getByTestId('td-upgrade')).toBeDisabled(); else await expect(page.getByTestId('td-upgrade')).toBeEnabled();
     await page.getByTestId('td-sell').tap();await expect(page.getByTestId('td-coins')).toHaveText(String(c2));
-    await page.getByTestId('td-slot-0').tap();await page.getByTestId('td-build-rollingPin').tap();await page.getByTestId('td-slot-0').tap();await page.getByTestId('td-upgrade').tap();await expect(page.getByTestId('td-coins')).toHaveText(String(c3));
-    await page.getByTestId('td-slot-1').tap();
-    if(c3<pin) await expect(page.getByTestId('td-build-rollingPin')).toBeDisabled(); else await expect(page.getByTestId('td-build-rollingPin')).toBeEnabled();
+    await page.getByTestId('td-slot-0').tap();
+    if(c2<pin) {
+      // L1's small purse cannot undo a sale by immediately buying again.
+      await expect(page.getByTestId('td-build-rollingPin')).toBeDisabled();
+    } else {
+      await page.getByTestId('td-build-rollingPin').tap();await page.getByTestId('td-slot-0').tap();
+      if(c2-pin<pinUp) await expect(page.getByTestId('td-upgrade')).toBeDisabled();
+      else {
+        await page.getByTestId('td-upgrade').tap();
+        await expect(page.getByTestId('td-coins')).toHaveText(String(c2-pin-pinUp));
+      }
+    }
     await page.getByRole('button',{name:t.closePicker}).click();
     await page.getByTestId('td-speed').click();await expect(page.getByTestId('td-speed')).toHaveText('2×');await page.getByTestId('td-call-wave').click();await expect(page.getByTestId('td-wave')).toHaveText('1/5');
   });
@@ -67,7 +76,7 @@ for(const width of [320,390]) test.describe(`TD ${width}`,()=>{
   });
   test('failed completed save retries exact run after reload, win offers next level',async({page})=>{
     const api=await mockApi(page),bot=greedyTd(tdLevel(weekKey,1));
-    expect(TD_ENGINE_VERSION).toBe(10);
+    expect(TD_ENGINE_VERSION).toBe(11);
     expect(seed.startsWith(`v${TD_ENGINE_VERSION}.td.`)).toBe(true);
     expect(bot.inputs.some(i=>i.type==='upgrade' && i.branch)).toBe(true);
     const save={v:1,runId:'00000000-0000-4000-8000-000000000099',seed,level:1,weekKey,tiers,nickname:'Baker',expiresAt:'2099-01-01T00:00:00Z',inputs:bot.inputs,endTick:bot.state.tick,score:bot.state.wave};

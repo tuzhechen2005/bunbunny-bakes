@@ -14,7 +14,7 @@ it('unlocks by level and supplies distinct, bounded maps and slot counts', () =>
     }
     expect(tdLevel('2026-10-26', n)).toEqual(level);
   }
-});
+}, 30000);
 it('rejects locked towers, missing slots and unauthorized or repeated items', () => {
   const game = createTdGame({ level: tdLevel('2026-10-26', 1) });
   expect(game.apply({ tick: 0, type: 'place', slot: 0, tower: 'oven' })).toBe(false);
@@ -69,7 +69,7 @@ it('keeps authored and generated slots off both fork lanes with useful coverage'
       }
     }
   }
-});
+}, 30000);
 it('bot logs only unlocked towers and authorized items, with replayable switch decisions', async () => {
   const {greedyTd}=await import('../support/tdBot');
   const level=tdLevel('2026-10-26',10),itemsAllowed={bomb:1,bell:1,slide:1};

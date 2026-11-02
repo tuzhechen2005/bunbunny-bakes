@@ -16,9 +16,9 @@ it('settles old speed, excludes paused/hidden time, caps time and resumes exact 
 });
 it('restores only canonical unexpired replayable saves, including completed retry evidence', () => {
   const now=Date.parse('2026-10-20T12:00:00Z');
-  expect(TD_SAVE_KEY).toBe('bb_td_save_v10');
+  expect(TD_SAVE_KEY).toBe('bb_td_save_v11');
   expect(parseTdSave(JSON.stringify(save),now)).toEqual(save);
-  for (const patch of [{score:999},{endTick:-1},{seed:'v1.td.2026-10-19.1'},{seed:'v5.td.2026-10-19.1'},{seed:'v6.td.2026-10-19.1'},{seed:'v7.td.2026-10-19.1'},{seed:'v8.td.2026-10-19.1'},{seed:'v9.td.2026-10-19.1'},{level:2},{tiers:[]},{inputs:[{tick:500,type:'sell',slot:0}]}]) expect(parseTdSave(JSON.stringify({...save,...patch}),now)).toBeNull();
+  for (const patch of [{score:999},{endTick:-1},{seed:'v1.td.2026-10-19.1'},{seed:'v5.td.2026-10-19.1'},{seed:'v6.td.2026-10-19.1'},{seed:'v7.td.2026-10-19.1'},{seed:'v8.td.2026-10-19.1'},{seed:'v9.td.2026-10-19.1'},{seed:'v10.td.2026-10-19.1'},{level:2},{tiers:[]},{inputs:[{tick:500,type:'sell',slot:0}]}]) expect(parseTdSave(JSON.stringify({...save,...patch}),now)).toBeNull();
   expect(parseTdSave(JSON.stringify(save),Date.parse(save.expiresAt))).toBeNull();
   const inputs: TdInput[] = [{tick:0,type:'callWave',slot:-1}];
   const terminal=replayTd({seed,tierCount:1},inputs);
@@ -41,6 +41,7 @@ it('decodes RUN-format rectangles and anchors while missing entries remain optio
 });
 
 it('caps rejected client attempts at 100 while valid actions stay replayable, including after resume', () => {
+  const seed = tdLevel('2026-10-19', 3).seed;
   let game = createTdGame({ seed });
   const inputs: TdInput[] = [];
   expect(applyTdClientInput(game, inputs, {tick: 0, type: 'callWave', slot: -1})).toBe(true);
