@@ -1,0 +1,230 @@
+[
+  {
+    "file": "town",
+    "node": "bakeryMesh",
+    "before": 52890,
+    "after": 6840
+  },
+  {
+    "file": "town",
+    "node": "cafeMesh",
+    "before": 49506,
+    "after": 6891
+  },
+  {
+    "file": "town",
+    "node": "flower_shopMesh",
+    "before": 55154,
+    "after": 6805
+  },
+  {
+    "file": "town",
+    "node": "book_shopMesh",
+    "before": 49932,
+    "after": 6891
+  },
+  {
+    "file": "town",
+    "node": "house_roseMesh",
+    "before": 51094,
+    "after": 6863
+  },
+  {
+    "file": "town",
+    "node": "house_sageMesh",
+    "before": 48980,
+    "after": 6891
+  },
+  {
+    "file": "town",
+    "node": "patisserieMesh",
+    "before": 54560,
+    "after": 6849
+  },
+  {
+    "file": "town",
+    "node": "cheese_shopMesh",
+    "before": 51210,
+    "after": 6891
+  },
+  {
+    "file": "town",
+    "node": "tea_houseMesh",
+    "before": 53962,
+    "after": 6863
+  },
+  {
+    "file": "town",
+    "node": "corner_houseMesh",
+    "before": 49706,
+    "after": 6890
+  },
+  {
+    "file": "town",
+    "node": "sidewalkMesh",
+    "before": 7012,
+    "after": 597
+  },
+  {
+    "file": "town",
+    "node": "roadMesh",
+    "before": 25308,
+    "after": 1272
+  },
+  {
+    "file": "props",
+    "node": "flourMesh",
+    "before": 3636,
+    "after": 1660
+  },
+  {
+    "file": "props",
+    "node": "rampMesh",
+    "before": 7850,
+    "after": 1659
+  },
+  {
+    "file": "props",
+    "node": "vanMesh",
+    "before": 7850,
+    "after": 2760
+  },
+  {
+    "file": "props",
+    "node": "truckMesh",
+    "before": 7850,
+    "after": 2760
+  },
+  {
+    "file": "props",
+    "node": "breadMesh",
+    "before": 3296,
+    "after": 1660
+  },
+  {
+    "file": "props",
+    "node": "bagMesh",
+    "before": 2348,
+    "after": 1658
+  },
+  {
+    "file": "props",
+    "node": "coffeeMesh",
+    "before": 2644,
+    "after": 1660
+  },
+  {
+    "file": "props",
+    "node": "lampMesh",
+    "before": 2660,
+    "after": 760
+  },
+  {
+    "file": "props",
+    "node": "benchMesh",
+    "before": 3916,
+    "after": 1460
+  },
+  {
+    "file": "props",
+    "node": "potholeMesh",
+    "before": 7036,
+    "after": 1660
+  },
+  {
+    "file": "props",
+    "node": "breadwheelMesh",
+    "before": 4456,
+    "after": 1660
+  },
+  {
+    "file": "props",
+    "node": "shoesMesh",
+    "before": 4928,
+    "after": 1636
+  },
+  {
+    "file": "props",
+    "node": "shieldMesh",
+    "before": 3632,
+    "after": 1660
+  },
+  {
+    "file": "props",
+    "node": "signalMesh",
+    "before": 3392,
+    "after": 558
+  },
+  {
+    "file": "props",
+    "node": "bicycleMesh",
+    "before": 5744,
+    "after": 1453
+  },
+  {
+    "file": "props",
+    "node": "crate_stackMesh",
+    "before": 7849,
+    "after": 1458
+  },
+  {
+    "file": "props",
+    "node": "menu_boardMesh",
+    "before": 4568,
+    "after": 1460
+  },
+  {
+    "file": "props",
+    "node": "buntingMesh",
+    "before": 3164,
+    "after": 547
+  },
+  {
+    "file": "props",
+    "node": "cartMesh",
+    "before": 7848,
+    "after": 2421
+  },
+  {
+    "file": "props",
+    "node": "awningMesh",
+    "before": 7850,
+    "after": 2458
+  },
+  {
+    "file": "props",
+    "node": "puddleMesh",
+    "before": 7536,
+    "after": 2480
+  },
+  {
+    "file": "props",
+    "node": "treeMesh",
+    "before": 7824,
+    "after": 3159
+  },
+  {
+    "file": "props",
+    "node": "tree_round2Mesh",
+    "before": 7944,
+    "after": 3156
+  },
+  {
+    "file": "props",
+    "node": "tree_tallMesh",
+    "before": 7824,
+    "after": 3160
+  },
+  {
+    "file": "props",
+    "node": "planterMesh",
+    "before": 2248,
+    "after": 1460
+  },
+  {
+    "file": "bunny",
+    "node": "BunnyClay",
+    "before": 27000,
+    "after": 6959
+  }
+]

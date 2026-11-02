@@ -1,0 +1,16 @@
+R18 checks
+
+npx vitest run --configLoader runner --project unit tests/unit/run*
+PASS: 10 test files, 88 tests.
+
+npx tsc --noEmit
+BLOCKED by worktree setup: generated Prisma client/enums are absent
+(src/generated/prisma/client and src/generated/prisma/enums), causing missing
+module and related typing errors across the application and tests. No application
+or generated files were changed for this assets-only task.
+
+Asset checks and per-node counts: ../validation.json and triangles.json.
+Blender checks all seven actions at every key and half-key (335 poses).
+Three GLTFLoader + MeshoptDecoder checks 175 poses.
+Review images use the R17 cameras and Cycles 96 samples; each PNG is under 1 MB.
+No iPhone FPS measurement was performed. No commit was created.
