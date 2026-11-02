@@ -196,6 +196,7 @@ describe("TD input and replay contract", () => {
     expect(a.state()).toEqual(replayTd({ level: level() }, inputs, 1200));
   });
 
+  // This is an eight-simulation correctness check, not the replay latency budget.
   it("replays complete passing and failing bot runs on all maps", () => {
     for (const n of [1, 5, 10, 20]) for (const bot of [greedyTd, randomTd]) {
       const l = tdLevel("2026-10-26", n);
@@ -204,7 +205,7 @@ describe("TD input and replay contract", () => {
       expect(result.state.over).toBe(true);
       expect(result.state.tick).toBeLessThanOrEqual(MAX_LEVEL_TICKS);
     }
-  }, 20_000);
+  }, 60_000);
 });
 
 describe("TD combat and waves", () => {

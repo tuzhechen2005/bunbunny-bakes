@@ -1,3 +1,4 @@
+import { claimCoinFinish } from "./economy";
 import { hasPassedLevel, nextGameLevel } from "./gameLevels";
 // Weekly M3 attempts (S9 / D151): deterministic deals, replayed completion and shared level ranking.
 
@@ -104,7 +105,7 @@ export async function finishM3Run(db: DbClient, input: unknown, ipHash: string, 
   const verified = verifyM3Run(run, data, now, true);
   const passedAt = verified.score >= m3Level(weekKeyOf(run.startedAt), run.level).target ? now : null;
   const weekKey = weekKeyOf(now);
-  const claimed = await db.gameRun.updateMany({
+  const claimed = await claimCoinFinish(db, {
     where: { id: run.id, finishedAt: null },
     data: {
       finishedAt: now,
@@ -117,7 +118,7 @@ export async function finishM3Run(db: DbClient, input: unknown, ipHash: string, 
       playMs: verified.playMs,
       suspicious: verified.suspicious,
     },
-  });
+  }, now);
   if (claimed.count === 0) {
     const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
     return m3Result(db, stored);

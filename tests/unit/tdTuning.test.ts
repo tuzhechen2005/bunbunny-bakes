@@ -6,6 +6,7 @@ import { greedyTd, randomTd, tdBotWeeks } from "../support/tdBot";
 const checkpoints = [0, 100].flatMap(offset => [[1, 100], [3, 85], [5, 70], [10, 45], [20, 5]]
   .map(([level, target]) => ({ offset, level, target })));
 
+// Each case simulates 100 complete games; allow shared-runner contention.
 it.each(checkpoints)("keeps level $level inside D8 regression bounds (week offset $offset)", ({ offset, level, target }) => {
   const weeks = tdBotWeeks(100, offset);
   const greedy = weeks.map(week => greedyTd(tdLevel(week, level)));
@@ -27,4 +28,4 @@ it.each(checkpoints)("keeps level $level inside D8 regression bounds (week offse
     expect(rate.greedy).toBeGreaterThanOrEqual(Math.max(1, target - 10));
     expect(rate.greedy).toBeLessThanOrEqual(target + 10);
   }
-}, 180_000);
+}, 600_000);

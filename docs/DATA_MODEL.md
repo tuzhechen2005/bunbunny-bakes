@@ -295,3 +295,15 @@ The end tick is recoverable as `round(playMs*60/1000)`. `suspicious` flags media
 120 ms or active duration over ten minutes, without excluding ranking. Existing live progress,
 retention, shared bans and `(game,weekKey)` award behavior apply unchanged. Winner notifications
 resolve RUN through the selected historical `GamePrizeWeek`. No tier configuration is required.
+
+## E1 面包币（D170）
+
+- `CoinLedger`: UUID `id`, `wechatIdNorm` (trim/lowercase), integer `delta`, enum `reason` (`GAME_RUN`, `ORDER`, `PURCHASE`, `ITEM_USE_REFUND`, `ADMIN`), text `refId`, timestamptz `createdAt`. Unique `(reason, refId)`; index `(wechatIdNorm, createdAt)`. DB trigger rejects UPDATE/DELETE. Migration does not backfill old runs/orders.
+- Balance is `SUM(delta)`, no mutable duplicate. Every economy transaction takes `pg_advisory_xact_lock(hashtextextended('coins:' || normalizedId, 0))` before reading balance or changing inventory. This prevents concurrent overspend and daily-cap races even when no wallet rows exist.
+- `Inventory`: composite primary key `(wechatIdNorm, item)`, integer `count >= 0`. Code catalog holds game and price; new games can extend it. No automatic expiration or refund of items.
+- Verified finish claim, GAME_RUN award and TD deductions commit together. Duplicate finishes deduct/award once; insufficient items rolls back finish too. Daily sum uses `createdAt AT TIME ZONE 'America/Chicago'` (23/25-hour DST days supported). Daily remaining amount may reduce an award below 5 or to zero.
+- Existing order lock order remains OpenDate → Order → wallet. ORDER initial refId is order UUID; correction/recompletion uses `orderId:previousUpdatedAt`. Reversal negates outstanding award; recompletion restores original amount/recipient. Historical pre-E1 completions have no award to reverse. Negative balance after reversal is permitted, but cannot fund purchases. Status AuditLog and coins share the transaction; notification paths unchanged.
+- `countItemUses` in `src/lib/td/itemUses.ts` is the requested local D9 stub: counts `{type:"item", item:"bomb"|"bell"|"slide"}`. Current replay rejects item actions until D9 provides real gameplay; no replay checks are relaxed.
+- Real Postgres coverage: `economy.test.ts` (concurrency, completion/correction, cap/DST, moderation, atomic inventory), `migration.economy.test.ts` (additive migration, immutable ledger, uniqueness and count/identity checks). Use only validated `*_test` databases.
+
+- Shop identity is self-reported (D170/Q11=A), with no viewToken or ownership check. Purchases append CUSTOMER `shop.purchase` AuditLog in the wallet transaction, including normalized identity, item, qty and cost. No raw IP is stored; hourly game rate-limit buckets enforce both IP-hash and normalized identity limits.

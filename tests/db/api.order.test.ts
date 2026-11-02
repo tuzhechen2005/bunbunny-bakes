@@ -54,6 +54,7 @@ describe("GET /api/o/{token}", () => {
     const j = await res.json();
     expect(Object.keys(j).sort()).toEqual(
       [
+        "coinsOnPickup",
         "canCancel",
         "cancelDeadlineLabel",
         "deliveryFeeCents",
@@ -74,6 +75,7 @@ describe("GET /api/o/{token}", () => {
     expect(Object.keys(j.items[0]).sort()).toEqual(["imageUrl", "lineTotalCents", "name", "qty"]);
     expect(j.items[0].imageUrl).toBeNull();
     expect(j).toMatchObject({
+      coinsOnPickup: Math.floor(o.subtotalCents / 100) * 10,
       orderNo: o.orderNo,
       pickupDate: "2026-10-22",
       pickupDateLabel: "10/22 周四",

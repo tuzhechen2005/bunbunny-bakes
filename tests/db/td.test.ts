@@ -26,7 +26,10 @@ afterAll(async () => {await db.$disconnect();await prisma.$disconnect();});
 it('migrates TD without changing BIG defaults; deals common levels, gates case-insensitive identity and resets weekly', async () => {
   const legacy = await db.gameRun.create({data:{seed:'old',wechatId:'old',nickname:'old',tiersSnapshot:[]}});
   expect(legacy.game).toBe('BIG');
+  await db.inventory.create({data:{wechatIdNorm:'alice',item:'bell',count:2}});
   const a = await start(' alice '), b = await start('bob');
+  expect(a.inventory).toEqual({bomb:0,bell:2,slide:0});
+  expect(b.inventory).toEqual({bomb:0,bell:0,slide:0});
   expect(a.seed).toBe(b.seed); expect(a.seed).toBe(tdLevel(WEEK,1).seed);
   await expect(start('ALICE',2)).rejects.toMatchObject({message:copy.gameApi.levelLocked});
   expect(await finish(a)).toMatchObject({passed:true,level:1,best:1,rank:1,personalBest:1});
@@ -40,7 +43,9 @@ it('replays terminal losses, rejects incomplete/forged/tail evidence, and claims
   const r = await start();
   await expect(finishTdRun(db,{runId:r.runId,inputs:[],endTick:0,passed:true},'ip',LATER)).rejects.toMatchObject({code:'VALIDATION'});
   await expect(finishTdRun(db,{runId:r.runId,inputs:win.inputs,endTick:win.state.tick+1},'ip',LATER)).rejects.toMatchObject({code:'VALIDATION'});
+  expect(await db.coinLedger.count()).toBe(0);
   const [a,b] = await Promise.all([finish(r),finish(r)]);expect(a).toEqual(b);
+  expect(await db.coinLedger.findMany()).toMatchObject([{wechatIdNorm:"alice",reason:"GAME_RUN",refId:r.runId,delta:5}]);
   expect(await finish(r,new Date(+LATER+10000))).toEqual(a);
   const row = await db.gameRun.findUniqueOrThrow({where:{id:r.runId}});
   expect(row).toMatchObject({game:'TD',level:1,passedAt:LATER,finishedAt:LATER,drops:win.inputs});

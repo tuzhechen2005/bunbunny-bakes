@@ -407,3 +407,14 @@ IP 哈希规则与 M3 相同。主动暂停的时间不计入 endTick；有效�
   `RUN_PRIZE_FROM_WEEK` gates prize selection independently of configured bread tiers.
 
 See [RUN_CLIENT.md](RUN_CLIENT.md) for the deployment date placeholder and browser checks.
+
+## E1 面包币后端（D170）
+
+- 六个现有 finish 接口在回放通过后，同一事务保存完成记录、追加游戏奖励，并在 TD 扣除道具。重复 finish 返回已存结果，不重复奖励/扣物品；不足库存返回 `VALIDATION`，整笔完成事务回滚。隐藏/封禁成绩不发币。
+- 奖励公式集中在 `src/domain/economy.ts`，夹在 5–30：RUN 为 `floor(回放距离米/100)`；M3/TD 成功为关数×5、失败为5；BIG 为 `floor(score/500)×5`；TU/GRAB 为 `floor(score/100)×5`。按规范化微信号，六游戏共享 America/Chicago 每日300上限；剩余额度不足时缩减，可为0。
+- `POST /api/game/td/start` 新增 `inventory: {bomb, bell, slide}`。目前本分支仅有 E1 的 `countItemUses(inputs)` stub，实际 item 输入仍由旧回放拒绝，需 D9 合入才能游戏内使用。
+- `GET /api/o/{viewToken}` 新增 `coinsOnPickup`（商品小计美元向下取整×10，不含配送费；取消/拒绝为0）。这只是提示，奖励只能由现有 owner 状态接口完成订单时产生。
+- Owner 正常完成/更正完成与 AuditLog、币流水在同一订单事务。撤销完成追加负流水（允许负余额）；再次完成恢复原始奖励，不重复累加。取消或未取货状态不发奖励；outbox/email 无变动。
+- `GET /api/shop?wechatId=`: public self-reported game identity (trimmed, case-insensitive), no ownership verification or viewToken (owner Q11=A accepts impersonation risk). Returns `{balance, inventory, catalog, recentOrderAwards:[{id,delta,createdAt}]}` for that identity only; no WeChat ids, order ids or tokens. Awards cover the last 7 days. No-store.
+- `POST /api/shop/buy {wechatId,item,qty}`: same identity policy, JSON ≤4096 characters, item bomb/bell/slide, integer qty 1–100. Returns `{purchaseId,balance,inventory}`; insufficient coins/invalid input is `VALIDATION`. Wallet lock, negative PURCHASE ledger, inventory increment and `shop.purchase` CUSTOMER AuditLog (item/qty/cost/normalized identity) commit together. Each POST is a new purchase.
+- Both routes reuse the game hourly rate limiter with separate per-IP-hash and normalized-WeChat buckets: GET 120/hour each; buy 30/hour each. Rejected business requests consume allowance; `RATE_LIMITED` returns 429. Missing IP hash secret fails closed. No raw IP storage.

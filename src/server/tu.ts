@@ -1,3 +1,4 @@
+import { claimCoinFinish } from "./economy";
 // 兔了个兔 server side (D121-D124, contract C6): start a run, verify and store a finished one,
 // leaderboard. Same rules as 消除大面包 (src/server/game.ts): one-time seed, rate limits, a run
 // lives until the weekly reset after its start, the tap log is replayed with the run's own seed
@@ -141,7 +142,7 @@ export async function finishTuRun(db: DbClient, input: unknown, ipHash: string, 
   }
   const verified = verifyTuRun(run, data, now);
   const weekKey = weekKeyOf(now);
-  const claimed = await db.gameRun.updateMany({
+  const claimed = await claimCoinFinish(db, {
     where: { id: run.id, finishedAt: null },
     data: {
       finishedAt: now,
@@ -153,7 +154,7 @@ export async function finishTuRun(db: DbClient, input: unknown, ipHash: string, 
       playMs: verified.playMs,
       suspicious: verified.suspicious,
     },
-  });
+  }, now);
   if (claimed.count === 0) {
     const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
     return resultFor(db, stored, "TU");

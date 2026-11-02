@@ -1,3 +1,4 @@
+import { claimCoinFinish } from "./economy";
 // Dawn delivery RUN server (R3, D146). Mirrors TU run lifecycle, validation and leaderboard policy.
 
 import type { GameRun } from "@/generated/prisma/client";
@@ -76,7 +77,7 @@ export async function finishRun(db: DbClient, input: unknown, ipHash: string, no
   }
   const verified = verifyRun(run, data, now);
   const weekKey = weekKeyOf(now);
-  const claimed = await db.gameRun.updateMany({
+  const claimed = await claimCoinFinish(db, {
     where: { id: run.id, finishedAt: null },
     data: {
       finishedAt: now,
@@ -88,7 +89,7 @@ export async function finishRun(db: DbClient, input: unknown, ipHash: string, no
       playMs: verified.playMs,
       suspicious: verified.suspicious,
     },
-  });
+  }, now, {}, verified.distance);
   if (claimed.count === 0) {
     const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
     return resultFor(db, stored, "RUN");
@@ -119,5 +120,5 @@ export function verifyRun(run: GameRun, data: z.output<typeof runFinishSchema>, 
       const prior = entry as { tick?: unknown; dir?: unknown } | null;
       return prior?.tick === data.inputs[i]?.tick && prior?.dir === data.inputs[i]?.dir;
     }))) throw badRun();
-  return { score: outcome.score, playMs, suspicious: isRunSuspicious(data.inputs, data.endTick) };
+  return { score: outcome.score, distance: outcome.distance / 1000, playMs, suspicious: isRunSuspicious(data.inputs, data.endTick) };
 }

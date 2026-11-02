@@ -447,3 +447,29 @@ model AssistantUsage {
 
   @@id([day, ipHash])
 }
+
+enum CoinReason {
+  GAME_RUN
+  ORDER
+  PURCHASE
+  ITEM_USE_REFUND
+  ADMIN
+}
+
+model CoinLedger {
+  id           String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  wechatIdNorm String
+  delta        Int
+  reason       CoinReason
+  refId        String
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  @@unique([reason, refId])
+  @@index([wechatIdNorm, createdAt])
+}
+
+model Inventory {
+  wechatIdNorm String
+  item         String
+  count        Int @default(0)
+  @@id([wechatIdNorm, item])
+}

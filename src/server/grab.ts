@@ -1,3 +1,4 @@
+import { claimCoinFinish } from "./economy";
 // 兔兔夹面包 server (G2, D145). Mirrors TU run lifecycle, validation and leaderboard policy.
 
 import type { GameRun } from "@/generated/prisma/client";
@@ -89,7 +90,7 @@ export async function finishGrabRun(db: DbClient, input: unknown, ipHash: string
   }
   const verified = verifyGrabRun(run, data, now);
   const weekKey = weekKeyOf(now);
-  const claimed = await db.gameRun.updateMany({
+  const claimed = await claimCoinFinish(db, {
     where: { id: run.id, finishedAt: null },
     data: {
       finishedAt: now,
@@ -101,7 +102,7 @@ export async function finishGrabRun(db: DbClient, input: unknown, ipHash: string
       playMs: verified.playMs,
       suspicious: verified.suspicious,
     },
-  });
+  }, now);
   if (claimed.count === 0) {
     const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
     return resultFor(db, stored, "GRAB");
