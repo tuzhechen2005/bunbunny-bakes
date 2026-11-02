@@ -107,17 +107,17 @@ for a width that fits the place it is shown (rope, grid, detail: `sizes` in `src
 | `docs/TASKS.md` | Milestones |
 | `docs/HANDOFF.md` | Where things stand |
 
-### Dawn delivery runner (R13)
+### Dawn delivery runner (R14)
 
-`/game/run` uses engine/replay **v8**: starts at 480 mm/tick (28.8 m/s), reaches
-680 mm/tick (40.8 m/s) in 35 seconds, and coffee caps at 1020. Rows are 60m apart;
-obstacles begin around second 3, trucks around 15–16 seconds, with mandatory
-jump/slide-and-change gates and roof-only van trains. After about 60 seconds,
-every row requires an action or a roof route. Coffee is four times rarer per eligible row.
-The fixed casual bot median is **17.88s** (target 12–20s); snapshot search survives
-more than five minutes across 100 seeds. Old unfinished v1–v7 runs/saves are rejected;
-finished scores remain unchanged. See [engine rules and verification](src/lib/run/README.md)
-and [RUN client](docs/RUN_CLIENT.md). No components or browser execution in R13.
+`/game/run` uses engine/replay **v9** with one-second truck lane-change signals,
+precisely timed pothole jumps, slide-then-jump combos, and independently moving
+bread wheels. Eight-second double-jump shoes and a one-hit shield add power-ups.
+Distance points earn ×1/×2/×3 at 0/500/1500m; bread points remain unchanged.
+Speed remains 480→680 mm/tick over 35s, with 60m rows and mandatory roof routes.
+Old unfinished v1–v8 runs/saves are rejected; finished scores are unchanged.
+See [engine rules, survivability proof and verification](src/lib/run/README.md).
+R14 changes no components and runs no browsers. The frontend's exhaustive renderer
+map still needs the four new object kinds before the full TypeScript check can pass.
 
 ## 三连烤 weekly levels (S9)
 

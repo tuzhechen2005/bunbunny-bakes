@@ -1,10 +1,11 @@
+import { runDistancePoints } from '@/lib/run/engine';
 import { describe, expect, it } from "vitest";
 import {
   createRunGame, replayRun, RunReplayError, RUN_ENGINE_VERSION, MAX_RUN_TICKS,
   MAX_INPUTS, BASE_SPEED, CAP_SPEED, RAMP_TICKS, JUMP_TICKS, SLIDE_TICKS, runSpeed,
   LANE_CHANGE_TICKS, type RunInput, type RunEvent,
 } from "@/lib/run";
-import { goodRun, casualRun, randomRun, perfectRun } from "../support/runBot";
+import { goodRun, casualRun, randomRun, perfectRun, intermediateRun } from "../support/runBot";
 
 const result = (s: ReturnType<ReturnType<typeof createRunGame>["state"]>) => ({
   score: s.score, distance: s.distance, bread: s.bread, over: s.over, endTick: s.tick,
@@ -15,7 +16,7 @@ describe("run engine", () => {
     const g = createRunGame({ seed: "copy" });
     const twin = createRunGame({ seed: "copy" });
     const s = g.state();
-    expect(RUN_ENGINE_VERSION).toBe(8);
+    expect(RUN_ENGINE_VERSION).toBe(9);
     expect(s).toMatchObject({ tick: 0, distance: 0, score: 0, bread: 0, speed: BASE_SPEED, over: false, player: { lane: 1, pose: "run" } });
     s.objects[0].lane = 2; s.objects.pop(); s.player.lane = 2;
     s.powerUps.coffeeUntil = 999; s.events.push({ type: "over", tick: 0, reason: "limit" });
@@ -54,7 +55,7 @@ describe("run engine", () => {
       expect(eventsA).toEqual(eventsB);
       expect(result(a.state())).toEqual(result(b.state()));
       expect(replayRun(seed, run.inputs, run.endTick)).toEqual(result(a.state()));
-      expect(a.state().score).toBe(Math.floor(a.state().distance / 1000) + a.state().bread * 10);
+      expect(a.state().score).toBe(runDistancePoints(a.state().distance) + a.state().bread * 10);
     }
   });
 
@@ -80,10 +81,17 @@ describe("run engine", () => {
     expect(random[50]).toBeLessThan(20 * 60);
   }, 30_000);
 
-  it("pins version-eight scoring and a nontrivial seeded run", () => {
+  it("calibrates the 250 ms intermediate controller to a 60–120 second median", () => {
+    const times = Array.from({length:100}, (_,n) => intermediateRun(`tuning${n}`, 18001).endTick / 60).sort((a,b)=>a-b);
+    console.info("R14 intermediate p10/median/p90", times[10], times[50], times[90]);
+    expect(times[50]).toBeGreaterThanOrEqual(60);
+    expect(times[50]).toBeLessThanOrEqual(120);
+  }, 60000);
+
+  it("pins version-nine scoring and a nontrivial seeded run", () => {
     const run = goodRun("pinned");
     expect(replayRun("pinned", run.inputs, run.endTick)).toEqual({
-      score: 1389, distance: 929308, bread: 46, over: true, endTick: 1515,
+      score: 2248, distance: 929308, bread: 39, over: true, endTick: 1515,
     });
     expect(run.inputs.slice(0, 5)).toEqual([
       { tick: 166, dir: "D" }, { tick: 435, dir: "U" }, { tick: 495, dir: "U" },
@@ -179,7 +187,7 @@ describe("run replay validation", () => {
 });
 
 it("reuses live frame storage while matching detached authoritative replay",()=>{
-  const seed='v8.live-frame', path=goodRun(seed,3600);
+  const seed='v9.live-frame', path=goodRun(seed,3600);
   const live=createRunGame({seed,realtime:true});
   const replay=createRunGame({seed});
   const first=live.frame(0),player=first.player,powers=first.powerUps,objects=first.objects;

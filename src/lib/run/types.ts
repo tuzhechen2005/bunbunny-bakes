@@ -1,4 +1,4 @@
-export const RUN_ENGINE_VERSION = 8;
+export const RUN_ENGINE_VERSION = 9;
 export const TICK_RATE = 60;
 export const UNITS_PER_METRE = 1000;
 export const MAX_RUN_TICKS = 15 * 60 * TICK_RATE;
@@ -11,6 +11,7 @@ export const MAX_SPEED = CAP_SPEED * 3 / 2;
 export const JUMP_TICKS = 42;
 export const SLIDE_TICKS = 36;
 export const LANE_CHANGE_TICKS = 12;
+export const SHOES_TICKS = 8 * TICK_RATE;
 export const MAGNET_TICKS = 8 * TICK_RATE;
 export const COFFEE_TICKS = 6 * TICK_RATE;
 export const MIN_REACTION_TICKS = 30;
@@ -20,8 +21,8 @@ export const VISIBLE_DISTANCE = 90_000;
 export const LANES = [0, 1, 2] as const;
 export type RunLane = typeof LANES[number];
 export type RunDirection = "L" | "R" | "U" | "D";
-export type RunObstacleKind = "cart" | "flour" | "awning" | "puddle" | "ramp" | "van" | "truck";
-export type RunObjectKind = RunObstacleKind | "bread" | "paper-bag" | "coffee";
+export type RunObstacleKind = "cart" | "flour" | "awning" | "puddle" | "ramp" | "van" | "truck" | "pothole" | "bread-wheel";
+export type RunObjectKind = RunObstacleKind | "bread" | "paper-bag" | "coffee" | "double-jump-shoes" | "shield";
 export interface RunInput { tick: number; dir: RunDirection }
 export interface RunObject {
   id: number;
@@ -33,6 +34,10 @@ export interface RunObject {
   back: number;
   height: number;
   speed?: number;
+  /** Absolute signal deadline; snapshots use zero when no signal is scheduled. */
+  signalUntil?: number;
+  /** Adjacent truck destination; snapshots default to the current lane. */
+  targetLane?: RunLane;
   /** Collectible elevation above the road. */
   y?: number;
   /** Bread value; 5 marks a golden loaf. */
@@ -42,6 +47,7 @@ export interface RunObject {
 }
 export interface RunLaneChange { from: RunLane; to: RunLane; progress: number }
 export interface RunPlayer {
+  shield: boolean;
   y: number;
   surface: "ground" | "roof";
   lane: RunLane;
@@ -53,8 +59,8 @@ export interface RunPlayer {
 }
 export type RunEvent =
   | { type: "action"; tick: number; dir: RunDirection }
-  | { type: "collect"; tick: number; id: number; kind: "bread" | "paper-bag" | "coffee"; lane: RunLane }
-  | { type: "expire"; tick: number; kind: "paper-bag" | "coffee" }
+  | { type: "collect"; tick: number; id: number; kind: "bread" | "paper-bag" | "coffee" | "double-jump-shoes" | "shield"; lane: RunLane }
+  | { type: "expire"; tick: number; kind: "paper-bag" | "coffee" | "double-jump-shoes" }
   | { type: "collision"; tick: number; id: number; kind: RunObstacleKind; lane: RunLane }
   | { type: "over"; tick: number; reason: "collision" | "limit" };
 export interface RunState {
@@ -62,12 +68,13 @@ export interface RunState {
   player: RunPlayer;
   objects: RunObject[];
   speed: number;
-  /** Integer millimetres. Score uses floor(distance / UNITS_PER_METRE). */
+  /** Integer millimetres. Distance points use the current multiplier; bread stays worth 10. */
   distance: number;
   bread: number;
+  multiplier: number;
   score: number;
   over: boolean;
-  powerUps: { magnetUntil: number; coffeeUntil: number; magnetTicks: number; coffeeTicks: number };
+  powerUps: { shoesUntil: number; shoesTicks: number; magnetUntil: number; coffeeUntil: number; magnetTicks: number; coffeeTicks: number };
   /** Events from the latest step/input operation; state() does not drain them. */
   events: RunEvent[];
 }
