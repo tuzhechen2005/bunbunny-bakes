@@ -1,10 +1,12 @@
-// GET /api/menu data (API_SPEC §2). Customer-safe: no grams, limits, usage, batch yield
-// or capacity mode ever leaves this module.
+// GET /api/menu data (API_SPEC §2). Public projections exclude internal fields.
+// MenuData is server-only cache data; always use presentMenu before returning it.
 
+import { presentNewProducts } from "@/domain/newProducts";
 import { fieldFor, type FieldColors } from "@/lib/fieldColor";
 import type { DbClient } from "./db";
 
 export interface MenuProduct {
+  isNew: boolean;
   id: string;
   name: string;
   description: string;
@@ -36,13 +38,27 @@ export interface Menu {
   ownerWechatId?: string;
 }
 
-export async function getMenu(db: DbClient): Promise<Menu> {
+/** Internal cache payload; must be projected before crossing a customer boundary. */
+export type MenuData = Omit<Menu, "products"> & {
+  products: (Omit<MenuProduct, "isNew"> & { newUntil: Date | null })[];
+};
+
+export function presentMenu(data: MenuData, now: Date): Menu {
+  return { ...data, products: presentNewProducts(data.products, now) };
+}
+
+export async function getMenu(db: DbClient, now: Date = new Date()): Promise<Menu> {
+  return presentMenu(await getMenuData(db), now);
+}
+
+export async function getMenuData(db: DbClient): Promise<MenuData> {
   const settings = await db.setting.findUnique({ where: { id: 1 } });
   if (!settings) throw new Error("Setting row (id = 1) is missing; run `npm run db:seed`");
   const rows = await db.product.findMany({
     where: { status: { in: ["ACTIVE", "PAUSED"] } },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: {
+      newUntil: true,
       id: true,
       name: true,
       description: true,
@@ -58,12 +74,13 @@ export async function getMenu(db: DbClient): Promise<Menu> {
       pickupWeekdays: true,
     },
   });
-  const menu: Menu = {
+  const menu: MenuData = {
     orderingEnabled: settings.orderingEnabled,
     products: rows.map((p) => {
       // A row whose cover was set without a photos row still shows that cover.
       const images = p.images.length > 0 ? p.images.map((i) => i.url) : p.imageUrl ? [p.imageUrl] : [];
       return {
+        newUntil: p.newUntil,
         id: p.id,
         name: p.name,
         description: p.description,

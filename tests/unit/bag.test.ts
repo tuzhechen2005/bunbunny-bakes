@@ -21,6 +21,7 @@ import type { MenuProduct } from "@/lib/api";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ prefetch: () => undefined, push: () => undefined }) }));
 
 const product = (over: Partial<MenuProduct> = {}): MenuProduct => ({
+  isNew: false,
   id: "p1",
   name: "奶酥红豆包",
   description: null,

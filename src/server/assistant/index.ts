@@ -122,7 +122,7 @@ export async function askAssistant(
   const cart: CartLine[] = mergeLines(req.cart);
   const fulfillment: Fulfillment = req.fulfillment ?? "PICKUP";
   const [menu, availability] = await Promise.all([
-    getMenu(db),
+    getMenu(db, now),
     loadAvailabilityInput(db, { cart: [], fulfillment, now }),
   ]);
   const ctx: ToolContext = { menu, availability, fulfillment };

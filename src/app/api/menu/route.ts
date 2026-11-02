@@ -8,7 +8,7 @@ import { getMenu } from "@/server/menu";
 export async function GET(): Promise<Response> {
   try {
     await connection(); // never frozen at build time
-    return NextResponse.json(await getMenu(prisma));
+    return NextResponse.json(await getMenu(prisma, new Date()));
   } catch (e) {
     return jsonError(e);
   }

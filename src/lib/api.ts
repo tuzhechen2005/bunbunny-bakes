@@ -7,6 +7,7 @@ import type { CartItem } from "./cart";
 export type Fulfillment = "PICKUP" | "DELIVERY";
 
 export interface MenuProduct {
+  isNew: boolean;
   id: string;
   name: string;
   description: string | null;

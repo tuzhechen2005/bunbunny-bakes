@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { copy } from "@/copy";
+import { newProductUntil } from "@/domain/newProducts";
 import { usage } from "@/domain/capacity";
 import { localDateOf } from "@/domain/dates";
 import { OCCUPYING_STATUSES, type CapacityMode, type LocalDate } from "@/domain/types";
@@ -111,7 +112,7 @@ const fullSchema = z
   });
 
 const createSchema = z
-  .object(shape)
+  .object({ ...shape, isNew: z.boolean().optional() })
   .partial({
     unitLabel: true,
     description: true,
@@ -130,7 +131,7 @@ const createSchema = z
   })
   .strict();
 
-const patchSchema = z.object(shape).partial().strict();
+const patchSchema = z.object({ ...shape, isNew: z.boolean() }).partial().strict();
 
 export type ProductCreateInput = z.input<typeof createSchema>;
 export type ProductPatchInput = z.input<typeof patchSchema>;
@@ -213,7 +214,10 @@ export async function createProduct(db: DbClient, input: unknown, now: Date): Pr
       const max = await tx.product.aggregate({ _max: { sortOrder: true } });
       sortOrder = (max._max.sortOrder ?? 0) + 1;
     }
-    const product = await tx.product.create({ data: { ...fields, sortOrder }, include: PRODUCT_INCLUDE });
+    const product = await tx.product.create({
+      data: { ...fields, sortOrder, newUntil: data.isNew ? newProductUntil(now) : null },
+      include: PRODUCT_INCLUDE,
+    });
     await writeAudit(tx, {
       actor: "ADMIN",
       action: "product.create",
@@ -249,12 +253,14 @@ export async function updateProduct(
     // Validation applies to the merged result (a mode switch needs its new fields).
     const merged = parseOrThrow(fullSchema, { ...pickFields(before), ...patch });
     const changed = (Object.keys(merged) as (keyof Fields)[]).filter((k) => !sameValue(merged[k], before[k]));
-    if (changed.length === 0) return { product: before, overLimitDates: [] };
+    const newUntil = patch.isNew === undefined ? before.newUntil : patch.isNew ? newProductUntil(now) : null;
+    const newUntilChanged = newUntil?.getTime() !== before.newUntil?.getTime();
+    if (changed.length === 0 && !newUntilChanged) return { product: before, overLimitDates: [] };
 
     const capacityChanged = CAPACITY_KEYS.some((k) => changed.includes(k));
     const oldProducts = capacityChanged ? await loadProductMap(tx) : null;
 
-    const product = await tx.product.update({ where: { id }, data: merged, include: PRODUCT_INCLUDE });
+    const product = await tx.product.update({ where: { id }, data: { ...merged, newUntil }, include: PRODUCT_INCLUDE });
     await writeAudit(tx, {
       actor: "ADMIN",
       action: "product.update",

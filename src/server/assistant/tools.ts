@@ -60,6 +60,7 @@ function weekdaysText(days: number[]): string {
 export function publicProduct(menu: Menu, p: MenuProduct, ref: string) {
   return {
     id: ref,
+    isNew: p.isNew,
     name: p.name,
     price: `${formatCents(p.priceFromCents ?? p.unitPriceCents)} / 个`,
     flavors: p.flavors ?? [],
