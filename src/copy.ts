@@ -491,6 +491,16 @@ export const copy = {
       prizeNotReady: "兔兔跑酷下周起参与抽奖",
       inputLimit: "操作次数已到上限，小兔将继续直行",
       fpsUnit: "FPS",
+      /** v10 (D182): sprint start, practice, combo, near miss, death reason. */
+      sprint: "冲刺开局", sprintOn: "冲刺中", takeover: "接管",
+      practice: "练习", practiceSkip: "跳过",
+      cueLane: "左右滑，换道", cueJump: "上滑，跳", cueSlide: "下滑，趴",
+      combo: "连击", nearMiss: "好险",
+      death: {
+        cart: "推车要换道", van: "面包车要换道", truck: "货车要换道",
+        awning: "遮阳棚要趴下", flour: "面粉袋要跳", puddle: "水坑要跳", pothole: "坑要跳", "bread-wheel": "面包轮要跳",
+        "change-lane": "要换道", slide: "要趴下", jump: "要跳",
+      },
     },
     grab: {
       title: "兔兔夹面包", pageTitle: "兔兔夹面包",

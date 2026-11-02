@@ -68,3 +68,31 @@ export function clearRunSave(): void {
     /* ignore */
   }
 }
+
+// Finished-run memory (D182). The server alone decides sprint/practice eligibility from its own
+// finished-run history; this phone only remembers which WeChat IDs it has seen finish, to choose the
+// offer. A wrong guess is rejected by the server and the start falls back to a normal run.
+const PLAYED_KEY = "bb_run_played_v1";
+const playedKey = (wechatId: string) => wechatId.trim().toLowerCase();
+function readPlayed(): string[] {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(PLAYED_KEY) ?? "[]") as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").slice(-8) : [];
+  } catch {
+    return [];
+  }
+}
+export function hasFinishedRun(wechatId: string): boolean {
+  const k = playedKey(wechatId);
+  return !!k && readPlayed().includes(k);
+}
+export function setFinishedRun(wechatId: string, finished: boolean): void {
+  const k = playedKey(wechatId);
+  if (!k) return;
+  const rest = readPlayed().filter((x) => x !== k);
+  try {
+    window.localStorage.setItem(PLAYED_KEY, JSON.stringify(finished ? [...rest, k] : rest));
+  } catch {
+    /* private mode: the offer just stays conservative */
+  }
+}

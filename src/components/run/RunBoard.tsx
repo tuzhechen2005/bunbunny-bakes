@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- static clay HUD icons */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createRunGame, MAX_INPUTS, MAGNET_TICKS, COFFEE_TICKS, type RunInput, type RunDirection, type RunEvent, type RunState } from "@/lib/run";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { createRunGame, MAX_INPUTS, MAGNET_TICKS, COFFEE_TICKS, type RunInput, type RunDirection, type RunEvent, type RunState, type RunDeath } from "@/lib/run";
 import { copy } from "@/copy";
 import { sound } from "@/components/game/sound";
 import { haptic, useMotionPrefs } from "@/lib/motion/react";
@@ -11,7 +11,7 @@ import { createRunView, type RunView } from "./runView";
 import { swipeDirection } from "./runHelpers";
 import { RunSprite } from "./RunArt";
 
-export interface RunProgress { inputs: RunInput[]; score: number; elapsedMs: number; endTick: number }
+export interface RunProgress { inputs: RunInput[]; score: number; elapsedMs: number; endTick: number; death?: RunDeath | null }
 interface Props {
   seed: string; initialInputs?: RunInput[]; initialElapsedMs?: number;
   soundOn: boolean; reduced: boolean; paused: boolean;
@@ -20,11 +20,31 @@ interface Props {
 const t=copy.customer.run;
 const HUD_INTERVAL_MS = 100;
 const EMPTY_EVENTS:RunEvent[]=[];
-const hudValues = (s: RunState) => ({
-  distance: Math.floor(s.distance/1000), bread: s.bread, over: s.over,
-  magnetTicks: s.powerUps.magnetTicks, coffeeTicks: s.powerUps.coffeeTicks,
-  shoesTicks: s.powerUps.shoesTicks ?? 0, shield: !!s.player.shield, multiplier: s.multiplier ?? 1,
-});
+const SPRINT_M = 400;
+const TAKEOVER_TICKS = 120;
+// Practice cues fire at ticks 1 / 241 / 481 (lane change, jump, slide).
+const practiceCue = (tick: number) => tick < 240 ? 1 : tick < 480 ? 2 : 3;
+const hudValues = (s: RunState) => {
+  const phase = s.phase ?? "running", left = s.controlTick - s.tick;
+  return {
+    distance: Math.floor(s.distance/1000), bread: s.bread, over: s.over,
+    magnetTicks: s.powerUps.magnetTicks, coffeeTicks: s.powerUps.coffeeTicks,
+    shoesTicks: s.powerUps.shoesTicks ?? 0, shield: !!s.player.shield, multiplier: s.multiplier ?? 1,
+    phase, lane: s.player.lane, fast: s.speed >= 640,
+    // Whole seconds left until the player takes over (2, 1), 0 when not in the countdown.
+    takeover: phase === "sprint" && left > 0 && left <= TAKEOVER_TICKS ? Math.ceil(left / 60) : 0,
+    sprintPct: phase === "sprint" ? Math.min(100, Math.floor(s.distance / 10 / SPRINT_M)) : 0,
+    cue: phase === "practice" ? practiceCue(s.tick) : 0,
+    comboLevel: s.combo?.level ?? 1, grace: s.combo?.graceAvailable ?? true,
+  };
+};
+type Hud = ReturnType<typeof hudValues>;
+const sameHud = (a: Hud, b: Hud) => (Object.keys(a) as (keyof Hud)[]).every(k => a[k] === b[k]);
+const CUE_ICON = {
+  1: "M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4",
+  2: "M12 20V5M6 11l6-6 6 6",
+  3: "M12 4v15M6 13l6 6 6-6",
+} as const;
 export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduced,paused,onProgress,onOver,onShowResult}:Props) {
   const {degraded}=useMotionPrefs();
   const quiet=reduced||degraded;
@@ -41,6 +61,9 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
   const publishedHud=useRef(hud);
   const lastHud=useRef(-Infinity), lastProgress=useRef(-Infinity);
   const [hidden,setHidden]=useState(false);
+  const [nearMiss,setNearMiss]=useState(0);
+  const [lost,setLost]=useState({key:0,level:1});
+  const pendingNear=useRef(false);
   const [art,setArt]=useState<RunArt|null>(null);
   const canvas=useRef<HTMLCanvasElement>(null);
   const fps=useRef<HTMLOutputElement>(null);
@@ -89,24 +112,26 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
     let progress:RunProgress|undefined;
     if(force||terminal||now-lastProgress.current>=1000) {
       lastProgress.current=now;
-      progress={inputs:[...inputs.current],score:s.score,elapsedMs:s.tick*1000/60,endTick:s.tick};
+      progress={inputs:[...inputs.current],score:s.score,elapsedMs:s.tick*1000/60,endTick:s.tick,death:s.death?{...s.death}:null};
       onProgress(progress);
     }
     // Publish diagnostics at HUD cadence, flushing exact ticks on input/pause/hide/over.
     if(force||terminal||now-lastHud.current>=HUD_INTERVAL_MS) {
       const el=wrapper.current;
-      if(el){el.dataset.lane=String(s.player.lane);el.dataset.state=s.over?'over':s.player.pose;el.dataset.tick=String(s.tick);}
+      if(el){el.dataset.lane=String(s.player.lane);el.dataset.state=s.over?'over':s.player.pose;el.dataset.tick=String(s.tick);el.dataset.phase=s.phase;}
     }
     if(terminal||now-lastHud.current>=HUD_INTERVAL_MS) {
       lastHud.current=now;
       const next=hudValues(s),previous=publishedHud.current;
-      if(next.distance!==previous.distance||next.bread!==previous.bread||next.over!==previous.over||
-        next.magnetTicks!==previous.magnetTicks||next.coffeeTicks!==previous.coffeeTicks||
-        next.shoesTicks!==previous.shoesTicks||next.shield!==previous.shield||next.multiplier!==previous.multiplier) {
+      if(!sameHud(next,previous)) {
+        // A combo that falls back to ×1 (miss or hit) shakes once where the chip was.
+        if(next.comboLevel<previous.comboLevel&&previous.comboLevel>1)setLost(l=>({key:l.key+1,level:previous.comboLevel}));
         publishedHud.current=next;setHud(next);
       }
     }
     for(let i=0;i<events.length;i++)if(events[i].type==='collect'){if(soundOn)sound.merge(1);if(!quiet)haptic(8);break;}
+    for(let i=0;i<events.length;i++)if(events[i].type==='near-miss')pendingNear.current=true;
+    if(pendingNear.current){pendingNear.current=false;setNearMiss(n=>n+1);if(!quiet)haptic(6);}
     if(terminal) {
       reported.current=true;
       crashFrame.current=quiet?2:0;
@@ -131,7 +156,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
       if(!active.current)return;
       const snapshot=game.frame(elapsedTick(clock.read(now)));
       state.current=snapshot;
-      for(let i=0;i<snapshot.events.length;i++)if(snapshot.events[i].type==='collect')collected=true;
+      for(let i=0;i<snapshot.events.length;i++){const type=snapshot.events[i].type;if(type==='collect')collected=true;else if(type==='near-miss')pendingNear.current=true;}
       if(snapshot.over)crashFrame.current=quiet?2:0;
       draw();
       if(fpsEnabled){frames++;if(!fpsStart)fpsStart=now;}
@@ -167,14 +192,18 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
   // Three finite draws after collision, never an over-state rAF loop. Hiding cancels them.
   useEffect(()=>{
     if(!hud.over||hidden)return;
-    const timers=(quiet?[0]:[0,125,250]).map((delay,i)=>setTimeout(()=>{crashFrame.current=quiet?2:i;draw();},delay));
+    // The crash settles in two shaky frames, then the hit obstacle keeps pulsing until the sheet opens.
+    const timers=(quiet?[0]:[0,125,250,400,550,700,850]).map((delay,i)=>setTimeout(()=>{crashFrame.current=quiet?2:Math.min(i,2);draw();},delay));
     return ()=>timers.forEach(clearTimeout);
   },[hud.over,hidden,quiet,draw]);
   const swipe=useCallback((dir:RunDirection)=>{
     if(!active.current||paused||document.hidden||state.current.over)return;
     const tick=elapsedTick(clock.read(performance.now()));
     const events=game.step(tick);
-    if(!game.state().over&&inputs.current.length<MAX_INPUTS&&tick>(inputs.current.at(-1)?.tick??-1)) {
+    // Sprint ignores swipes, and S only means something in practice; neither is worth logging.
+    const now=game.state();
+    if(now.phase==='sprint'||(dir==='S'&&now.phase!=='practice')){publish(events,true,true,now);return;}
+    if(!now.over&&inputs.current.length<MAX_INPUTS&&tick>(inputs.current.at(-1)?.tick??-1)) {
       events.push(...game.input(tick,dir));inputs.current.push({tick,dir});
       if(inputs.current.length===MAX_INPUTS)setCapped(true);
       if(soundOn)sound.drop();
@@ -201,7 +230,7 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
     el.addEventListener('touchend',end);el.addEventListener('touchcancel',end);window.addEventListener('keydown',key);
     return ()=>{el.removeEventListener('touchstart',start);el.removeEventListener('touchmove',move);el.removeEventListener('touchend',end);el.removeEventListener('touchcancel',end);window.removeEventListener('keydown',key);};
   },[swipe]);
-  return <section className="run-play">
+  return <section className={`run-play${quiet?" run-quiet":""}`}>
     <div className="run-hud">
       <p className="run-chip"><span>{t.distance}</span><b className="font-num" data-testid="run-distance">{hud.distance}</b></p>
       <div className="run-powers">
@@ -214,9 +243,21 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
         </div>)}
       </div>
       <p className="run-chip run-chip-end"><span>{t.bread}</span><b className="font-num" data-testid="run-bread">{hud.bread}</b></p>
+      {hud.comboLevel>1?<div key={`c${hud.comboLevel}`} className={`run-combo font-num${hud.grace?"":" run-combo-thin"}`} role="img" aria-label={`${t.combo} ×${hud.comboLevel}`} data-testid="run-combo" data-level={hud.comboLevel} data-grace={hud.grace?"1":"0"}>
+        <i aria-hidden="true" /><span className="run-combo-label">{t.combo}</span>×{hud.comboLevel}
+      </div>:lost.key>0&&<div key={`l${lost.key}`} className="run-combo run-combo-lost font-num" aria-hidden="true" data-testid="run-combo-lost">×{lost.level}</div>}
     </div>
-    <div ref={wrapper} className={`run-board${webgl?" run-board-gl":""}${hud.coffeeTicks>0?" run-board-rush":""}`} role="application" aria-label={t.boardLabel} tabIndex={0} onClick={()=>{if(state.current.over)onShowResult?.();}} data-testid="run-board" >
+    {hud.phase==='sprint'&&<div className="run-tag" data-testid="run-sprint"><b className="font-display">{t.sprintOn}</b><i style={{width:`${hud.sprintPct}%`}} /></div>}
+    {hud.phase==='practice'&&<div className="run-tag run-tag-practice" data-testid="run-practice"><b className="font-display">{t.practice}</b></div>}
+    {hud.takeover>0&&<p key={hud.takeover} className="run-takeover font-display" role="status" data-testid="run-takeover">{t.takeover}<b className="font-num">{hud.takeover}</b></p>}
+    {hud.cue>0&&!hud.over&&<p key={`q${hud.cue}`} className="run-cue font-display" role="status" data-testid="run-cue" data-cue={hud.cue}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d={CUE_ICON[hud.cue as 1|2|3]} /></svg>
+      {hud.cue===1?t.cueLane:hud.cue===2?t.cueJump:t.cueSlide}
+    </p>}
+    {hud.phase==='practice'&&!hud.over&&<button type="button" className="run-skip font-display" onClick={()=>swipe('S')} data-testid="run-skip">{t.practiceSkip}</button>}
+    <div ref={wrapper} className={`run-board${webgl?" run-board-gl":""}${hud.coffeeTicks>0?" run-board-rush":hud.phase==='sprint'?" run-board-sprint":hud.fast?" run-board-fast":""}`} style={{"--lane":hud.lane} as CSSProperties} role="application" aria-label={t.boardLabel} tabIndex={0} onClick={()=>{if(state.current.over)onShowResult?.();}} data-testid="run-board" >
       <canvas ref={canvas} aria-hidden="true" />
+      {nearMiss>0&&<span key={nearMiss} className="run-near font-display" aria-hidden="true" data-testid="run-near-miss">{t.nearMiss}</span>}
       <output ref={fps} hidden className="run-fps" aria-hidden="true" />
       {!viewReady&&<p className="run-overlay" role="status">{t.loading}</p>}
       {capped&&!hud.over&&<p className="run-input-limit" role="status">{t.inputLimit}</p>}
