@@ -420,3 +420,30 @@ Use case: stylized-concept. New production Bunbunny Bakes asset. Reference 1 loc
 ### ART-3 validation
 
 All nine WebPs decode at requested dimensions with transparent and opaque alpha pixels. Total payload: **147,640 bytes (147.6 KB)**, below 400,000 bytes. Hero below 160 KB; every icon below 40 KB. All exports use quality 82. No application code or commits changed.
+
+
+## ART-4 — grab bomb and blast (D167, 2026-11-02)
+
+Generated using built-in `image_gen`, one call per original, with `transparent_background: true`. Visually inspected style references: `public/brand/art/game/grab-flour.webp`, `grab-clock.webp`, and `grab-butter.webp`; followed `docs/GAME_ART.md`. References were visible in conversation; no reference-path arguments were passed.
+
+Original generated PNGs are preserved in ignored `sources/grab-bomb.png` and `sources/grab-boom.png`. Exports preserve generated alpha, use Pillow Lanczos resizing and `cwebp -q 82 -m 6`. Destination: `public/brand/art/game/`.
+
+### grab-bomb
+
+Source: `sources/grab-bomb.png`; export: `grab-bomb.webp`, 512 × 512, transparent.
+
+Use case: stylized-concept. Create one original bakery-game hazard sprite, a round cartoon bomb made of glossy dark-chocolate molded clay, with one little cream-icing highlight on its upper-left shoulder, a short cinnamon-stick fuse angled up-right and one small bright gold and toasted-orange spark at its tip. Match the three reference sprites visible in the conversation (grab-flour, grab-clock, grab-butter): soft chunky rounded clay-toy forms, simple silhouettes, warm dawn light from upper left, gentle shaded lower-right depth, cream #F6EEDC, dough #E7BF7F, gold #F2C14E, terracotta #C8866C and cocoa #745742; bomb body uses deeper chocolate #3B2A1F. The chocolate has restrained soft gloss, no metallic reflection. Clear classic spherical bomb silhouette and unmistakable lit fuse, reads as danger at only 60px on a warm wood board. Square composition, entire bomb and spark visible, centered, fills about 88 percent of canvas. Actual transparent alpha background, clean antialiased edges without white matte or halo, no floor or cast shadow outside the object. No text, face, lettering, logo, skull, utensils, board, or extra objects. Single asset only, not a sheet. Intended final export 512 by 512.
+
+### grab-boom
+
+Source: `sources/grab-boom.png`; export: `grab-boom.webp`, 768 × 768, transparent.
+
+Use case: stylized-concept. Create one original bakery-game explosion FX sprite. Match the existing grab-flour, grab-clock and grab-butter reference sprites visible in this conversation: soft molded clay toys, chunky rounded simple forms, subtle clay texture, warm dawn light from upper left, soft lower-right shading. A compact radial explosion burst made of puffy flour-white and cream clay cloud lobes interleaved with toasted-orange and terracotta clay puffs, with a few small golden-brown clay bread crumbs flying outward. Make the silhouette energetic and expanding in every direction, rounded chunky sculpted burst tips behind the cloud, broad clear readable volumes, not realistic smoke. Palette cream #F6EEDC, paper #FFF8EC, dough #E7BF7F, gold #F2C14E, terracotta #C8866C, toasted orange, subtle cocoa shadows. No bomb in the image. Centered square composition, cloud and scattered crumbs fill about 88 percent of the canvas, keep all edges and crumbs inside generous transparent margin. Actual transparent alpha background, clean antialiased edges without a white matte or halo, no backdrop, floor or external cast shadow. No text, letters, numerals, faces, logo or watermark. Single asset only, not a sheet. Intended export 768 by 768.
+
+### grab-bomb-card
+
+Export: `grab-bomb-card.webp`, 256 × 256, transparent. Downscaled directly from the same original `sources/grab-bomb.png` using the bomb prompt above; no separate generation.
+
+### ART-4 validation
+
+Decoded sizes: bomb 512 × 512 (26,122 bytes), blast 768 × 768 (122,324 bytes), card 256 × 256 (10,834 bytes). All retain alpha values from 0 to 255. Total: **159,280 bytes (159.3 KB)**, within this request's 250 KB combined budget. The 768 px blast exceeds the guide's generic 40 KB sprite target; the two bomb icons are below it. All three use quality 82. Composited exports on warm wood-color, dark cocoa and white backgrounds; no visible white halo. Reviewed bomb and card at 60 px for lit-fuse hazard readability. QA contact sheet retained in ignored `sources/grab-bomb-boom-qa.png`. No application code changes or commits.
