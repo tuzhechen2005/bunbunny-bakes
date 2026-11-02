@@ -10,7 +10,7 @@ const level = () => tdLevel("2026-10-26", 1);
 
 describe("TD deterministic level and geometry", () => {
   it("pins the version and generates five shared weekly waves", () => {
-    expect(TD_ENGINE_VERSION).toBe(9);
+    expect(TD_ENGINE_VERSION).toBe(10);
     expect(tdSeedVersion(level().seed)).toBe(TD_ENGINE_VERSION);
     expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([340, 210, 261, 720, 720]);
     expect(level()).toEqual(level());
@@ -32,8 +32,8 @@ describe("TD deterministic level and geometry", () => {
         const ordinary = w.pests.filter(p => !p.boss);
         const baseCount = Math.min(96, 9 + Math.floor((n - 1) * 1.5) + [0, 3, 6, 2, 12][wave]);
         const percent = n <= 5 ? 70 : 100;
-        expect(ordinary.length).toBeGreaterThanOrEqual(Math.floor(baseCount * percent / 100));
-        expect(ordinary.length).toBeLessThanOrEqual(Math.floor((baseCount + 2) * percent / 100));
+        expect(ordinary.length).toBeGreaterThanOrEqual(Math.round(Math.floor(baseCount * percent / 100) * 0.6));
+        expect(ordinary.length).toBeLessThanOrEqual(Math.round(Math.floor((baseCount + 2) * percent / 100) * 0.6));
         for (const p of ordinary) expect(p.speed).toBe(n === 1 ? 24 : Math.floor(PESTS[p.kind].speed * (100 + Math.min(150, (n - 1) * 3)) * 80 / 10000));
         for (const p of w.pests.filter(p => p.boss)) expect(p.speed).toBe(n === 1 ? 24 : 16);
       }
@@ -46,14 +46,14 @@ describe("TD deterministic level and geometry", () => {
       expect(() => tdLevel(week, 1)).toThrow();
     }
     for (const n of [0, -1, 1.1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) expect(() => tdLevel("2026-10-26", n)).toThrow();
-    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v4.td.2026-10-26.1", "v5.td.2026-10-26.1", "v6.td.2026-10-26.1", "v7.td.2026-10-26.1", "v8.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
+    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v4.td.2026-10-26.1", "v5.td.2026-10-26.1", "v6.td.2026-10-26.1", "v7.td.2026-10-26.1", "v8.td.2026-10-26.1", "v9.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
       expect(() => createTdGame({ seed })).toThrow();
     }
     for (const tierCount of [0, 101, 1.5, NaN]) expect(() => createTdGame({ level: level(), tierCount })).toThrow();
     const tampered = level();
     tampered.waves[0].pests[0].hp = 1; tampered.startCoins = 1000000; tampered.map = 2;
     expect(createTdGame({ level: tampered }).state()).toEqual(createTdGame({ level: level() }).state());
-    expect(tdLevel("2026-10-26", Number.MAX_SAFE_INTEGER).waves.flatMap(w => w.pests).length).toBeLessThanOrEqual(481);
+    expect(tdLevel("2026-10-26", Number.MAX_SAFE_INTEGER).waves.flatMap(w => w.pests).length).toBeLessThanOrEqual(291);
   });
 
   it("keeps all three winding paths and eleven off-path slots in the landscape field", () => {

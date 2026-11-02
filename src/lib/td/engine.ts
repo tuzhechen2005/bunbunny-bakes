@@ -178,7 +178,10 @@ export function createTdGame(opts: TdOptions): TdGame {
       // Timeout wins all ties; spawn exits resolve before damage.
       if (tick - startedTick === MAX_LEVEL_TICKS) { finish("timeout"); break; }
       if (nextWaveTick !== null && tick >= nextWaveTick) startWave(false);
-      if (spawnTick !== null && tick >= spawnTick) {
+      // Delay arrivals while control effects or overlapping waves fill the road.
+      // Pending spawns retain their order and resume when a space opens.
+      if (spawnTick !== null && tick >= spawnTick
+        && pests.length < (level.waves[wave - 1].maxLivePests ?? Infinity)) {
         const spec = level.waves[wave - 1].pests[spawnIndex++];
         const pest: TdPest = { ...spec, ...pathPosition(map, 0), inTunnel:false, onStrip:false, onJam:false, forkChoices:{}, slipped:[], slowUntil:0, slowStrength:0, id: nextPest++, wave, distance: 0, maxHp: spec.hp, slowed: false, heading: pathHeading(map, 0), carrying: 0, carriedTiers: [], returning: false, frozenUntil: bellUntil, stunnedUntil: 0, floured: false, burning: false, vulnerability: 0, burnUntil: 0, burnTick: 0, burnDamage: 0, burnTower: -1 };
         syncPest(pest);

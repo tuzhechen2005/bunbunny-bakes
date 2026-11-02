@@ -98,6 +98,20 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
     wave.interval = 100;
     for (const pest of wave.pests) { pest.hp = pest.boss ? 90 : 16; pest.armor = 0; pest.speed = 24; }
   }
+  // Sparse waves reduce splash value and extend single-target firing windows.
+  // Interpolate compensation across the same D9 difficulty checkpoints.
+  const densityPressure = n === 1 ? 100 : n <= 5 ? 98 : n <= 10 ? 98 - (n - 5) * 2.4
+    : n <= 20 ? 86 + (n - 10) * 2.9 : 115;
+  // Fewer, stronger targets retain approximately the same wave HP and income.
+  for (const wave of waves) {
+    const ordinary = wave.pests.filter(p => !p.boss);
+    const count = Math.max(1, Math.round(ordinary.length * 0.6));
+    const scale = ordinary.length / count;
+    wave.pests = [...ordinary.slice(0, count), ...wave.pests.filter(p => p.boss)]
+      .map(p => ({ ...p, hp: Math.round(p.hp * scale * (p.boss ? 100 : densityPressure) / 100), bounty: Math.round(p.bounty * scale) }));
+    wave.interval = Math.ceil(wave.interval / 0.6);
+    wave.maxLivePests = n < 20 ? 8 : 12;
+  }
   const unlockLevels = [1, 3, 5, 8, 11, 14, 18];
   return { mapData: levelMap(seed, n), unlockedTowers: TOWER_KINDS.filter((_,i) => n >= unlockLevels[i]),
     newlyUnlocked: TOWER_KINDS.filter((_,i) => n === unlockLevels[i]), seed, weekKey, number: n, map: Math.floor((n - 1) / 4) % 3, startCoins, waves };

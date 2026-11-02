@@ -88,3 +88,22 @@ it('a cream line before a portal interrupts entry during a long movement step', 
   const g=start();g.apply({tick:0,type:'item',item:'slide',position:3900});g.step(1);
   expect(g.state().pests[0]).toMatchObject({distance:2080,slipped:[1]});
 });
+
+it('queues capped arrivals without losing pests or advancing the wave timer, and replays them', () => {
+  const wave = fixture.level!.waves[0];
+  wave.maxLivePests = 2;
+  wave.interval = 10;
+  wave.pests.forEach(p => { p.hp = 100; p.speed = 0; });
+  const inputs: TdInput[] = [
+    { tick: 0, type: 'callWave', slot: -1 },
+    { tick: 50, type: 'item', item: 'bomb', x: 100, y: 400 },
+  ];
+  const game = start();
+  expect(game.step(50).filter(e => e.type === 'spawn').map(e => e.pest)).toEqual([1, 2]);
+  expect(game.state()).toMatchObject({ spawning: true, nextWaveTick: null });
+  expect(game.apply(inputs[1])).toBe(true);
+  expect(game.step(51).filter(e => e.type === 'spawn').map(e => e.pest)).toEqual([3]);
+  expect(game.state()).toMatchObject({ spawning: false, nextWaveTick: 651 });
+  const replay = replayTd({ seed: fixture.level!.seed, itemsAllowed: { bomb: 1, bell: 1, slide: 1 } }, inputs, 51);
+  expect({ ...replay, events: [] }).toEqual({ ...game.state(), events: [] });
+});
