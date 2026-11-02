@@ -427,7 +427,8 @@ Client prices, totals and names are ignored. Missing selection on a flavoured pr
 Admin override cannot bypass flavour validation.
 
 Admin edits retain DB price/name snapshots for the same product + flavour (D45); a new flavour
-uses current DB pricing. Every explicitly submitted non-null flavour must be active.
+uses current DB pricing and must be active. An existing product + flavour line may retain an
+inactive flavour; ownership is still validated and its stored price/name snapshots are retained.
 Omitting `items` preserves historical lines, including inactive flavours, for metadata-only edits.
 An existing null-flavour line can be retained by explicitly sending `flavorId: null` on that
 product; omission does not grant the legacy exemption. New orders have no legacy exemption.

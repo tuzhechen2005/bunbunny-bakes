@@ -26,7 +26,7 @@ import {
   entersConfirmed,
   isOccupying,
 } from "@/domain/status";
-import type { CartLine, Fulfillment, LocalDate, OrderStatus, PriceSnapshot, Violation } from "@/domain/types";
+import type { CartLine, Fulfillment, LocalDate, OrderStatus, Violation } from "@/domain/types";
 import { copy } from "@/copy";
 import { Prisma } from "@/generated/prisma/client";
 import type { PaidMethod } from "@/generated/prisma/client";
@@ -525,7 +525,7 @@ export async function adminEditOrder(
     const existingByLine = new Map(order.items.map((i) => [lineKey(i), i]));
     if (data.items) {
       const legacyProducts = new Set(order.items.filter(i => i.flavorId === null).map(i => i.productId));
-      validateFlavors(newCart, products, legacyProducts);
+      validateFlavors(newCart, products, legacyProducts, new Set(existingByLine.keys()));
     }
     const unavailable = newCart.filter(
       (l) =>
@@ -552,22 +552,25 @@ export async function adminEditOrder(
       }
     }
 
-    // --- prices: snapshots for products already on the order (D45), current for new ones
+    // --- prices: snapshots for product + flavour lines already on the order (D45), current for new ones
     const lines = newCart.map((l) => {
       const existing = existingByLine.get(lineKey(l));
-      const price: PriceSnapshot = existing
+      const priced = existing
         ? {
-            unitPriceCents: existing.unitPriceCents,
-            bundleSize: existing.bundleSize,
-            bundlePriceCents: existing.bundlePriceCents,
+            flavorName: existing.flavorName,
+            price: {
+              unitPriceCents: existing.unitPriceCents,
+              bundleSize: existing.bundleSize,
+              bundlePriceCents: existing.bundlePriceCents,
+            },
           }
-        : currentLinePrice(l, products[l.productId]).price;
+        : currentLinePrice(l, products[l.productId]);
       const name = existing ? existing.nameSnapshot : products[l.productId].name;
       return {
         productId: l.productId,
         flavorId: l.flavorId ?? null,
-        flavorName: existing ? existing.flavorName : currentLinePrice(l, products[l.productId]).flavorName,
-        qty: l.qty, price, name,
+        flavorName: priced.flavorName,
+        qty: l.qty, price: priced.price, name,
       };
     });
     const repriced = itemsChanged || fulfillmentChanged;

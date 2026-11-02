@@ -1,3 +1,4 @@
+import { lineKey } from "@/domain/cart";
 import type { CartLine, PriceSnapshot } from "@/domain/types";
 import type { ProductInfo, ProductInfoMap } from "./day";
 import type { Tx } from "./db";
@@ -10,13 +11,18 @@ export async function lockCartProducts(tx: Tx, cart: CartLine[]): Promise<void> 
   }
 }
 
-/** Explicit null is allowed on edit only for a product with a stored legacy null line. */
-export function validateFlavors(cart: CartLine[], products: ProductInfoMap, legacy = new Set<string>()): void {
+/** Admin edits may retain inactive stored lines and explicit legacy nulls; ownership is always required. */
+export function validateFlavors(
+  cart: CartLine[],
+  products: ProductInfoMap,
+  legacy = new Set<string>(),
+  existingLines = new Set<string>(),
+): void {
   for (const line of cart) {
     const p = products[line.productId];
     if (!p) continue; // Product validation owns unknown products.
     if (line.flavorId) {
-      if (!p.flavors?.some(f => f.id === line.flavorId && f.active)) {
+      if (!p.flavors?.some(f => f.id === line.flavorId && (f.active || existingLines.has(lineKey(line))))) {
         throw new AppError("FLAVOR_UNAVAILABLE", { extra: { productId: line.productId, flavorId: line.flavorId } });
       }
     } else if (p.flavors?.some(f => f.active) && !(line.flavorId === null && legacy.has(line.productId))) {

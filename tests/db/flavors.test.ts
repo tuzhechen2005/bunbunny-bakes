@@ -78,8 +78,35 @@ it("changes flavour at current DB price and preserves unchanged line snapshots",
   const changed = await stored(old.id);
   expect(changed.totalCents).toBe(750);
   expect(changed.items).toHaveLength(2);
+  expect(changed.items.find(i => i.flavorId === original)).toMatchObject({ flavorName: "原味", unitPriceCents: 300 });
+});
+
+it("retains an inactive flavour and its snapshot when editing another line quantity", async () => {
+  const old = await stored((await create([line(original), line(matcha)])).id);
+  const snapshot = old.items.find(i => i.flavorId === original)!;
+  await db.productFlavor.update({ where: { id: original }, data: { active: false, name: "renamed", priceCents: 999 } });
+  await adminEditOrder(db, {
+    orderId: old.id, expectedUpdatedAt: old.updatedAt.toISOString(), items: [line(original), line(matcha, 2)],
+  }, now);
+  const changed = await stored(old.id);
+  expect(changed.items).toHaveLength(2);
+  expect(changed.items.find(i => i.flavorId === original)).toMatchObject({
+    flavorName: snapshot.flavorName, nameSnapshot: snapshot.nameSnapshot,
+    unitPriceCents: snapshot.unitPriceCents, bundleSize: snapshot.bundleSize,
+    bundlePriceCents: snapshot.bundlePriceCents, lineTotalCents: snapshot.lineTotalCents, qty: snapshot.qty,
+  });
+  expect(changed.items.find(i => i.flavorId === matcha)?.qty).toBe(2);
+  expect(changed.totalCents).toBe(1100);
+});
+
+it("rejects a new inactive flavour line on an existing product even with override", async () => {
+  const old = await stored((await create([line(original)])).id);
   await db.productFlavor.update({ where: { id: matcha }, data: { active: false } });
-  await expect(adminEditOrder(db, { orderId: old.id, expectedUpdatedAt: changed.updatedAt.toISOString(), items: [line(matcha)] }, now)).rejects.toMatchObject({ code: "FLAVOR_UNAVAILABLE" });
+  await expect(adminEditOrder(db, {
+    orderId: old.id, expectedUpdatedAt: old.updatedAt.toISOString(),
+    items: [line(original), line(matcha)], override: true, reason: "extra batch",
+  }, now)).rejects.toMatchObject({ code: "FLAVOR_UNAVAILABLE" });
+  expect(await stored(old.id)).toEqual(old);
 });
 
 it("allows explicit legacy null on edits only and keeps its price snapshot", async () => {
