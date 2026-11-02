@@ -3,7 +3,7 @@ export const MIN_TIERS = 4;
 export const MAX_TIERS = 6;
 export const MAX_MOVES = 30;
 export const MIN_MOVE_GAP_MS = 150;
-export const M3_ENGINE_VERSION = 3;
+export const M3_ENGINE_VERSION = 4;
 export const REFILL_BIAS_PERCENT = 20;
 export const MAX_CASCADE_STEPS = 20;
 export const CELL_POINTS = 10;
@@ -24,7 +24,10 @@ export interface M3Swap { a: M3Cell; b: M3Cell }
 export interface M3Move extends M3Swap { at: number }
 export interface M3Order { tier: number; need: number; have: number; points: number }
 export interface M3Special extends M3Cell { kind: "roll" | "big"; tier: number }
+export interface M3FailureGap { pointsShort: number; orders: { index: number; tier: number; itemsShort: number }[] }
 export interface M3State {
+  lastCascadeWaves: number;
+  failureGap: M3FailureGap | null;
   board: number[][];
   specials: M3Special[];
   movesLeft: number;

@@ -80,7 +80,7 @@ describe("use()", () => {
     let n = 0;
     for (let seed = 0; seed < 200; seed++) {
       const g = createTuGame({ seed: `sw${seed}`, tiers: TIERS });
-      // Batch 3 has all 8 breads, so there is always room for two new ones.
+      // Batch 3 has 6 breads, so there is always room for two new ones.
       playWitness(g, `sw${seed}`);
       playWitness(g, `sw${seed}`);
       const before = g.state();
@@ -92,13 +92,13 @@ describe("use()", () => {
         { type: "order", index: 1, tier: after.orders[1] },
       ]);
       const onBoard = new Set(after.tiles.map((t) => t.tier));
-      expect(onBoard.size).toBe(8);
+      expect(onBoard.size).toBe(6);
       for (const o of after.orders) {
         expect(onBoard.has(o)).toBe(true);
         expect(before.orders).not.toContain(o);
       }
       expect(after.orders[0]).not.toBe(after.orders[1]);
-      expect({ ...after, orders: before.orders, props: before.props }).toEqual(before);
+      expect({ ...after, canStop: before.canStop, orders: before.orders, props: before.props }).toEqual(before);
       n++;
     }
     expect(n).toBe(200);
@@ -330,15 +330,16 @@ describe("replay of mixed logs (C8)", () => {
       hash: hashTuState(g.state()),
     }).toMatchInlineSnapshot(`
       {
-        "batch": 3,
-        "hash": "bc4188e5",
+        "batch": 5,
+        "hash": "64473770",
         "props": [
+          "peek",
           "peek",
           "bag",
           "peek",
         ],
-        "score": 2390,
-        "taps": 106,
+        "score": 8190,
+        "taps": 251,
       }
     `);
   });
@@ -346,10 +347,10 @@ describe("replay of mixed logs (C8)", () => {
 
 describe("engine version (C8)", () => {
   it(`is ${TU_ENGINE_VERSION}, and new seeds carry it; plain hex seeds are version 1`, () => {
-    expect(TU_ENGINE_VERSION).toBe(4);
+    expect(TU_ENGINE_VERSION).toBe(5);
     const s = tuSeed("0123456789abcdef0123456789abcdef");
-    expect(s).toBe("v4.0123456789abcdef0123456789abcdef");
-    expect(tuSeedVersion(s)).toBe(4);
+    expect(s).toBe("v5.0123456789abcdef0123456789abcdef");
+    expect(tuSeedVersion(s)).toBe(5);
     expect(tuSeedVersion("0123456789abcdef0123456789abcdef")).toBe(1);
     expect(tuSeedVersion("v3.abc")).toBe(3);
     expect(tuSeedVersion("v2.")).toBe(1);

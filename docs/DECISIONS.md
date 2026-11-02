@@ -238,3 +238,16 @@ pin/oven pair; passive late-level builds are not guaranteed a 20–30-second bos
 See the engine README for the measured passive/reactive results and UI fields.
 D182（[店主] 11/02 RUN v10）： 480→720 mm/tick over 20s (old cap reached at 16.67s), rows 64m and slide→jump gap 28m; second-run optional fixed 400m invincible sprint with no pickups, 2s takeover warning and 64m safe buffer, mode stored in server seed and gated by finished RUN history; first-run optional 12s non-ranked practice with replayed skip; bread streak 3/6 earns ×2/×3 bread points with one missed-bread grace per chain and hit reset; near-miss feedback only; hit-specific death reason and combo telegraph fields exposed to UI. Owner 11/02 explicit RUN v10 brief supersedes review recommendation against acceleration. 100-seed 250ms bot median 69.2s.
 D183（[店主] 11/02，GRAB v6）：普通回收目标缩短 20%（整数速度向上取整），面粉最坏回收 ≤4 秒；接触立刻锁定并公开熟度／得分，回到起点才入账。一张两件订单（同种两件或 1+1），奖励为标准小面包完美夹取的两倍（300），引擎保证所需种类及时出现，完成立即换单，结算计订单数。完美连夹第二／第三次 +10%／+20% 封顶，失误只清连夹、不扣已有分。每关独立目标，达到立即进入更难下一关（更多炸弹、移动面包、更短时限），榜单先已到达关卡再总分；L1 易过、策略代理典型结束 L3–5。L3 起小鼠携带面包横向走动、价值翻倍；L2 起稀有金面包为中面包三倍分／重量 12，低速回收使同距离单位行程价值约为普通中面包的 81%，不做高收益抽奖。服务端重放验分／关卡，版本升至 6，旧未完成局与存档拒绝；十分钟总活跃时长安全上限。UI 由 Claude 实现，完整状态、事件、榜单字段见 `src/lib/grab/README.md` 的 UI contract；仿真与检查见 `docs/GRAB_V6_VALIDATION.md`。
+### D184 — M3 / TU / BIG playability fixes (owner 11/02)
+
+Owner 11/02 authorized the playability-1102 review follow-up, engine/server/tests/docs only.
+M3 v4 softens new-kind L7/L19 with a 30% two-level target discount, then 20%/10% recovery
+and staged temporary extra moves, calibrated against 100 independent week seeds. Expose
+last-swap cascade wave count and failure score/current-order deficits; presentation speed
+never changes points. TU v5 uses 54 tiles / 6 layers / 6 kinds at oven 3, 72 tiles with the
+same kinds/layers at oven 4, then 7 kinds at oven 5 and 8 at oven 6. Clear boundaries allow
+收工 via replay input id 0, paying unused props once using the cleared oven's multiplier;
+any next-oven accepted input closes that window. Expose public-information planning and prop
+previews. BIG v2 exposes highest attained / next tier and first-record events only; physics
+and scoring stay unchanged. Version checks reject old unfinished runs; no UI components or
+pages changed. Measurements and limits are recorded in engine READMEs and docs/D184-validation.md.

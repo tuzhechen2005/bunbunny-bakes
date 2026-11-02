@@ -116,11 +116,14 @@ use this batch.
 | --- | --- | --- | --- | --- | --- |
 | 1 | 4 | 2 | 24 | 2 | ~8% |
 | 2 | 5 | 4 | 36 | 3 | ~28% |
-| 3 | 8 | 8 | 96 | 4 | ~54% |
-| 4 | 8 | 8 | 108 | 4 | ~55% |
-| 5+ | 8 | 8 | 120 | 4 | ~56% |
+| 3 | 6 | 6 | 54 | 3 | ~43% |
+| 4 | 6 | 6 | 72 | 3 | measured in layout tests |
+| 5 | 7 | 6 | 90 | 3 | measured in layout tests |
+| 6 | 8 | 8 | 96 | 4 | ~54% |
+| 7 | 8 | 8 | 108 | 4 | ~55% |
+| 8+ | 8 | 8 | 120 | 4 | ~56% |
 
-Batch 1 is the warm-up, batch 2 is where careless play stops, batch 3 is the wall (D130).
+Batch 1 is the warm-up, batch 2 is where careless play stops, D184 separates tile-count and kind-count increases after batch 2.
 
 Breads per batch are capped at the shop's tier count and are the first k of a per-batch seeded
 shuffle of all tiers.
@@ -131,7 +134,7 @@ shuffle of all tiers.
 which every position is free when its turn comes, then assigns tiers along that order in triples
 (up to `spread` triples open at once, never 6 in the bag without a pack; `spread` must stay ≤ 4,
 guarded at load). That order is returned as `solution` (the witness); `tests/unit/tuDeal.test.ts`
-plays it through the real engine for every batch in `BATCHES` (+1) over 500 seeds (and 150 seeds
+plays it through the real engine for every batch in `BATCHES` over 500 seeds (and 150 seeds
 for every shop size 2–7). Hidden tiles change nothing here: the witness exists regardless of what
 the player can see, and a tile is only taken in it when it is free (hence visible). A 7-slot bag
 only makes it easier.
@@ -154,9 +157,9 @@ entries and a last `at` beyond the real elapsed time plus slack.
 
 ### Engine version (C8)
 
-`TU_ENGINE_VERSION` (4) changes whenever a rules change would make an old log score differently
-(this one: D141 caps prop inventory, changing later uses and the unused-prop end bonus). The server starts every run with `tuSeed(hex)` =
-`v4.<hex>`, and `finishTuRun` refuses (422 「这一局已经过期，请重新开始」) a run whose
+`TU_ENGINE_VERSION` (5) changes whenever a rules change would make an old log score differently
+(this one: D184 changes the oven curve and adds boundary cash-out). The server starts every run with `tuSeed(hex)` =
+`v5.<hex>`, and `finishTuRun` refuses (422 「这一局已经过期，请重新开始」) a run whose
 `tuSeedVersion(seed)` is not the current one; seeds from before versioning are plain hex =
 version 1. So a run started before a deploy can simply not be finished (it would expire at the
 weekly reset anyway and is cleaned up as an unfinished run) instead of being replayed under new
@@ -188,3 +191,40 @@ historical D131 baseline predates the D141 cap (8 tiers, 1000 seeds, end batch):
 (with 2 tiers the bag can never fill and the game always runs to `MAX_TAPS`).
 
 `hashTuState(state)` (FNV-1a) is for pinned vectors and debugging.
+
+## UI contract
+
+D184 (owner 11/02), engine v5. The existing `batch { batch, bonus }` event still deals the
+next oven immediately and awards only the cleared-oven bonus. New `state().canStop` is
+true at that boundary. Offer 收工 / continue; continuing is simply the next accepted tap
+or prop use. Invalid inputs leave the window open. Prop use also closes it, so no prop
+can be spent on the new oven and then cashed out against the old one.
+
+`game.stop()` returns null outside this boundary or after ending. On success it consumes
+one log entry, awards `50 × clearedOven × remainingPropCount` and returns the existing
+`bonus { points }`, `over` events once. It sets `over=true`, `canStop=false`; `batch` remains
+the already-dealt next oven. Use `batch - 1` as the cleared-oven count for cash-out.
+No bonus is paid for a prefix/exit or for continuing. Normal loss still pays the current
+oven multiplier. Finalization is idempotent at the engine and database levels.
+
+Persist successful stop as `{ id: STOP_TILE_ID, at }`, where exported `STOP_TILE_ID = 0`
+is reserved (real tile ids start at 1). `replayTu` recognizes it and calls `stop()`; it rejects
+premature stops, repeats, and inputs after stop. During client restore, route id 0 to
+`stop()`, ordinary ids to `tap()`. Existing finish/progress endpoints accept this strict
+input shape and compute its score from replay, with the same timing checks.
+
+`tuPlanning(state)` returns `{ slotsLeft, pairTiers, props }` without mutation or RNG.
+`pairTiers` lists bag pairs only when two or fewer slots remain. Prop previews are:
+`peek { usable, hiddenTileCount }`, `bag { usable, slotsAdded }`, and
+`swap { usable, orderIndexes: [0,1] }`. These describe effects before spending; no hidden
+bread tier or future random order is disclosed. Peek duration remains the existing UI's 3s.
+Old v4 unfinished runs and saves are rejected by the existing version mechanism.
+
+### D184 verification (v5)
+
+All eight configurations: **11,200 witness oven clears** across 500 eight-kind seeds and
+150 seeds for each shop size 2–7. On the review's 100 seeds, greedy median is oven **5** /
+**253 inputs**, with no 600-input censoring; digger has 49 censored runs, reinforcing the
+need for cash-out. Oven 3 still has 25/94 greedy failures versus oven 2's 4/98: the review's
+no-doubling aspiration is **not met**. Two spread variants did not resolve it.
+[Full measurements and reproduction](../../../docs/D184-validation.md).

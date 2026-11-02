@@ -35,6 +35,8 @@ export type TuProp = "peek" | "bag" | "swap";
 export const TU_PROPS: readonly TuProp[] = ["peek", "bag", "swap"];
 
 export interface TuState {
+  /** True only after a clear and before any input in the next oven. */
+  canStop: boolean;
   /** 1-based 炉. */
   batch: number;
   /** Tiles still on the board, in deal order (bottom layers first). */
@@ -76,6 +78,8 @@ export type TuEvent =
 
 export interface TuGame {
   state(): TuState;
+  /** Cash out immediately after clearing an oven; null outside that boundary. */
+  stop(): TuEvent[] | null;
   /** null = not a tile on the board, covered, or the game is over. */
   tap(tileId: number): TuEvent[] | null;
   /** null = none of it left, the game is over, or not usable ("bag" only once per batch). */
@@ -83,7 +87,7 @@ export interface TuGame {
   readonly over: boolean;
   readonly score: number;
   readonly batch: number;
-  /** Accepted log entries so far (tile taps and prop uses). */
+  /** Accepted log entries so far (tile taps, prop uses and cash-out). */
   readonly taps: number;
 }
 
@@ -94,8 +98,10 @@ export const MAX_TIERS = 8;
  * new run's seed (tuSeed), so the server refuses to finish a run dealt under another version, and
  * part of the client's save key, so old saves are dropped.
  */
-export const TU_ENGINE_VERSION = 4;
-/** The engine ends the game after this many log entries (taps + prop uses), so client and server agree. */
+export const TU_ENGINE_VERSION = 5;
+/** Reserved replay input id for cashing out; real tile ids start at 1. */
+export const STOP_TILE_ID = 0;
+/** Hard cap on accepted log entries (taps, props, cash-out). */
 export const MAX_TAPS = 20_000;
 /** Plausibility for the server: two log entries closer than this (ms) are not a human. */
 export const MIN_TAP_GAP_MS = 120;
@@ -156,6 +162,7 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
   let score = 0;
   let over = false;
   let taps = 0;
+  let canStop = false;
 
   const deal = () => {
     batch++;
@@ -182,15 +189,17 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
   orders[1] = pickOrder([orders[0]]);
 
   /** Ends the game: the unused-prop bonus, then `over`. */
-  const end = (events: TuEvent[]) => {
+  const end = (events: TuEvent[], bonusBatch = batch) => {
+    canStop = false;
     over = true;
-    const points = PROP_BONUS_POINTS * batch * (props.peek + props.bag + props.swap);
+    const points = PROP_BONUS_POINTS * bonusBatch * (props.peek + props.bag + props.swap);
     score += points;
     events.push({ type: "bonus", points }, { type: "over" });
   };
 
   const state = (): TuState => ({
     batch,
+    canStop,
     tiles: board.map((t) => ({ id: t.id, tier: t.tier, x: t.x2 / 2, y: t.y2 / 2, layer: t.layer, free: isFree(t), visible: isVisible(t) })),
     bag: [...bag],
     orders: [orders[0], orders[1]],
@@ -205,6 +214,7 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
     if (over) return null;
     const idx = board.findIndex((t) => t.id === tileId);
     if (idx < 0 || !isFree(board[idx])) return null;
+    canStop = false;
     const tile = board[idx];
     // Only tiles under the taken one can become visible; board order keeps the ids in deal order.
     const hiddenUnder = board.filter((o) => o.layer < tile.layer && overlaps(o, tile) && !isVisible(o));
@@ -233,6 +243,7 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
         const bonus = BATCH_POINTS * batch;
         score += bonus;
         deal();
+        canStop = true;
         dealt = { batch, bonus };
       }
       if (hit >= 0) {
@@ -275,6 +286,7 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
   const use = (p: TuProp): TuEvent[] | null => {
     if (over || !TU_PROPS.includes(p) || props[p] <= 0) return null;
     if (p === "bag" && bagSize !== BAG_SIZE) return null;
+    canStop = false;
     props[p]--;
     taps++;
     const events: TuEvent[] = [{ type: "prop", p, left: props[p] }];
@@ -293,7 +305,16 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
     return events;
   };
 
+  const stop = (): TuEvent[] | null => {
+    if (over || !canStop) return null;
+    taps++;
+    const events: TuEvent[] = [];
+    end(events, batch - 1);
+    return events;
+  };
+
   return {
+    stop,
     state,
     tap,
     use,

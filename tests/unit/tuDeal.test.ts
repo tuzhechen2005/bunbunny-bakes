@@ -26,7 +26,7 @@ describe("dealBatch layout", () => {
     for (const s of BATCHES) expect(s.spread).toBeLessThanOrEqual(4);
   });
 
-  it("the D130 curve: batch 2 has 4 layers and ~25% hidden, batch 3 on 6-8 layers and ~55% hidden", () => {
+  it("the D184 curve introduces six-layer ovens before eight-layer ovens", () => {
     const hiddenShare = (b: number) => {
       let hidden = 0;
       let all = 0;
@@ -44,7 +44,7 @@ describe("dealBatch layout", () => {
     for (let b = 3; b <= BATCHES.length + 1; b++) {
       expect(batchSpec(b).layers).toBeGreaterThanOrEqual(6);
       expect(batchSpec(b).layers).toBeLessThanOrEqual(8);
-      expect(hiddenShare(b)).toBeGreaterThan(0.5);
+      expect(hiddenShare(b)).toBeGreaterThan(b < 6 ? 0.40 : 0.5);
       expect(hiddenShare(b)).toBeLessThan(0.6);
     }
   });
@@ -98,7 +98,7 @@ function clearWithWitness(seed: string, n: number, batches: number) {
 }
 
 describe("every batch is solvable", () => {
-  it("the witness clears batches 1-7 in the engine for 500 seeds (8 tiers), never filling the bag", () => {
+  it("the witness clears every configured batch for 500 seeds (8 tiers), never filling the bag", () => {
     for (let seed = 0; seed < 500; seed++) clearWithWitness(`S${seed}`, 8, BATCHES.length);
   }, 60_000);
 

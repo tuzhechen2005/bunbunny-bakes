@@ -1,0 +1,353 @@
+{
+  "m3": {
+    "weeks": "2026-01-05..2027-11-29",
+    "maxAdjacentDrop": 15.0,
+    "levels": [
+      {
+        "level": 1,
+        "passed": 98,
+        "weeks": 100,
+        "passRate": 98.0
+      },
+      {
+        "level": 2,
+        "passed": 98,
+        "weeks": 100,
+        "passRate": 98.0
+      },
+      {
+        "level": 3,
+        "passed": 99,
+        "weeks": 100,
+        "passRate": 99.0
+      },
+      {
+        "level": 4,
+        "passed": 92,
+        "weeks": 100,
+        "passRate": 92.0
+      },
+      {
+        "level": 5,
+        "passed": 100,
+        "weeks": 100,
+        "passRate": 100.0
+      },
+      {
+        "level": 6,
+        "passed": 97,
+        "weeks": 100,
+        "passRate": 97.0
+      },
+      {
+        "level": 7,
+        "passed": 88,
+        "weeks": 100,
+        "passRate": 88.0
+      },
+      {
+        "level": 8,
+        "passed": 89,
+        "weeks": 100,
+        "passRate": 89.0
+      },
+      {
+        "level": 9,
+        "passed": 75,
+        "weeks": 100,
+        "passRate": 75.0
+      },
+      {
+        "level": 10,
+        "passed": 82,
+        "weeks": 100,
+        "passRate": 82.0
+      },
+      {
+        "level": 11,
+        "passed": 67,
+        "weeks": 100,
+        "passRate": 67.0
+      },
+      {
+        "level": 12,
+        "passed": 69,
+        "weeks": 100,
+        "passRate": 69.0
+      },
+      {
+        "level": 13,
+        "passed": 55,
+        "weeks": 100,
+        "passRate": 55.0
+      },
+      {
+        "level": 14,
+        "passed": 53,
+        "weeks": 100,
+        "passRate": 53.0
+      },
+      {
+        "level": 15,
+        "passed": 63,
+        "weeks": 100,
+        "passRate": 63.0
+      },
+      {
+        "level": 16,
+        "passed": 55,
+        "weeks": 100,
+        "passRate": 55.0
+      },
+      {
+        "level": 17,
+        "passed": 50,
+        "weeks": 100,
+        "passRate": 50.0
+      },
+      {
+        "level": 18,
+        "passed": 48,
+        "weeks": 100,
+        "passRate": 48.0
+      },
+      {
+        "level": 19,
+        "passed": 42,
+        "weeks": 100,
+        "passRate": 42.0
+      },
+      {
+        "level": 20,
+        "passed": 27,
+        "weeks": 100,
+        "passRate": 27.0
+      },
+      {
+        "level": 21,
+        "passed": 18,
+        "weeks": 100,
+        "passRate": 18.0
+      },
+      {
+        "level": 22,
+        "passed": 19,
+        "weeks": 100,
+        "passRate": 19.0
+      },
+      {
+        "level": 23,
+        "passed": 10,
+        "weeks": 100,
+        "passRate": 10.0
+      },
+      {
+        "level": 24,
+        "passed": 7,
+        "weeks": 100,
+        "passRate": 7.0
+      },
+      {
+        "level": 25,
+        "passed": 6,
+        "weeks": 100,
+        "passRate": 6.0
+      },
+      {
+        "level": 26,
+        "passed": 6,
+        "weeks": 100,
+        "passRate": 6.0
+      },
+      {
+        "level": 27,
+        "passed": 5,
+        "weeks": 100,
+        "passRate": 5.0
+      },
+      {
+        "level": 28,
+        "passed": 9,
+        "weeks": 100,
+        "passRate": 9.0
+      },
+      {
+        "level": 29,
+        "passed": 2,
+        "weeks": 100,
+        "passRate": 2.0
+      },
+      {
+        "level": 30,
+        "passed": 2,
+        "weeks": 100,
+        "passRate": 2.0
+      }
+    ]
+  },
+  "tu": [
+    {
+      "name": "randomTu",
+      "medianInputs": 9,
+      "medianBatch": 1,
+      "capped": 0,
+      "ovens": [
+        {
+          "oven": 1,
+          "reached": 100,
+          "failed": 94
+        },
+        {
+          "oven": 2,
+          "reached": 6,
+          "failed": 6
+        },
+        {
+          "oven": 3,
+          "reached": 0,
+          "failed": 0
+        },
+        {
+          "oven": 4,
+          "reached": 0,
+          "failed": 0
+        },
+        {
+          "oven": 5,
+          "reached": 0,
+          "failed": 0
+        },
+        {
+          "oven": 6,
+          "reached": 0,
+          "failed": 0
+        },
+        {
+          "oven": 7,
+          "reached": 0,
+          "failed": 0
+        },
+        {
+          "oven": 8,
+          "reached": 0,
+          "failed": 0
+        },
+        {
+          "oven": 9,
+          "reached": 0,
+          "failed": 0
+        }
+      ]
+    },
+    {
+      "name": "greedyTu",
+      "medianInputs": 253,
+      "medianBatch": 5,
+      "capped": 0,
+      "ovens": [
+        {
+          "oven": 1,
+          "reached": 100,
+          "failed": 2
+        },
+        {
+          "oven": 2,
+          "reached": 98,
+          "failed": 4
+        },
+        {
+          "oven": 3,
+          "reached": 94,
+          "failed": 25
+        },
+        {
+          "oven": 4,
+          "reached": 69,
+          "failed": 16
+        },
+        {
+          "oven": 5,
+          "reached": 53,
+          "failed": 21
+        },
+        {
+          "oven": 6,
+          "reached": 32,
+          "failed": 22
+        },
+        {
+          "oven": 7,
+          "reached": 10,
+          "failed": 8
+        },
+        {
+          "oven": 8,
+          "reached": 2,
+          "failed": 2
+        },
+        {
+          "oven": 9,
+          "reached": 0,
+          "failed": 0
+        }
+      ]
+    },
+    {
+      "name": "diggerTu",
+      "medianInputs": 597,
+      "medianBatch": 8,
+      "capped": 49,
+      "ovens": [
+        {
+          "oven": 1,
+          "reached": 100,
+          "failed": 0
+        },
+        {
+          "oven": 2,
+          "reached": 100,
+          "failed": 0
+        },
+        {
+          "oven": 3,
+          "reached": 100,
+          "failed": 3
+        },
+        {
+          "oven": 4,
+          "reached": 97,
+          "failed": 4
+        },
+        {
+          "oven": 5,
+          "reached": 93,
+          "failed": 3
+        },
+        {
+          "oven": 6,
+          "reached": 90,
+          "failed": 17
+        },
+        {
+          "oven": 7,
+          "reached": 73,
+          "failed": 14
+        },
+        {
+          "oven": 8,
+          "reached": 59,
+          "failed": 10
+        },
+        {
+          "oven": 9,
+          "reached": 1,
+          "failed": 0
+        }
+      ]
+    }
+  ],
+  "big": {
+    "seeds": 100,
+    "identicalScoreAndPhysics": 100
+  }
+}

@@ -82,7 +82,7 @@ describe("start", () => {
     await db.product.update({ where: { id: ids.rockCheese }, data: { status: "PAUSED" } });
     const r = await start();
     expect(Object.keys(r).sort()).toEqual(["expiresAt", "runId", "seed", "tiers"]);
-    expect(r.seed).toMatch(/^[0-9a-f]{32}$/);
+    expect(r.seed).toMatch(/^v2\.[0-9a-f]{32}$/);
     // The weekly reset after the start: Monday 2026-10-26 00:00 CDT.
     expect(r.expiresAt).toBe("2026-10-26T05:00:00.000Z");
     // 3 active products + big.
@@ -730,4 +730,12 @@ describe("case-insensitive ban uniqueness", () => {
     await db.gameBan.create({ data: { wechatId: "Foo" } });
     await expect(db.gameBan.create({ data: { wechatId: "fOO" } })).rejects.toBeDefined();
   });
+});
+
+it("D184 rejects unfinished BIG runs from the unversioned engine", async () => {
+  await createDefaultProducts();
+  const run = await start();
+  await db.gameRun.update({ where: { id: run.runId }, data: { seed: "0123456789abcdef0123456789abcdef" } });
+  await expect(finishRun(db, { runId: run.runId, drops: [] }, IP, LATER)).rejects.toMatchObject({ code: "VALIDATION" });
+  expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).finishedAt).toBeNull();
 });

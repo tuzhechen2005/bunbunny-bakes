@@ -24,7 +24,8 @@ it("plays engine events in order and reconstructs the entire game without mutati
     const events = game.swap(m.a, m.b)!;
     const queue = animationQueue(before, events);
     expect(queue.map(f => f.event)).toEqual(events);
-    expect(queue.at(-1)!.after).toEqual(game.state());
+    // Animation consumes board/score events; settled metadata is read from the engine.
+    expect({ ...queue.at(-1)!.after, lastCascadeWaves: game.state().lastCascadeWaves, failureGap: game.state().failureGap }).toEqual(game.state());
     expect(JSON.stringify(before)).toBe(frozen);
   }
 });

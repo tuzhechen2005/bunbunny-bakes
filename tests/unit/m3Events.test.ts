@@ -80,6 +80,7 @@ it("reconstructs every board/order/score change from events, including gravity a
         }
         expect(firstWavePoints).toBe(preview);
         view.specials = view.board.flatMap((row, r) => row.flatMap((v, c) => v >= ROLL_BASE ? [{ r, c, kind: v >= BIG_BASE ? "big" as const : "roll" as const, tier: tierOf(v) }] : []));
+        view.lastCascadeWaves = chain;
         expect(view).toEqual(game.state());
         // No returned event may alias a live object.
         view.orders[0].have = 999;
