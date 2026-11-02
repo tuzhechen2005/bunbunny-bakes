@@ -7,6 +7,7 @@ import type { CartItem } from "./cart";
 export type Fulfillment = "PICKUP" | "DELIVERY";
 
 export interface MenuProduct {
+  /** N1: put on the menu as 新品 within the last 7 days (computed by the server). */
   isNew: boolean;
   id: string;
   name: string;
@@ -28,8 +29,6 @@ export interface MenuProduct {
   flavors?: { id: string; name: string; priceCents: number }[];
   /** Cheapest active flavour, or unitPriceCents. */
   priceFromCents?: number;
-  /** N1: put on the menu as 新品 within the last 7 days (computed by the server). */
-  isNew?: boolean;
 }
 
 export interface Menu {
