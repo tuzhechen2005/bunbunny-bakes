@@ -1,3 +1,4 @@
+import { syncOrderCoins } from "./economy";
 // Changing existing orders: customer cancel, owner status changes, payment, and edits
 // (DATA_MODEL.md §2, §4 "店主改单" / "顾客或店主取消"; CAPACITY_RULES.md §3.3, §6, §8, §9;
 // D26, D45, D46, D48, D52).
@@ -358,6 +359,7 @@ export async function adminChangeStatus(
       },
       select: summarySelect,
     });
+    await syncOrderCoins(tx, order, data.to, now);
     await writeAudit(tx, {
       actor: "ADMIN",
       action: "order.status",
@@ -415,6 +417,7 @@ export async function adminCorrectStatus(
     }
 
     const updated = await tx.order.update({ where: { id: order.id }, data: data2, select: summarySelect });
+    await syncOrderCoins(tx, order, data.to, now);
     await writeAudit(tx, {
       actor: "ADMIN",
       action: "order.status_correct",

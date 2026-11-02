@@ -26,8 +26,11 @@ afterAll(async () => {await db.$disconnect();await prisma.$disconnect();});
 it('migrates TD without changing BIG defaults; deals common levels, gates case-insensitive identity and resets weekly', async () => {
   const legacy = await db.gameRun.create({data:{seed:'old',wechatId:'old',nickname:'old',tiersSnapshot:[]}});
   expect(legacy.game).toBe('BIG');
+  await db.inventory.create({data:{wechatIdNorm:'alice',item:'bell',count:2}});
   const a = await start(' alice '), b = await start('bob');
   expect(a.unlockedTowers).toEqual(['rollingPin']); expect(a.newlyUnlocked).toEqual(['rollingPin']); expect(a.mapData.slots).toHaveLength(3);
+  expect(a.inventory).toEqual({bomb:0,bell:2,slide:0});
+  expect(b.inventory).toEqual({bomb:0,bell:0,slide:0});
   expect(a.seed).toBe(b.seed); expect(a.seed).toBe(tdLevel(WEEK,1).seed);
   await expect(start('ALICE',2)).rejects.toMatchObject({message:copy.gameApi.levelLocked});
   expect(await finish(a)).toMatchObject({passed:true,level:1,best:1,rank:1,personalBest:1});
@@ -41,7 +44,9 @@ it('replays terminal losses, rejects incomplete/forged/tail evidence, and claims
   const r = await start();
   await expect(finishTdRun(db,{runId:r.runId,inputs:[],endTick:0,passed:true},'ip',LATER)).rejects.toMatchObject({code:'VALIDATION'});
   await expect(finishTdRun(db,{runId:r.runId,inputs:win.inputs,endTick:win.state.tick+1},'ip',LATER)).rejects.toMatchObject({code:'VALIDATION'});
+  expect(await db.coinLedger.count()).toBe(0);
   const [a,b] = await Promise.all([finish(r),finish(r)]);expect(a).toEqual(b);
+  expect(await db.coinLedger.findMany()).toMatchObject([{wechatIdNorm:"alice",reason:"GAME_RUN",refId:r.runId,delta:5}]);
   expect(await finish(r,new Date(+LATER+10000))).toEqual(a);
   const row = await db.gameRun.findUniqueOrThrow({where:{id:r.runId}});
   expect(row).toMatchObject({game:'TD',level:1,passedAt:LATER,finishedAt:LATER,drops:win.inputs});
@@ -160,4 +165,19 @@ it('replays consumables only with trusted inventory and returns exact accounting
   expect(verifyTdRun(run,data,LATER,false,{bell:1}).itemsUsed).toEqual({bomb:0,bell:1,slide:0});
   expect(()=>verifyTdRun(run,{...data,inputs:[inputs[0],...inputs]},LATER,false,{bell:10})).toThrow();
   expect((await db.gameRun.findUniqueOrThrow({where:{id:run.id}})).finishedAt).toBeNull();
+});
+it('verifies shop items against the live inventory and spends them once on finish', async () => {
+  const lvl = tdLevel(WEEK,2), base = await start();
+  const run2 = () => db.gameRun.create({data:{game:'TD',level:2,weekKey:WEEK,seed:lvl.seed,wechatId:'alice',nickname:'alice',tiersSnapshot:base.tiers as never,startedAt:T,ipHash:'ip'}});
+  const p = lvl.mapData.path[1];
+  const inputs: TdInput[] = [{tick:0,type:'callWave',slot:-1},{tick:30,type:'item',item:'bomb',x:p.x,y:p.y}];
+  const out = replayTd({level:lvl,itemsAllowed:{bomb:1},tierCount:base.tiers.length},inputs);
+  expect(out.inputsRejected).toBe(0);
+  const send = (id: string) => finishTdRun(db,{runId:id,inputs,endTick:out.tick},'ip',LATER);
+  const r = await run2();
+  await expect(send(r.id)).rejects.toMatchObject({code:'VALIDATION'}); // no bomb owned
+  await db.inventory.create({data:{wechatIdNorm:'alice',item:'bomb',count:1}});
+  await send(r.id);
+  expect((await db.inventory.findFirstOrThrow()).count).toBe(0);
+  await expect(send((await run2()).id)).rejects.toMatchObject({code:'VALIDATION'}); // spent
 });

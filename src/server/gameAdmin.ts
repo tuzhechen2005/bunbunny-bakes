@@ -1,3 +1,4 @@
+import { lockWallet } from "./economy";
 import { boardScore, boardTime, levelEligibility } from "./gameLevels";
 // Admin side of the 消除大面包 game (L3): tier configuration, leaderboard moderation, weekly award.
 //
@@ -616,6 +617,7 @@ export const banBodySchema = z.object({
 
 export async function banWechat(db: DbClient, input: z.output<typeof banBodySchema>, now: Date): Promise<void> {
   await db.$transaction(async (tx) => {
+    await lockWallet(tx, input.wechatId);
     const prior = await tx.$queryRaw<{ reason: string | null }[]>`
       SELECT "reason" FROM "GameBan" WHERE lower("wechatId") = lower(${input.wechatId})`;
     const inserted = await tx.$executeRaw`
@@ -642,6 +644,7 @@ export async function unbanWechat(db: DbClient, wechatId: string, now: Date): Pr
   const id = wechatId.trim();
   if (!id || id.length > 64) throw notFound();
   await db.$transaction(async (tx) => {
+    await lockWallet(tx, id);
     const n = await tx.$executeRaw`DELETE FROM "GameBan" WHERE lower("wechatId") = lower(${id})`;
     if (n === 0) throw notFound();
     await writeAudit(tx, {

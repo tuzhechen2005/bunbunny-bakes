@@ -19,7 +19,7 @@ const ITEM_LEVEL: Record<TdItem, number> = { bomb: 2, bell: 6, slide: 10 };
 const PESTS = ['ant', 'mouse', 'sparrow', 'beetle', 'boss'] as const;
 export interface TdProgress { inputs: TdInput[]; endTick: number; score: number; passed: boolean }
 /** Inventory handed out by the server at level start (E1); absent → no items this level. */
-const itemsOf = (save: TdSave): Partial<Record<TdItem, number>> => (save as TdSave & { items?: Partial<Record<TdItem, number>> }).items ?? {};
+const itemsOf = (save: TdSave): Partial<Record<TdItem, number>> => save.inventory ?? {};
 type Action = { type: 'place'; slot: number; tower: TowerKind } | { type: 'upgrade'; slot: number; branch?: TdBranch } | { type: 'sell'; slot: number } | { type: 'callWave'; slot: -1 } | { type: 'switch'; fork: number } | { type: 'item'; item: 'bomb'; x: number; y: number } | { type: 'item'; item: 'bell' } | { type: 'item'; item: 'slide'; position: number };
 interface Props { save: TdSave; paused: boolean; soundOn: boolean; reduced: boolean; onProgress: (p: TdProgress) => void; onOver: (p: TdProgress) => void }
 

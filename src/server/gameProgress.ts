@@ -8,6 +8,7 @@ import { TU_ENGINE_VERSION, tuSeedVersion } from "@/lib/tu";
 import { M3_ENGINE_VERSION, m3SeedVersion } from "@/lib/m3";
 import { copy } from "@/copy";
 import type { DbClient } from "./db";
+import { inventory } from "./economy";
 import { AppError } from "./errors";
 import { finishSchema, isBanned, parseGameInput, verifyBigRun } from "./game";
 import { tuFinishSchema, verifyTuRun } from "./tu";
@@ -63,7 +64,7 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
   if (Array.isArray(run.drops) && !samePrefix(run.drops, log)) {
     throw new AppError("VALIDATION", { message: copy.gameApi.badRun });
   }
-  const verified = "inputs" in body ? (game === "TD" ? verifyTdRun(run, parseGameInput(tdFinishSchema, inputBody), now) : verifyRun(run, parseGameInput(runFinishSchema, inputBody), now))
+  const verified = "inputs" in body ? (game === "TD" ? verifyTdRun(run, parseGameInput(tdFinishSchema, inputBody), now, false, await inventory(db, run.wechatId)) : verifyRun(run, parseGameInput(runFinishSchema, inputBody), now))
     : "drops" in body ? verifyBigRun(run, body, now)
     : "taps" in body ? verifyTuRun(run, body, now)
     : "launches" in body ? verifyGrabRun(run, body, now)

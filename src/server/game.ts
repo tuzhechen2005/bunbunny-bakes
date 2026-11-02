@@ -1,3 +1,4 @@
+import { claimCoinFinish } from "./economy";
 import { boardScore, boardTime, levelEligibility, isLevelGame, levelPlayerActive } from "./gameLevels";
 // 消除大面包 server side (D100-D105): start a run, verify and store a finished one, leaderboard.
 // The client score is never trusted: finish replays the drop log with the run's own seed and the
@@ -262,7 +263,7 @@ export async function finishRun(db: DbClient, input: unknown, ipHash: string, no
   // Same as the start's week, since a run cannot be finished after the reset.
   const weekKey = weekKeyOf(now);
   // Only one finisher wins the run; a concurrent duplicate reads the stored result.
-  const claimed = await db.gameRun.updateMany({
+  const claimed = await claimCoinFinish(db, {
     where: { id: run.id, finishedAt: null },
     data: {
       finishedAt: now,
@@ -273,7 +274,7 @@ export async function finishRun(db: DbClient, input: unknown, ipHash: string, no
       dropCount: data.drops.length,
       simSteps: verified.simSteps,
     },
-  });
+  }, now);
   if (claimed.count === 0) {
     const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
     return resultFor(db, stored);

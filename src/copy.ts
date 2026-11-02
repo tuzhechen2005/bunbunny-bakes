@@ -270,7 +270,7 @@ export const copy = {
       hint: "玩游戏、下单取货都能攒面包币",
       who: "填上你玩游戏用的微信号", whoGo: "进店",
       buy: "买", owned: "已有 {n}", notEnough: "面包币不够", bought: "买到啦",
-      fromOrders: "+{n} 来自订单", howTitle: "怎么攒面包币",
+      howTitle: "怎么攒面包币",
       how: ["每玩完一局送 5–30 个（每天最多 300）", "订单取货后每 $1 送 10 个"],
       items: {
         bomb: { name: "面粉炸弹", text: "点哪里，炸开一片" },

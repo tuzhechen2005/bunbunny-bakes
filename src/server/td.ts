@@ -1,3 +1,5 @@
+import { countItemUses } from "@/lib/td";
+import { claimCoinFinish, inventory } from "./economy";
 import { hasPassedLevel, nextGameLevel } from "./gameLevels";
 // Weekly TD attempts (D151 / D152): server-derived levels, replayed completion and shared ranking.
 
@@ -30,7 +32,7 @@ import { runExpiresAt, weekKeyOf } from "./gameWeek";
 
 export const TD_MAX_FINISH_BODY_BYTES = MAX_INPUTS * 100 + 4096;
 export const tdStartSchema = startSchema.extend({ level: z.number().int().min(1).max(2_147_483_646).optional() });
-export type TdStartResult = StartResult & Pick<TdLevel, "mapData" | "unlockedTowers" | "newlyUnlocked"> & { level: number; weekKey: string };
+export type TdStartResult = StartResult & Pick<TdLevel, "mapData" | "unlockedTowers" | "newlyUnlocked"> & { level: number; weekKey: string; inventory: Awaited<ReturnType<typeof inventory>> };
 export type TdFinishResult = FinishResult & { level: number; passed: boolean };
 export const tdFinishSchema = z.object({
   runId: z.uuid(),
@@ -77,7 +79,7 @@ export async function startTdRun(db: DbClient, input: unknown, ipHash: string, n
       ipHash,
     },
   });
-  return { mapData: definition.mapData, unlockedTowers: definition.unlockedTowers, newlyUnlocked: definition.newlyUnlocked, runId: run.id, seed, level, weekKey, tiers, expiresAt: runExpiresAt(now).toISOString() };
+  return { mapData: definition.mapData, unlockedTowers: definition.unlockedTowers, newlyUnlocked: definition.newlyUnlocked, inventory: await inventory(db, data.wechatId), runId: run.id, seed, level, weekKey, tiers, expiresAt: runExpiresAt(now).toISOString() };
 }
 
 export async function finishTdRun(db: DbClient, input: unknown, ipHash: string, now: Date): Promise<TdFinishResult> {
@@ -95,10 +97,11 @@ export async function finishTdRun(db: DbClient, input: unknown, ipHash: string, 
   if (await isBanned(db, run.wechatId)) {
     throw new AppError("VALIDATION", { message: copy.gameApi.banned });
   }
-  const verified = verifyTdRun(run, data, now, true);
+  // Items are checked against the live inventory; claimCoinFinish deducts them atomically.
+  const verified = verifyTdRun(run, data, now, true, await inventory(db, run.wechatId));
   const passedAt = verified.passed ? now : null;
   const weekKey = weekKeyOf(now);
-  const claimed = await db.gameRun.updateMany({
+  const claimed = await claimCoinFinish(db, {
     where: { id: run.id, finishedAt: null },
     data: {
       finishedAt: now,
@@ -111,7 +114,7 @@ export async function finishTdRun(db: DbClient, input: unknown, ipHash: string, 
       playMs: verified.playMs,
       suspicious: verified.suspicious,
     },
-  });
+  }, now, countItemUses(data.inputs));
   if (claimed.count === 0) {
     const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
     return tdResult(db, stored);

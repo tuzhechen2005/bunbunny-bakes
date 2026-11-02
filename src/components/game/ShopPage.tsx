@@ -36,7 +36,6 @@ export function ShopPage() {
   }, []);
   useEffect(() => { if (wechat) { const id = setTimeout(() => void load(wechat), 0); return () => clearTimeout(id); } }, [wechat, load]);
   const balance = useRolling(state?.balance ?? 0);
-  const recent = state?.orderAwards?.[0];
   const buy = async (item: ShopItem) => {
     if (!wechat || busy) return;
     setBusy(item); setToast("");
@@ -57,7 +56,6 @@ export function ShopPage() {
         <div className="shop-wallet clay-panel" data-testid="shop-wallet">
           <img src="/brand/art/shop/coin-stack.webp" alt="" onError={e => { e.currentTarget.src = "/brand/art/icon-coin.webp"; }} />
           <div><span>{t.coins}</span><b className="font-num" data-testid="shop-balance">{balance}</b></div>
-          {recent ? <p className="shop-order-award" data-testid="shop-order-award"><img src="/brand/art/shop/order-bag.webp" alt="" />{fill(t.fromOrders, { n: String(recent.coins) })}</p> : null}
         </div>
         {error ? <p role="alert" className="mt-3 text-center text-sm text-c-red">{error} <button className="underline" onClick={() => void load(wechat)}>{t.retry}</button></p> : null}
         <div className="shop-grid">

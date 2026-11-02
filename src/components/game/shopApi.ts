@@ -4,7 +4,6 @@ export interface ShopState {
   inventory: Partial<Record<ShopItem, number>>;
   catalog: { item: ShopItem; price: number }[];
   /** Order awards from the last 7 days (newest first). */
-  orderAwards?: { coins: number; at: string }[];
 }
 
 export async function fetchShop(wechatId: string): Promise<ShopState> {

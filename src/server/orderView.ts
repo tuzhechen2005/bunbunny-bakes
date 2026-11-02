@@ -1,3 +1,4 @@
+import { orderCoins } from "@/domain/economy";
 // GET /api/o/{token} data (API_SPEC §2, DATA_MODEL §2 "顾客看到的状态").
 // Exactly the fields the order page needs: no ids, no wechatId, no payment fields,
 // no raw timestamps, no internal status enum beyond `statusKind`.
@@ -18,6 +19,7 @@ export interface CustomerOrderView {
   orderNo: string;
   /** `imageUrl`: the public product photo (null: none, or the product is gone). */
   items: { name: string; qty: number; lineTotalCents: number; imageUrl: string | null }[];
+  coinsOnPickup: number;
   subtotalCents: number;
   deliveryFeeCents: number;
   totalCents: number;
@@ -109,6 +111,7 @@ export async function getCustomerOrderView(
       lineTotalCents: i.lineTotalCents,
       imageUrl: imageOf.get(i.productId) ?? null,
     })),
+    coinsOnPickup: order.status === "CANCELLED" || order.status === "REJECTED" ? 0 : orderCoins(order.subtotalCents),
     subtotalCents: order.subtotalCents,
     deliveryFeeCents: order.deliveryFeeCents,
     totalCents: order.totalCents,

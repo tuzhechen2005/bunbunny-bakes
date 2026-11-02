@@ -14,7 +14,7 @@ export function parseTdSave(raw: string | null, now = Date.now()): TdSave | null
       || !s.tiers.every(t => t && typeof t.id === 'string' && typeof t.radius === 'number' && typeof t.points === 'number'
         && (t.imageUrl === null || typeof t.imageUrl === 'string') && typeof t.color?.bg === 'string' && typeof t.color?.ink === 'string')
       || s.seed !== tdLevel(s.weekKey, s.level).seed) return null;
-    const state = replayTd({ seed: s.seed, tierCount: s.tiers.length }, s.inputs, s.endTick);
+    const state = replayTd({ seed: s.seed, tierCount: s.tiers.length, itemsAllowed: s.inventory ?? {} }, s.inputs, s.endTick);
     return state.tick === s.endTick && state.wave === s.score ? s : null;
   } catch { return null; }
 }
