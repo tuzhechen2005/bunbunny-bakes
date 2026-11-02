@@ -15,6 +15,8 @@ export interface FlavorDto { id: string; productId: string; name: string; priceC
 
 export interface ProductDto {
   id: string;
+  /** N1: 新品 until this instant (ISO); null/absent = not new. */
+  newUntil?: string | null;
   /** F1: all flavours incl. inactive, in sort order. */
   flavors?: FlavorDto[];
   name: string;

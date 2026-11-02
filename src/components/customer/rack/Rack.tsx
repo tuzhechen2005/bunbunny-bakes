@@ -6,6 +6,7 @@ import type { MenuProduct } from "@/lib/api";
 import { Pendulum, Spring, createLoop, rubberBand, snapTarget, type Loop } from "@/lib/motion";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { photosOf, ProductPhoto } from "../ProductCard";
+import { NewStamp } from "./NewStamp";
 import { bindDrag } from "./drag";
 import {
   cardPose,
@@ -539,8 +540,9 @@ export function Rack({ products, index, onIndexChange, onOpen, hostRef, active, 
           <div className="hm-hang">
             <Peg />
             <div className="hm-flip">
-              <div className="hm-face">
+              <div className={`hm-face${p.isNew ? " is-new" : ""}`}>
                 <ProductPhoto product={p} className="h-full w-full" variant="rope" priority={i === 0} eager={i === 1} decorative />
+                {p.isNew ? <NewStamp /> : null}
               </div>
               {/* The back of the spin is the second photo when there is one (D98), else the darker cover. */}
               <div className="hm-face hm-back" data-second={photosOf(p)[1] ? "" : undefined} data-testid="rack-back">
