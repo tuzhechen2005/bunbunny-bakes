@@ -143,7 +143,7 @@ function batchSection(
     } else {
       core = fill(t.summary.batchLine, { unit: l.unitLabel, qty: l.qty, batches: l.batches, leftover: l.leftover });
     }
-    if (l.flavors?.length) return flavorSummaryText(l.name, l.flavors, l.qty) + "（" + core + "）";
+    if (l.flavors?.length) return flavorSummaryText(l.name, l.flavors, l.qty, l.unitLabel) + "（" + core + "）";
     return fill(t.summary.batchNamePrefix, { name: l.name }) + core;
   });
   return [header, ...body];
@@ -179,7 +179,7 @@ function renderDailySummary(n: NotificationToRender): RenderedEmail {
       breadHeader,
       ...breadLines.map((l) =>
         l.flavors?.length
-          ? flavorSummaryText(l.name, l.flavors, l.qty) + (l.rounds ? "（" + fill(t.summary.breadLineRounds, { name: l.name, qty: l.qty, rounds: l.rounds.rounds, leftover: l.rounds.leftover }) + "）" : "")
+          ? flavorSummaryText(l.name, l.flavors, l.qty, l.unitLabel) + (l.rounds ? "（" + fill(t.summary.breadLineRounds, { name: l.name, qty: l.qty, rounds: l.rounds.rounds, leftover: l.rounds.leftover }) + "）" : "")
           : l.rounds
           ? fill(t.summary.breadLineRounds, {
               name: l.name,
@@ -228,43 +228,68 @@ function renderDailySummary(n: NotificationToRender): RenderedEmail {
   return { subject, text: sections.map((sec) => sec.join("\n")).join("\n\n") };
 }
 
-function winnerLines(l: WinnerLine, levels = false): string[] {
+function winnerLines(l: WinnerLine): string[] {
   const g = t.gameWinner;
   return [
     fill(g.nicknameLine, { nickname: l.nickname }),
     fill(g.wechatLine, { wechatId: l.wechatId }),
-    fill(levels ? g.levelLine : g.scoreLine, { score: l.score }),
+    fill(g.scoreLine, { score: l.score }),
     fill(g.orderedLine, { ordered: l.ordered ? g.yes : g.no }),
   ];
 }
 
 /** One game's content in the winner email: #1 and the ⚠️ path. */
-function winnerSections(w: WinnerLine, runnerUp: WinnerLine | null, levels = false): string[][] {
+function winnerSections(w: WinnerLine, runnerUp: WinnerLine | null): string[][] {
   const g = t.gameWinner;
-  const sections: string[][] = [winnerLines(w, levels)];
+  const sections: string[][] = [winnerLines(w)];
   if (!w.ordered) {
     sections.push([g.warn]);
-    sections.push(runnerUp ? [fill(g.runnerUpHeader, { rank: runnerUp.rank }), ...winnerLines(runnerUp, levels)] : [g.noRunnerUp]);
+    sections.push(runnerUp ? [fill(g.runnerUpHeader, { rank: runnerUp.rank }), ...winnerLines(runnerUp)] : [g.noRunnerUp]);
   }
   return sections;
 }
 
-/** D133: keep the winner section format, but render only the selected prize game. */
+/**
+ * D114: last week's #1 (full WeChat id, score, ordered); ⚠️ + the best player who has ordered.
+ * D124: when 兔了个兔 had anyone on its board, one email with a titled section per game; otherwise
+ * exactly the first game's email.
+ */
 function renderGameWinner(n: NotificationToRender): RenderedEmail {
   const g = t.gameWinner;
   const p = payloadObject(n) as unknown as GameWinnerPayload;
-  if (!p.week || !p.winner) throw new Error(`GAME_WINNER notification ${n.id}: payload has no winner`);
-  const names: Record<GameWinnerPayload["game"], string> = { BIG: g.gameBig, TU: g.gameTu, M3: g.gameM3, GRAB: g.gameGrab, TD: g.gameTd, RUN: g.gameRun };
-  const name = names[p.game];
-  if (!name) throw new Error(`GAME_WINNER notification ${n.id}: unknown game`);
+  if (!p.week || (!p.winner && !p.tu?.winner)) throw new Error(`GAME_WINNER notification ${n.id}: payload has no winner`);
   const weekHeader = fill(g.weekHeader, { start: dayLabel(p.week.start), end: dayLabel(p.week.end) });
-  const [first, ...rest] = winnerSections(p.winner, p.runnerUp, (p.game === "M3" || p.game === "TD"));
-  const part = fill((p.game === "M3" || p.game === "TD") ? g.levelSubjectPart : g.subjectPart, { game: name, nickname: p.winner.nickname, score: p.winner.score });
+  const admin = [fill(g.openAdmin, { url: `${siteUrl(p.siteUrl)}/admin/game` })];
+  if (!p.tu?.winner) {
+    const w = p.winner as WinnerLine;
+    const [first, ...rest] = winnerSections(w, p.runnerUp);
+    return {
+      subject: fill(w.ordered ? g.subject : g.subjectWarn, { nickname: w.nickname, score: w.score }),
+      text: [[weekHeader, ...first], ...rest, admin].map((sec) => sec.join("\n")).join("\n\n"),
+    };
+  }
+  const games = [
+    { name: g.gameBig, winner: p.winner, runnerUp: p.runnerUp },
+    { name: g.gameTu, winner: p.tu.winner, runnerUp: p.tu.runnerUp },
+  ];
+  const sections: string[][] = [[weekHeader]];
+  for (const x of games) {
+    const title = fill(g.sectionTitle, { game: x.name });
+    if (!x.winner) {
+      sections.push([title, g.emptyBoard]);
+      continue;
+    }
+    const [first, ...rest] = winnerSections(x.winner, x.runnerUp);
+    sections.push([title, ...first], ...rest);
+  }
+  sections.push(admin);
+  const present = games.filter((x) => x.winner);
+  const parts = present
+    .map((x) => fill(g.subjectPart, { game: x.name, nickname: x.winner!.nickname, score: x.winner!.score }))
+    .join(g.subjectJoin);
   return {
-    subject: fill(p.winner.ordered ? g.twoSubject : g.twoSubjectWarn, { games: part }),
-    text: [[weekHeader], [fill(g.sectionTitle, { game: name }), ...first], ...rest,
-      [fill(g.openAdmin, { url: `${siteUrl(p.siteUrl)}/admin/game` })]]
-      .map((section) => section.join("\n")).join("\n\n"),
+    subject: fill(present.every((x) => x.winner!.ordered) ? g.twoSubject : g.twoSubjectWarn, { games: parts }),
+    text: sections.map((sec) => sec.join("\n")).join("\n\n"),
   };
 }
 
