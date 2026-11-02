@@ -77,7 +77,7 @@ describe("start", () => {
     const ids = await createDefaultProducts();
     const r = await start();
     expect(Object.keys(r).sort()).toEqual(["expiresAt", "runId", "seed", "tiers"]);
-    expect(r.seed).toMatch(/^v4\.[0-9a-f]{32}$/);
+    expect(r.seed).toMatch(/^v5\.[0-9a-f]{32}$/);
     expect(r.expiresAt).toBe("2026-10-26T05:00:00.000Z");
     expect(r.tiers.map((t) => t.id)).toEqual([ids.redBean, ids.rockCheese, ids.cheeseHorn, ids.brulee]);
     for (const t of r.tiers) expect(Object.keys(t).sort()).toEqual(["color", "id", "imageUrl", "name", "points", "radius"]);
@@ -146,7 +146,7 @@ describe("finish", () => {
     expect(bot.over).toBe(true);
     // C8: the log mixes tile taps and prop uses.
     expect(bot.taps.filter((t) => "p" in t).length).toBeGreaterThan(0);
-    expect(bot.taps).toHaveLength(58);
+    expect(bot.taps.length).toBeLessThan(MAX_TAPS);
     const res = await finishTuRun(db, { runId: run.runId, taps: bot.taps, score: 999_999 }, IP, LATER);
     expect(res).toEqual({
       score: bot.score,
@@ -268,8 +268,8 @@ describe("finish", () => {
       message: "这一局已经过期，请重新开始",
     });
     expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).finishedAt).toBeNull();
-    // Version 3 allowed uncapped props, so later uses and the end bonus may differ.
-    await db.gameRun.update({ where: { id: run.runId }, data: { seed: `v3.${oldSeed}` } });
+    // Version 4 used the old oven curve and has no cash-out input.
+    await db.gameRun.update({ where: { id: run.runId }, data: { seed: `v4.${oldSeed}` } });
     await expect(finishTuRun(db, { runId: run.runId, taps: [] }, IP, LATER)).rejects.toMatchObject({
       code: "VALIDATION", message: "这一局已经过期，请重新开始",
     });
@@ -544,4 +544,20 @@ describe("bots", () => {
     const bot = randomTu(run.seed, run.tiers);
     expect((await finishTuRun(db, { runId: run.runId, taps: bot.taps }, IP, LATER)).score).toBe(bot.score);
   });
+});
+
+it("D184 replays cash-out and persists the unused-prop bonus exactly once", async () => {
+  await createDefaultProducts();
+  const run = await start();
+  const { dealBatch, STOP_TILE_ID } = await import("@/lib/tu");
+  const g = createTuGame({ seed: run.seed, tiers: run.tiers });
+  const ids = g.state().tiles.map(t => t.id);
+  const taps = dealBatch(run.seed, run.tiers.length, 1).solution.map((i, at) => ({ id: ids[i], at: at * 500 }));
+  for (const t of taps) g.tap(t.id);
+  expect(g.stop()).not.toBeNull();
+  taps.push({ id: STOP_TILE_ID, at: taps.length * 500 });
+  const result = await finishTuRun(db, { runId: run.runId, taps }, IP, LATER);
+  expect(result.score).toBe(g.score);
+  expect((await finishTuRun(db, { runId: run.runId, taps }, IP, LATER)).score).toBe(g.score);
+  expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).drops).toEqual(taps);
 });

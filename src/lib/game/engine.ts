@@ -8,6 +8,7 @@
 // replays a run from (seed, tiers, drops) and the client plays the same engine, so the score is
 // verifiable without trusting the client.
 
+import { BIG_ENGINE_VERSION, bigSeedVersion } from "./seed";
 import { createRng, type Rng } from "./rng";
 
 export interface TierDef {
@@ -18,10 +19,12 @@ export interface TierDef {
   points: number;
 }
 
+export interface TierMilestone { highestTier: number; nextTier: number | null }
 export type GameEvent =
-  | { type: "drop"; step: number; tier: number; x: number; y: number }
+  | { type: "drop"; step: number; tier: number; x: number; y: number; milestone?: TierMilestone }
   | {
       type: "merge";
+      milestone?: TierMilestone;
       step: number;
       /** Tier of the new body. */
       tier: number;
@@ -42,6 +45,8 @@ export interface Body {
 }
 
 export interface GameState {
+  highestTier: number | null;
+  nextTier: number | null;
   bodies: Body[];
   score: number;
   over: boolean;
@@ -155,12 +160,14 @@ export function createGame(opts: GameOptions): Game {
   const H = opts.height;
   const bigIndex = tiers.length - 1;
   const dropTiers = dropTierCount(bigIndex);
-  const rng: Rng = createRng(opts.seed);
+  if (/^[0-9a-f]{32}$/.test(opts.seed) || (/^v\d+\./.test(opts.seed) && bigSeedVersion(opts.seed) !== BIG_ENGINE_VERSION)) throw new Error("big: expired seed");
+  const rng: Rng = createRng(opts.seed.replace(/^v2\./, ""));
 
   let bodies: Internal[] = [];
   let uid = 0;
   let steps = 0;
   let score = 0;
+  let highestTier: number | null = null;
   let over = false;
   let overTimer = 0;
   let lastDrop = -Infinity;
@@ -170,6 +177,12 @@ export function createGame(opts: GameOptions): Game {
   let events: GameEvent[] = [];
   let hand = rng.int(dropTiers);
   let preview = rng.int(dropTiers);
+
+  function reachTier(tier: number): TierMilestone | undefined {
+    if (highestTier !== null && tier <= highestTier) return;
+    highestTier = tier;
+    return { highestTier, nextTier: tier < bigIndex ? tier + 1 : null };
+  }
 
   function dangerPending(): boolean {
     for (let i = 0; i < bodies.length; i++) {
@@ -242,7 +255,7 @@ export function createGame(opts: GameOptions): Game {
             r,
             born: Math.min(A.born, B.born),
           });
-          events.push({ type: "merge", step: steps, tier, x: nx, y: ny, points, bigBig: false });
+          events.push({ type: "merge", step: steps, tier, x: nx, y: ny, points, bigBig: false, milestone: reachTier(tier) });
         }
         break;
       }
@@ -340,7 +353,7 @@ export function createGame(opts: GameOptions): Game {
       dropCount++;
       quiet = 0;
       asleep = false;
-      events.push({ type: "drop", step: steps, tier, x: bx, y: by });
+      events.push({ type: "drop", step: steps, tier, x: bx, y: by, milestone: reachTier(tier) });
       return body.id;
     },
     step(): void {
@@ -362,6 +375,8 @@ export function createGame(opts: GameOptions): Game {
     },
     state(): GameState {
       return {
+        highestTier,
+        nextTier: highestTier === null ? 0 : highestTier < bigIndex ? highestTier + 1 : null,
         bodies: bodies.map((b) => ({ id: b.id, tier: b.tier, x: b.x, y: b.y, r: b.r })),
         score,
         over,

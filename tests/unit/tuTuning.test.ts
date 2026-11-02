@@ -20,20 +20,21 @@ describe("game length with 8 tiers", () => {
     expect(runs.filter((r) => r.batch <= 2).length).toBeGreaterThanOrEqual(0.98 * seeds.length);
   });
 
-  it("greedy play with props stops in batch 3 (median), rarely before or past batch 4, never hits the cap", () => {
+  it("greedy play with props reaches the gradual middle ovens without hitting the cap", () => {
     const runs = seeds.map((s) => greedyTu(s, TIERS));
-    expect(median(runs.map((r) => r.batch))).toBe(3);
+    expect(median(runs.map((r) => r.batch))).toBeGreaterThanOrEqual(4);
+    expect(median(runs.map((r) => r.batch))).toBeLessThanOrEqual(6);
     expect(runs.filter((r) => r.batch <= 2).length).toBeLessThanOrEqual(0.15 * seeds.length);
-    expect(runs.filter((r) => r.batch >= 5).length).toBeLessThanOrEqual(0.2 * seeds.length);
+    expect(runs.filter((r) => r.batch >= 8).length).toBeLessThanOrEqual(0.2 * seeds.length);
     expect(runs.filter((r) => r.taps.length >= MAX_TAPS)).toEqual([]);
     expect(runs.every((r) => r.taps.some((t) => "p" in t))).toBe(true);
   });
 
-  it("greedy play without props stops in batch 2-3", () => {
+  it("greedy play without props reaches the middle ovens", () => {
     const runs = seeds.map((s) => greedyTu(s, TIERS, { props: false }));
     const m = median(runs.map((r) => r.batch));
-    expect(m >= 2 && m <= 3).toBe(true);
-    expect(runs.filter((r) => r.batch >= 4).length).toBeLessThanOrEqual(0.12 * seeds.length);
+    expect(m >= 2 && m <= 5).toBe(true);
+    expect(runs.filter((r) => r.batch >= 7).length).toBeLessThanOrEqual(0.12 * seeds.length);
   });
 });
 

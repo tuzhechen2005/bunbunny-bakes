@@ -28,12 +28,15 @@ export interface BatchSpec {
 /**
  * Batch n uses BATCHES[n - 1]; every batch after the last repeats the last one. The curve (D130):
  * batch 1 is a warm-up (few breads, 2 layers, ~8% hidden), batch 2 has 4 layers and ~25% hidden,
- * batch 3 on is the wall (all 8 breads, 8 layers, ~55% of the tiles hidden, triples spread wide).
+ * D184 splits the next steps: 54/72 tiles with six kinds/layers, then seven kinds, then eight.
  * Changing it changes every board: bump TU_ENGINE_VERSION (engine.ts).
  */
 export const BATCHES: readonly BatchSpec[] = [
   { tiers: 4, layers: 2, tiles: 24, spread: 2 },
   { tiers: 5, layers: 4, tiles: 36, spread: 3 },
+  { tiers: 6, layers: 6, tiles: 54, spread: 3 },
+  { tiers: 6, layers: 6, tiles: 72, spread: 3 },
+  { tiers: 7, layers: 6, tiles: 90, spread: 3 },
   { tiers: 8, layers: 8, tiles: 96, spread: 4 },
   { tiers: 8, layers: 8, tiles: 108, spread: 4 },
   { tiers: 8, layers: 8, tiles: 120, spread: 4 },

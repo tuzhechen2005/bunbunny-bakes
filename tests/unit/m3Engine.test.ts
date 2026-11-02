@@ -9,7 +9,7 @@ describe("M3 engine", () => {
   it("uses the first six tiers, requires four, and exposes version/limits", () => {
     for (let n = 0; n < 4; n++) expect(() => createM3Game({ seed: "x", tiers: tiers(n) })).toThrow(RangeError);
     expect(createM3Game({ seed: "x", tiers: tiers(8) }).state()).toEqual(createM3Game({ seed: "x", tiers: tiers() }).state());
-    expect([MAX_MOVES, MIN_MOVE_GAP_MS, M3_ENGINE_VERSION, MAX_CASCADE_STEPS]).toEqual([30, 150, 3, 20]);
+    expect([MAX_MOVES, MIN_MOVE_GAP_MS, M3_ENGINE_VERSION, MAX_CASCADE_STEPS]).toEqual([30, 150, 4, 20]);
   });
 
   it.each([4, 5, 6])("starts with no matches and a legal move over 200 seeds (%i tiers)", (n) => {
@@ -84,12 +84,12 @@ describe("M3 engine", () => {
 
   it("pins an initial board and full greedy game", () => {
     const g = createM3Game({ seed: "pinned", tiers: tiers() });
-    expect(hashM3State(g.state())).toMatchInlineSnapshot(`"140431aa"`);
+    expect(hashM3State(g.state())).toMatchInlineSnapshot(`"5a481ba1"`);
     const run = greedyM3("pinned", tiers());
     for (const m of run.moves) g.swap(m.a, m.b);
     expect({ score: run.score, specials: run.specials, reshuffles: run.reshuffles, hash: hashM3State(g.state()) }).toMatchInlineSnapshot(`
       {
-        "hash": "d512857e",
+        "hash": "2b2435f3",
         "reshuffles": 0,
         "score": 6620,
         "specials": 13,

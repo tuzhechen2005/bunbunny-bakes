@@ -16,7 +16,7 @@ import { z } from "zod";
 import { copy } from "@/copy";
 import type { GameKind } from "@/lib/gameCatalog";
 import { Prisma } from "@/generated/prisma/client";
-import { MAX_DROPS, MAX_STEPS, replay, ReplayError } from "@/lib/game";
+import { BIG_ENGINE_VERSION, bigSeed, bigSeedVersion, MAX_DROPS, MAX_STEPS, replay, ReplayError } from "@/lib/game";
 import type { LocalDate } from "@/domain/types";
 import type { DbClient } from "./db";
 import { AppError } from "./errors";
@@ -119,7 +119,7 @@ export async function startRun(db: DbClient, input: unknown, ipHash: string, now
   }
   await rateLimit(db, `game_start_ip:${ipHash}`, START_LIMIT_PER_HOUR, now);
   const tiers = await loadTierConfigs(db);
-  const seed = randomBytes(16).toString("hex");
+  const seed = bigSeed(randomBytes(16).toString("hex"));
   const run = await db.gameRun.create({
     data: {
       seed,
@@ -253,7 +253,7 @@ export async function finishRun(db: DbClient, input: unknown, ipHash: string, no
   // Repeating a finish returns the stored result (the first drop log wins).
   if (run.finishedAt) return resultFor(db, run);
   // A run lives until the weekly reset after its start (D111): it always counts for its own week.
-  if (now.getTime() >= runExpiresAt(run.startedAt).getTime()) {
+  if (now.getTime() >= runExpiresAt(run.startedAt).getTime() || bigSeedVersion(run.seed) !== BIG_ENGINE_VERSION) {
     throw new AppError("VALIDATION", { message: copy.gameApi.runExpired });
   }
   if (await isBanned(db, run.wechatId)) {

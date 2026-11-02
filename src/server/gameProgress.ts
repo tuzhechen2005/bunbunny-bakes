@@ -1,3 +1,4 @@
+import { BIG_ENGINE_VERSION, bigSeedVersion } from "@/lib/game";
 import { TD_ENGINE_VERSION, tdSeedVersion } from "@/lib/td";
 import { tdFinishSchema, verifyTdRun } from "./td";
 import { isDeepStrictEqual } from "node:util";
@@ -44,6 +45,7 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
   const run = await db.gameRun.findUniqueOrThrow({ where: { id: data.runId } });
   if (run.finishedAt) return { score: run.score, live: false };
   if (now >= runExpiresAt(run.startedAt)
+    || (game === "BIG" && bigSeedVersion(run.seed) !== BIG_ENGINE_VERSION)
     || (game === "TD" && tdSeedVersion(run.seed) !== TD_ENGINE_VERSION)
     || (game === "TU" && tuSeedVersion(run.seed) !== TU_ENGINE_VERSION)
     || (game === "M3" && m3SeedVersion(run.seed) !== M3_ENGINE_VERSION)

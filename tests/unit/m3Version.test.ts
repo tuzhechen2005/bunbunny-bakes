@@ -7,10 +7,10 @@ const save = { v: 1, runId: "run", level: 1, weekKey: "2026-10-26", seed: m3Leve
 afterEach(() => vi.unstubAllGlobals());
 
 it("rejects old/future versioned replay seeds and saves even with an empty move log", () => {
-  expect(M3_ENGINE_VERSION).toBe(3);
-  expect(M3_SAVE_KEY).toBe("bb_m3_save_v3");
+  expect(M3_ENGINE_VERSION).toBe(4);
+  expect(M3_SAVE_KEY).toBe("bb_m3_save_v4");
   expect(parseM3Save(JSON.stringify(save), 0)).toEqual(save);
-  for (const seed of ["v1.abcdef", "v2.abcdef", "v4.abcdef"]) {
+  for (const seed of ["v1.abcdef", "v2.abcdef", "v3.abcdef", "v5.abcdef"]) {
     expect(() => replayM3(seed, tiers, [])).toThrow(M3ReplayError);
     expect(parseM3Save(JSON.stringify({ ...save, seed }), 0)).toBeNull();
   }

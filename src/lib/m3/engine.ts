@@ -40,7 +40,7 @@ function forkRng(seed: string): ForkRng {
 }
 interface Branch {
   board: number[][]; moves: number; score: number; orders: [M3Order, M3Order];
-  rng: ForkRng; orderRng: ForkRng;
+  rng: ForkRng; orderRng: ForkRng; lastCascadeWaves: number;
 }
 
 export function createM3Game(opts: GameOptions): M3Game { return buildGame(opts); }
@@ -55,6 +55,7 @@ function buildGame(opts: GameOptions, branch?: Branch): M3Game {
   const rng = branch?.rng ?? forkRng(`${opts.seed}:m3:board`);
   const orderRng = branch?.orderRng ?? forkRng(`${opts.seed}:m3:orders`);
   let board = branch?.board ?? initialBoard(n, rng);
+  let lastCascadeWaves = branch?.lastCascadeWaves ?? 0;
   let moves = branch?.moves ?? 0, score = branch?.score ?? 0;
   const newOrder = (other: number): M3Order => {
     const pool = Array.from({ length: n }, (_, i) => i).filter((t) => t !== other);
@@ -70,7 +71,7 @@ function buildGame(opts: GameOptions, branch?: Branch): M3Game {
     board.forEach((row, r) => row.forEach((code, c) => {
       if (code >= ROLL_BASE) specials.push({ r, c, kind: kindOf(code), tier: tierOf(code) });
     }));
-    return { board: copyBoard(board), specials, orders: [{ ...orders[0] }, { ...orders[1] }], score, movesLeft: moveLimit - moves, over: isOver() };
+    return { lastCascadeWaves, failureGap: isOver() && score < target && Number.isFinite(target) ? { pointsShort: target - score, orders: orders.map((o, index) => ({ index, tier: o.tier, itemsShort: o.need - o.have })) } : null, board: copyBoard(board), specials, orders: [{ ...orders[0] }, { ...orders[1] }], score, movesLeft: moveLimit - moves, over: isOver() };
   };
 
   function resolve(wave: Wave, chain: number, events: M3Event[]): void {
@@ -148,6 +149,7 @@ function buildGame(opts: GameOptions, branch?: Branch): M3Game {
       resolve(wave, chain++, events);
       wave = planWave(board);
     }
+    lastCascadeWaves = chain - 1;
     if (wave) {
       // Stop a pathological chain without extra score/order credit. A fresh settled board
       // avoids asking multiset-preserving shuffle to solve an impossible tier distribution.
@@ -160,7 +162,7 @@ function buildGame(opts: GameOptions, branch?: Branch): M3Game {
     if (isOver()) events.push({ type: "over" });
     return events;
   }
-  const fork = () => buildGame(opts, { board: copyBoard(board), moves, score,
+  const fork = () => buildGame(opts, { board: copyBoard(board), moves, score, lastCascadeWaves,
     orders: [{ ...orders[0] }, { ...orders[1] }], rng: rng.fork(), orderRng: orderRng.fork() });
   return { state, swap, fork, get score() { return score; }, get over() { return isOver(); }, get moves() { return moves; } };
 }

@@ -1,9 +1,9 @@
 // Server-side (and test) replay of a 兔了个兔 run: same seed + tiers + log = same score.
 
-import { createTuGame, MAX_TAPS, TU_PROPS, type TuProp, type TuTierInput } from "./engine";
+import { createTuGame, MAX_TAPS, STOP_TILE_ID, TU_PROPS, type TuProp, type TuTierInput } from "./engine";
 
 export interface TuTap {
-  /** Tile id from state().tiles. */
+  /** Tile id from state().tiles, or STOP_TILE_ID (0) to cash out at a clear boundary. */
   id: number;
   /** Integer ms since the run started on the client (Math.round it); strictly increasing. */
   at: number;
@@ -60,7 +60,7 @@ export function replayTu(seed: string, tiers: readonly TuTierInput[], log: reado
     if (game.over) throw new TuReplayError("tap after game over");
     if ("p" in e) {
       if (game.use(e.p as TuProp) === null) throw new TuReplayError("prop not usable");
-    } else if (game.tap(e.id as number) === null) throw new TuReplayError("tile not tappable");
+    } else if ((e.id === STOP_TILE_ID ? game.stop() : game.tap(e.id as number)) === null) throw new TuReplayError("tile not tappable");
     prev = at;
   }
   return { score: game.score, over: game.over, batch: game.batch, taps: game.taps };

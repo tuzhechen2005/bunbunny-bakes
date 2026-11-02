@@ -44,7 +44,7 @@ it("rejects stale/diverging prefixes before replay", async () => {
 
 it("idle reports keep the earlier score's tie rank while renewing live status, including weekly awards", async () => {
   const run = await startRun(db, { wechatId: "alice", nickname: "Alice" }, "ip", start);
-  const seed = "s5-idle-player";
+  const seed = "v2.abcdef";
   await db.gameRun.update({ where: { id: run.runId }, data: { seed } });
   const bot = botRun(seed, run.tiers, 20);
   expect(bot.score).toBeGreaterThan(0);

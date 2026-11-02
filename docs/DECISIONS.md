@@ -212,3 +212,17 @@ D178 检查：600 组经济回归及 560 组活体上限回归通过；136 个 T
 D179（[店主] 11/02 N1）：后台管理加“新品”功能，让客户页新上架商品有独立特效。Q1：店主开启后自动展示 7 天（服务器 now + 7×24h），可提前关闭，再次开启重新计时；省略不改。Q2：客户特效由前端（Claude）实现，后台开关也由 Claude 接入；本任务只实现后端。Q3：菜单新品优先，同组保留既有排序。Product.newUntil 可空、无回填，后台返回截止时间，客户及助手只返回服务端计算的 isNew；到期不依赖写库或缓存刷新，改标记与商品 AuditLog 同事务。
 
 D180（[店主] 11/02 F2，站点发布后口味需求及 grill）：每个口味可有独立每日限额 dailyLimit（null 不限），同时始终受商品原有限额／日期覆盖／大圆包整天取整约束（Q1 A+C）；可按取货日期覆盖口味限额，清除后回退默认（Q2 A）。口味有独立 bundlePriceCents（null 不使用套餐），绝不继承商品套餐价（Q3 A）；不同口味不能凑套餐（Q4 A），套餐件数共用商品 bundleSize（Q5）。顾客日期数据仅给 soldOutFlavorIds，不暴露限额或用量（Q6/Q7 UI 由 Claude 接入）。占额创建、改单及恢复状态都在日期锁内按 after 重算；店主超限必须原因及 AuditLog。仅后端、迁移、测试及接口文档；不改 components，不涉及游戏分支。
+
+### D184 — M3 / TU / BIG playability fixes (owner 11/02)
+
+Owner 11/02 authorized the playability-1102 review follow-up, engine/server/tests/docs only.
+M3 v4 softens new-kind L7/L19 with a 30% two-level target discount, then 20%/10% recovery
+and staged temporary extra moves, calibrated against 100 independent week seeds. Expose
+last-swap cascade wave count and failure score/current-order deficits; presentation speed
+never changes points. TU v5 uses 54 tiles / 6 layers / 6 kinds at oven 3, 72 tiles with the
+same kinds/layers at oven 4, then 7 kinds at oven 5 and 8 at oven 6. Clear boundaries allow
+收工 via replay input id 0, paying unused props once using the cleared oven's multiplier;
+any next-oven accepted input closes that window. Expose public-information planning and prop
+previews. BIG v2 exposes highest attained / next tier and first-record events only; physics
+and scoring stay unchanged. Version checks reject old unfinished runs; no UI components or
+pages changed. Measurements and limits are recorded in engine READMEs and docs/D184-validation.md.

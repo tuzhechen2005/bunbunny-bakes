@@ -46,8 +46,15 @@ export function m3LevelWitness(level: M3Level): M3Move[] | null {
 /** Cheap rules for HUD/resume. Only the server needs to search for the weekly seed. */
 export function m3LevelRules(n: number): Omit<M3Level, "seed"> {
   if (!Number.isSafeInteger(n) || n < 1 || n > 2_147_483_646) throw new RangeError("bad m3 level");
-  const moves = Math.max(8, 9 - Math.floor((n - 1) / 20));
-  const target = Math.round((6000 + 3000 * (1 - Math.exp(-(((n - 1) / 40) ** 1.6)))) / 10) * 10;
+  let moves = Math.max(8, 9 - Math.floor((n - 1) / 20));
+  let target = Math.round((6000 + 3000 * (1 - Math.exp(-(((n - 1) / 40) ** 1.6)))) / 10) * 10;
+  // D184: new-kind relief, then staged recovery. Calibrated on 100 independent weeks.
+  // The six-kind transition needs a longer buffer than the initial +2-move candidate.
+  const age = n >= 19 ? n - 19 : n >= 7 ? n - 7 : 99;
+  const reliefMoves = n >= 19 ? [6, 6, 5, 5, 4, 4, 3, 3, 2, 2, 1, 1] : [3, 3, 3, 3, 2, 2, 1, 1];
+  moves += reliefMoves[age] ?? 0;
+  const discount = age < 2 ? 0.30 : age < 4 ? 0.20 : age < 6 ? 0.10 : 0;
+  target = Math.round(target * (1 - discount) / 10) * 10;
   return { moves, target, tierCount: n < 7 ? 4 : n < 19 ? 5 : 6 };
 }
 
@@ -60,7 +67,7 @@ export function m3Level(weekKey: string, n: number): M3Level {
   const key = `${weekKey}:${n}`;
   const cached = cache.get(key);
   if (cached) return { ...cached };
-  const rng = createRng(`m3:v3:level:${key}`);
+  const rng = createRng(`m3:v4:level:${key}`);
   // Reject an unsuitable board, never lower the difficulty or hand out an impossible deal.
   for (;;) {
     const seed = m3Seed(Array.from({ length: 4 }, () => rng.int(0x100000000).toString(16).padStart(8, "0")).join(""));

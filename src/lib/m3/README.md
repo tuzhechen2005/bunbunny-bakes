@@ -49,7 +49,7 @@ restore by replaying accepted moves from the seed. `game.fork()` copies board, o
 move count and both RNG cursors for independent planning; immutable random draws are shared
 without changing the seeded stream. It is used only by the generation-time proof search.
 
-## Rules and tie breaks (engine version 3)
+## Rules and tie breaks (engine version 4)
 
 - Initial boards have no matches and at least one legal move. Fill row-major, choosing a tier
   that cannot complete a horizontal/vertical triple; reject and regenerate a dead initial board.
@@ -111,7 +111,7 @@ without changing the seeded stream. It is used only by the generation-time proof
 | `MAX_CASCADE_STEPS` | 20 | Maximum scored resolutions per accepted move |
 | `MAX_MOVES` | 30 | Engine-enforced accepted-move cap |
 | `MIN_MOVE_GAP_MS` | 150 | Minimum gap between replay moves |
-| `M3_ENGINE_VERSION` | 3 | Pin this with saved/server runs; v1/v2 saves/runs are rejected |
+| `M3_ENGINE_VERSION` | 4 | Pin this with saved/server runs; v1/v2/v3 saves/runs are rejected |
 
 Orders use a separate `${seed}:m3:orders` RNG stream; board/refill/shuffle use
 `${seed}:m3:board`. New orders choose among the selected tiers, excluding the other active
@@ -332,3 +332,33 @@ winning path, and the level tests replay those witnesses independently to check 
 | 28 | 4.0% |
 | 29 | 1.0% |
 | 30 | 4.0% |
+
+## UI contract
+
+D184 (owner 11/02), engine v4. `state().lastCascadeWaves` is zero initially and the
+number of scored resolutions in the last accepted swap thereafter (1–20). It survives
+forks and does not change on an invalid swap. Read the settled state before scheduling
+playback; existing `match.chain`/`special.chain` identify each wave, while fall/refill/order
+belong to the preceding match wave. Accelerate later waves to fit roughly 2–3 seconds;
+retain every event and all points, including order completion bonuses. Animation timing
+is a UI concern and never affects replay or score.
+
+`state().failureGap` is null while playing, on a pass, and in uncapped score simulations.
+On a failed finite-target level it is `{ pointsShort, orders: [{ index, tier, itemsShort }] }`.
+`pointsShort = target - score`; each current order's `itemsShort = need - have`. Orders
+are recurring score opportunities, **not additional pass requirements**. Snapshots are detached.
+Use the settled state after the existing `over` event. `m3LevelRules(level).tierCount`
+changes at levels 7 and 19; these are the first-new-kind introductions for UI explanation.
+
+D184 replaces the historical monotonic-target rule: new-kind levels receive 30% target
+relief for two levels, then 20% for two, then 10% for two. Extra moves are recovered
+in stages; see `m3LevelRules`. No refill, cascade scoring, order, or match rule changed.
+All old v3 unfinished runs and local saves are rejected by existing version checks.
+
+### D184 calibration (v4)
+
+100 weeks × 30 levels: maximum adjacent strategy pass-rate decline **15 points**;
+L6/L7 **97%/88%**, L18/L19 **48%/42%**. Extra moves at L7–L14 are
+3,3,3,3,2,2,1,1; at L19–L30 they are 6,6,5,5,4,4,3,3,2,2,1,1.
+Smaller candidate buffers did not meet the requested boundary. Full rates, reproduction
+commands and finite-sample limits: [D184 validation](../../../docs/D184-validation.md).

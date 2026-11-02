@@ -2,13 +2,15 @@ import { expect, it } from "vitest";
 import { createM3Game, m3Level, m3LevelWitness, replayM3, legalM3Moves } from "@/lib/m3";
 import { greedyM3 } from "../support/m3Bot";
 
-it("deals identical weekly levels, with increasing targets and decreasing moves", () => {
+it("deals identical weekly levels, with introduction relief and replayable witnesses", () => {
   let previous = m3Level("2026-10-26", 1);
   for (let n = 1; n <= 30; n++) {
     const level = m3Level("2026-10-26", n);
     expect(m3Level("2026-10-26", n)).toEqual(level);
-    expect(level.target).toBeGreaterThanOrEqual(previous.target);
-    expect(level.moves).toBeLessThanOrEqual(previous.moves);
+    if (n !== 7 && n !== 19) {
+      expect(level.target).toBeGreaterThanOrEqual(previous.target);
+      expect(level.moves).toBeLessThanOrEqual(previous.moves);
+    }
     expect(level.tierCount).toBeGreaterThanOrEqual(previous.tierCount);
     const tiers = Array.from({ length: level.tierCount }, (_, i) => ({ id: String(i) }));
     const proof = m3LevelWitness(level)!;
