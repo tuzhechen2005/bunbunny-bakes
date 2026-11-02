@@ -11,7 +11,7 @@ export interface ProductImageDto {
 }
 
 /** The product as the admin API returns it (dates arrive as ISO strings). */
-export interface FlavorDto { id: string; productId: string; name: string; priceCents: number; active: boolean; sort: number }
+export interface FlavorDto { id: string; productId: string; name: string; priceCents: number; dailyLimit: number | null; bundlePriceCents: number | null; active: boolean; sort: number }
 
 export interface ProductDto {
   id: string;

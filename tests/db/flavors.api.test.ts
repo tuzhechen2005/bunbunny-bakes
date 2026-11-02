@@ -82,7 +82,9 @@ it("creates, renames, reprices, sorts and deactivates with atomic audit; no hard
   const second = await POST(request("POST", { name: "抹茶", priceCents: 400 }), ctx);
   const b = (await second.json()).product.flavors[1];
   const flavorCtx = { params: Promise.resolve({ id: P.redBean, flavorId: a.id }) };
-  expect((await PATCH(request("PATCH", { name: "香草", priceCents: 350, active: false }), flavorCtx)).status).toBe(200);
+  const patched = await PATCH(request("PATCH", { name: "香草", priceCents: 350, active: false }), flavorCtx);
+  expect(patched.status).toBe(200);
+  expect(await patched.json()).toMatchObject({ product: { id: P.redBean }, overLimitDates: [] });
   expect((await REORDER(request("PUT", { ids: [b.id, a.id] }), ctx)).status).toBe(200);
   expect((await REORDER(request("PUT", { ids: [a.id] }), ctx)).status).toBe(409);
   const list = (await (await GET(request("GET"))).json()).products.find((p: { id: string }) => p.id === P.redBean);
@@ -120,4 +122,33 @@ it("rolls back a flavour change when its AuditLog insert fails", async () => {
     await db.$executeRawUnsafe(`DROP TRIGGER f1_fail_audit ON "AuditLog"`);
     await db.$executeRawUnsafe(`DROP FUNCTION f1_fail_audit()`);
   }
+});
+
+it("F2: API bundle quotes and date flags never expose internal flavour limits", async () => {
+  const { addDays, localDateOf } = await import("@/domain/dates");
+  const { createOpenDate } = await import("./helpers");
+  const date = addDays(localDateOf(new Date()), 3);
+  await createOpenDate(date);
+  const ctx = patchCtx(P.redBean);
+  const created = await POST(request("POST", { name: "原味", priceCents: 450, bundlePriceCents: 1600, dailyLimit: 0 }), ctx);
+  expect(created.status).toBe(201);
+  const f = (await created.json()).product.flavors[0];
+  expect(f).toMatchObject({ dailyLimit: 0, bundlePriceCents: 1600 });
+  const quote = await QUOTE(request("POST", { items: [{ productId: P.redBean, flavorId: f.id, qty: 5 }], fulfillment: "PICKUP" }));
+  expect(quote.status).toBe(200);
+  const body = await quote.json();
+  expect(body.pricing.subtotalCents).toBe(2050);
+  expect(body.dates).toEqual([{ date, state: "FULL", soldOutFlavorIds: [f.id] }]);
+  expect(JSON.stringify(body)).not.toMatch(/"(dailyLimit|flavorLimits|used|limit|after)"/);
+  const { GET: MENU } = await import("@/app/api/menu/route");
+  const menu = await (await MENU()).json();
+  expect(menu.products.find((p: { id: string }) => p.id === P.redBean).flavors).toEqual([{ id: f.id, name: "原味", priceCents: 450, bundlePriceCents: 1600 }]);
+  const { POST: ORDER } = await import("@/app/api/orders/route");
+  vi.stubEnv("IP_HASH_SECRET", "f2-test-only");
+  const result = await ORDER(request("POST", { items: [{ productId: P.redBean, flavorId: f.id, qty: 1 }], fulfillment: "PICKUP", pickupDate: date, wechatId: "test-customer" }));
+  vi.unstubAllEnvs();
+  expect(result.status).toBe(409);
+  const error = await result.json();
+  expect(error).toMatchObject({ error: "FLAVOR_FULL", flavorId: f.id, productId: P.redBean });
+  expect(Object.keys(error).sort()).toEqual(["error", "flavorId", "message", "productId"]);
 });

@@ -140,7 +140,7 @@ export const reorderSchema = z.object({ ids: z.array(z.uuid()).min(1).max(500) }
 
 const CAPACITY_KEYS = ["capacityMode", "doughG", "roundG", "piecesPerRound", "dailyLimit"] as const;
 
-export type OverLimitKind = "DOUGH" | "PRODUCT" | "DELIVERY";
+export type OverLimitKind = "DOUGH" | "PRODUCT" | "DELIVERY" | "FLAVOR";
 export interface OverLimitDate {
   date: LocalDate;
   kinds: OverLimitKind[];
@@ -252,6 +252,9 @@ export async function updateProduct(
 
     // Validation applies to the merged result (a mode switch needs its new fields).
     const merged = parseOrThrow(fullSchema, { ...pickFields(before), ...patch });
+    if (patch.bundleSize !== undefined && merged.bundleSize < 2 && before.flavors.some(f => f.bundlePriceCents !== null)) {
+      throw new AppError("VALIDATION", { extra: { fields: { bundleSize: "Flavour bundles require a bundle size of at least 2" } } });
+    }
     const changed = (Object.keys(merged) as (keyof Fields)[]).filter((k) => !sameValue(merged[k], before[k]));
     const newUntil = patch.isNew === undefined ? before.newUntil : patch.isNew ? newProductUntil(now) : null;
     const newUntilChanged = newUntil?.getTime() !== before.newUntil?.getTime();

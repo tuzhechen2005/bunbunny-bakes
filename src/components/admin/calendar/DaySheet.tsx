@@ -26,11 +26,14 @@ function parseLimit(s: string): number | null | undefined {
 export function DaySheet({
   day,
   products,
+  productNames,
   onClose,
   onSaved,
 }: Readonly<{
   day: CalendarDay;
   products: { id: string; name: string }[];
+  /** All product names by id (flavours belong to any product, not only independent-limit ones). */
+  productNames: Record<string, string>;
   onClose: () => void;
   onSaved: () => void;
 }>) {
@@ -40,6 +43,9 @@ export function DaySheet({
   const [delivery, setDelivery] = useState(day.overrides.deliveryLimit?.toString() ?? "");
   const [limits, setLimits] = useState<Record<string, string>>(
     Object.fromEntries(products.map((p) => [p.id, day.overrides.productLimits[p.id]?.toString() ?? ""])),
+  );
+  const [flavorLimits, setFlavorLimits] = useState<Record<string, string>>(
+    Object.fromEntries(day.flavors.map((f) => [f.id, f.override?.toString() ?? ""])),
   );
   const [note, setNote] = useState(day.note ?? "");
   const [pending, setPending] = useState(false);
@@ -67,6 +73,15 @@ export function DaySheet({
       if (v === undefined) invalid = true;
       else productV[p.id] = v;
     }
+    // Only changed overrides are sent: omitted keys keep their stored override.
+    const flavorV: Record<string, number | null> = {};
+    for (const f of day.flavors) {
+      const text = flavorLimits[f.id] ?? "";
+      if (text === (f.override?.toString() ?? "")) continue;
+      const v = parseLimit(text);
+      if (v === undefined) invalid = true;
+      else flavorV[f.id] = v;
+    }
     if (invalid) {
       setError(t.limitInvalid);
       return;
@@ -81,6 +96,7 @@ export function DaySheet({
         deliveryEnabled,
         deliveryLimit: deliveryV,
         productLimits: productV,
+        flavorLimits: flavorV,
         note: note.trim() === "" ? null : note,
         ...(confirm ? { confirm: true } : {}),
       },
@@ -102,8 +118,15 @@ export function DaySheet({
     if (w.what === "PRODUCT") {
       return fill(t.warnProduct, { name: names[w.productId] ?? t.archivedProduct, limit: w.limit, used: w.used });
     }
+    if (w.what === "FLAVOR") {
+      const f = day.flavors.find((x) => x.id === w.flavorId);
+      const name = f ? `${productNames[f.productId] ?? t.archivedProduct}${copy.customer.home.flavorJoin}${f.name}` : t.archivedProduct;
+      return fill(t.warnProduct, { name, limit: w.limit, used: w.used });
+    }
     return fill(w.what === "DOUGH" ? t.warnDough : t.warnDelivery, { limit: w.limit, used: w.used });
   }
+
+  const flavorGroups = [...day.flavors.reduce((m, f) => m.set(f.productId, [...(m.get(f.productId) ?? []), f]), new Map<string, typeof day.flavors>())];
 
   const label = "mb-1 block text-sm text-muted";
   const toggleRow = "flex min-h-11 items-center gap-3 text-base";
@@ -192,6 +215,38 @@ export function DaySheet({
               onChange={(e) => setLimits({ ...limits, [p.id]: e.target.value })}
             />
           </div>
+        ))}
+
+        {flavorGroups.map(([productId, fs]) => (
+          <section key={productId} aria-label={productNames[productId] ?? t.archivedProduct} data-testid="day-flavors">
+            <h3 className="mb-1 text-sm text-muted">{productNames[productId] ?? t.archivedProduct}</h3>
+            <ul className="space-y-1">
+              {fs.map((f) => {
+                const over = f.limit !== null && f.used > f.limit;
+                return (
+                  <li
+                    key={f.id}
+                    data-testid="flavor-limit-row"
+                    data-over={over ? "true" : undefined}
+                    className={`flex min-h-11 items-center gap-3 rounded-lg border px-3 ${over ? "border-danger bg-danger/10 text-danger" : "border-line bg-card"} ${f.active ? "" : "opacity-60"}`}
+                  >
+                    <label className="min-w-0 flex-1 truncate text-base" htmlFor={`cal-f-${f.id}`}>
+                      {f.limit === null ? `${f.name} ${f.used}` : fill(t.usageProduct, { name: f.name, used: f.used, limit: f.limit })}
+                    </label>
+                    <input
+                      id={`cal-f-${f.id}`}
+                      aria-label={fill(t.productLimit, { name: f.name })}
+                      className="min-h-11 w-24 rounded-lg border border-line bg-card px-3 text-base text-foreground"
+                      inputMode="numeric"
+                      value={flavorLimits[f.id] ?? ""}
+                      placeholder={f.override === null ? String(f.limit ?? "") : ""}
+                      onChange={(e) => setFlavorLimits({ ...flavorLimits, [f.id]: e.target.value })}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
         ))}
 
         <label className={toggleRow}>

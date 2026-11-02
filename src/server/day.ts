@@ -140,13 +140,14 @@ export async function loadDayContext(
   // Sequential on purpose: one transaction = one connection.
   const openDateRaw = await tx.openDate.findUnique({ where: { date: dbDate } });
   const overrides = await tx.openDateProductLimit.findMany({ where: { date: dbDate } });
+  const flavorOverrides = await tx.openDateFlavorLimit.findMany({ where: { date: dbDate } });
   const orders = await tx.order.findMany({
     where: { pickupDate: dbDate },
     select: {
       id: true,
       status: true,
       fulfillment: true,
-      items: { select: { productId: true, qty: true }, orderBy: { id: "asc" } },
+      items: { select: { productId: true, flavorId: true, qty: true }, orderBy: { id: "asc" } },
     },
     orderBy: { seq: "asc" },
   });
@@ -178,6 +179,7 @@ export async function loadDayContext(
     deliveryEnabled: openDate?.deliveryEnabled ?? true,
     deliveryLimit: openDate?.deliveryLimit ?? settings.defaultDeliveryLimit,
     productLimits,
+    flavorLimits: Object.fromEntries(flavorOverrides.map(o => [o.flavorId, o.limit])),
   };
 
   return {
@@ -187,7 +189,7 @@ export async function loadDayContext(
       id: o.id,
       status: o.status,
       fulfillment: o.fulfillment,
-      items: o.items.map((i) => ({ productId: i.productId, qty: i.qty })),
+      items: o.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, qty: i.qty })),
     })),
   };
 }

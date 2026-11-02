@@ -427,10 +427,10 @@ See [RUN_CLIENT.md](RUN_CLIENT.md) for the deployment date placeholder and brows
 
 ## F1 — flavour API contract (D175; frontend handoff)
 
-`GET /api/menu` always adds `flavors: [{id, name, priceCents}]` and `priceFromCents` to each
+`GET /api/menu` always adds `flavors: [{id, name, priceCents, bundlePriceCents}]` and `priceFromCents` to each
 product. Flavours are active only, ordered by `sort ASC, id ASC`. The from-price is the minimum
 active flavour price, falling back to the product's `unitPriceCents` when there are none.
-A flavour line costs `qty * priceCents`; product bundle pricing does not apply to flavour lines.
+F2 flavour lines use their own bundlePriceCents with the product bundleSize (null means no bundle); product bundle pricing does not apply to flavour lines.
 Products without active flavours retain their original pricing and bundles.
 
 `POST /api/availability` (the existing cart quote/date endpoint), `POST /api/orders`, admin
@@ -467,7 +467,7 @@ use `active: false`; DB foreign keys prevent deleting a flavour referenced by an
 |---|---|---|
 | GET | `/api/admin/products` | Each product includes all flavours, including inactive, with id/productId/name/priceCents/active/sort/createdAt/updatedAt |
 | POST | `/api/admin/products/{id}/flavors` | `{name, priceCents, active?, sort?}`; active defaults true, sort defaults to append; 201 `{product}` with complete flavours |
-| PATCH | `/api/admin/products/{id}/flavors/{flavorId}` | `{name?, priceCents?, active?, sort?}`; 200 `{product}`; unknown/wrong-product ID returns 404 |
+| PATCH | `/api/admin/products/{id}/flavors/{flavorId}` | `{name?, priceCents?, active?, sort?}`; 200 `{product, overLimitDates}`; unknown/wrong-product ID returns 404 |
 | PUT | `/api/admin/products/{id}/flavors/order` | `{ids: string[]}` must contain every flavour (including inactive), exactly once; mismatch 409 STALE; 200 `{product}`; unchanged order writes no audit |
 | GET | `/api/admin/order-form` | Products include flavours with id/name/priceCents/active/sort; picker permits active selections; historical names come from order snapshots |
 
@@ -495,3 +495,159 @@ for the caller's unit context without introducing a new product field.
 - `GET /api/admin/products` 返回 `200 { products }`；列表、创建及修改返回的商品均含 `newUntil: string | null`（UTC ISO 8601，例如 `2026-11-09T12:00:00.000Z`）。后台商品不额外返回 `isNew`。输入不接受 `newUntil`，`isNew` 只接受 boolean（null、字符串、数字均 `422 VALIDATION`）。
 - 标记写入与既有 `product.create` / `product.update` AuditLog 在同一事务；创建 after、修改 before/after 均含 `newUntil`。自动到期只影响读取结果，不写数据库或日志。
 - 客户菜单和助手 `get_menu` 只返回 `isNew`，不返回 `newUntil`；前端负责后台开关及客户特效（Claude）。
+
+## F2 — exact additive API contract (D180)
+
+All existing response properties remain unchanged. The JSON below defines the new
+nested objects/fields; `productId`/`flavorId` values are UUID strings. Currency is
+integer cents. No customer response contains dailyLimit, override, limit or used.
+
+### Flavour management and product responses
+
+`POST /api/admin/products/{id}/flavors` accepts:
+
+```json
+{"name":"抹茶","priceCents":450,"active":true,"sort":0,"dailyLimit":12,"bundlePriceCents":1600}
+```
+
+Only name and priceCents are required. Both new fields default to null.
+`PATCH /api/admin/products/{id}/flavors/{flavorId}` accepts any subset of those
+fields, including `{ "dailyLimit": null, "bundlePriceCents": null }` to clear.
+Omitted fields retain current values. Limit: integer 0–1,000,000 or null; bundle:
+integer 1–1,000,000 or null; invalid values return 422 VALIDATION.
+A non-null flavour bundle price requires the product's bundleSize >= 2
+(422 VALIDATION, fields.bundlePriceCents). Setting a product's bundleSize < 2
+while any flavour (including inactive) has a bundle price returns 422 VALIDATION,
+fields.bundleSize.
+
+POST returns 201 `{ "product": Product }`, PATCH returns 200
+`{ "product": Product, "overLimitDates": [{ "date": "2026-11-04", "kinds": ["FLAVOR"] }] }`.
+When dailyLimit is lowered (including null/unlimited to a finite limit), warnings
+list open dates from today in Chicago onward with occupying flavour usage > the
+new limit and no per-date override for that flavour, sorted by date. Existing
+over-limit dates are included if still over the lowered limit. Equal usage does
+not warn; unchanged, raised, or cleared limits return an empty array. The update
+still succeeds. Every `Product.flavors[]` object now has exactly:
+
+```json
+{"id":"<flavorId>","productId":"<productId>","name":"抹茶","priceCents":450,"dailyLimit":12,"bundlePriceCents":1600,"active":true,"sort":0,"createdAt":"2026-11-02T18:00:00.000Z","updatedAt":"2026-11-02T18:00:00.000Z"}
+```
+
+These same extra fields appear wherever the existing admin Product response is
+returned: GET `/api/admin/products` (`{products:[Product]}`), POST
+`/api/admin/products` (`{product:Product}`, new product has `flavors:[]`), PATCH
+`/api/admin/products/{id}` (`{product:Product,overLimitDates:[...]}`), and PUT
+`/api/admin/products/{id}/flavors/order` (`{product:Product}`). Requests for those
+endpoints are unchanged. The same nested flavour additions also appear in these
+existing Product-returning endpoints (no request changes):
+
+| Method/path | Request | Response |
+|---|---|---|
+| POST `/api/admin/products/reorder` | `{ "ids": ["<productId>"] }` | 200 `{ "products": [Product] }` |
+| POST `/api/admin/products/{id}/image` | multipart `file` | 200 `{ "product": Product }` |
+| DELETE `/api/admin/products/{id}/image` | no body | 200 `{ "product": Product }` |
+| POST `/api/admin/products/{id}/images` | multipart `file` | 201 `{ "product": Product }` |
+| DELETE `/api/admin/products/{id}/images/{imageId}` | no body | 200 `{ "product": Product }` |
+| PUT `/api/admin/products/{id}/images/order` | `{ "ids": ["<imageId>"] }` | 200 `{ "product": Product }` |
+
+ Flavour mutations audit both new fields through the
+existing `product.flavor.create/update/reorder` actions.
+
+GET `/api/admin/order-form` keeps `{products,dates,fees}`; each
+`products[].flavors[]` is now:
+
+```json
+{"id":"<flavorId>","name":"抹茶","priceCents":450,"bundlePriceCents":1600,"dailyLimit":12,"active":true,"sort":0}
+```
+
+### Owner calendar and per-date overrides
+
+GET `/api/admin/calendar?from=2026-11-04&to=2026-11-04` keeps
+`{independentProducts,days}`. Each `days[]` adds `flavors` (all flavours, including
+inactive, ordered within product by sort/id):
+
+```json
+{"flavors":[{"id":"<flavorId>","productId":"<productId>","name":"抹茶","active":true,"limit":8,"used":5,"override":8}]}
+```
+
+`limit` is override ?? dailyLimit ?? null; null means unlimited. `used` counts
+occupying orders only, on this pickup date. `override` is null if no override row.
+The existing `usage`, `limits`, `overrides`, `production` and `over` shapes remain
+unchanged; use `flavors[].used > flavors[].limit` (when non-null) for flavour warnings.
+
+PUT `/api/admin/dates/{date}` accepts the existing complete date request plus an
+optional flavour override map:
+
+```json
+{"isOpen":true,"doughLimitG":1600,"deliveryEnabled":true,"deliveryLimit":8,"productLimits":{},"flavorLimits":{"<flavorId>":8},"note":null,"confirm":false}
+```
+
+Map values are integers 0–1,000,000 or null. Set zero to block that flavour; send
+`{"<flavorId>":null}` to delete the override. Omitted map/keys preserve overrides.
+Unknown flavour IDs return 422 VALIDATION with `fields["flavorLimits.<id>"]`.
+Success: 200 CalendarDay directly (same object as GET `days[]`, including flavors).
+Below-usage changes return 409 without writing:
+
+```json
+{"error":"OVER_LIMIT","message":"<existing calendar warning message>","warnings":[{"kind":"BELOW_USAGE","what":"FLAVOR","flavorId":"<flavorId>","limit":3,"used":5}]}
+```
+
+Resend with `confirm:true` to apply. Existing warnings can coexist. Audit
+`date.update` before/after adds `flavorLimits:{"<flavorId>":8}` containing only
+stored overrides; confirmed warnings are recorded in the audit reason.
+
+### Customer menu, quote, availability, and order failure
+
+GET `/api/menu` keeps its existing envelope. Each `products[].flavors[]` is exactly:
+
+```json
+{"id":"<flavorId>","name":"抹茶","priceCents":450,"bundlePriceCents":1600}
+```
+
+Only active flavours appear. Null bundle means unit-only pricing; size comes from
+`products[].bundleSize`. The assistant get_menu tool uses the same public shape,
+and its cart quote shares the same server pricing helper.
+
+POST `/api/availability` request is unchanged:
+
+```json
+{"items":[{"productId":"<productId>","flavorId":"<flavorId>","qty":5}],"fulfillment":"PICKUP"}
+```
+
+Example complete response (size 4, bundle 1600, unit 450):
+
+```json
+{"orderingEnabled":true,"pricing":{"subtotalCents":2050,"deliveryFeeCents":0,"totalCents":2050,"freeDeliveryGapCents":450},"cartProblems":[],"dates":[{"date":"2026-11-04","state":"AVAILABLE","soldOutFlavorIds":[],"cutoffAt":"2026-11-04T02:00:00.000Z","cutoffLabel":"11/03 周二 20:00 截止"}]}
+```
+
+Every offered date has `soldOutFlavorIds:string[]`, including CUTOFF, WEEKDAY,
+FULL and DELIVERY_FULL dates. It is independent of the submitted cart: each active
+flavour whose next piece fails flavour or product/dough capacity is included.
+Non-AVAILABLE entries contain only `date,state,soldOutFlavorIds` plus `hints` when
+present; existing REDUCE/SPLIT hint shapes are unchanged. Sold-out flags are advisory;
+submissions recheck inside the transaction. The assistant's date checks use the same
+capacity rules, without exposing internal quantities.
+
+POST `/api/orders` request and success shapes are unchanged. New HTTP 409 error:
+
+```json
+{"error":"FLAVOR_FULL","message":"这一天的预订名额已经满啦，可以选择下一个有空位的日期～","productId":"<productId>","flavorId":"<flavorId>"}
+```
+
+No limit, used, after, over or suggestion field is included for this error. This
+reuses the existing FULL message; UI can map FLAVOR_FULL and the IDs to flavour-specific
+copy. If both flavour and product constraints fail, FLAVOR_FULL takes precedence.
+
+Owner create (`POST /api/admin/orders`), edit (`PATCH /api/admin/orders/{id}`), and
+status restore (`POST /api/admin/orders/{id}/correct-status`) requests/success shapes
+are unchanged. Their existing 409 OVER_LIMIT response may now contain a flavour
+violation, represented compatibly as PRODUCT with an additional flavorId:
+
+```json
+{"error":"OVER_LIMIT","message":"<existing over-limit message>","violations":[{"kind":"PRODUCT","date":"2026-11-04","productId":"<productId>","flavorId":"<flavorId>","limit":3,"after":4,"over":1}]}
+```
+
+A PRODUCT violation without flavorId still denotes the product limit. Existing
+`override:true` plus a nonblank `reason` permits either kind and writes
+`order.override` with the complete violations. No customer edit API exists in this
+branch; cancellation and unchanged snapshot/notification shapes remain as before.

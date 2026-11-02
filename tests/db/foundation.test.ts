@@ -540,12 +540,14 @@ describe("loadSettings / loadProductMap / loadDayContext", () => {
     expect(ctx.products[p.brulee]).toMatchObject({ batchYield: 3, dailyLimit: 24, leadDays: 2 });
 
     expect(ctx.plain.limits).toEqual({
+      flavorLimits: {},
       doughLimitG: 1600,
       deliveryEnabled: true,
       deliveryLimit: 8,
       productLimits: { [p.brulee]: 24, [pausedPudding.id]: 0 },
     });
     expect(ctx.custom.limits).toEqual({
+      flavorLimits: {},
       doughLimitG: 1200,
       deliveryEnabled: false,
       deliveryLimit: 3,
@@ -563,12 +565,12 @@ describe("loadSettings / loadProductMap / loadDayContext", () => {
         status: "NEW",
         fulfillment: "DELIVERY",
         items: expect.arrayContaining([
-          { productId: p.redBean, qty: 4 },
-          { productId: p.cheeseHorn, qty: 3 },
+          { productId: p.redBean, flavorId: null, qty: 4 },
+          { productId: p.cheeseHorn, flavorId: null, qty: 3 },
         ]),
       },
-      { id: o2.id, status: "CANCELLED", fulfillment: "PICKUP", items: [{ productId: archivedBun.id, qty: 2 }] },
-      { id: o3.id, status: "COMPLETED", fulfillment: "PICKUP", items: [{ productId: p.brulee, qty: 5 }] },
+      { id: o2.id, status: "CANCELLED", fulfillment: "PICKUP", items: [{ productId: archivedBun.id, flavorId: null, qty: 2 }] },
+      { id: o3.id, status: "COMPLETED", fulfillment: "PICKUP", items: [{ productId: p.brulee, flavorId: null, qty: 5 }] },
     ]);
     expect(ctx.custom.orders[0].items).toHaveLength(2);
     expect(ctx.plain.orders).toHaveLength(1);
@@ -676,7 +678,7 @@ describe("AppError", () => {
       [
         "VALIDATION", "ORDERING_DISABLED", "DATE_CLOSED", "CUTOFF_PASSED", "PRODUCT_UNAVAILABLE",
         "QTY_LIMIT", "FULL", "DELIVERY_FULL", "RATE_LIMITED", "NOT_CANCELLABLE", "OVER_LIMIT",
-        "STALE", "UNAUTHORIZED", "NOT_FOUND", "WEEKDAY_UNAVAILABLE", "FLAVOR_REQUIRED", "FLAVOR_UNAVAILABLE",
+        "STALE", "UNAUTHORIZED", "NOT_FOUND", "WEEKDAY_UNAVAILABLE", "FLAVOR_REQUIRED", "FLAVOR_UNAVAILABLE", "FLAVOR_FULL",
       ].sort(),
     );
     const statuses = Object.fromEntries(ERROR_CODES.map((c) => [c, new AppError(c).httpStatus]));

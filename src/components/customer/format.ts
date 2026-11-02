@@ -1,6 +1,7 @@
 // Display helpers for customer pages. Display only: the payable total always comes from the server.
 
 import { copy } from "@/copy";
+import { flavorPrice } from "@/domain/flavorPricing";
 import { formatCents, lineTotal } from "@/domain/pricing";
 import type { MenuProduct } from "@/lib/api";
 
@@ -29,7 +30,7 @@ export function priceText(p: MenuProduct): string {
 }
 
 /** Display-only line total; 0 for invalid input instead of throwing. */
-export function safeLineTotal(qty: number, p: MenuProduct): number {
+export function safeLineTotal(qty: number, p: Pick<MenuProduct, "unitPriceCents" | "bundleSize" | "bundlePriceCents">): number {
   try {
     return lineTotal(qty, p);
   } catch {
@@ -69,9 +70,15 @@ export function hasFlavors(p: Pick<MenuProduct, "flavors">): boolean {
 export function cartLineTotal(item: { qty: number; flavorId?: string | null }, p: MenuProduct): number {
   if (item.flavorId) {
     const f = p.flavors?.find((x) => x.id === item.flavorId);
-    return f ? f.priceCents * item.qty : 0;
+    return f ? safeLineTotal(item.qty, flavorPrice(p, f)) : 0;
   }
   return safeLineTotal(item.qty, p);
+}
+/** F2: "4 个 $16.00" under a flavour's price, or null when it has no bundle price. */
+export function flavorBundleText(p: Pick<MenuProduct, "bundleSize">, f: { bundlePriceCents: number | null }): string | null {
+  return f.bundlePriceCents === null
+    ? null
+    : fill(copy.customer.home.bundlePrice, { size: p.bundleSize, price: formatCents(f.bundlePriceCents) });
 }
 /** "泡芙 · 抹茶" for a flavoured line, the product name otherwise. */
 export function cartLineName(item: { flavorId?: string | null }, p: MenuProduct): string {

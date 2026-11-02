@@ -64,6 +64,7 @@ export interface DateEntry {
   state: DateState;
   cutoffAt: Date;
   cutoffLabel: string;
+  soldOutFlavorIds: string[];
   /** Only on FULL / WEEKDAY dates of a non-empty cart, and only when there is one (§7.2). */
   hints?: DateHint[];
 }
@@ -186,6 +187,15 @@ function planDay(
   return { state, cutoffAt, hints };
 }
 
+/** Capacity-only flags, independent of cart, cutoff and delivery. Never returns counts. */
+export function soldOutFlavors(products: Record<string, AvailProduct>, day: OpenDay): string[] {
+  return Object.values(products).filter(p => p.status === "ACTIVE").flatMap(p =>
+    (p.flavors ?? []).filter(f => f.active !== false && !checkDay({
+      date: day.date, existing: day.orders, products, limits: day.limits,
+      candidate: { fulfillment: "PICKUP", items: [{ productId: p.id, flavorId: f.id, qty: 1 }] },
+    }).ok).map(f => f.id));
+}
+
 export function listAvailability(input: AvailabilityInput): AvailabilityResult {
   const problems = cartProblems(input.cart, input.products, input.maxQtyPerItem);
   if (!input.orderingEnabled) {
@@ -194,7 +204,7 @@ export function listAvailability(input: AvailabilityInput): AvailabilityResult {
   const visible = visibleDays(input);
   const dates = visible.map((day): DateEntry => {
     const { state, cutoffAt, hints } = planDay(input, day, visible, problems.length > 0);
-    const entry: DateEntry = { date: day.date, state, cutoffAt, cutoffLabel: cutoffLabel(cutoffAt) };
+    const entry: DateEntry = { date: day.date, state, cutoffAt, cutoffLabel: cutoffLabel(cutoffAt), soldOutFlavorIds: soldOutFlavors(input.products, day) };
     if (hints.length > 0) entry.hints = hints;
     return entry;
   });

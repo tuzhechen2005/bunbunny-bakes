@@ -58,11 +58,12 @@ describe("POST /api/availability", () => {
     expect(by["2026-10-21"]).toEqual({
       date: "2026-10-21",
       state: "AVAILABLE",
+      soldOutFlavorIds: [],
       cutoffAt: "2026-10-21T01:00:00.000Z",
       cutoffLabel: "10/20 周二 20:00 截止",
     });
-    expect(by["2026-10-23"]).toEqual({ date: "2026-10-23", state: "FULL" });
-    expect(by["2026-10-24"]).toEqual({ date: "2026-10-24", state: "DELIVERY_FULL" });
+    expect(by["2026-10-23"]).toEqual({ date: "2026-10-23", state: "FULL", soldOutFlavorIds: [] });
+    expect(by["2026-10-24"]).toEqual({ date: "2026-10-24", state: "DELIVERY_FULL", soldOutFlavorIds: [] });
   });
 
   it("prices with P7 free delivery and a gap", async () => {

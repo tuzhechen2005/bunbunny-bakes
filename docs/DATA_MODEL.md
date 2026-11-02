@@ -55,10 +55,10 @@
 `id uuid` 主键、`productId uuid → Product`、`name text`（trim 后 1–12 Unicode 字符）、
 `priceCents int`（0–1,000,000）、`active bool`（默认 true）、`sort int`（默认 0）、
 `createdAt / updatedAt timestamptz`。按 `(sort, id)` 排序，索引 `(productId, sort)`。
-所有口味共用商品名额；合并商品数量后才检查每单上限、面团、大圆包和独立限额。
+所有口味共用商品名额，F2 另加各口味限额；合并商品数量后才检查每单上限、面团、大圆包和独立限额。
 
 至少一个 active 口味时，新行必须选择该商品的 active 口味。口味行使用
-`qty × ProductFlavor.priceCents`，不使用商品套餐价；无 active 口味且未选择口味时沿用原价格/套餐。
+F2 的口味单价／口味套餐价和商品 bundleSize，不使用商品套餐价；无 active 口味且未选择口味时沿用原价格/套餐。
 `Product.unitPriceCents` 保留作展示回退，不覆盖已选口味价格。
 
 口味修改在 Product 行排他锁下与 AuditLog 一起提交；下单/改单在原 OpenDate/Order 锁之后，
@@ -339,3 +339,33 @@ resolve RUN through the selected historical `GamePrizeWeek`. No tier configurati
 
 - Shop identity is self-reported (D170/Q11=A), with no viewToken or ownership check. Purchases append CUSTOMER `shop.purchase` AuditLog in the wallet transaction, including normalized identity, item, qty and cost. No raw IP is stored; hourly game rate-limit buckets enforce both IP-hash and normalized identity limits.
 
+## F2 — ProductFlavor daily capacity and bundles (D180)
+
+`ProductFlavor.dailyLimit Int?` is a default per-pickup-date piece limit; null means
+unlimited. `ProductFlavor.bundlePriceCents Int?` is the flavour bundle price; null
+means no bundle. Bundle size remains `Product.bundleSize`. Migration
+`20261102180000_flavor_limits_bundles` adds nullable columns without a backfill.
+Database checks enforce nonnegative limits and positive non-null bundle prices.
+
+`OpenDateFlavorLimit { date DateTime @db.Date, flavorId String @db.Uuid, limit Int }`
+has composite primary key `(date, flavorId)`. Both foreign keys cascade on parent
+deletion, matching OpenDateProductLimit. Limit is nonnegative; deleting the override
+restores the flavour default (including unlimited). No new order snapshot fields:
+existing unitPriceCents/bundleSize/bundlePriceCents carry the flavour price snapshot.
+
+All capacity-taking paths use the extended pure `checkDay` under the existing
+OpenDate FOR UPDATE lock: customer create, owner create/edit/date moves and status
+corrections that restore occupancy. There is no customer edit endpoint in this
+branch; customer cancellation releases occupancy through the existing locked path.
+Order reads retain flavorId for after recomputation. Product SHARE locks serialize
+current flavour settings with admin flavour mutations (Product FOR UPDATE), acquired
+after day/order locks. Status restoration now uses these locks too.
+
+Calendar date writes lock OpenDate before reading limits/usage and upsert/delete
+flavour overrides in the same transaction as `date.update` AuditLog. Below-usage
+changes follow existing confirm/warning semantics. Flavour create/update audits
+include both new fields. Order overrides use existing reason + `order.override` audit.
+
+DB tests connect only to validated names ending `_test`, including scratch migration
+maintenance connections. The primary test database must already exist; globalSetup
+applies migrations to that database without connecting to a maintenance database.

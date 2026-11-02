@@ -1,6 +1,6 @@
 import type { CartLine } from "./types";
 
-/** Pricing identity; capacity always aggregates by productId separately. */
+/** Pricing identity; product capacity aggregates by productId; flavour limits also aggregate by flavorId. */
 export function lineKey(line: Pick<CartLine, "productId" | "flavorId">): string {
   return `${line.productId}:${line.flavorId ?? ""}`;
 }

@@ -571,6 +571,8 @@ export const copy = {
     FULL: "这一天的预订名额已经满啦，可以选择下一个有空位的日期～",
     /** FULL when there is no suggested date (PAGES.md checkout errors). */
     FULL_NO_SUGGESTION: "暂时没有可以容纳这个订单的日期，可以减少数量或加微信联系店主",
+    /** F2: one flavour is full on that date. */
+    FLAVOR_FULL: "这个口味这一天已满，请换一天或换个口味",
     DELIVERY_FULL: "这一天的配送名额满了，可以改成自提～",
     /** D115: a cart product cannot be picked up on that weekday. */
     WEEKDAY_UNAVAILABLE: "有商品这一天不能取，请换一天或分开下单",
@@ -1331,7 +1333,9 @@ export const copy = {
         title: "口味", hint: "有口味的商品，顾客必须先选口味；每个口味按自己的价格，共用这个商品的名额",
         name: "口味名", price: "价格", add: "加一个口味", save: "保存", up: "上移", down: "下移",
         onSale: "在售", offSale: "已下架", takeOff: "下架", putOn: "上架", empty: "还没有口味", failed: "没保存成功，请重试",
-        invalid: "口味名 1–12 个字，价格填数字",
+        invalid: "口味名 1–12 个字，价格填数字；每日限额填整数，套餐价填金额，都可以留空",
+        dailyLimit: "每日限额", dailyLimitPlaceholder: "不限", bundlePrice: "{size} 个套餐价", bundlePricePlaceholder: "无套餐",
+        limitTag: "限 {n}",
       },
       title: "商品",
       newTitle: "新增商品",

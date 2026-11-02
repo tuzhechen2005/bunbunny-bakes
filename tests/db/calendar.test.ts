@@ -87,6 +87,7 @@ describe("GET calendar", () => {
       isOpen: false,
       hasRow: false,
       note: null,
+      flavors: [],
       limits: { doughLimitG: 1600, deliveryEnabled: true, deliveryLimit: 8, productLimits: { [P.brulee]: 24 } },
       overrides: { doughLimitG: null, deliveryLimit: null, productLimits: { [P.brulee]: null } },
       usage: { doughG: 0, products: { [P.brulee]: 0 }, deliveries: 0 },
@@ -268,7 +269,7 @@ describe("PUT dates/{date}", () => {
   it("returns the day in the GET shape", async () => {
     const day: CalendarDay = await updateOpenDate(db, D1, body(), NOW);
     expect(Object.keys(day).sort()).toEqual(
-      ["date", "hasRow", "isOpen", "limits", "note", "orderCount", "over", "overrides", "production", "usage"],
+      ["date", "flavors", "hasRow", "isOpen", "limits", "note", "orderCount", "over", "overrides", "production", "usage"],
     );
   });
 });

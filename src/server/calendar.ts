@@ -2,7 +2,7 @@
 // (PAGES.md /admin/calendar, API_SPEC.md, CAPACITY_RULES §3–§5, D23, D45).
 
 import { z } from "zod";
-import { usage as computeUsage } from "@/domain/capacity";
+import { usage as computeUsage, flavorUsage } from "@/domain/capacity";
 import { addDays, compareLocalDate, isLocalDate } from "@/domain/dates";
 import { type DayOrder, type LocalDate, type Usage } from "@/domain/types";
 import { buildDayProduction, type DayProduction } from "@/domain/summary";
@@ -35,6 +35,7 @@ export interface CalendarDay {
     deliveryLimit: number | null;
     productLimits: Record<string, number | null>;
   };
+  flavors: { id: string; productId: string; name: string; active: boolean; limit: number | null; used: number; override: number | null }[];
   usage: Usage;
   /** Occupying (NEW/CONTACTED/CONFIRMED/…) orders on that day. */
   orderCount: number;
@@ -50,6 +51,7 @@ export interface CalendarResponse {
 export type DateWarning =
   | { kind: "BELOW_USAGE"; what: "DOUGH" | "DELIVERY"; limit: number; used: number }
   | { kind: "BELOW_USAGE"; what: "PRODUCT"; productId: string; limit: number; used: number }
+  | { kind: "BELOW_USAGE"; what: "FLAVOR"; flavorId: string; limit: number; used: number }
   | { kind: "HAS_ORDERS"; count: number };
 
 const fieldError = (fields: Record<string, string>) =>
@@ -78,6 +80,7 @@ export const dateUpdateSchema = z.object({
   deliveryEnabled: z.boolean(),
   deliveryLimit: limitInt.nullable(),
   productLimits: z.record(z.uuid(), limitInt.nullable()),
+  flavorLimits: z.record(z.uuid(), limitInt.nullable()).optional(),
   note: z
     .string()
     .trim()
@@ -109,6 +112,7 @@ export async function loadCalendar(
   const range = { gte: toDbDate(from), lte: toDbDate(to) };
   // Sequential: one transaction = one connection.
   const openDates = await tx.openDate.findMany({ where: { date: range } });
+  const flavorRows = await tx.openDateFlavorLimit.findMany({ where: { date: range } });
   const limitRows = await tx.openDateProductLimit.findMany({ where: { date: range } });
   const orders = await tx.order.findMany({
     where: { pickupDate: range },
@@ -152,6 +156,13 @@ export async function loadCalendar(
     const dayOrders = ordersByDate.get(date) ?? [];
     const overrideMap = overridesByDate.get(date) ?? new Map<string, number>();
     const u = computeUsage(dayOrders, products);
+    const usedFlavors = flavorUsage(dayOrders);
+    const flavorOverrides = new Map(flavorRows.filter(r => fromDbDate(r.date) === date).map(r => [r.flavorId, r.limit]));
+    const flavors = Object.values(products).flatMap(p => (p.flavors ?? []).map(f => ({
+      id: f.id, productId: p.id, name: f.name, active: f.active,
+      limit: flavorOverrides.get(f.id) ?? f.dailyLimit,
+      used: usedFlavors[f.id] ?? 0, override: flavorOverrides.get(f.id) ?? null,
+    })));
 
     const limits = {
       doughLimitG: row?.doughLimitG ?? settings.defaultDoughLimitG,
@@ -184,6 +195,7 @@ export async function loadCalendar(
       note: row?.note ?? null,
       limits,
       overrides,
+      flavors,
       usage: u,
       orderCount: production.orderCount,
       production,
@@ -206,7 +218,7 @@ function describeWarnings(warnings: DateWarning[]): string {
     .map((w) =>
       w.kind === "HAS_ORDERS"
         ? `HAS_ORDERS ${w.count}`
-        : `${w.what}${w.what === "PRODUCT" ? ` ${w.productId}` : ""} limit ${w.limit} < used ${w.used}`,
+        : `${w.what}${w.what === "PRODUCT" ? ` ${w.productId}` : w.what === "FLAVOR" ? ` ${w.flavorId}` : ""} limit ${w.limit} < used ${w.used}`,
     )
     .join("; ");
 }
@@ -220,6 +232,7 @@ function stateOf(day: CalendarDay) {
     productLimits: Object.fromEntries(
       Object.entries(day.overrides.productLimits).filter(([, v]) => v !== null),
     ),
+    flavorLimits: Object.fromEntries(day.flavors.filter(f => f.override !== null).map(f => [f.id, f.override])),
     note: day.note,
   };
 }
@@ -242,16 +255,19 @@ export async function updateOpenDate(
   const dbDate = toDbDate(date);
 
   return db.$transaction(async (tx) => {
+    const created =
+      (await tx.$executeRaw`INSERT INTO "OpenDate" ("date") VALUES (${date}::date) ON CONFLICT ("date") DO NOTHING`) > 0;
+    await lockOpenDate(tx, date);
     const products = await loadProductMap(tx);
+    const flavorMap = new Map(Object.values(products).flatMap(p => (p.flavors ?? []).map(f => [f.id, f] as const)));
+    for (const id of Object.keys(input.flavorLimits ?? {})) {
+      if (!flavorMap.has(id)) throw fieldError({ [`flavorLimits.${id}`]: "Unknown flavour" });
+    }
     for (const id of Object.keys(input.productLimits)) {
       if (products[id]?.capacityMode !== "INDEPENDENT") {
         throw fieldError({ [`productLimits.${id}`]: "Not an independent-limit product" });
       }
     }
-
-    const created =
-      (await tx.$executeRaw`INSERT INTO "OpenDate" ("date") VALUES (${date}::date) ON CONFLICT ("date") DO NOTHING`) > 0;
-    await lockOpenDate(tx, date);
 
     // Read under the lock: nothing can be added to this day until we commit.
     const current = (await loadCalendar(tx, date, date, { products })).days[0];
@@ -277,6 +293,11 @@ export async function updateOpenDate(
       if (used > limit) {
         warnings.push({ kind: "BELOW_USAGE", what: "PRODUCT", productId: p.id, limit, used });
       }
+    }
+    for (const f of current.flavors) {
+      const override = Object.hasOwn(input.flavorLimits ?? {}, f.id) ? input.flavorLimits![f.id] : f.override;
+      const limit = override ?? flavorMap.get(f.id)!.dailyLimit;
+      if (limit !== null && f.used > limit) warnings.push({ kind: "BELOW_USAGE", what: "FLAVOR", flavorId: f.id, limit, used: f.used });
     }
     if (!created && current.isOpen && !input.isOpen && current.orderCount > 0) {
       warnings.push({ kind: "HAS_ORDERS", count: current.orderCount });
@@ -307,6 +328,14 @@ export async function updateOpenDate(
           update: { limit },
         });
       }
+    }
+
+    for (const [flavorId, limit] of Object.entries(input.flavorLimits ?? {})) {
+      if (limit === null) await tx.openDateFlavorLimit.deleteMany({ where: { date: dbDate, flavorId } });
+      else await tx.openDateFlavorLimit.upsert({
+        where: { date_flavorId: { date: dbDate, flavorId } },
+        create: { date: dbDate, flavorId, limit }, update: { limit },
+      });
     }
 
     const updated = (await loadCalendar(tx, date, date, { products })).days[0];

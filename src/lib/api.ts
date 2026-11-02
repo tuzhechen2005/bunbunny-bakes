@@ -26,7 +26,7 @@ export interface MenuProduct {
   /** Chicago weekdays the product can be picked up (0 = Sunday ... 6 = Saturday); empty = every day (C1). */
   pickupWeekdays: number[];
   /** Active flavours (F1); a product with flavours needs one chosen per cart line. */
-  flavors?: { id: string; name: string; priceCents: number }[];
+  flavors?: { id: string; name: string; priceCents: number; bundlePriceCents: number | null }[];
   /** Cheapest active flavour, or unitPriceCents. */
   priceFromCents?: number;
 }
@@ -50,6 +50,7 @@ export type DateHint =
   | { kind: "SPLIT"; reason: "CAPACITY" | "WEEKDAY"; here: CartItem[]; rest: CartItem[]; restDate: string | null };
 
 export interface DateOption {
+  soldOutFlavorIds: string[];
   date: string;
   state: DateState;
   /** Only on FULL / WEEKDAY dates, and only for a non-empty cart. */

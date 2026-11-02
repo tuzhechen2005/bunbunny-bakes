@@ -995,6 +995,10 @@
 /* F1 flavour chips: one tap picks the flavour; its price shows on the chip. */
 .hm-dt-flavors { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
 .hm-flavor { display: inline-flex; align-items: baseline; gap: 6px; min-height: 40px; padding: 8px 14px; border: 1.5px solid var(--c-line); border-radius: 999px; background: var(--c-paper); color: var(--c-ink); font-size: 14px; font-weight: 700; cursor: pointer; transition: transform 90ms ease-out, background-color 150ms, border-color 150ms; }
+.hm-flavor { flex-wrap: wrap; }
+.hm-flavor:has(small) { border-radius: 20px; }
+.hm-flavor small { flex: 0 0 100%; font-size: 11.5px; font-weight: 600; color: var(--c-grey); text-align: left; }
+.hm-flavor[aria-checked="true"] small { color: var(--c-paper); opacity: .8; }
 .hm-flavor b { font-size: 13px; font-weight: 600; color: var(--c-grey); }
 .hm-flavor[aria-checked="true"] { border-color: var(--c-ink); background: var(--c-ink); color: var(--c-paper); }
 .hm-flavor[aria-checked="true"] b { color: var(--c-paper); opacity: .8; }

@@ -1,3 +1,4 @@
+import { flavorPrice } from "@/domain/flavorPricing";
 import { lineKey } from "@/domain/cart";
 import type { CartLine, PriceSnapshot } from "@/domain/types";
 import type { ProductInfo, ProductInfoMap } from "./day";
@@ -37,10 +38,6 @@ export function currentLinePrice(line: CartLine, p: ProductInfo): { flavorId: st
   return {
     flavorId: flavor?.id ?? null,
     flavorName: flavor?.name ?? null,
-    price: {
-      unitPriceCents: flavor?.priceCents ?? p.unitPriceCents,
-      bundleSize: p.bundleSize,
-      bundlePriceCents: flavor ? null : p.bundlePriceCents,
-    },
+    price: flavorPrice(p, flavor),
   };
 }
