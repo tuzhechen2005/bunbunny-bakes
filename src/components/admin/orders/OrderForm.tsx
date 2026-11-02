@@ -141,7 +141,7 @@ export function OrderForm({ data, order }: OrderFormProps) {
     const map: Record<string, PriceSource> = {};
     for (const p of products) {
       map[p.id] = p;
-      for (const f of (p as FormProduct).flavors ?? []) map[formLineKey({ productId: p.id, flavorId: f.id })] = { unitPriceCents: f.priceCents, bundleSize: 0, bundlePriceCents: null };
+      for (const f of (p as FormProduct).flavors ?? []) map[formLineKey({ productId: p.id, flavorId: f.id })] = { unitPriceCents: f.priceCents, bundleSize: p.bundleSize, bundlePriceCents: f.bundlePriceCents ?? null };
     }
     for (const i of order?.items ?? []) map[formLineKey(lineFromOrder(i, flavoredIds))] = i;
     return map;
