@@ -1,0 +1,61 @@
+{
+  "sourceSha256": "106d379d7f2449683e1d085d212579c51a5618bfdbde029310f0f8be0eacaee4",
+  "meshes": [
+    {
+      "name": "tree",
+      "triangles": 3159,
+      "flatTriangles": 37,
+      "coincidentVertices": 19,
+      "maxSeamAngleDegrees": 0.0000017075472925031877
+    },
+    {
+      "name": "tree_round2",
+      "triangles": 3156,
+      "flatTriangles": 37,
+      "coincidentVertices": 20,
+      "maxSeamAngleDegrees": 0.0000012074182697257333
+    },
+    {
+      "name": "tree_tall",
+      "triangles": 3160,
+      "flatTriangles": 28,
+      "coincidentVertices": 21,
+      "maxSeamAngleDegrees": 0.0000014787793334710982
+    },
+    {
+      "name": "planter",
+      "triangles": 1460,
+      "flatTriangles": 0,
+      "coincidentVertices": 30,
+      "maxSeamAngleDegrees": 0.0000012074182697257333
+    },
+    {
+      "name": "bread",
+      "triangles": 1660,
+      "flatTriangles": 0,
+      "coincidentVertices": 56,
+      "maxSeamAngleDegrees": 0.0000012074182697257333
+    },
+    {
+      "name": "bag",
+      "triangles": 1658,
+      "flatTriangles": 0,
+      "coincidentVertices": 88,
+      "maxSeamAngleDegrees": 0.0000017075472925031877
+    },
+    {
+      "name": "crate_stack",
+      "triangles": 1458,
+      "flatTriangles": 3,
+      "coincidentVertices": 142,
+      "maxSeamAngleDegrees": 0.0000014787793334710982
+    },
+    {
+      "name": "puddle",
+      "triangles": 2480,
+      "flatTriangles": 401,
+      "coincidentVertices": 0,
+      "maxSeamAngleDegrees": 0
+    }
+  ]
+}

@@ -138,8 +138,8 @@ def awning(width=1.8,height=1.1,depth=.8,color='rose',posts=True,z=0,architectur
             f.stroke('Valance saddle stitch',[(x-.009,height+.10,z+depth/2),(x+.009,height+.10,z+depth/2)],.0026,'kraft' if k=='cream' else 'cream')
 
 
-def puddle():
-    N=96;R=36
+def puddle(segments=96,rings=36):
+    N=segments;R=rings
     outline=[]
     for i in range(N):
         a=i*math.tau/N;w=1+.065*math.sin(3*a+.5)+.043*math.cos(5*a-.7)+.022*math.sin(9*a)
@@ -175,7 +175,7 @@ def puddle():
     rim=mesh('Dark wet stain on surrounding stone',vs,faces,'wet')
     # Thin wet pigment follows the surface beneath it; small flattened edge stones.
     for i in (4,17,38,47,65,82,89):
-        x,z=outline[i]
+        x,z=outline[round(i*N/96)%N]
         r.ball('Wet edge pebble',(x*.965,.012,z*.965),(.020,.012,.014),'wet' if i%2 else 'stone',8,4)
     r.ROOT['footprint']=[1.7,1.1];r.ROOT['rippleRadii']=[.28,.51,.74]
     r.ROOT['waterRoughness']=.05;r.ROOT['waterMetalness']=.15

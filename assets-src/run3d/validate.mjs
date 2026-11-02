@@ -14,6 +14,7 @@ const expected={bunny:['BunnyClay','BunnyRig'],props,town:[...facades,'sidewalk'
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const near=(a,b,tol=.025,label='dimension')=>assert(Math.abs(a-b)<=tol,`${label}: ${a} vs ${b}`);
 const report={};
+const triangleTable=JSON.parse(fs.readFileSync(path.join(here,'review/triangles.json')));
 const poseLog=fs.readFileSync(path.join(here,'.cache/poses.log'),'utf8');
 const poseHash=poseLog.match(/POSE_ASSET_SHA256=([a-f0-9]{64})/)?.[1];
 const poseReport=JSON.parse(poseLog.match(/POSE_REPORT=(.+)/)[1]);
@@ -60,6 +61,8 @@ for(const name of ['bunny','props','town']){
   const g=JSON.parse(bytes.subarray(20,20+bytes.readUInt32LE(12)));
   assert(g.extensionsRequired.includes('EXT_meshopt_compression'));
   assert(g.extensionsRequired.includes('KHR_mesh_quantization'));
+  for(const mesh of g.meshes)for(const [index,p] of mesh.primitives.entries())
+    assert(Number.isInteger(p.attributes.NORMAL),`${name}/${mesh.name} primitive ${index}: missing NORMAL in packed GLB`);
   assert(!g.images?.length);assert(g.buffers.every(b=>!b.uri));
   assert(g.bufferViews.some(v=>v.extensions?.EXT_meshopt_compression));
   if(name!=='bunny'){
@@ -68,6 +71,11 @@ for(const name of ['bunny','props','town']){
   }
   const doc=await io.read(path.join(dir,name+'.glb')),root=doc.getRoot();
   const roots=root.getDefaultScene().listChildren();
+  const baselineContract=(await io.read(path.join(here,'.cache/baseline',name+'.glb'))).getRoot();
+  assert.deepEqual(root.listNodes().map(n=>n.getName()).sort(),baselineContract.listNodes().map(n=>n.getName()).sort(),'All node names preserved');
+  assert.deepEqual(root.listMeshes().map(n=>n.getName()).sort(),baselineContract.listMeshes().map(n=>n.getName()).sort(),'Mesh names preserved');
+  assert.deepEqual(root.listMaterials().map(m=>[m.getName(),m.getBaseColorFactor(),m.getRoughnessFactor(),m.getMetallicFactor(),m.getAlphaMode()]),baselineContract.listMaterials().map(m=>[m.getName(),m.getBaseColorFactor(),m.getRoughnessFactor(),m.getMetallicFactor(),m.getAlphaMode()]),'Materials preserved');
+  for(const mesh of root.listMeshes())assert.equal(mesh.listPrimitives().length,baselineContract.listMeshes().find(m=>m.getName()===mesh.getName()).listPrimitives().length,'Merged per material layout');
   assert.deepEqual(roots.map(n=>n.getName()).sort(),expected[name].slice().sort());
   for(const node of roots){
     assert.deepEqual(node.getTranslation(),[0,0,0],node.getName());
@@ -83,6 +91,13 @@ for(const name of ['bunny','props','town']){
     assert.equal(mat.getAlphaMode(),'OPAQUE');
   }
   for(const mesh of root.listMeshes())for(const p of mesh.listPrimitives()){
+    const normal=p.getAttribute('NORMAL');
+    assert(normal,`${name}/${mesh.getName()}: missing decoded NORMAL`);
+    assert.equal(normal.getCount(),p.getAttribute('POSITION').getCount());
+    for(let i=0;i<normal.getCount();i++){
+      const v=normal.getElement(i,[]);
+      assert(v.every(Number.isFinite)&&Math.abs(Math.hypot(...v)-1)<.02,`${name}/${mesh.getName()}: invalid NORMAL`);
+    }
     const c=p.getAttribute('COLOR_0');assert(c,'Missing baked vertex pigment');
     assert.equal(c.getComponentType(),5121);assert(c.getNormalized());
     assert.notEqual(p.getAttribute('POSITION').getComponentType(),5126,'Positions must be quantized');
@@ -90,9 +105,13 @@ for(const name of ['bunny','props','town']){
   }
   const dimensions=Object.fromEntries(roots.map(n=>[n.getName(),bounds(n)]));
   const triangles=Object.values(dimensions).reduce((a,b)=>a+b.triangles,0);
+  for(const node of root.listNodes().filter(n=>n.getMesh())){
+    const row=triangleTable.find(r=>r.file===name&&r.node===node.getName());assert(row,'Missing per-node triangle row');
+    assert.equal(row.after,bounds(node).triangles,'Report matches shipped geometry');
+    assert.equal(row.before,bounds(baselineContract.listNodes().find(n=>n.getName()===node.getName())).triangles,'Report matches baseline');
+  }
   if(name==='bunny'){
-    assert.equal(sha(bytes),sha(fs.readFileSync(path.join(here,'.cache/baseline/bunny.glb'))),'R17 must leave bunny bytes unchanged');
-    assert(triangles>=25000&&triangles<=35000);
+    assert(triangles>0&&triangles<=7000);
     assert.equal(root.listSkins().length,1);
     assert.deepEqual(root.listSkins()[0].listJoints().map(n=>n.getName()).sort(),['body','head','earL','earR','legL','legR','armL','armR'].sort());
     near(dimensions.BunnyClay.size[1],1.6,.002);near(dimensions.BunnyClay.min[1],0,.0002);
@@ -124,6 +143,7 @@ for(const name of ['bunny','props','town']){
     report.actions=actions;
   }
   if(name==='props'){
+    report.treeAttributes=Object.fromEntries(g.meshes.filter(m=>m.name.startsWith('Wheel thrown tree pot')).map(m=>[m.name,m.primitives.map(p=>Object.keys(p.attributes).sort())]));
     for(const n of ['tree','tree_round2','tree_tall']){
       const tree=roots.find(r=>r.getName()===n);
       assert.equal(tree.getExtras().foliageClumps,5);
@@ -157,20 +177,20 @@ for(const name of ['bunny','props','town']){
     assert(avg(outer,v=>v.p[1])-avg(inner,v=>v.p[1])>.007,'Water must be concave');
     assert(avg(outer,v=>v.c[1])-avg(inner,v=>v.c[1])>.15,'Water must lighten toward its edge');
     assert(avg(inner,v=>v.c[2])>avg(inner,v=>v.c[0]),'Deep teal-blue centre');
-    for(const [n,d] of Object.entries(dimensions))assert(d.triangles>=2000&&d.triangles<=8000,`${n}: ${d.triangles} triangles`);
+    const limits={tree:3200,tree_round2:3200,tree_tall:3200,lamp:800,bunting:600,planter:1500,bicycle:1500,crate_stack:1500,menu_board:1500,bench:1500,van:4000,truck:4000};
+    for(const [n,d] of Object.entries(dimensions))assert(d.triangles>0&&d.triangles<=(limits[n]||2500),`${n}: ${d.triangles} triangles`);
+    assert(triangles<=50000,'Props total budget');
     for(const [n,axis,value] of [['cart',0,1.8],['cart',1,1.4],['flour',1,.9],['bread',0,.45],['ramp',0,1.7],['ramp',1,1.3],['ramp',2,2],['pothole',0,1.6],['pothole',2,1.6],['breadwheel',1,1.2],['breadwheel',2,1.2]])near(dimensions[n].size[axis],value,.025,n);
     for(const n of ['van','truck']){near(dimensions[n].max[1],1.3,.001);near(dimensions[n].size[0],1.9);near(dimensions[n].size[2],6);}
     for(const n of ['pothole','breadwheel','shoes','shield','signal','planter','crate_stack','menu_board'])near(dimensions[n].min[1],0,.008,`${n} ground`);
     assert(dimensions.pothole.size[1]<.08);assert(dimensions.signal.size[1]<.35);
     const previous=await io.read(path.join(here,'.cache/baseline/props.glb'));
-    const changed=new Set(['tree','puddle','planter','cart','awning','tree_round2','tree_tall']);
     for(const old of previous.getRoot().getDefaultScene().listChildren()){
-      if(changed.has(old.getName()))continue;
       const before=bounds(old),after=dimensions[old.getName()];
-      assert.equal(after.triangles,before.triangles,`${old.getName()} unchanged triangles`);
+      assert(after.triangles<=before.triangles,`${old.getName()} triangle reduction`);
       for(let axis=0;axis<3;axis++){
-        near(after.min[axis],before.min[axis],.0002,`${old.getName()} unchanged min`);
-        near(after.max[axis],before.max[axis],.0002,`${old.getName()} unchanged max`);
+        near(after.min[axis],before.min[axis],.0002,`${old.getName()} preserved min`);
+        near(after.max[axis],before.max[axis],.0002,`${old.getName()} preserved max`);
       }
     }
     const bunting=roots.find(n=>n.getName()==='bunting');
@@ -179,6 +199,9 @@ for(const name of ['bunny','props','town']){
     near(dimensions.bunting.size[0],8,.04);assert(dimensions.bunting.min[1]>-.85);
   }
   if(name==='town'){
+    assert(triangles<=80000,'Town total budget');
+    for(const n of facades)assert(dimensions[n].triangles<=7000,n);
+    assert(dimensions.road.triangles+dimensions.sidewalk.triangles<=2000,'Street tile budget');
     for(const n of facades){near(dimensions[n].size[0],6);near(dimensions[n].size[1],7);assert(dimensions[n].max[2]<2.66);}
     for(const [n,w] of [['road',8],['sidewalk',2]]){near(dimensions[n].size[0],w,.001);near(dimensions[n].size[2],6,.001);}
     near(dimensions.road.max[1],.024,.0002);
@@ -190,13 +213,24 @@ for(const name of ['bunny','props','town']){
 const files=fs.readdirSync(dir,{recursive:true}).filter(n=>fs.statSync(path.join(dir,n)).isFile());
 const total=files.reduce((sum,n)=>sum+fs.statSync(path.join(dir,n)).size,0);
 assert(total<=4200000,`Public budget exceeded: ${total}`);
-const previews=['preview.png','bunny-closeup.png','props-review.png','facades-review.png','mechanics-preview.png','trees-closeup.png','puddle-closeup.png','planting-closeup.png'];
+const previews=['preview.png','bunny-closeup.png','trees-closeup.png','puddle-closeup.png','props-closeup.png'];
+report.smoothNormals=JSON.parse(fs.readFileSync(path.join(here,'review/smooth-normals.json')));
+assert.equal(report.smoothNormals.sourceSha256,report.props.sha256);
+for(const mesh of report.smoothNormals.meshes){
+ assert(mesh.maxSeamAngleDegrees<1,mesh.name+' split normals');
+ if(mesh.name.startsWith('tree'))assert(mesh.flatTriangles/mesh.triangles<.02,mesh.name+' flat normals');
+}
 const provenance=JSON.parse(fs.readFileSync(path.join(here,'.cache/preview-provenance.json')));
-for(const name of ['bunny','props','town'])assert.equal(provenance.sourceSha256[name],report[name].sha256);
-report.previews=Object.fromEntries(previews.map(n=>{const bytes=fs.readFileSync(path.join(here,n));assert.equal(bytes.readUInt32BE(0),0x89504e47);return [n,{bytes:bytes.length,width:bytes.readUInt32BE(16),height:bytes.readUInt32BE(20),sha256:sha(bytes)}];}));
+for(const name of ['bunny','props','town']){
+  assert.equal(provenance.sourceSha256[name],report[name].sha256);
+  assert.equal(provenance.importedDecodedSha256[name],sha(fs.readFileSync(path.join(here,'.cache/decoded',name+'.glb'))));
+}
+report.previews=Object.fromEntries(previews.map(n=>{const bytes=fs.readFileSync(path.join(here,'review/after',n));assert(bytes.length<1000000, n+' review size');assert.equal(bytes.readUInt32BE(0),0x89504e47);return [n,{bytes:bytes.length,width:bytes.readUInt32BE(16),height:bytes.readUInt32BE(20),sha256:sha(bytes)}];}));
+report.beforePreviews=Object.fromEntries(['preview.png','bunny-closeup.png','trees-closeup.png','puddle-closeup.png'].map(n=>{const bytes=fs.readFileSync(path.join(here,'review/before',n));assert(bytes.length<1000000);return [n,{bytes:bytes.length,sha256:sha(bytes)}];}));
+report.baselineSha256=Object.fromEntries(['bunny','props','town'].map(n=>[n,sha(fs.readFileSync(path.join(here,'.cache/baseline',n+'.glb')))]));
 report.totalPublicBytes=total;report.budgetBytes=4200000;
-report.facadeOptimization={targetTriangleRatio:.94,relativeErrorLimit:.00008,lockedBorders:true,excludes:['road','sidewalk','all props','bunny']};
-report.compression='EXT_meshopt_compression + KHR_mesh_quantization. Bunny: 16-bit positions/12-bit normals; props: 16-bit positions/8-bit octahedral normals; town: 14-bit positions/8-bit octahedral normals. All: 8-bit vertex colours/weights. MeshoptDecoder required.';
+report.geometryOptimization={source:'performance.py',perNodeTable:'review/triangles.json',facadeLimit:7000,streetCombinedLimit:2000,treeLimit:3200,propsLimit:50000,townLimit:80000,bunnyLimit:7000};
+report.compression='EXT_meshopt_compression + KHR_mesh_quantization. Bunny: 16-bit positions/12-bit normals; props: 16-bit positions/12-bit octahedral normals; town: 14-bit positions/8-bit octahedral normals. All: 8-bit vertex colours/weights. MeshoptDecoder required.';
 const loaderCheck=JSON.parse(fs.readFileSync(path.join(here,'.cache/loader-check.json')));
 for(const name of ['bunny','props','town'])assert.equal(loaderCheck[name].sha256,report[name].sha256);
 assert.equal(loaderCheck.bunny.animationPoses,175);

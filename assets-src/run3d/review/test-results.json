@@ -1,0 +1,14 @@
+{
+  "fullRun": {
+    "command": "npx vitest run --configLoader runner --project unit --maxWorkers 1 tests/unit/run*",
+    "passed": 87,
+    "failed": 1,
+    "failure": "runTrack.test.ts: 1000-seed reachable path test exceeded its 15000 ms timeout"
+  },
+  "isolatedRetry": {
+    "command": "npx vitest run --configLoader runner --project unit tests/unit/runTrack.test.ts",
+    "passed": 6,
+    "failed": 0
+  },
+  "distinctTestsPassingAcrossRuns": 88
+}

@@ -3,7 +3,7 @@ import sys, os, math, json, hashlib
 from pathlib import Path
 import bpy
 HERE=Path(__file__).resolve().parent
-os.environ['RUN3D_OUT']=str(HERE/'.cache/decoded')
+os.environ['RUN3D_OUT']=os.environ.get('RUN3D_REVIEW_SOURCE',str(HERE/'.cache/decoded'))
 sys.path.insert(0,str(HERE))
 import render as r
 
@@ -12,7 +12,9 @@ def save(name,width,height):
     scene=bpy.context.scene
     scene.render.resolution_x=width;scene.render.resolution_y=height
     scene.cycles.samples=96
-    scene.render.filepath=str(HERE/name)
+    destination=Path(os.environ.get('RUN3D_REVIEW_DIR',str(HERE)))
+    destination.mkdir(parents=True,exist_ok=True)
+    scene.render.filepath=str(destination/name)
     bpy.ops.render.render(write_still=True)
 
 
@@ -102,6 +104,15 @@ def puddle_closeup():
     save('puddle-closeup.png',1100,850)
 
 
+def rounded_props_closeup():
+    r.clear();lib=r.import_library('props')
+    for name,p in [('planter',(-1.1,0,0)),('bread',(0,0,.4)),('bag',(.65,0,0)),('crate_stack',(1.5,0,-.4)),('puddle',(-.15,0,1.4))]:
+        r.instance(lib[name],p)
+    r.box('Studio floor',(0,-.065,0),(200,.10,200),'cream',.01)
+    r.light_scene(True);r.camera((3.5,3.7,7.0),(0,.45,.45),60)
+    save('props-closeup.png',1400,1000)
+
+
 def planting_closeup():
     r.clear();props=r.import_library('props')
     r.instance(props['awning'],(-1.25,0,0));r.instance(props['planter'],(1.0,0,.12))
@@ -111,10 +122,12 @@ def planting_closeup():
 
 if __name__=='__main__':
     selection=sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else ['street','trees','puddle','planting','props','facades']
-    for name in selection:{'street':street,'closeup':closeup,'props':props_sheet,'facades':facades_sheet,'trees':trees_closeup,'puddle':puddle_closeup,'planting':planting_closeup}[name]()
+    for name in selection:{'street':street,'closeup':closeup,'props':props_sheet,'facades':facades_sheet,'trees':trees_closeup,'puddle':puddle_closeup,'planting':planting_closeup,'rounded':rounded_props_closeup}[name]()
     public=HERE.parents[1]/'public/brand/run3d'
     (HERE/'.cache/preview-provenance.json').write_text(json.dumps({
         'sourceSha256':{n:hashlib.sha256((public/(n+'.glb')).read_bytes()).hexdigest() for n in ('bunny','props','town')},
+        'importedDecodedSha256':{n:hashlib.sha256((Path(os.environ['RUN3D_OUT'])/(n+'.glb')).read_bytes()).hexdigest() for n in ('bunny','props','town')},
+        'geometrySource':'Blender imports meshopt-decoded packed public GLBs; no normal regeneration in review',
         'gameCamera':{'position':[0,4.6,-7.2],'target':[0,1.1,7],'verticalFovDegrees':55,'roadScaleX':.78},
         'natureCloseupOrder':['tree','tree_round2','tree_tall'],
         'puddleCloseup':'Decoded puddle on decoded road stones; road offset -0.012 m; reflected 18 W rectangular softbox',

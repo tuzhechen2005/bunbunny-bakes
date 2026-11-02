@@ -15,6 +15,11 @@ const loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder),report={};
 for(const name of ['bunny','props','town']){
   const b=fs.readFileSync(`public/brand/run3d/${name}.glb`);
   const g=await loader.parseAsync(b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength),'');
+  g.scene.traverse(object=>{
+    if(!object.isMesh)return;
+    assert(object.geometry.getAttribute('normal'),`${name}/${object.name}: missing loader normal`);
+    for(const material of [object.material].flat())assert(!material.flatShading,`${name}/${object.name}: loader forced flat shading`);
+  });
   g.scene.updateMatrixWorld(true);
   const roots={};
   for(const root of g.scene.children){

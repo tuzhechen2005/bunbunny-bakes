@@ -1,0 +1,127 @@
+[
+  {
+    "node": "flourMesh",
+    "r18": 1659,
+    "r18b": 1660
+  },
+  {
+    "node": "rampMesh",
+    "r18": 1660,
+    "r18b": 1659
+  },
+  {
+    "node": "vanMesh",
+    "r18": 2760,
+    "r18b": 2760
+  },
+  {
+    "node": "truckMesh",
+    "r18": 2760,
+    "r18b": 2760
+  },
+  {
+    "node": "breadMesh",
+    "r18": 1660,
+    "r18b": 1660
+  },
+  {
+    "node": "bagMesh",
+    "r18": 1659,
+    "r18b": 1658
+  },
+  {
+    "node": "coffeeMesh",
+    "r18": 1660,
+    "r18b": 1660
+  },
+  {
+    "node": "lampMesh",
+    "r18": 760,
+    "r18b": 760
+  },
+  {
+    "node": "benchMesh",
+    "r18": 1460,
+    "r18b": 1460
+  },
+  {
+    "node": "potholeMesh",
+    "r18": 1660,
+    "r18b": 1660
+  },
+  {
+    "node": "breadwheelMesh",
+    "r18": 1659,
+    "r18b": 1660
+  },
+  {
+    "node": "shoesMesh",
+    "r18": 1660,
+    "r18b": 1636
+  },
+  {
+    "node": "shieldMesh",
+    "r18": 1660,
+    "r18b": 1660
+  },
+  {
+    "node": "signalMesh",
+    "r18": 544,
+    "r18b": 558
+  },
+  {
+    "node": "bicycleMesh",
+    "r18": 1460,
+    "r18b": 1453
+  },
+  {
+    "node": "crate_stackMesh",
+    "r18": 1458,
+    "r18b": 1458
+  },
+  {
+    "node": "menu_boardMesh",
+    "r18": 1460,
+    "r18b": 1460
+  },
+  {
+    "node": "buntingMesh",
+    "r18": 560,
+    "r18b": 547
+  },
+  {
+    "node": "cartMesh",
+    "r18": 2460,
+    "r18b": 2421
+  },
+  {
+    "node": "awningMesh",
+    "r18": 2460,
+    "r18b": 2458
+  },
+  {
+    "node": "puddleMesh",
+    "r18": 2480,
+    "r18b": 2480
+  },
+  {
+    "node": "treeMesh",
+    "r18": 2460,
+    "r18b": 3159
+  },
+  {
+    "node": "tree_round2Mesh",
+    "r18": 2446,
+    "r18b": 3156
+  },
+  {
+    "node": "tree_tallMesh",
+    "r18": 2459,
+    "r18b": 3160
+  },
+  {
+    "node": "planterMesh",
+    "r18": 1460,
+    "r18b": 1460
+  }
+]
