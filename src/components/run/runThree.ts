@@ -118,13 +118,62 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   const extras = ["planter", "bicycle", "crate_stack", "menu_board", "bench"].map(n => propsG.scene.getObjectByName(n)).filter((o): o is THREE.Object3D => !!o).map(bake);
   const buntingSrc = propsG.scene.getObjectByName("bunting");
   const bunting = buntingSrc ? bake(buntingSrc) : null;
+  // ---- ground: one long road and two pavements whose painted textures scroll --------
+  // Modelled cobbles cost ~40k triangles per tile and shimmered into dark lines in motion; a
+  // mipmapped texture on one plane has no tile seams and filters cleanly at any distance.
+  const box = (o: THREE.Object3D) => { o.updateMatrixWorld(true); return new THREE.Box3().setFromObject(o); };
+  const rb = box(roadT), wb = box(walkT);
+  const roadW = (rb.max.x - rb.min.x) * ROAD_SCALE, walkW = wb.max.x - wb.min.x, walkTop = wb.max.y;
+  const GROUND_LEN = AHEAD + BEHIND + TILE * 2, GROUND_Z = (AHEAD - BEHIND) / 2;
+  const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  const paint = (w: number, h: number, draw: (x: CanvasRenderingContext2D, w: number, h: number) => void) => {
+    const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d")!, w, h);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = maxAniso; t.repeat.set(1, GROUND_LEN / TILE); return t;
+  };
+  const rand = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+  // One texture repeat = one tile (TILE long): 20 rows of offset clay cobbles and the lane dashes.
+  const roadTex = paint(512, 512, (x, w, h) => {
+    const sx = w / roadW, rows = 22, rh = h / rows, cw = .4 * sx;
+    x.fillStyle = "#c79d74"; x.fillRect(0, 0, w, h);
+    const tones = ["#e4c29c", "#dcb48b", "#e9cca8", "#d6ab80", "#e0bb93"];
+    for (let r = 0; r < rows; r++) for (let cx = -(r % 2) * cw / 2; cx < w; cx += cw) {
+      x.fillStyle = tones[Math.floor(rand() * tones.length)];
+      x.beginPath(); x.roundRect(cx + 2, r * rh + 2, cw - 4, rh - 4, 4); x.fill();
+      x.fillStyle = "rgba(255,248,236,.22)"; x.beginPath(); x.roundRect(cx + 4, r * rh + 3, cw - 10, (rh - 6) * .45, 4); x.fill();
+    }
+    x.fillStyle = "rgba(255,250,242,.9)";
+    for (const lx of [-LANE / 2, LANE / 2]) for (const z0 of [.6, 3.6]) x.fillRect(w / 2 + lx * sx - 3, z0 / TILE * h, 6, .9 / TILE * h);
+  });
+  const walkTex = paint(256, 256, (x, w, h) => {
+    const cols = Math.max(1, Math.round(walkW)), rows = TILE, cw = w / cols, rh = h / rows;
+    x.fillStyle = "#d9cab4"; x.fillRect(0, 0, w, h);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      x.fillStyle = ["#f1e7d8", "#ece0ce", "#f4ebde"][Math.floor(rand() * 3)];
+      x.beginPath(); x.roundRect(c * cw + 2, r * rh + 2, cw - 4, rh - 4, 6); x.fill();
+    }
+  });
+  const ground = (tex: THREE.Texture, w: number) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, GROUND_LEN).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: tex, roughness: .95 }));
+    m.receiveShadow = true; m.position.z = GROUND_Z; scene.add(m); return m;
+  };
+  ground(roadTex, roadW + .4).position.y = 0;
+  const curbMat = new THREE.MeshStandardMaterial({ color: 0xa0704a, roughness: .8 });
+  for (const side of [-1, 1]) {
+    const cx = side * (ROAD_HALF + 1) + (wb.max.x + wb.min.x) / 2;
+    const walk = ground(walkTex, walkW); walk.position.set(cx, walkTop, GROUND_Z);
+    // The pavement body and its terracotta kerb are plain boxes: nothing on them needs to scroll.
+    const body = new THREE.Mesh(new THREE.BoxGeometry(walkW, walkTop, GROUND_LEN), new THREE.MeshStandardMaterial({ color: 0xe6d8c3, roughness: .95 }));
+    body.position.set(cx, walkTop / 2 - .005, GROUND_Z); scene.add(body); // vertical faces: no shadow acne
+    const kerb = new THREE.Mesh(new THREE.BoxGeometry(.16, walkTop + .03, GROUND_LEN), curbMat);
+    // Proud of the pavement wall by 3 cm so the two faces never z-fight.
+    kerb.position.set(cx - side * (walkW / 2 - .05), (walkTop + .03) / 2, GROUND_Z); scene.add(kerb);
+  }
+
   interface Slot { g: THREE.Group; left: THREE.Group[]; right: THREE.Group[]; deco: THREE.Group[]; extra: THREE.Group[]; flag: THREE.Group | null; index: number }
   const street: Slot[] = [];
   for (let i = 0; i < slots; i++) {
     const g = new THREE.Group();
-    // Tiles overlap by 1% along Z so no hairline gap ever shows between them.
-    const road = roadT.clone(); road.scale.set(ROAD_SCALE, 1, 1.01); road.traverse(o => { o.receiveShadow = true; }); g.add(road);
-    for (const side of [-1, 1]) { const w = walkT.clone(); w.position.x = side * (ROAD_HALF + 1); w.scale.z = 1.01; w.traverse(o => { o.receiveShadow = true; }); g.add(w); }
     const make = (side: number) => facades.map(f => {
       const b = f.clone(); b.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; b.position.set(side * (ROAD_HALF + 4.2), .18, 0); b.visible = false; g.add(b); return b;
     });
@@ -263,6 +312,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
 
     // Street slots recycle by absolute tile index; variants come from a stable hash.
     const firstTile = Math.floor((dist - BEHIND) / TILE);
+    const scroll = -((dist / TILE) % 1); roadTex.offset.y = scroll; walkTex.offset.y = scroll;
     for (let i = 0; i < street.length; i++) {
       const idx = firstTile + i, sl = street[(idx % street.length + street.length) % street.length];
       sl.g.position.z = idx * TILE - dist + TILE / 2;
