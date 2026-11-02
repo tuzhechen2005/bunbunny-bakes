@@ -35,6 +35,9 @@ export interface FinishResult {
   personalBest?: number;
   /** C2 (D113): this run is now the all-time record. */
   newRecord?: boolean;
+  /** GRAB v6 (D183): highest level entered, and orders completed. */
+  level?: number;
+  completedOrders?: number;
 }
 
 export interface LeaderboardRow {
@@ -43,16 +46,20 @@ export interface LeaderboardRow {
   nickname: string;
   wechatMasked: string;
   score: number;
+  /** GRAB v6: highest level entered (rows rank by it before the score). */
+  level?: number;
 }
 
 export interface Leaderboard {
   liveScores?: boolean;
   week: { start: string; end: string };
   top: LeaderboardRow[];
-  lastWinner: { nickname: string; wechatMasked: string; score: number } | null;
+  lastWinner: { nickname: string; wechatMasked: string; score: number; level?: number } | null;
   myBest?: number;
+  /** GRAB v6: the player's own best level. */
+  myLevel?: number;
   /** C2 (D113): the all-time best of everyone, null while nobody has finished a run. */
-  allTime?: { nickname: string; wechatMasked: string; score: number } | null;
+  allTime?: { nickname: string; wechatMasked: string; score: number; level?: number } | null;
 }
 
 export interface Body {

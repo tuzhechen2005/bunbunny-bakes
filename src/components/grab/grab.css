@@ -8,11 +8,11 @@
 .grab-help-card img { width:48px; height:48px; object-fit:contain; margin-bottom:7px; }
 .grab-help-card b { font-size:14px; }
 .grab-help-card span { margin-top:4px; color:var(--c-grey-text); font-size:11px; white-space:nowrap; }
-.grab-hud { display:flex; justify-content:space-between; padding:4px 6px 0; }
+.grab-hud { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:4px 6px 0; }
 .grab-hud p { margin:0; font-size:12px; color:var(--c-grey-text); }
 .grab-hud p:last-child { text-align:right; }
 .grab-hud b { display:block; color:var(--c-ink); font-size:38px; line-height:1.15; font-weight:400; }
-.grab-bakery { position:relative; height:76px; flex-shrink:0; pointer-events:none; z-index:2; }
+.grab-bakery { position:relative; display:flex; align-items:flex-end; justify-content:space-between; height:76px; flex-shrink:0; padding:0 2px 6px; pointer-events:none; z-index:2; }
 .grab-bunny { position:absolute; height:96px; width:110px; object-fit:contain; bottom:calc(100% - 11px); left:50%; pointer-events:none; z-index:3; transform:translateX(-50%); }
 .grab-board { display:block; position:relative; isolation:isolate; height:100%; width:100%; padding:0; border:0; border-radius:22px 22px 30px 30px; overflow:hidden; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; cursor:pointer;
   background:
@@ -81,6 +81,16 @@
 .grab-still * { animation-play-state:paused; }
 .grab-quiet .grab-perfect, .grab-quiet .grab-sparkle, .grab-quiet .grab-item::after, .grab-quiet .grab-face > img, .grab-quiet .grab-smoke i, .grab-quiet .grab-item[data-kind="bomb"] .grab-face, .grab-quiet .grab-debris, .grab-quiet .grab-burst, .grab-quiet .grab-bump, .grab-quiet [data-testid="grab-timer"] { animation:none; }
 .grab-quiet .grab-smoke i { opacity:.5; transform:translateY(-40%); }
+.grab-quiet .grab-mouse { animation:none; }
+.grab-quiet .grab-item[data-golden] .grab-face::after, .grab-quiet .grab-strain, .grab-quiet .grab-chain, .grab-quiet .grab-check, .grab-quiet .grab-interlude-title { animation:none; }
+.grab-quiet .grab-item[data-golden] .grab-face::after { display:none; }
+.grab-quiet .grab-tag, .grab-quiet .grab-order-in { animation-name:grab-record-fade; }
+.grab-quiet .grab-order-pop { animation-name:grab-fade; }
+.grab-quiet .grab-order-leave { display:none; }
+.grab-quiet .grab-tag { transform:translateX(-50%); }
+.grab-quiet .grab-order-in[data-next] { animation-delay:0ms; }
+.grab-quiet .grab-order-pop { transform:translateX(-50%); animation-duration:900ms; }
+.grab-quiet .grab-level-bar i { transition:none; }
 .grab-quiet .grab-score-pop { animation-name:grab-fade; transform:translateX(-50%); }
 .grab-quiet .grab-boom { animation-name:grab-fade; transform:translate(-50%,-50%); }
 .grab-quiet .grab-debris { opacity:0; }
@@ -99,3 +109,76 @@
 @keyframes grab-refill { from { opacity:0; transform:translate(var(--from-x),var(--from-y)) scale(.5); } to { opacity:1; transform:translate(0,0) scale(1); } }
 @keyframes grab-record-fade { from { opacity:0; } to { opacity:1; } }
 @media (prefers-reduced-motion:reduce) { .grab-refill > .grab-face { animation-name:grab-record-fade; } }
+
+/* Level (D183): name, progress to the target, and the numbers; the bar is a compositor-only scaleX. */
+.grab-level { display:flex; flex:1; min-width:0; flex-direction:column; align-items:center; padding-top:6px; }
+.grab-level-name { font-size:13px; line-height:1.2; color:var(--c-ink); }
+.grab-level-bar { width:100%; max-width:150px; height:6px; margin-top:5px; border-radius:3px; background:rgba(60,30,10,.1); overflow:hidden; }
+.grab-level-bar i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#e7b768,#cf8a3c); transform-origin:0 50%; transition:transform 360ms ease-out; }
+.grab-level-num { margin-top:3px; font-size:11px; line-height:1; color:var(--c-grey-text); }
+
+/* Order card: two small bread thumbnails that tick off, and the reward. */
+.grab-order { position:relative; z-index:2; width:116px; height:40px; }
+.grab-order-card { position:absolute; left:0; bottom:0; display:flex; align-items:center; gap:5px; height:40px; padding:0 9px 0 5px; border-radius:20px; background:rgba(255,248,236,.94); box-shadow:inset 0 0 0 1px rgba(96,54,22,.2), 0 3px 8px -4px rgba(74,38,14,.5); white-space:nowrap; }
+.grab-order-slot { position:relative; display:block; width:30px; height:30px; flex:none; border-radius:9px; overflow:hidden; background:#efe2cb; box-shadow:inset 0 0 0 1px rgba(60,30,10,.12); }
+.grab-order-slot img { display:block; width:100%; height:100%; object-fit:cover; }
+.grab-order-ok img { opacity:.45; }
+.grab-check { position:absolute; inset:5px; width:20px; height:20px; padding:2px; border-radius:50%; background:#3f8a4f; color:#fff; animation:grab-check 300ms cubic-bezier(.3,1.6,.5,1) both; }
+.grab-order-reward { margin-left:1px; font-size:15px; font-weight:400; color:#9a5a24; }
+.grab-order-in { animation:grab-order-in 380ms cubic-bezier(.2,.9,.3,1) both; }
+.grab-order-in[data-next] { animation-delay:620ms; }
+.grab-order-leave { animation:grab-order-leave 340ms ease-in 560ms both; }
+.grab-order-pop { position:absolute; left:50%; top:-8px; z-index:3; color:#fffaf0; font-size:26px; line-height:1; white-space:nowrap; text-shadow:0 2px 0 #9a5a24, 0 0 12px rgba(154,90,36,.5); animation:grab-order-pop 1000ms cubic-bezier(.2,.8,.2,1) both; }
+@keyframes grab-order-in { from { opacity:0; transform:translateX(-26px) scale(.9); } to { opacity:1; transform:none; } }
+@keyframes grab-order-leave { to { opacity:0; transform:translateX(26px) scale(.9); } }
+@keyframes grab-order-pop { 0% { opacity:0; transform:translate(-50%,30%) scale(.6); } 22% { opacity:1; transform:translate(-50%,-30%) scale(1.15); } 80% { opacity:1; } 100% { opacity:0; transform:translate(-50%,-120%); } }
+@keyframes grab-check { from { opacity:0; transform:scale(.3); } to { opacity:1; transform:scale(1); } }
+
+/* Perfect chain chip. */
+.grab-chain { display:flex; flex-direction:column; align-items:center; margin:0 0 4px; padding:3px 9px 4px; border-radius:14px; background:#5a3b2a; color:#fff3dc; font-size:11px; line-height:1.25; white-space:nowrap; box-shadow:0 2px 0 #3b2a1f; animation:grab-chain 360ms cubic-bezier(.3,1.6,.5,1); }
+.grab-chain b { color:#f6cf64; font-size:13px; font-weight:400; }
+@keyframes grab-chain { from { transform:scale(.8); } to { transform:scale(1); } }
+
+/* Contact label: rides under the bread from the instant the tongs touch until it is banked. */
+.grab-tag-pos { position:absolute; inset:0; z-index:4; pointer-events:none; will-change:transform; }
+.grab-tag { position:absolute; left:0; top:0; display:flex; align-items:baseline; gap:5px; padding:3px 10px 4px; border-radius:999px; font-size:14px; line-height:1.2; white-space:nowrap; transform:translateX(-50%); transform-origin:50% 0; animation:grab-tag 320ms cubic-bezier(.3,1.6,.5,1) both; box-shadow:0 2px 6px -2px rgba(40,20,6,.55); }
+.grab-tag b { font-size:15px; font-weight:400; }
+.grab-tag em { margin-left:1px; padding:0 5px; border-radius:8px; background:rgba(60,30,10,.85); color:#fff3dc; font-size:12px; font-style:normal; }
+.grab-tag-perfect { background:linear-gradient(180deg,#ffe08a,#f2b93a); color:#4a2f08; box-shadow:0 0 0 1px #c88a1a, 0 2px 8px -2px rgba(200,138,26,.8); }
+.grab-tag-raw { background:#f7efe2; color:#8a7a66; box-shadow:0 0 0 1px #d9cbb5; }
+.grab-tag-burnt { background:#2e2622; color:#f1e2cf; box-shadow:0 0 0 1px #6a3a22, 0 0 10px rgba(255,110,30,.35); }
+.grab-tag-none { background:#fffaf0; color:#6a4a2a; box-shadow:0 0 0 1px #d9cbb5; }
+@keyframes grab-tag { from { opacity:0; transform:translateX(-50%) scale(.4); } to { opacity:1; transform:translateX(-50%) scale(1); } }
+
+/* Mouse carrier: the TD mouse sheet (6 frames) scurrying under a small bread. */
+.grab-item[data-mouse]::before { display:none; }
+.grab-item[data-mouse] .grab-face { box-shadow:0 5px 8px -3px rgba(74,38,14,.55), inset 0 0 0 1px rgba(60,30,10,.1); }
+.grab-mouse { position:absolute; left:-85%; top:-9%; width:270%; aspect-ratio:1; background:url("/brand/td/pest-mouse.webp") 0 0 / 600% 100% no-repeat; animation:grab-scurry 600ms steps(6) infinite; pointer-events:none; }
+.grab-item[data-dir="left"] .grab-mouse { transform:scaleX(-1); }
+@keyframes grab-scurry { to { background-position:120% 0; } }
+
+/* Golden bread: gilded picture (canvas), gold rim light, a slow sheen sweep and two glints. */
+.grab-item[data-golden]::before { background:#fff1c4; box-shadow:0 0 0 3px #efc14a, 0 0 22px 5px rgba(255,200,70,.7), 0 8px 12px -4px rgba(74,38,14,.4); }
+.grab-item[data-golden] .grab-face::after { content:""; position:absolute; inset:-30%; background:linear-gradient(105deg, transparent 42%, rgba(255,255,255,.7) 50%, transparent 58%); transform:translateX(-110%); animation:grab-sheen 2800ms ease-in-out infinite; pointer-events:none; }
+.grab-item[data-golden][data-stage="burnt"] .grab-face::after { display:none; }
+.grab-sparkle-b { right:auto; top:auto; left:8%; bottom:10%; width:18%; height:18%; animation-delay:800ms; }
+@keyframes grab-sheen { 0%,55% { transform:translateX(-110%); } 100% { transform:translateX(110%); } }
+/* Heavy reel: the tongs and the load tremble under the weight. */
+.grab-strain { animation:grab-strain 140ms linear infinite; }
+@keyframes grab-strain { 0%,100% { transform:translate(-50%,-45%); } 25% { transform:translate(calc(-50% + 1.5px),-45%); } 75% { transform:translate(calc(-50% - 1.5px),-45%); } }
+
+/* Level clear interstitial. */
+.grab-interlude { position:absolute; inset:0; z-index:6; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; border-radius:22px 22px 30px 30px; background:rgba(58,34,16,.55); color:#fff8ea; text-align:center; animation:grab-record-fade 260ms ease-out both; }
+.grab-interlude-title { margin:0; font-size:30px; line-height:1.15; text-shadow:0 2px 0 rgba(60,30,10,.6); animation:grab-record 420ms cubic-bezier(.3,1.4,.5,1) both; }
+.grab-interlude-target { margin:0 0 14px; font-size:15px; opacity:.85; }
+.grab-interlude-next { width:min(220px,70%); }
+@media (prefers-reduced-motion:reduce) {
+  .grab-mouse, .grab-strain, .grab-chain, .grab-check, .grab-interlude-title, .grab-item[data-golden] .grab-face::after { animation:none; }
+  .grab-item[data-golden] .grab-face::after { display:none; }
+  .grab-tag, .grab-order-in { animation-name:grab-record-fade; }
+  .grab-order-pop { animation-name:grab-fade; }
+  .grab-order-leave { display:none; }
+  .grab-tag, .grab-order-pop { transform:translateX(-50%); }
+  .grab-order-in[data-next] { animation-delay:0ms; }
+  .grab-level-bar i { transition:none; }
+}

@@ -4,9 +4,12 @@
 
 export type BakeStage = "raw" | "perfect" | "burnt";
 export type BakedSet = Record<BakeStage, string>;
+/** Golden bread (D183): gilded raw and perfect pictures; burnt golden bread uses the charcoal one. */
+export type GoldenSet = Record<"raw" | "perfect", string>;
 
 const SIZE = 256;
 const cache = new Map<string, Promise<BakedSet | null>>();
+const goldCache = new Map<string, Promise<GoldenSet | null>>();
 
 const clamp = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : v);
 const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -43,7 +46,7 @@ function pass(base: ImageData, fn: (r: number, g: number, b: number, d: number, 
   return out;
 }
 
-async function bake(src: string): Promise<BakedSet | null> {
+async function source(src: string) {
   const img = await load(src);
   const canvas = document.createElement("canvas"); canvas.width = canvas.height = SIZE;
   const x = canvas.getContext("2d", { willReadFrequently: true });
@@ -52,7 +55,13 @@ async function bake(src: string): Promise<BakedSet | null> {
   const k = Math.max(SIZE / img.naturalWidth, SIZE / img.naturalHeight);
   const w = img.naturalWidth * k, h = img.naturalHeight * k;
   x.drawImage(img, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
-  const base = x.getImageData(0, 0, SIZE, SIZE);
+  return { canvas, x, base: x.getImageData(0, 0, SIZE, SIZE) };
+}
+
+async function bake(src: string): Promise<BakedSet | null> {
+  const s = await source(src);
+  if (!s) return null;
+  const { canvas, x, base } = s;
 
   // Raw dough: washed towards cream, softer contrast.
   x.putImageData(pass(base, (r, g, b) => [r * .6 + 243 * .4, g * .6 + 230 * .4, b * .62 + 207 * .38]), 0, 0);
@@ -97,5 +106,54 @@ async function bake(src: string): Promise<BakedSet | null> {
 export function bakedVariants(src: string): Promise<BakedSet | null> {
   let p = cache.get(src);
   if (!p) { p = bake(src).catch(() => null); cache.set(src, p); }
+  return p;
+}
+
+/** Four-point star glint, drawn additively. */
+function glint(x: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  x.save(); x.globalCompositeOperation = "lighter";
+  const g = x.createRadialGradient(cx, cy, 0, cx, cy, r);
+  g.addColorStop(0, "rgba(255,252,230,.95)"); g.addColorStop(.3, "rgba(255,226,130,.5)"); g.addColorStop(1, "rgba(255,200,60,0)");
+  x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
+  x.fillStyle = "rgba(255,250,225,.9)";
+  x.beginPath(); x.moveTo(cx, cy - r * 1.5); x.lineTo(cx + r * .14, cy - r * .14); x.lineTo(cx + r * 1.5, cy); x.lineTo(cx + r * .14, cy + r * .14);
+  x.lineTo(cx, cy + r * 1.5); x.lineTo(cx - r * .14, cy + r * .14); x.lineTo(cx - r * 1.5, cy); x.lineTo(cx - r * .14, cy - r * .14); x.closePath(); x.fill();
+  x.restore();
+}
+
+async function gild(src: string): Promise<GoldenSet | null> {
+  const s = await source(src);
+  if (!s) return null;
+  const { canvas, x, base } = s;
+  const out = {} as GoldenSet;
+  // Gold leaf: the picture's own light and dark become a bronze-to-champagne ramp, with a little of
+  // the original colour kept so each bread stays recognisable. Raw is matte; perfect is lacquered.
+  for (const stage of ["raw", "perfect"] as const) {
+    const shine = stage === "perfect" ? 1 : .55;
+    x.putImageData(pass(base, (r, g, b, d, u, v) => {
+      const l = (r * .3 + g * .59 + b * .11) / 255, t = Math.min(1, Math.max(0, (l - .12) * 1.25));
+      // dark #7a5312 -> mid #dfa626 -> light #fff0a8
+      let R = t < .55 ? 122 + (223 - 122) * (t / .55) : 223 + (255 - 223) * ((t - .55) / .45);
+      let G = t < .55 ? 83 + (166 - 83) * (t / .55) : 166 + (240 - 166) * ((t - .55) / .45);
+      let B = t < .55 ? 18 + (38 - 18) * (t / .55) : 38 + (168 - 38) * ((t - .55) / .45);
+      R = R * .82 + r * .18; G = G * .82 + g * .18; B = B * .82 + b * .18;
+      const diag = Math.exp(-(((u + v) - 0.95) ** 2) / .012);        // one bright diagonal band
+      const spot = Math.exp(-((u - .3) ** 2 + (v - .28) ** 2) / .02);  // soft hot spot
+      const gleam = shine * (.42 * diag + .36 * spot);
+      const rim = .22 * smooth(.62, 1.05, d);                          // darker burnished edge
+      return [(R + (255 - R) * gleam) * (1 - rim), (G + (248 - G) * gleam) * (1 - rim * 1.1), (B + (205 - B) * gleam) * (1 - rim * 1.5)];
+    }), 0, 0);
+    x.strokeStyle = "rgba(255,226,120,.9)"; x.lineWidth = 7; x.strokeRect(3.5, 3.5, SIZE - 7, SIZE - 7);
+    if (stage === "perfect") { glint(x, SIZE * .3, SIZE * .28, 13); glint(x, SIZE * .74, SIZE * .66, 9); }
+    else glint(x, SIZE * .3, SIZE * .28, 8);
+    out[stage] = await toUrl(canvas);
+  }
+  return out;
+}
+
+/** Golden variants for one picture; null while loading or if the picture cannot be read. */
+export function goldenVariants(src: string): Promise<GoldenSet | null> {
+  let p = goldCache.get(src);
+  if (!p) { p = gild(src).catch(() => null); goldCache.set(src, p); }
   return p;
 }

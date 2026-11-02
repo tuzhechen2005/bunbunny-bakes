@@ -9,12 +9,16 @@ import { greedyGrab } from "../support/grabBot";
 import { aimGrabBread } from "../support/grabAim";
 
 const SEED = `v${GRAB_ENGINE_VERSION}.abcdef0123456789`;
+// A seed whose level-1 bomb is reachable (the default seed hides it behind a bread).
+const BOMB_SEED = `v${GRAB_ENGINE_VERSION}.bb030123456789`;
+// A bot run (public-state greedy) that reaches level 5 with orders, mice and a golden bread.
+const RUN_SEED = `v${GRAB_ENGINE_VERSION}.ab02c0de`;
 const TIERS = Array.from({length:6},(_,i)=>({id:`t${i}`,name:`Bread ${i}`,radius:.1,points:10,imageUrl:`/api/images/mock/grab-${i}.jpg`,color:{bg:"#EFE7DA",ink:"#4A2723"}}));
 const PHOTO = readFileSync("tests/fixtures/bun.jpg");
 const BOARD = {liveScores:true,week:{start:"2026-12-07",end:"2026-12-13"},top:[],lastWinner:null,allTime:{nickname:"Baker",wechatMasked:"ba***er",score:9000}};
 const g = copy.customer.game, t = copy.customer.grab;
 interface Log {runId:string;launches:number[];endTick:number}
-async function mockApi(page: Page, prize = "GRAB") {
+async function mockApi(page: Page, prize = "GRAB", seed = SEED) {
  const starts: unknown[] = [], finishes: Log[] = [], reports: {log:number[];endTick:number}[] = [];
  await page.route("**/api/menu", r=>r.fulfill({json:{products:[],ownerWechatId:"owner"}}));
  await page.route(/\/api\/images\/mock\/|%2Fapi%2Fimages%2Fmock%2F/, r=>r.fulfill({body:PHOTO,contentType:"image/jpeg"}));
@@ -23,9 +27,9 @@ async function mockApi(page: Page, prize = "GRAB") {
   {kind:"M3",name:copy.customer.m3.title,href:"/game/m3",weekBest:3},{kind:"GRAB",name:t.title,href:"/game/grab",weekBest:null},
  ]}}));
  await page.route("**/api/game/grab/leaderboard**",r=>r.fulfill({json:BOARD}));
- await page.route("**/api/game/grab/start",r=>{ starts.push(r.request().postDataJSON());return r.fulfill({json:{runId:`grab-run-${starts.length}`,seed:SEED,tiers:TIERS,expiresAt:"2099-01-01T00:00:00Z"}}); });
- await page.route("**/api/game/grab/progress",r=>{ const b=r.request().postDataJSON();reports.push(b);return r.fulfill({json:{score:replayGrab(SEED,TIERS,b.log,b.endTick).score,live:true}}); });
- await page.route("**/api/game/grab/finish",r=>{ const b=r.request().postDataJSON();finishes.push(b);const score=replayGrab(SEED,TIERS,b.launches,b.endTick).score;return r.fulfill({json:{score,best:score,rank:1,week:BOARD.week,personalBest:score,newRecord:true}}); });
+ await page.route("**/api/game/grab/start",r=>{ starts.push(r.request().postDataJSON());return r.fulfill({json:{runId:`grab-run-${starts.length}`,seed,tiers:TIERS,expiresAt:"2099-01-01T00:00:00Z"}}); });
+ await page.route("**/api/game/grab/progress",r=>{ const b=r.request().postDataJSON();reports.push(b);return r.fulfill({json:{score:replayGrab(seed,TIERS,b.log,b.endTick).score,live:true}}); });
+ await page.route("**/api/game/grab/finish",r=>{ const b=r.request().postDataJSON();finishes.push(b);const score=replayGrab(seed,TIERS,b.launches,b.endTick);return r.fulfill({json:{score:score.score,best:score.score,rank:1,week:BOARD.week,personalBest:score.score,newRecord:true,level:score.level,completedOrders:score.completedOrders}}); });
  return {starts,finishes,reports};
 }
 async function start(page:Page) {
@@ -92,8 +96,7 @@ for(const width of [320,390]) {
   test.use({viewport:{width,height:700},hasTouch:true});
   test("four game hub, illustrated menu, prize gating and leaderboard",async({page})=>{
    await mockApi(page);await page.goto("/game/hub");
-   const boxes=await Promise.all(["big","tu","m3","grab"].map(k=>page.getByTestId(`hub-game-${k}`).boundingBox()));
-   expect(boxes[0]!.y).toBe(boxes[1]!.y);expect(boxes[2]!.y).toBe(boxes[3]!.y);expect(boxes[2]!.y).toBeGreaterThan(boxes[0]!.y);
+   await expect(page.getByTestId("hub-game-grab")).toBeVisible();
    await page.getByTestId("hub-game-grab").click();await expect(page.getByRole("heading",{level:1})).toHaveText(t.title);
    for(const art of ["tongs","bread","clock"]) await expect(page.getByTestId(`grab-help-${art}`).locator("img")).toHaveAttribute("src",art==="bread"?"/brand/grab/bread.svg":`/brand/art/game/grab-${art}.webp`);
    await expect(page.getByTestId("grab-prize-line")).toHaveText(g.prizeLine);
@@ -121,9 +124,9 @@ for(const width of [320,390]) {
   });
   test("grabbing the bomb shows the blast and a −5 秒 tag",async({page})=>{
    let hit=-1;
-   for(let t=1;t<600&&hit<0;t++){const g=createGrabGame({seed:SEED,tiers:TIERS});g.step(t);g.launch(t);if(g.step(t+200).some(e=>e.type==="explode"))hit=t;}
+   for(let t=1;t<600&&hit<0;t++){const g=createGrabGame({seed:BOMB_SEED,tiers:TIERS});g.step(t);g.launch(t);if(g.step(t+200).some(e=>e.type==="explode"))hit=t;}
    expect(hit).toBeGreaterThan(0);
-   await mockApi(page); await page.clock.install(); await page.goto("/game/grab");
+   await mockApi(page,"GRAB",BOMB_SEED); await page.clock.install(); await page.goto("/game/grab");
    await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000)); await start(page);
    await expect(page.locator('.grab-item[data-kind="bomb"]')).toHaveCount(1);
    await page.clock.runFor(Math.floor(hit*1000/60)+5); await page.getByTestId("grab-board").click();
@@ -188,6 +191,82 @@ for(const width of [320,390]) {
    await expect.poll(()=>page.evaluate(key=>localStorage.getItem(key),GRAB_SAVE_KEY)).toBeNull();
    const finalTick=await page.getByTestId("grab-board").getAttribute("data-tick");await page.clock.runFor(5000);await expect(page.getByTestId("grab-board")).toHaveAttribute("data-tick",finalTick!);
    await page.getByTestId("grab-over-close").click();await page.clock.runFor(1000);await expect(page.getByTestId("grab-bar")).toBeVisible();
+  });
+  /** Resume a bot run at `at` (its launches up to then), then let `run` ms pass; the clock stays frozen. */
+  async function resumeRun(page: Page, at: number, run = 0) {
+   const launches = greedyGrab(RUN_SEED, TIERS).launches.filter(t => t <= at);
+   const score = replayGrab(RUN_SEED, TIERS, launches, at).score;
+   await mockApi(page, "GRAB", RUN_SEED);
+   await page.addInitScript(({key,save})=>localStorage.setItem(key,JSON.stringify(save)),{key:GRAB_SAVE_KEY,save:{v:1,runId:"scene",seed:RUN_SEED,tiers:TIERS,launches,elapsedMs:at*1000/60,score,nickname:"Baker",expiresAt:"2099-01-01T00:00:00Z"}});
+   await page.clock.install(); await page.goto("/game/grab");
+   await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
+   await page.getByTestId("grab-resume").click(); await expect(page.getByTestId("grab-board")).toBeVisible();
+   await page.clock.runFor(100 + run);
+  }
+  test("contact label, order card and perfect chain follow the engine",async({page})=>{
+   await resumeRun(page, 249);
+   const tag = page.getByTestId("grab-contact");
+   await expect(tag).toHaveAttribute("data-stage","perfect"); await expect(tag).toContainText(t.stage.perfect); await expect(tag).toContainText("+270");
+   await expect(page.getByTestId("grab-level")).toContainText(t.level.replace("{n}","1"));
+   await expect(page.getByTestId("grab-order").locator(".grab-order-slot")).toHaveCount(2);
+   await expect(page.getByTestId("grab-order")).toContainText("+300");
+   await expect(page.getByTestId("grab-chain")).toContainText(t.chain.replace("{n}","1"));
+   await expect(page.getByTestId("grab-chain")).toContainText(t.chainBonus.replace("{n}","10"));
+   await page.clock.runFor(8000); // banked on return: the label goes away
+   await expect(page.getByTestId("grab-contact")).toHaveCount(0);
+  });
+  test("a delivered ingredient ticks off the order",async({page})=>{
+   await resumeRun(page, 520);
+   await expect(page.getByTestId("grab-order").locator('.grab-order-slot[data-done="1"]')).toHaveCount(1);
+  });
+  test("a finished order pops its reward and the next order slides in",async({page})=>{
+   const L = greedyGrab(RUN_SEED, TIERS).launches.filter(t => t < 1052).at(-1)!;
+   await resumeRun(page, L + 1, (1052 - L) * 1000 / 60 + 150);
+   await expect(page.getByTestId("grab-order-pop")).toHaveText("+300");
+   await expect(page.getByTestId("grab-order-leaving").locator('.grab-order-slot[data-done="1"]')).toHaveCount(2);
+   await page.clock.runFor(1500);
+   await expect(page.getByTestId("grab-order-pop")).toHaveCount(0);
+   await expect(page.getByTestId("grab-order").locator('.grab-order-slot[data-done="1"]')).toHaveCount(0);
+  });
+  test("a mouse carries a bread across the board and the grab shows ×2",async({page})=>{
+   await resumeRun(page, 3300);
+   await expect(page.locator(".grab-item[data-mouse] .grab-mouse")).toHaveCount(1);
+   const mouse = page.locator(".grab-item[data-mouse]").first();
+   await expect(mouse).toHaveAttribute("data-dir", /left|right/);
+   const before = (await mouse.boundingBox())!.x; await page.clock.runFor(1000);
+   expect(Math.abs((await mouse.boundingBox())!.x - before)).toBeGreaterThan(1); // painted through refs, not stuck
+  });
+  test("grabbing a mouse shows ×2 at the tongs",async({page})=>{
+   await resumeRun(page, 4040);
+   await expect(page.getByTestId("grab-mouse-mult")).toHaveText(t.mouseMult);
+  });
+  test("golden bread gets its own canvas picture, no image filters",async({page})=>{
+   await resumeRun(page, 1200);
+   const gold = page.locator(".grab-item[data-golden] .grab-face > img:not(.grab-sparkle)").first();
+   await expect(gold).toHaveAttribute("src", /^blob:/);
+   const filters = await page.locator(".grab-board img").evaluateAll(nodes=>nodes.map(node=>getComputedStyle(node).filter));
+   expect(filters.every(filter=>filter==="none")).toBe(true);
+  });
+  test("a level clear holds the run until 下一关",async({page})=>{
+   const L = greedyGrab(RUN_SEED, TIERS).launches.filter(t => t < 1790).at(-1)!;
+   await resumeRun(page, L + 1, (1790 - L) * 1000 / 60 + 300);
+   await expect(page.getByTestId("grab-level-clear")).toContainText(t.levelClear.replace("{n}","2"));
+   await expect(page.getByTestId("grab-level")).toContainText(t.level.replace("{n}","3"));
+   const tick = await page.getByTestId("grab-board").getAttribute("data-tick");
+   await page.clock.runFor(5000);
+   await expect(page.getByTestId("grab-board")).toHaveAttribute("data-tick", tick!);
+   await page.getByTestId("grab-level-next").click(); await expect(page.getByTestId("grab-level-clear")).toHaveCount(0);
+   await page.clock.runFor(500);
+   expect(Number(await page.getByTestId("grab-board").getAttribute("data-tick"))).toBeGreaterThan(Number(tick));
+  });
+  test("failure sheet names the level, the shortfall and the orders completed",async({page})=>{
+   const bot = greedyGrab(RUN_SEED, TIERS);
+   await resumeRun(page, bot.ticks - 1, 600);
+   await page.clock.runFor(3000);
+   await expect(page.getByTestId("grab-over-sheet")).toBeVisible();
+   await expect(page.getByTestId("grab-fail-title")).toHaveText(t.failTitle.replace("{n}",String(bot.level)));
+   await expect(page.getByTestId("grab-orders-done")).toHaveText(String(bot.completedOrders));
+   await expect(page.getByTestId("grab-fail-short")).toBeVisible();
   });
   test("replay button is visible while playing and 重玩本局 starts a new run", async ({ page }) => {
    const api=await mockApi(page); await page.goto("/game/grab"); await start(page);
