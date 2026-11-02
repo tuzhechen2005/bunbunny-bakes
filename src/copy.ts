@@ -1145,7 +1145,7 @@ export const copy = {
     products: {
       /** F1 flavours panel on the product edit page. */
       flavors: {
-        title: "口味", hint: "有口味的商品，顾客必须先选口味；每个口味按自己的价格，共用这个商品的名额",
+        title: "口味", hint: "有口味的商品，顾客必须先选口味；每个口味可单独设价格、限额和套餐价；商品总名额照样有效",
         name: "口味名", price: "价格", add: "加一个口味", save: "保存", up: "上移", down: "下移",
         onSale: "在售", offSale: "已下架", takeOff: "下架", putOn: "上架", empty: "还没有口味", failed: "没保存成功，请重试",
         invalid: "口味名 1–12 个字，价格填数字；每日限额填整数，套餐价填金额，都可以留空",
