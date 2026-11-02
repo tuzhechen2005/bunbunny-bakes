@@ -81,6 +81,12 @@ for(const width of [320,390])test.describe(`RUN ${width}px`,()=>{
   const tick=await page.getByTestId("run-board").getAttribute("data-tick");await page.clock.runFor(5000);await expect(page.getByTestId("run-board")).toHaveAttribute("data-tick",tick!);
   await page.getByTestId("run-over-close").click();await page.clock.runFor(1000);await expect(page.getByTestId("run-bar")).toBeVisible();
  });
+  test("replay button is visible while playing and 重玩本局 starts a new run",async({page})=>{
+  const api=await mockApi(page);await page.clock.install();await page.goto("/game/run");await start(page);
+  await expect(page.getByTestId("run-replay")).toBeVisible();
+  await page.getByTestId("run-replay").click();await page.getByTestId("run-replay-level").click();await page.clock.runFor(500);
+  await expect.poll(()=>api.starts.length).toBe(2);await expect(page.getByTestId("run-board")).toBeVisible();expect(api.finishes).toHaveLength(0);
+ });
  test("save/resume, keyboard, paused exit, hidden clock, discard and reduced motion",async({page})=>{
   const api=await mockApi(page);await page.emulateMedia({reducedMotion:"reduce"});await page.clock.install();await page.goto("/game/run");await start(page);await page.clock.runFor(100);
   await page.keyboard.press("ArrowRight");await page.clock.runFor(250);await expect(page.getByTestId("run-board")).toHaveAttribute("data-lane","2");

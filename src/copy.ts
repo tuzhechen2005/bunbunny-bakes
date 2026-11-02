@@ -359,6 +359,13 @@ export const copy = {
       restartTitle: "上一局的进度会丢掉，确定吗？",
       restartConfirm: "重新开始",
       keepPlaying: "再想想",
+      /** In-game restart (replay) dialog. */
+      replay: "重新开始",
+      replayTitle: "重新开始？",
+      replayLevel: "重玩本关",
+      replayFirst: "从第 1 关重玩",
+      replayRound: "重玩本局",
+      replayCancel: "取消",
       /** Leaving a run (D111). */
       exit: "退出",
       exitSave: "保存进度再走",

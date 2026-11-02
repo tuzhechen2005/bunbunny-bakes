@@ -13,7 +13,7 @@ async function mockApi(page:Page) {
   await page.route('**/brand/td/manifest.json',r=>r.fulfill({status:404,body:''}));
   await page.route('**/api/game/hub',r=>r.fulfill({json:{liveScores:true,week:board.week,prizeGame:'TD',games:['BIG','TU','M3','GRAB','RUN','TD'].map((kind,i)=>({kind,name:[g.title,copy.customer.tu.title,copy.customer.m3.title,copy.customer.grab.title,copy.customer.run.title,t.title][i],href:kind==='BIG'?'/game':`/game/${kind.toLowerCase()}`,weekBest:null}))}}));
   await page.route('**/api/game/td/leaderboard**',r=>r.fulfill({json:board}));
-  await page.route('**/api/game/td/start',r=>{starts.push(r.request().postDataJSON());return r.fulfill({json:{runId:`00000000-0000-4000-8000-${String(starts.length).padStart(12,'0')}`,seed,level:1,weekKey,mapData:tdLevel(weekKey,1).mapData,unlockedTowers:["rollingPin"],newlyUnlocked:["rollingPin"],tiers,expiresAt:'2099-01-01T00:00:00Z'}});});
+  await page.route('**/api/game/td/start',r=>{const body=r.request().postDataJSON();starts.push(body);const lv=(body as {level?:number}).level??1;return r.fulfill({json:{runId:`00000000-0000-4000-8000-${String(starts.length).padStart(12,'0')}`,seed:tdLevel(weekKey,lv).seed,level:lv,weekKey,mapData:tdLevel(weekKey,lv).mapData,unlockedTowers:["rollingPin"],newlyUnlocked:["rollingPin"],tiers,expiresAt:'2099-01-01T00:00:00Z'}});});
   await page.route('**/api/game/td/progress',r=>r.fulfill({json:{score:0,live:true}}));
   await page.route('**/api/game/td/finish',r=>{const body=r.request().postDataJSON();finishes.push(body);const s=replayTd({seed,tierCount:1},body.inputs,body.endTick);return r.fulfill({json:{score:s.wave,level:1,passed:s.passed,best:Number(s.passed),personalBest:Number(s.passed),rank:s.passed?1:null,week:board.week}});});
   return {starts,finishes};
@@ -53,6 +53,24 @@ for(const width of [320,390]) test.describe(`TD ${width}`,()=>{
     if(c3<pin) await expect(page.getByTestId('td-build-rollingPin')).toBeDisabled(); else await expect(page.getByTestId('td-build-rollingPin')).toBeEnabled();
     await page.getByRole('button',{name:t.closePicker}).click();
     await page.getByTestId('td-speed').click();await expect(page.getByTestId('td-speed')).toHaveText('2×');await page.getByTestId('td-call-wave').click();await expect(page.getByTestId('td-wave')).toHaveText('1/5');
+  });
+  test('replay: level 1 offers only this level; level 2 offers both, abandons the run without a finish',async({page})=>{
+    const api=await mockApi(page);await page.goto('/game/td');await begin(page);
+    await expect(page.getByTestId('td-replay')).toBeVisible();
+    await page.getByTestId('td-replay').click();await expect(page.getByTestId('td-replay-first')).toHaveCount(0);
+    await page.getByTestId('td-replay-cancel').click();await expect(page.getByTestId('td-replay-sheet')).toHaveCount(0);expect(api.starts).toHaveLength(1);
+    await page.getByTestId('td-replay').click();await page.getByTestId('td-replay-level').click();
+    await expect(page.getByTestId('td-board')).toBeVisible();await expect.poll(()=>api.starts.length).toBe(2);
+    expect(api.starts[1]).toMatchObject({wechatId:'baker',nickname:'Baker',level:1});
+    const save={v:1,runId:'00000000-0000-4000-8000-000000000098',seed:tdLevel(weekKey,2).seed,level:2,weekKey,tiers,nickname:'Baker',expiresAt:'2099-01-01T00:00:00Z',inputs:[],endTick:0,score:0};
+    await page.getByTestId('td-exit').click();await page.getByTestId('td-exit-discard').click();await expect(page.getByTestId('td-menu-start')).toBeVisible();
+    await page.evaluate(({key,save})=>localStorage.setItem(key,JSON.stringify(save)),{key:TD_SAVE_KEY,save});
+    await page.reload();await page.getByTestId('td-resume').click();
+    await page.getByTestId('td-replay').click();await expect(page.getByTestId('td-replay-first')).toBeVisible();await page.getByTestId('td-replay-level').click();
+    await expect.poll(()=>api.starts.length).toBe(3);expect(api.starts[2]).toMatchObject({level:2});
+    await page.getByTestId('td-replay').click();await page.getByTestId('td-replay-first').click();
+    await expect.poll(()=>api.starts.length).toBe(4);expect(api.starts[3]).toMatchObject({level:1});
+    expect(api.finishes).toHaveLength(0);
   });
   test('pause/hidden time stops; save resumes without another start, discard and reduced motion',async({page})=>{
     const api=await mockApi(page);await page.emulateMedia({reducedMotion:'reduce'});await page.clock.install();await page.goto('/game/td');await begin(page);

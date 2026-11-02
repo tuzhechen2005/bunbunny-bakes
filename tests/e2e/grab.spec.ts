@@ -189,6 +189,12 @@ for(const width of [320,390]) {
    const finalTick=await page.getByTestId("grab-board").getAttribute("data-tick");await page.clock.runFor(5000);await expect(page.getByTestId("grab-board")).toHaveAttribute("data-tick",finalTick!);
    await page.getByTestId("grab-over-close").click();await page.clock.runFor(1000);await expect(page.getByTestId("grab-bar")).toBeVisible();
   });
+  test("replay button is visible while playing and 重玩本局 starts a new run", async ({ page }) => {
+   const api=await mockApi(page); await page.goto("/game/grab"); await start(page);
+   await expect(page.getByTestId("grab-replay")).toBeVisible();
+   await page.getByTestId("grab-replay").click(); await page.getByTestId("grab-replay-level").click();
+   await expect.poll(()=>api.starts.length).toBe(2); await expect(page.getByTestId("grab-board")).toBeVisible(); expect(api.finishes).toHaveLength(0);
+  });
   test("save/resume, exit pauses, hidden time excluded, reduced motion",async({page})=>{
    const api=await mockApi(page);await page.emulateMedia({reducedMotion:"reduce"});await page.clock.install();await page.goto("/game/grab");await start(page);await page.clock.runFor(4300);
    await page.getByTestId("grab-exit").click();await expect(page.getByTestId("grab-exit-sheet")).toBeVisible();

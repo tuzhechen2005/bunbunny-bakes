@@ -4,7 +4,7 @@ import { useBgm } from '@/components/game/bgm';
 import { GameTutorial } from '@/components/game/GameTutorial';
 import { TopBar } from '@/components/ui/TopBar';
 import { focusRing } from '@/components/ui/focus';
-import { GameShell, SpeakerButton, GameRegistrationField, GameMenuHero, GameResultArt, gamePrimary, gameSecondary } from '@/components/game/GameChrome';
+import { GameShell, SpeakerButton, ReplayButton, GameRegistrationField, GameMenuHero, GameResultArt, gamePrimary, gameSecondary } from '@/components/game/GameChrome';
 import { copy } from '@/copy';
 import { fill } from '@/components/customer/format';
 import { readRemembered, writeRemembered, isRetryable } from '@/components/game/gameApi';
@@ -25,7 +25,7 @@ export function TdPage() {
   const [wechat, setWechat] = useState(''), [nickname, setNickname] = useState(''), [soundOn, setSoundOn] = useState(false);
   const [errors, setErrors] = useState<{wechat: string | null; nick: string | null}>({wechat: null, nick: null});
   const [nextLevel, setNextLevel] = useState(1), [starting, setStarting] = useState(false), [error, setError] = useState('');
-  const [dialog, setDialog] = useState<'exit' | 'restart' | null>(null), [showResult, setShowResult] = useState(false);
+  const [dialog, setDialog] = useState<'exit' | 'restart' | 'replay' | null>(null), [showResult, setShowResult] = useState(false);
   const [localPassed, setLocalPassed] = useState(false);
   const [result, setResult] = useState<TdFinish | null>(null), [submitting, setSubmitting] = useState(false), [retry, setRetry] = useState(false);
   const active = useRef<TdSave | null>(null), progress = useRef<TdProgress>({inputs:[],endTick:0,score:0,passed:false});
@@ -73,7 +73,7 @@ export function TdPage() {
     acknowledged.current = null; setError(''); setResult(null); setSubmitting(false); setRetry(false); setShowResult(false);
     if (soundOn) unlockAudio(); setRun(s); setPhase('playing');
   };
-  const begin = async (event?: FormEvent) => {
+  const begin = async (event?: FormEvent, levelOverride?: number) => {
     event?.preventDefault(); if (starting) return;
     const validation = {
       wechat: !wechat.trim() || [...wechat.trim()].length > 40 ? g.wechatInvalid : null,
@@ -82,12 +82,17 @@ export function TdPage() {
     setErrors(validation); setError('');
     if (validation.wechat || validation.nick) { setPhase('form'); return; }
     setStarting(true); setError('');
-    const level = result && run && Date.parse(run.expiresAt) > Date.now() ? result.level + Number(result.passed) : undefined;
+    const level = levelOverride ?? (result && run && Date.parse(run.expiresAt) > Date.now() ? result.level + Number(result.passed) : undefined);
     const r = await startTd(wechat.trim(), nickname.trim(), level); setStarting(false);
     if (!r.ok) { setError(r.error.message); setPhase('form'); return; }
     writeRemembered({wechatId:wechat.trim(),nickname:nickname.trim()});
     const s: TdSave = {...r.data,v:1,nickname:nickname.trim(),inputs:[],endTick:0,score:0};
     writeTdSave(s); activate(s);
+  };
+  const replay = async (level: number) => {
+    if (starting) return;
+    clearTdSave(); active.current = null; setSaved(null);
+    await begin(undefined, level); setDialog(null);
   };
   const menu = (discard = false) => {
     if (discard) clearTdSave();
@@ -106,6 +111,7 @@ export function TdPage() {
       <TopBar backHref="/game/hub" backLabel={copy.customer.gameHub.backLabel} title={phase === 'board' ? t.title : undefined}
         right={<div className="flex items-center">
           {phase === 'playing' && <button type="button" data-testid="td-exit" className={`min-h-11 shrink-0 rounded-full px-3 text-sm font-bold text-c-ink ${focusRing}`} onClick={() => setDialog('exit')}>{g.exit}</button>}
+          {phase === 'playing' && <ReplayButton testId="td-replay" onClick={() => setDialog('replay')} />}
           <SpeakerButton testId="td-sound" on={soundOn} onToggle={toggleSound} />
         </div>} />
     </div>
@@ -129,7 +135,13 @@ export function TdPage() {
     {phase === 'board' && <main><button className={`${gameSecondary} td-board-close`} data-testid="td-board-close" onClick={() => setPhase('menu')}>{g.closeBoard}</button><LeaderboardView scoreLabel={t.levels} hasPrize={hasPrize} wechatId={wechat.trim()} version={nextLevel} fetcher={fetchTdLeaderboard} /></main>}
     {playing && run && <><TdBoard key={run.runId} save={run} paused={dialog !== null} soundOn={soundOn} reduced={reduced || degraded} onProgress={persist} onOver={over} />
       {phase === 'over' && !showResult && <button className={gameSecondary} data-testid="td-show-result" onClick={() => setShowResult(true)}>{g.barScore}</button>}</>}
-    {dialog && <Sheet label={dialog === 'exit' ? g.exitTitle : g.restartTitle} onClosed={() => setDialog(null)} panelTestId={`td-${dialog}-sheet`} className="td-sheet">
+    {dialog === 'replay' && run && <Sheet label={g.replayTitle} onClosed={() => setDialog(null)} panelTestId="td-replay-sheet" className="td-sheet">
+      <h2>{g.replayTitle}</h2>
+      <button className={gamePrimary} disabled={starting} data-testid="td-replay-level" onClick={() => void replay(run.level)}>{g.replayLevel}</button>
+      {run.level > 1 && <button className={gameSecondary} disabled={starting} data-testid="td-replay-first" onClick={() => void replay(1)}>{g.replayFirst}</button>}
+      <button className={gameSecondary} data-testid="td-replay-cancel" onClick={() => setDialog(null)}>{g.replayCancel}</button>
+    </Sheet>}
+    {(dialog === 'exit' || dialog === 'restart') && <Sheet label={dialog === 'exit' ? g.exitTitle : g.restartTitle} onClosed={() => setDialog(null)} panelTestId={`td-${dialog}-sheet`} className="td-sheet">
       <h2>{dialog === 'exit' ? g.exitTitle : g.restartTitle}</h2>
       {dialog === 'exit' ? <><button className={gamePrimary} data-testid="td-exit-save" onClick={() => menu()}>{g.exitSave}</button><button className={gameSecondary} data-testid="td-exit-discard" onClick={() => menu(true)}>{g.exitDiscard}</button></>
         : <button className={gamePrimary} data-testid="td-restart-confirm" onClick={() => { clearTdSave();setSaved(null);setDialog(null);setPhase('form'); }}>{g.restartConfirm}</button>}

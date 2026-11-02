@@ -426,6 +426,19 @@ test("exit sheet: 保存进度再走 keeps the save, 不保存 deletes it; resta
   expect(await page.evaluate((k) => localStorage.getItem(k), SAVE)).toBeNull();
 });
 
+test("replay: 重玩本局 starts a new run without a finish; button is visible while playing", async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto("/game");
+  await startGame(page);
+  await expect(page.getByTestId("game-replay")).toBeVisible();
+  await page.getByTestId("game-replay").click();
+  await expect(page.getByTestId("game-replay-first")).toHaveCount(0);
+  await page.getByTestId("game-replay-level").click();
+  await expect.poll(() => api.starts.length).toBe(2);
+  await expect(page.getByTestId("game-canvas")).toBeVisible();
+  expect(api.finishes).toHaveLength(0);
+});
+
 test("an expired save is deleted and not offered", async ({ page }) => {
   await mockApi(page);
   await page.addInitScript((k) => {

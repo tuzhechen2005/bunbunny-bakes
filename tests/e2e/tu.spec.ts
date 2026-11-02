@@ -215,6 +215,24 @@ test("exit asks: 保存进度再走 keeps the run, 不保存 deletes it; 重新�
   expect(await page.evaluate((key) => localStorage.getItem(key), TU_SAVE_KEY)).toBeNull();
 });
 
+test("replay: 重玩本局 abandons the run without a finish and starts a new one", async ({ page }) => {
+  const api = await mockApi(page);
+  await page.goto("/game/tu");
+  await startGame(page);
+  await page.getByTestId("tu-replay").click();
+  await expect(page.getByTestId("tu-replay-first")).toHaveCount(0);
+  await page.getByTestId("tu-replay-cancel").click();
+  await expect(page.getByTestId("tu-replay-sheet")).toHaveCount(0);
+  expect(api.starts).toHaveLength(1);
+  await page.getByTestId("tu-replay").click();
+  await page.getByTestId("tu-replay-level").click();
+  await expect.poll(() => api.starts.length).toBe(2);
+  await expect(page.getByTestId("tu-board")).toBeVisible();
+  await expect(page.getByTestId("tu-replay")).toBeVisible();
+  expect(api.starts[1]).toMatchObject({ wechatId: "bunbunny_fan", nickname: "小面包" });
+  expect(api.finishes).toHaveLength(0);
+});
+
 test("an expired save is not offered", async ({ page }) => {
   await mockApi(page);
   await page.goto("/game/tu");

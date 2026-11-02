@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useBgm } from "@/components/game/bgm";
-import { GameMenuHero, GameResultArt, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
+import { GameMenuHero, GameResultArt, ReplayButton, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { GameTutorial } from "@/components/game/GameTutorial";
 import { RollNumber } from "@/components/customer/checkout/RollNumber";
 import { fill } from "@/components/customer/format";
@@ -95,7 +95,7 @@ export function GamePage() {
   const [boardFrom, setBoardFrom] = useState<"menu" | "over">("menu");
   /** The saved run on this phone (D111), shown on the menu. */
   const [save, setSave] = useState<GameSave | null>(null);
-  const [dialog, setDialog] = useState<"restart" | "exit" | null>(null);
+  const [dialog, setDialog] = useState<"restart" | "exit" | "replay" | null>(null);
   const dialogRef = useRef<SheetHandle>(null);
   const afterDialog = useRef<() => void>(() => {});
   /** What the autosave needs besides the session. */
@@ -247,6 +247,14 @@ export function GamePage() {
     sheetRef.current?.close();
   };
 
+  /** Abandon the current run without a finish, then start a fresh one (skips the form). */
+  const replay = () => {
+    submitted.current.add(runId.current);
+    sessionRef.current = null;
+    clearSave();
+    void begin();
+  };
+
   const exitButton =
     phase === "playing" ? (
       <button
@@ -270,6 +278,7 @@ export function GamePage() {
       titleAs="h1"
       right={
         <div className="flex items-center">
+          {phase === "playing" ? <ReplayButton testId="game-replay" onClick={() => setDialog("replay")} /> : null}
           {exitButton}
           <SpeakerButton on={soundOn} onToggle={toggleSound} />
         </div>
@@ -544,6 +553,31 @@ export function GamePage() {
             </div>
           ) : null}
       </main>
+
+      {dialog === "replay" && phase === "playing" ? (
+        <Sheet
+          ref={dialogRef}
+          label={t.replayTitle}
+          onClosed={() => {
+            setDialog(null);
+            const fn = afterDialog.current;
+            afterDialog.current = () => {};
+            fn();
+          }}
+          className="px-6 pt-7 pb-[calc(24px+env(safe-area-inset-bottom))]"
+          panelTestId="game-replay-sheet"
+        >
+          <p className="font-display m-0 text-center text-xl leading-snug">{t.replayTitle}</p>
+          <div className="mt-6 flex flex-col gap-2.5">
+            <button type="button" onClick={() => closeDialogThen(replay)} className={gamePrimary} data-testid="game-replay-level">
+              {t.replayRound}
+            </button>
+            <button type="button" onClick={() => closeDialogThen(() => {})} className={`min-h-11 w-full rounded-full bg-c-wash text-[15px] font-bold ${focusRing}`} data-testid="game-replay-cancel">
+              {t.replayCancel}
+            </button>
+          </div>
+        </Sheet>
+      ) : null}
 
       {dialog === "exit" ? (
         <Sheet
