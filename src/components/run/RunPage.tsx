@@ -13,7 +13,7 @@ import { TopBar } from "@/components/ui/TopBar";
 import { focusRing } from "@/components/ui/focus";
 import { useGameHub } from "@/components/game/useGameHub";
 import { useLiveProgress } from "@/components/game/useLiveProgress";
-import { GameMenuHero, GameRegistrationField, GameResultArt, GameShell as Shell, SpeakerButton, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
+import { GameMenuHero, GameRegistrationField, GameResultArt, GameShell as Shell, SpeakerButton, ReplayButton, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { copy } from "@/copy";
 import { elapsedTick } from "./runClock";
 import { fetchMenu } from "@/lib/api";
@@ -75,7 +75,7 @@ export function RunPage() {
   const [boardVersion, setBoardVersion] = useState(0);
   const [boardFrom, setBoardFrom] = useState<"menu" | "over">("menu");
   const [save, setSave] = useState<RunSave | null>(null);
-  const [dialog, setDialog] = useState<"restart" | "exit" | null>(null);
+  const [dialog, setDialog] = useState<"restart" | "exit" | "replay" | null>(null);
   const dialogRef = useRef<SheetHandle>(null);
   const afterDialog = useRef<() => void>(() => {});
   const meta = useRef({ seed: "", expiresAt: "", nickname: "" });
@@ -203,6 +203,13 @@ export function RunPage() {
     dialogRef.current?.close();
   };
 
+  /** Abandon the current run without a finish, then start a fresh one (skips the form). */
+  const replay = () => {
+    submitted.current.add(runId.current);
+    clearRunSave();
+    void begin();
+  };
+
   const begin = async (e?: FormEvent) => {
     e?.preventDefault();
     if (starting) return;
@@ -280,6 +287,7 @@ export function RunPage() {
       titleAs="p"
       right={
         <div className="flex items-center">
+          {phase === "playing" ? <ReplayButton testId="run-replay" onClick={() => setDialog("replay")} /> : null}
           {phase === "playing" ? (
             <button type="button" onClick={() => setDialog("exit")} className={`min-h-11 shrink-0 rounded-full px-3 text-sm font-bold text-c-ink ${focusRing}`} data-testid="run-exit">
               {g.exit}
@@ -476,6 +484,32 @@ export function RunPage() {
           </div>
         ) : null}
       </main>
+
+      {phase === "playing" && dialog === "replay" ? (
+        <Sheet
+          ref={dialogRef}
+          label={g.replayTitle}
+          onClosed={() => {
+            if (phaseRef.current !== "playing") return;
+            setDialog(null);
+            const fn = afterDialog.current;
+            afterDialog.current = () => {};
+            fn();
+          }}
+          className="px-6 pt-7 pb-[calc(24px+env(safe-area-inset-bottom))]"
+          panelTestId="run-replay-sheet"
+        >
+          <p className="font-display m-0 text-center text-xl leading-snug">{g.replayTitle}</p>
+          <div className="mt-6 flex flex-col gap-2.5">
+            <button type="button" onClick={() => closeDialogThen(replay)} className={gamePrimary} data-testid="run-replay-level">
+              {g.replayRound}
+            </button>
+            <button type="button" onClick={() => closeDialogThen(() => {})} className={gameSecondary} data-testid="run-replay-cancel">
+              {g.replayCancel}
+            </button>
+          </div>
+        </Sheet>
+      ) : null}
 
       {phase === "playing" && dialog === "exit" ? (
         <Sheet

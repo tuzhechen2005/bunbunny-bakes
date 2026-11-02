@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { useBgm } from "@/components/game/bgm";
-import { GameMenuHero, GameResultArt, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
+import { GameMenuHero, GameResultArt, ReplayButton, gamePrimary, gameSecondary } from "@/components/game/GameChrome";
 import { GameTutorial } from "@/components/game/GameTutorial";
 import { fill } from "@/components/customer/format";
 import { LeaderboardView } from "@/components/game/LeaderboardView";
@@ -101,7 +101,7 @@ export function M3Page() {
   const [boardVersion, setBoardVersion] = useState(0);
   const [boardFrom, setBoardFrom] = useState<"menu" | "over">("menu");
   const [save, setSave] = useState<M3Save | null>(null);
-  const [dialog, setDialog] = useState<"restart" | "exit" | null>(null);
+  const [dialog, setDialog] = useState<"restart" | "exit" | "replay" | null>(null);
   const dialogRef = useRef<SheetHandle>(null);
   const afterDialog = useRef<() => void>(() => {});
   const meta = useRef({ level: 1, weekKey: "", seed: "", expiresAt: "", nickname: "", tiers: [] as TierView[] });
@@ -221,7 +221,7 @@ export function M3Page() {
     dialogRef.current?.close();
   };
 
-  const begin = async (e?: FormEvent) => {
+  const begin = async (e?: FormEvent, levelOverride?: number) => {
     e?.preventDefault();
     if (starting) return;
     const v = validate(wechatId, nickname);
@@ -235,8 +235,8 @@ export function M3Page() {
     if (soundOn) unlockAudio();
     const w = wechatId.trim();
     const n = nickname.trim();
-    const retryLevel = phase === "over" && run && finish.state === "ok" && Date.now() < Date.parse(meta.current.expiresAt)
-      ? run.level + Number(finish.result.passed) : undefined;
+    const retryLevel = levelOverride ?? (phase === "over" && run && finish.state === "ok" && Date.now() < Date.parse(meta.current.expiresAt)
+      ? run.level + Number(finish.result.passed) : undefined);
     const r = await startM3(w, n, retryLevel);
     setStarting(false);
     if (!r.ok || !Array.isArray(r.data.tiers) || r.data.tiers.length !== r.data.tierCount) {
@@ -287,6 +287,13 @@ export function M3Page() {
   // Background music only while actually playing with sound on (pause sheets keep it quiet).
   useBgm("m3", soundOn && phase === "playing" && dialog === null);
 
+  /** Abandon the current run without a finish, then start a fresh one at `level` (skips the form). */
+  const replay = (level: number) => {
+    submitted.current.add(runId.current);
+    clearM3Save();
+    void begin(undefined, level);
+  };
+
   const top = (
     <TopBar
       backHref="/game/hub"
@@ -295,6 +302,7 @@ export function M3Page() {
       titleAs="p"
       right={
         <div className="flex items-center">
+          {phase === "playing" ? <ReplayButton testId="m3-replay" onClick={() => setDialog("replay")} /> : null}
           {phase === "playing" ? (
             <button type="button" onClick={() => setDialog("exit")} className={`min-h-11 shrink-0 rounded-full px-3 text-sm font-bold text-c-ink ${focusRing}`} data-testid="m3-exit">
               {g.exit}
@@ -537,6 +545,37 @@ export function M3Page() {
           </div>
         ) : null}
       </main>
+
+      {phase === "playing" && dialog === "replay" ? (
+        <Sheet
+          ref={dialogRef}
+          label={g.replayTitle}
+          onClosed={() => {
+            if (phaseRef.current !== "playing") return;
+            setDialog(null);
+            const fn = afterDialog.current;
+            afterDialog.current = () => {};
+            fn();
+          }}
+          className="px-6 pt-7 pb-[calc(24px+env(safe-area-inset-bottom))]"
+          panelTestId="m3-replay-sheet"
+        >
+          <p className="font-display m-0 text-center text-xl leading-snug">{g.replayTitle}</p>
+          <div className="mt-6 flex flex-col gap-2.5">
+            <button type="button" onClick={() => closeDialogThen(() => replay(run.level))} className={primary} data-testid="m3-replay-level">
+              {g.replayLevel}
+            </button>
+            {run.level > 1 ? (
+              <button type="button" onClick={() => closeDialogThen(() => replay(1))} className={secondary} data-testid="m3-replay-first">
+                {g.replayFirst}
+              </button>
+            ) : null}
+            <button type="button" onClick={() => closeDialogThen(() => {})} className={secondary} data-testid="m3-replay-cancel">
+              {g.replayCancel}
+            </button>
+          </div>
+        </Sheet>
+      ) : null}
 
       {phase === "playing" && dialog === "exit" ? (
         <Sheet

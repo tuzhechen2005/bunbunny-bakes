@@ -103,6 +103,36 @@ for (const width of [320, 390]) {
       expect(api.starts.at(-1)?.level).toBe(2);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     });
+    test("replay: level 1 offers this level only; level 2 also offers level 1; no finish is sent", async ({ page }) => {
+      const api = await mockApi(page);
+      await start(page);
+      await page.getByTestId("m3-replay").click();
+      await expect(page.getByTestId("m3-replay-first")).toHaveCount(0);
+      await page.getByTestId("m3-replay-cancel").click();
+      await expect(page.getByTestId("m3-replay-sheet")).toHaveCount(0);
+      await page.getByTestId("m3-replay").click();
+      await page.getByTestId("m3-replay-level").click();
+      await expect.poll(() => api.starts.length).toBe(2);
+      expect(api.starts[1].level).toBe(1);
+      const rules = definition(2);
+      const save = { v: 1, level: 2, weekKey: WEEK, runId: "run-seed2", seed: rules.seed, tiers: TIERS.slice(0, rules.tierCount), moves: [], nickname: "小面包", expiresAt: "2099-01-01T00:00:00Z", score: 0 };
+      await page.evaluate(([key, value]) => localStorage.setItem(key as string, JSON.stringify(value)), [M3_SAVE_KEY, save]);
+      await page.reload();
+      await page.getByTestId("m3-resume").click();
+      await expect(page.getByTestId("m3-level")).toHaveText("第 2 关");
+      await page.getByTestId("m3-replay").click();
+      await expect(page.getByTestId("m3-replay-first")).toBeVisible();
+      await page.getByTestId("m3-replay-level").click();
+      await expect.poll(() => api.starts.length).toBe(3);
+      expect(api.starts[2].level).toBe(2);
+      await expect(page.getByTestId("m3-level")).toHaveText("第 2 关");
+      await page.getByTestId("m3-replay").click();
+      await page.getByTestId("m3-replay-first").click();
+      await expect.poll(() => api.starts.length).toBe(4);
+      expect(api.starts[3].level).toBe(1);
+      await expect(page.getByTestId("m3-level")).toHaveText("第 1 关");
+      expect(api.finishes).toHaveLength(0);
+    });
     test("fails at zero moves and retries the identical level", async ({ page }) => {
       test.setTimeout(180_000);
       const api = await mockApi(page);
