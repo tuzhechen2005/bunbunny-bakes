@@ -39,7 +39,7 @@
 .td-sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 .td-next { display:flex; align-items:center; justify-content:center; gap:10px; height:30px; flex:none; font-size:12px; color:var(--c-grey-text); }
 .td-next-pest { display:flex; align-items:center; gap:2px; color:var(--c-ink); font-family:var(--font-num-face); font-size:14px; }
-.td-pest-icon { display:inline-block; width:30px; height:30px; background-size:400% 100%; background-position:0 0; background-repeat:no-repeat; }
+.td-pest-icon { display:inline-block; width:30px; height:30px; background-size:600% 100%; background-position:0 0; background-repeat:no-repeat; }
 .td-pest-ant { background-image:url(/brand/td/pest-ant.webp); }
 .td-pest-mouse { background-image:url(/brand/td/pest-mouse.webp); }
 .td-pest-sparrow { background-image:url(/brand/td/pest-sparrow.webp); }
@@ -230,3 +230,8 @@
 .td-best-row b { font-size:13px; font-weight:400; color:var(--c-ink); }
 @media (prefers-reduced-motion:reduce) { .td-star-pop { animation:none; } }
 .td-boss-sm { top:24%; padding:7px 16px; border-radius:999px; font-size:15px; background:rgba(59,42,31,.86); }
+/* Owner 11/02 (WeChat, rotated): keep the bottom controls and the next-wave strip clear of the edge so
+   the 开始 ring and pest icons are never clipped. */
+.td-shell-playing .td-play > .td-controls { bottom:calc(14px + env(safe-area-inset-bottom)); }
+.td-shell-playing .td-play > .td-next { bottom:calc(14px + env(safe-area-inset-bottom)); }
+.td-info-clutter { margin:0; font-size:12px; line-height:1.35; color:var(--c-grey-text); }

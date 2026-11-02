@@ -45,6 +45,8 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
   const [banner, setBanner] = useState<string | null>(null);
   const [info, setInfo] = useState(false);
   const [hold, setHold] = useState(false);
+  // Clutter is explained once per device until first tapped (owner 11/02: "两包东西是啥也没有说明").
+  const [clutterTip, setClutterTip] = useState(() => typeof window !== 'undefined' && !window.localStorage.getItem('bb_td_clutter_tip'));
   const [aim, setAim] = useState<'bomb' | 'slide' | null>(null);
   const [unlockSeen, setUnlockSeen] = useState(false);
   const paused = pagePaused || hold;
@@ -177,7 +179,7 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
       {hud.clutter.map(c => c.hp > 0 && <button key={c.id} type="button" className={`td-clutter${hud.targetClutter === c.id ? ' td-clutter-on' : ''}`} data-testid={`td-clutter-${c.id}`} disabled={disabled}
         aria-pressed={hud.targetClutter === c.id} aria-label={fill(t.clutterLabel, { name: t.clutter[c.kind], n: c.reward })}
         style={{ left: `${c.x / FIELD_WIDTH * 100}%`, top: `${c.y / FIELD_HEIGHT * 100}%` }}
-        onClick={() => act({ type: 'target-clutter', clutter: state.current.targetClutter === c.id ? null : c.id })} />)}
+        onClick={() => { if (clutterTip) { setClutterTip(false); try { window.localStorage.setItem('bb_td_clutter_tip', '1'); } catch {} } act({ type: 'target-clutter', clutter: state.current.targetClutter === c.id ? null : c.id }); }} />)}
       {aim && <div className="td-aim" data-testid="td-aim" onClick={e => {
         const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const x = Math.round((e.clientX - r.left) / r.width * FIELD_WIDTH), y = Math.round((e.clientY - r.top) / r.height * FIELD_HEIGHT);
@@ -197,7 +199,7 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
         <div className="td-unlock-ok"><button className="td-ctl td-ctl-main" data-testid="td-unlock-ok" onClick={() => setUnlockSeen(true)}>{t.gotIt}</button></div>
       </div></div>}
       {banner && <p className={`td-boss${banner === t.bossSpit ? ' td-boss-sm' : ''}`} role="status">{banner}</p>}
-      {hud.awaitingStart && ready && selected === null && !hold && <p className="td-start-hint font-display" role="status">{t.startHint2}</p>}
+      {hud.awaitingStart && ready && selected === null && !hold && <p className="td-start-hint font-display" role="status">{clutterTip && hud.clutter.some(c => c.hp > 0) ? t.clutterTip : t.startHint2}</p>}
       {selected !== null && !disabled && <div className={`td-tray${slots[selected].y > FIELD_HEIGHT * .57 ? " td-tray-top" : ""}`} role="group" aria-label={fill(t.slot, { n: selected + 1 })}>
         {tower ? <>
           <div className="td-tray-head"><img src={`/brand/td/${towerFile[tower.kind]}-${tower.level}.webp`} alt="" /><b>{t.towers[tower.kind]}</b></div>
@@ -224,6 +226,7 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
             <p className="td-info-branch"><i className="td-dot-a" />{t.info[kind].a}</p>
             <p className="td-info-branch"><i className="td-dot-b" />{t.info[kind].b}</p></div>
         </div>)}</div>
+        {hud.clutter.length ? <p className="td-info-clutter">{t.clutterInfo}</p> : null}
         <button className="td-ctl td-ctl-main" onClick={() => setInfo(false)}>{t.infoClose}</button>
       </div>}
       {hold && !hud.over && <div className="td-hold-cover" role="dialog" aria-label={t.paused}>

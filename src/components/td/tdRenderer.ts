@@ -213,11 +213,11 @@ export function createTdRenderer(canvas: HTMLCanvasElement, map: TdMap, art: TdA
 
     // Conveyor arrows run along the belt (static when reduced) so the speed-up reads at a glance.
     if (strips.length) {
-      const phase = reduced ? 0 : (tick * 1.6) % 46;
+      const t0 = reduced ? 0 : tick * 1.6;
       ctx.fillStyle = 'rgba(255,214,102,.95)';
       for (const g of strips) for (let i = 1; i < g.length; i++) {
         const a = g[i - 1], b = g[i], d = Math.hypot(b.x - a.x, b.y - a.y), ang = Math.atan2(b.y - a.y, b.x - a.x);
-        for (let t = 12 + phase; t < d - 8; t += 46) { ctx.save(); ctx.translate(a.x + (b.x - a.x) * t / d, a.y + (b.y - a.y) * t / d); ctx.rotate(ang); ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(-6, -18); ctx.lineTo(1, 0); ctx.lineTo(-6, 18); ctx.closePath(); ctx.fill(); ctx.restore(); }
+        const gap = d < 92 ? Math.max(18, d / 2) : 46; for (let t = (d < 92 ? 0 : 12) + t0 % gap + (d < 92 ? gap / 2 - 9 : 0); t < d - 4; t += gap) { ctx.save(); ctx.translate(a.x + (b.x - a.x) * t / d, a.y + (b.y - a.y) * t / d); ctx.rotate(ang); ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(-6, -18); ctx.lineTo(1, 0); ctx.lineTo(-6, 18); ctx.closePath(); ctx.fill(); ctx.restore(); }
       }
     }
 
