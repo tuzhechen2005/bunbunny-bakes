@@ -236,3 +236,4 @@ purchase while saving. Two base L1 pins can now finish at one bread (one star).
 The responsive L20 reference build relocates earned investment to a nearby
 pin/oven pair; passive late-level builds are not guaranteed a 20–30-second boss.
 See the engine README for the measured passive/reactive results and UI fields.
+D182（[店主] 11/02 RUN v10）： 480→720 mm/tick over 20s (old cap reached at 16.67s), rows 64m and slide→jump gap 28m; second-run optional fixed 400m invincible sprint with no pickups, 2s takeover warning and 64m safe buffer, mode stored in server seed and gated by finished RUN history; first-run optional 12s non-ranked practice with replayed skip; bread streak 3/6 earns ×2/×3 bread points with one missed-bread grace per chain and hit reset; near-miss feedback only; hit-specific death reason and combo telegraph fields exposed to UI. Owner 11/02 explicit RUN v10 brief supersedes review recommendation against acceleration. 100-seed 250ms bot median 69.2s.

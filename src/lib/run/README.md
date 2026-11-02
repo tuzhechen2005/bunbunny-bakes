@@ -1,159 +1,195 @@
-# Run engine — R14 / engine v9
+# Run engine — v10 / D182
 
-Pure deterministic TypeScript shared by server replay and the client.
-`RUN_ENGINE_VERSION = 9`; new seeds and the existing version-derived save key use
-v9. Unfinished v1–v8 runs and saves are rejected; finished scores are unchanged.
-The e2e SEED is v9. No components are changed and no browsers are run in this task.
-The frontend must add the four new kinds to its object/art mapping before rendering
-v9: `pothole`, `bread-wheel`, `double-jump-shoes`, and `shield`.
+Pure deterministic TypeScript shared by live play and server replay. All geometry
+uses integer millimetres; time is 60 Hz ticks. `RUN_ENGINE_VERSION = 10` rejects
+unfinished v1–v9 runs and version-derived local saves. Finished scores remain.
+Scope: engine/server/tests/docs only; Claude owns the components and pages.
 
-## API and snapshot contract
+## UI contract
 
-`createRunGame({seed})` exposes `input(tick, dir)`, `step(toTick)`, and detached
-`state()`. `frame(toTick)` is a borrowed, pooled snapshot; never retain it across
-frames. Realtime pre-generation and lazy server replay produce identical results.
-All simulation is integer millimetres and 60 Hz ticks, without wall-clock reads.
-Input advances **through** its tick before applying a swipe: collision-tick input
-is too late. Log every valid swipe, including no-ops, at strictly increasing ticks.
-Caps remain 20,000 inputs and 54,000 ticks (15 minutes). Replay validates the full
-log before simulation and returns the actual end tick.
+`createRunGame({seed, realtime?})` exposes `input(tick, dir)`, `step(toTick)`,
+`state()` (detached), and `frame(toTick)` (borrowed; do not retain). Input advances
+**through** its tick before applying the action; a collision-tick swipe is too late.
+Log all valid inputs, including no-ops, at strictly increasing ticks. The limits
+remain 20,000 inputs and 54,000 ticks, including practice. Server `replayRun`
+uses `captureEvents: false` to skip feedback allocation; scoring and control state
+are identical to live event capture (covered by parity tests). `L/R/U/D` mean lane left,
+lane right, jump, slide. **`S` skips practice** at that tick; elsewhere it is a no-op.
 
-Every snapshot object exposes `id`, `kind`, `lane`, relative centre `z`, `front`,
-`back`, `height`, `speed` (mm/tick, zero for static objects), `signalUntil` (absolute
-tick, zero when no signal was scheduled; active while greater than the snapshot tick), and `targetLane` (current lane when no planned change).
-Front/back are nonnegative extents from the centre. Objects sort by current z then
-id. Collectibles also have `y`; golden bread has `value: 5`, ordinary bread defaults
-to 1. Truck bread has `carrierId` and shares its carrier's lane and displacement.
-All object and player fields are consistent between detached and pooled snapshots.
+### Starting and handing over
 
-Player snapshots expose `y`, `surface`, `lane`, `pose`, progress (0..1000),
-`laneChange`, `queuedLane`, and boolean `shield`. Lane changes take 12 ticks and
-switch occupancy at their midpoint; one horizontal swipe may queue. Jump/slide
-last 42/36 ticks and can overlap a lane change. Geometry remains in `geometry.json`.
+`POST /api/game/run/start` accepts `{wechatId, nickname, startMode?}` where
+`startMode` is `normal` (default), `sprint`, or `practice`. It returns
+`{runId, seed, expiresAt, startMode}`. Server checks case-insensitive RUN finished
+history: sprint requires a finished run; practice requires no finished run.
+There is no history/best-distance value trusted from the browser. Modes are stored
+in the immutable run seed (`v10.<randomhex>[.sprint|.practice]`), so progress and
+finish replay use the stored mode automatically. No schema migration is needed.
+Choose normal to decline practice or sprint; after starting practice, log `S` to
+skip the remainder. This is a run setting, not a persistent upgrade.
 
-## New obstacles and powers
+State fields:
 
-- **Lane-changing trucks:** move toward the player at 40 mm/tick. At activation
-  inside the 90m simulation window, a changing truck sets `signalUntil = tick + 60`
-  and exposes its adjacent `targetLane`. At that tick it occupies the target lane.
-  A truck changes only once. Its bread changes lanes simultaneously. Authored
-  targets stay within the two blocked lanes, preserving the reserved route;
-  when the open lane separates both blocked lanes, trucks keep their lane.
-- **Potholes:** 4.4m long, requiring airborne feet throughout the swept overlap.
-  Sliding or walking crashes. Jumping too early and landing in the hole, or starting
-  too late at its approaching edge, also crashes. No height grace applies.
-- **High-low combos:** an awning followed 26m later in the same lane by a pothole.
-  Slide, then jump promptly; changing lanes is also allowed. Flour gates retain
-  their 18m follow-up cart. The combo is tested at the maximum coffee speed.
-- **Rolling bread wheels:** 1.8m high and 1.8m long, moving independently toward
-  the player at 120 mm/tick. Jump or change lanes. Their movement uses the same
-  deterministic activation and swept collision rules as trucks. Wheels start
-  from 480m and only occupy middle rows, preserving recovery space.
-- **Double-jump shoes:** `kind: "double-jump-shoes"`, active for 480 ticks (8s).
-  `powerUps.shoesUntil` and `shoesTicks` expose expiry and remaining time. One
-  additional jump is allowed while airborne, starting a new arc at current feet
-  height. A third jump is ignored; landing resets eligibility. Recollection
-  refreshes expiry, but does not reset the current airborne jump allowance.
-- **Shield:** `kind: "shield"`, sets `player.shield = true`. One collision consumes
-  it and emits a collision event without ending the run. The absorbed object's
-  remaining depth is harmless; a different obstacle can crash immediately.
-  Recollecting does not stack shields. Coffee still bypasses collisions without
-  consuming a shield.
+| Field | Meaning |
+| --- | --- |
+| `startMode` | Original server-selected mode; does not change on skip |
+| `phase` | `practice`, `sprint`, or `running` |
+| `controlTick` | Sprint handover or practice end tick; updated to skip tick by `S`; normal is 0 |
+| `distance` | Ranked millimetres; zero throughout practice |
+| `bread` | Raw bread value collected (gold counts 5), independent of points |
+| `breadPoints` | Accumulated bread points after combo multiplication |
+| `combo` | `{streak, level:1|2|3, graceAvailable}` |
+| `death` | Null until fatal hit, then `{id, kind, lane, reasonCode}` |
 
-Each row has a seeded 1/96 chance of shoes and 1/96 chance of shield. Coffee and
-magnet remain restricted to the introductory rows, each at 1/96 per row. Coffee
-lasts 360 ticks and multiplies speed by 3/2; magnet lasts 480 ticks and attracts
-bread across lanes and elevations. Roof bread otherwise requires roof support and
-feet within 1800 mm of its elevation.
+Sprint is invincible and ignores swipes until exactly **400,000 mm**. It collects
+no bread or powers. Its distance counts normally (400 points at handover). It uses
+the same acceleration for everyone and clamps the final automatic tick to exactly
+400m. The engine removes objects from the start and the **400–464m** safety buffer,
+including conservative moving-obstacle envelopes. Trucks/rollers still start no
+earlier than 480m. A `takeover-warning` is emitted exactly 120 ticks before control.
+The UI may fast-forward rendering, but must retain simulation ticks and the existing
+server wall-time plausibility check; it cannot instantly claim free elapsed time.
+
+Practice lasts **720 ticks / 12s** unless skipped. At 3s a central cart asks for a
+lane change; at 7s flour across all lanes asks for a jump; at 11s awnings across all
+lanes ask for a slide. Hits are harmless, and no practice score, distance, bread or
+powers enter ranked play. At completion/skip the player resets to the centre,
+actions clear, ranked distance resets, and the ordinary seeded track and speed
+curve begin at zero. Practice time still counts toward the 15-minute run cap.
+
+Events are returned by `step`/`input` and exposed in `state.events` for the latest
+operation. `state()` does not drain them. A large step can return multiple events.
+
+| Event | Fields beyond `type` | When |
+| --- | --- | --- |
+| `takeover-warning` | `tick, controlTick` | Exactly 2s before sprint ends; show 接管 countdown |
+| `control` | `tick` | Sprint ends, practice ends, or practice is skipped |
+| `practice-cue` | `tick, action` | Ticks 1/241/481: `change-lane` / `jump` / `slide` |
+| `combo` | `tick, streak, level, graceAvailable` | Each bread pickup, forgiven miss, reset or hit |
+| `near-miss` | `tick, id, kind, lane` | Once on safely exiting a close obstacle; show 好险, **no score** |
+| `death` | `tick, hit` | Fatal hit; `hit` has the same fields as state `death` |
+| `collision` | `tick, id, kind, lane` | Shield absorption or fatal hit; resets combo in either case |
+| `over` | `tick, reason` | Existing `collision` or `limit`; `death` is null for limit |
+| `action` | `tick, dir` | Accepted motion; skipped/ignored input need not emit this |
+| `collect` | `tick, id, kind, lane` | Bread or power pickup |
+| `expire` | `tick, kind` | Power expiry |
+
+Death hints: cart/van/truck → `change-lane`; awning → `slide`;
+flour/puddle/pothole/bread-wheel → `jump`. IDs let the UI highlight the fatal
+object. Near-miss means a completed same-lane clearance: under an awning, over a
+pothole, or with feet less than 600mm above another low obstacle during overlap.
+Roof travel, coffee bypass and absorbed hits do not emit it. It never changes score.
+
+Objects expose `id, kind, lane, z, front, back, height, speed, signalUntil,
+targetLane`, plus optional `y, value, carrierId`. `z` is relative to player; objects
+sort by z then ID. **`comboId` and `comboStep:1|2`** link the two obstacles of a
+designed phrase for advance highlighting. Both are visible within the ordinary
+90m window; they do not reveal hidden future track. Truck signals last 60 ticks,
+then change to the adjacent target lane; carrier bread moves with its truck.
+Detached and pooled snapshots expose the same fields.
+
+Player fields remain `y, surface, lane, pose, progress, laneChange, queuedLane,
+shield`. Lane changes last 12 ticks (occupancy switches halfway), allow one queued
+swipe, and overlap jump/slide. Jump/slide last 42/36 ticks. Powers: coffee 360 ticks
+at ×1.5 speed and collision immunity; magnet 480 ticks; shoes 480 ticks allowing
+one extra airborne jump; shield absorbs one obstacle without stacking. Full
+collision dimensions and jump/roof physics remain in `geometry.json`.
 
 ## Scoring
 
-Snapshot `multiplier` is ×1 below 500m, ×2 from 500m, and ×3 from 1500m.
-The current multiplier applies to distance points; bread value is unchanged:
+Distance multiplier remains ×1 below 500m, ×2 from 500m, ×3 from 1500m:
 
 ```
-score = floor(distance / 1000) * multiplier + bread * 10
+score = floor(distance / 1000) * distanceMultiplier + breadPoints
 ```
 
-Thus 500m earns 1000 distance points, 1500m earns 4500, and 1501m earns 4503.
-Both live snapshots and authoritative replay use this same formula; save
-verification and server finishing use authoritative replay.
+Each collected bread object increments streak once, including gold. Bread 3 and
+onwards earn ×2, bread 6 and onwards ×3: `10 * (value ?? 1) * combo.level`.
+Existing points are never multiplied retroactively. One missed bread object per
+chain consumes grace without clearing streak; another miss resets streak/level
+and replenishes grace. Collection does not replenish grace. Any hit, including
+shield absorption, resets the chain. Misses count when a bread centre passes the
+player uncollected (including optional side/roof bread), in deterministic object
+order. Coffee bypass is not a hit. Sprint/practice cannot build a chain.
 
-## Difficulty and survivability
+## Speed, spacing and simulations
 
-Speed remains 480→680 mm/tick over 35 seconds (coffee maximum 1020). Three 60m
-rows form a 180m chunk, with a 30m initial offset and first obstacles at 90m (~3s).
-The track RNG stream remains `${seed}:run:track:v1`, pinned by the enclosing v9 seed.
-Density ramps from 240m to 720m, with mature ordinary draws 45% van, 25% truck,
-30% street, overridden by action and roof phrases. New street obstacles start
-at 240m; trucks and wheels start at 480m. Routes move at most one lane after 240m.
-From 1260m, every third phrase requires two touching 12m van roofs with an approach
-ramp and carts in the other lanes. From 2340m (~62s), every non-roof row requires
-an action. Van roof heights, jump parabola, roof landing and gravity remain unchanged.
+Owner 11/02 explicitly requested acceleration despite the earlier review's advice.
+For ranked elapsed tick `t` (practice excluded):
 
-Spacing proof, supplemented by executed paths:
+```
+speed(t) = 480 + floor(240 * min(t, 1200) / 1200) mm/tick
+coffeeSpeed(t) = floor(speed(t) * 1.5)
+```
 
-- Introductory two-lane crossings retain at least 57.4m, exceeding
-  `1020 * (30 reaction + 24 crossing + 1 margin) = 56.1m`.
-- Mature routes require at most one lane change. A roof train ends 18m after its
-  row; the next truck envelope starts at most 18m before the next row. The 24m
-  gap exceeds `1020 * (10 + 12 + 1) = 23.46m`.
-- Wheels occur only in middle ordinary rows. A conservative 25m displacement
-  envelope plus their 0.9m front and the preceding row's maximum 9m back leaves
-  25.1m, also exceeding 23.46m. They never follow a combo or roof train.
-- A combo's pothole ends 28.2m after its row. The next ramp starts at worst 13m
-  before the next row, leaving 18.8m, exceeding the 13.26m lane-change requirement.
-  The next route is already visible before the combo jump, so reaction/planning
-  overlaps the action rather than starting after landing. Jump and lane change
-  may run concurrently. Trucks and wheels are excluded from that next row.
-- Truck lane changes never enter the reserved lane. Action centres are at least
-  58 ticks apart at maximum speed, longer than either action. A 26m high-low gap
-  lets a centred slide finish before the jump at 1020 mm/tick.
+| Ranked time | Speed mm/tick | Metres/second |
+| --- | ---: | ---: |
+| 0s | 480 | 28.8 |
+| 5s | 540 | 32.4 |
+| 10s | 600 | 36.0 |
+| 15s | 660 | 39.6 |
+| 16.67s | 680 (old cap) | 40.8 |
+| 20s+ | 720 | 43.2 |
 
-Tests inspect 1,000 seeds × 16 chunks, execute 1,000 early paths, and run 100 mature
-search paths for 18,001 ticks (>5 minutes), asserting **zero absorbed collisions**
-so shields cannot hide an unsolvable route. Paired roof/ground searches verify the
-roof requirement. Search uses only public snapshots, including truck signals,
-geometry and speeds, never generator route metadata.
+Old curve: 480→680 over 35s. New cap +5.88%; maximum coffee speed 1080.
+Rows widen 60→64m, preserving 3-row phrases. First obstacle is 94m. Awning→pothole
+widens 26→28m; flour→cart retains 18m. Combo IDs make both steps telegraphable.
+Roof and action density thresholds remain 1260m and 2340m. Normal moving trucks
+and wheels remain restricted to middle rows and cannot invade the reserved route.
 
-Casual control samples at 10 Hz, delays inputs 250ms and randomly selects apparently
-open lanes. Intermediate control also delays inputs 250ms, independently queues
-lane/action decisions, and plans 72 ticks ahead with sampling allowance. Search
-plans 120 ticks ahead and acts without motor delay. Calibration uses 100 fixed
-`tuning0..tuning99` seeds and median index 50: casual target 12–20s (~15s),
-intermediate 60–120s, search at least 3 minutes. Measured seconds (sorted indices 10/50/90):
+Worst-case introductory two-lane crossing gap is 61.4m, above
+`1080 * (30 reaction + 24 crossing + 1 margin) = 59.4m`. Roof→truck recovery
+is 28m, above `1080 * (10 + 12 + 1) = 24.84m`. Combo→ramp recovery is
+20.8m, above the concurrent one-lane move's 14.04m; its next route is visible
+before finishing the jump. A 28m slide→jump gap preserves action timing at coffee
+cap. These bounds are also exercised by the existing seeded path tests.
 
-| Bot | p10 | Median | p90 |
-| --- | ---: | ---: | ---: |
-| Casual | 12.55 | 17.88 | 26.15 |
-| Intermediate (250ms) | 38.23 | 73.53 | 101.48 |
-| Search (100 mature tracks, capped) | 300.02 | 300.02 | 300.02 |
+Headless public-snapshot bots, unchanged 250ms latency, `tuning0..99`, 300s cap:
 
-The search result uses `survive0..survive99`; all finish the 18,001-tick horizon
-without a collision, including shield absorption. The full 15-minute replay and
-20,000-input replay tests also pass their 100ms budgets. The final broader unit run also passes both 1,000-seed tests (spacing 11.69s,
-executed early paths 14.82s), after earlier host-load timeouts.
+| Controller | N | p10 seconds | Median | p90 | Capped |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Casual (250ms) | 100 | 10.70 | 17.28 | 20.73 | 0 |
+| Intermediate (250ms) | 100 | 36.62 | **69.20** | 116.62 | 0 |
+| Search (no latency) | 20 | 300 | 300 | 300 | 20 |
+
+Search had zero collisions, including shield absorption. Delayed intermediate
+median meets the requested 60–90s range; this is bot evidence, not a phone playtest
+or a claim that every player will survive that long. Harness: `tests/support/runBot.ts`; reproduce summary with `npx tsx tests/support/runV10Simulation.ts`.
 
 ## Verification
 
-```
-npx prisma generate
-npx tsc --noEmit --incremental false
-npx eslint
-npx vitest run --configLoader runner --project unit --maxWorkers 1 --pool threads
-TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_r14_test npx vitest run --configLoader runner --project db
-```
+Run `npx prisma generate`, `npx tsc --noEmit`, `npx eslint src tests --quiet`,
+and unit plus DB Vitest projects. All DB runs must set both `TEST_DATABASE_URL`
+and `TEST_DIRECT_DATABASE_URL` to
+`postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_run10_test`.
+Do not modify global setup or migration maintenance URLs. UI implementation and
+browser/WeChat playtesting are separate work.
 
-Verification results: ESLint and `git diff --check` pass. All 1,217 unit cases are
-covered successfully: 1,207 in the 97-file run excluding TD calibration, six TD
-calibration cases in the original full run, and the remaining four on isolated
-retry after host-load timeouts. All 829 DB cases are covered successfully on
-`*_test` databases: the full thread-pool run passed 828, and the timezone-switching
-`dbDates` file passed all 12 when rerun with the normal fork pool. Threads cannot
-apply `process.env.TZ` changes to native Date behavior. The runner DB file also
-passes all nine tests with forks, including final multiplier scoring and v8 rejection.
-No browser/e2e execution was performed.
+### v10 validation record (11/02)
 
-TypeScript currently reports the frontend's exhaustive `runRenderer.ts` object
-map missing the four new kinds. It is intentionally left for the frontend task
-because R14 forbids edits to `src/components/**`; types are not weakened to hide it.
+- TypeScript, ESLint and diff whitespace checks pass. Final targeted functional
+  suite: **48/48** (six files), including start modes, event-free replay parity,
+  combo/grace, near miss, death, old-save rejection and maximum-speed combo timing.
+- 1,000 early real-engine paths pass after raising that workload's timeout to 60s
+  on the shared host. The 1,000-seed spacing assertions and 100 mature five-minute
+  searches also completed without route/collision failures. Sample counts and
+  physical assertions were retained.
+- The broad unit sweep excluding `tdTuning.test.ts` ran 1,258 cases: 1,252 passed
+  initially. Subsequent focused runs resolve the obsolete speed expectation,
+  event-free test loaded against an earlier engine during the sweep, and early
+  path timeout. The two **100ms replay performance assertions pass** on the final
+  isolated run after the other suites finished (20,000-input median and full
+  15-minute replay). Earlier concurrent runs exceeded the budget, as did
+  unmodified HEAD on the same loaded host. The 100ms budget was not relaxed.
+- The unrelated TD `levelDesign` assertion expects boss HP 90 but gets 525.
+  Full-suite TD tuning was interrupted; it is not reported as passing. No TD
+  source or tests were changed.
+- Browser/e2e was not run; its RUN seed fixture was bumped to v10. UI components
+  and pages remain unchanged and need Claude's integration of the contract above.
+
+- Non-migration DB suite: **902 cases verified passing** on `bunbunny_run10_test`.
+  The thread-pool sweep passed 901 and failed the native timezone-switch assertion;
+  a final fork-pool run passed all **23** RUN/date cases (11 RUN, 12 date), including
+  sprint eligibility, stored-mode replay, practice skip and immutable log prefixes.
+  The original full DB run was interrupted during migration tests; migration
+  verification is **incomplete**, and maintenance URLs/global setup were untouched.

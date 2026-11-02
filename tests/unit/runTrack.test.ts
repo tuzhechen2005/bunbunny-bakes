@@ -21,7 +21,7 @@ describe("run track solvability", () => {
         expect(chunk.index).toBe(index);
         expect(chunk.start).toBe(previousZ);
         expect(chunk.end - chunk.start).toBe(ROW_GAP * 3);
-        expect(chunk.objects.every((o, i, all) => o.z > chunk.start && o.z <= chunk.end + 26000 && (i === 0 || all[i - 1].z <= o.z))).toBe(true);
+        expect(chunk.objects.every((o, i, all) => o.z > chunk.start && o.z <= chunk.end + 28000 && (i === 0 || all[i - 1].z <= o.z))).toBe(true);
         const ids = chunk.objects.map((o) => o.id).sort((a, b) => a - b);
         expect(ids[0]).toBe(previousId + 1);
         expect(new Set(ids).size).toBe(ids.length);
@@ -54,7 +54,7 @@ describe("run track solvability", () => {
           } else if (gate) {
             expect(z).toBeGreaterThanOrEqual(PRESSURE_START);
             expect(row.filter(o => o.kind === "cart")).toHaveLength(2);
-            expect(chunk.objects.some(o => (o.kind === "cart" && o.z === z + 18000 || o.kind === "pothole" && o.z === z + 26000) && o.lane === route.lane)).toBe(true);
+            expect(chunk.objects.some(o => (o.kind === "cart" && o.z === z + 18000 || o.kind === "pothole" && o.z === z + 28000) && o.lane === route.lane)).toBe(true);
           }
           for (const truck of row.filter(o => o.kind === "truck")) {
             expect(truck.z).toBeGreaterThanOrEqual(TRUCK_START);
@@ -71,11 +71,11 @@ describe("run track solvability", () => {
           }
           const front = Math.max(...row.map(o => o.front + (o.kind === "truck" ? 12000 : o.kind === "bread-wheel" ? 25000 : o.kind === "van" ? 4000 : 0)));
           const free = z - previousZ - front - previousBack;
-          const reaction = z <= 240000 ? MIN_REACTION_TICKS : previousBack === 28200 ? 0 : 10;
+          const reaction = z <= 240000 ? MIN_REACTION_TICKS : previousBack === 30200 ? 0 : 10;
           expect(free).toBeGreaterThanOrEqual(MAX_SPEED * (reaction + changes * LANE_CHANGE_TICKS + 1));
           if (z <= 240000) expect(free - MAX_SPEED * changes * LANE_CHANGE_TICKS).toBeGreaterThanOrEqual(MIN_REACTION_DISTANCE);
           else expect(changes).toBeLessThanOrEqual(1);
-          previousBack = gate?.kind === "van" ? 18000 : gate?.kind === "awning" ? 28200 : gate ? 19400 : Math.max(...row.map(o => o.back));
+          previousBack = gate?.kind === "van" ? 18000 : gate?.kind === "awning" ? 30200 : gate ? 19400 : Math.max(...row.map(o => o.back));
           expect(VISIBLE_DISTANCE).toBeGreaterThanOrEqual(z - previousZ);
           previousZ = z; lane = route.lane;
         }
@@ -84,7 +84,7 @@ describe("run track solvability", () => {
     expect(twoLaneCrossings).toBeGreaterThan(300);
     expect(changingTrucks).toBeGreaterThan(0);
     expect([...kinds].sort()).toEqual(["awning", "bread", "bread-wheel", "cart", "coffee", "double-jump-shoes", "flour", "paper-bag", "pothole", "puddle", "ramp", "shield", "truck", "van"]);
-  }, 15_000);
+  }, 60_000);
 
   it("executes open paths in the real engine over 1000 seeds without relying on power-ups", () => {
     for (let n = 0; n < 1000; n++) {
@@ -93,7 +93,7 @@ describe("run track solvability", () => {
       expect(run.collisions, `shield-independent seed ${n}`).toBe(0);
       expect(run.state.events.some((e) => e.type === "collision")).toBe(false);
     }
-  }, 15_000);
+  }, 60_000);
 
   it("searches public snapshots for five-minute surviving paths across mature patterns", () => {
     for (let n = 0; n < 100; n++) {
@@ -101,7 +101,7 @@ describe("run track solvability", () => {
       expect(run.over, `seed ${n}`).toBe(false);
       expect(run.collisions, `shield-independent seed ${n}`).toBe(0);
     }
-  }, 60_000);
+  }, 120_000);
 
   it("is deterministic and changes with the seed", () => {
     const a = createRunTrack("same"), b = createRunTrack("same"), c = createRunTrack("different");

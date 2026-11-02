@@ -1,12 +1,12 @@
-export const RUN_ENGINE_VERSION = 9;
+export const RUN_ENGINE_VERSION = 10;
 export const TICK_RATE = 60;
 export const UNITS_PER_METRE = 1000;
 export const MAX_RUN_TICKS = 15 * 60 * TICK_RATE;
 export const MAX_INPUTS = 20_000;
 /** Speeds are integer millimetres per tick. */
 export const BASE_SPEED = 480;
-export const CAP_SPEED = 680;
-export const RAMP_TICKS = 35 * TICK_RATE;
+export const CAP_SPEED = 720;
+export const RAMP_TICKS = 20 * TICK_RATE;
 export const MAX_SPEED = CAP_SPEED * 3 / 2;
 export const JUMP_TICKS = 42;
 export const SLIDE_TICKS = 36;
@@ -16,11 +16,11 @@ export const MAGNET_TICKS = 8 * TICK_RATE;
 export const COFFEE_TICKS = 6 * TICK_RATE;
 export const MIN_REACTION_TICKS = 30;
 export const MIN_REACTION_DISTANCE = MAX_SPEED * MIN_REACTION_TICKS;
-export const ROW_GAP = 60_000;
+export const ROW_GAP = 64_000;
 export const VISIBLE_DISTANCE = 90_000;
 export const LANES = [0, 1, 2] as const;
 export type RunLane = typeof LANES[number];
-export type RunDirection = "L" | "R" | "U" | "D";
+export type RunDirection = "L" | "R" | "U" | "D" | "S";
 export type RunObstacleKind = "cart" | "flour" | "awning" | "puddle" | "ramp" | "van" | "truck" | "pothole" | "bread-wheel";
 export type RunObjectKind = RunObstacleKind | "bread" | "paper-bag" | "coffee" | "double-jump-shoes" | "shield";
 export interface RunInput { tick: number; dir: RunDirection }
@@ -44,6 +44,9 @@ export interface RunObject {
   value?: 1 | 5;
   /** Moving roof owner, so its bread shares the truck displacement. */
   carrierId?: number;
+  /** Authored two-obstacle phrase; both steps share the first obstacle ID. */
+  comboId?: number;
+  comboStep?: 1 | 2;
 }
 export interface RunLaneChange { from: RunLane; to: RunLane; progress: number }
 export interface RunPlayer {
@@ -57,18 +60,35 @@ export interface RunPlayer {
   laneChange: RunLaneChange | null;
   queuedLane: "L" | "R" | null;
 }
+export type RunStartMode = "normal" | "sprint" | "practice";
+export interface RunDeath { id: number; kind: RunObstacleKind; lane: RunLane; reasonCode: "change-lane" | "slide" | "jump" }
+export interface RunCombo { streak: number; level: 1 | 2 | 3; graceAvailable: boolean }
 export type RunEvent =
+  | { type: "combo"; tick: number; streak: number; level: 1 | 2 | 3; graceAvailable: boolean }
+  | { type: "near-miss"; tick: number; id: number; kind: RunObstacleKind; lane: RunLane }
+  | { type: "takeover-warning"; tick: number; controlTick: number }
+  | { type: "control"; tick: number }
+  | { type: "practice-cue"; tick: number; action: "change-lane" | "jump" | "slide" }
+  | { type: "death"; tick: number; hit: RunDeath }
+
   | { type: "action"; tick: number; dir: RunDirection }
   | { type: "collect"; tick: number; id: number; kind: "bread" | "paper-bag" | "coffee" | "double-jump-shoes" | "shield"; lane: RunLane }
   | { type: "expire"; tick: number; kind: "paper-bag" | "coffee" | "double-jump-shoes" }
   | { type: "collision"; tick: number; id: number; kind: RunObstacleKind; lane: RunLane }
   | { type: "over"; tick: number; reason: "collision" | "limit" };
 export interface RunState {
+  startMode: RunStartMode;
+  phase: "practice" | "sprint" | "running";
+  controlTick: number;
+  breadPoints: number;
+  combo: RunCombo;
+  death: RunDeath | null;
+
   tick: number;
   player: RunPlayer;
   objects: RunObject[];
   speed: number;
-  /** Integer millimetres. Distance points use the current multiplier; bread stays worth 10. */
+  /** Integer millimetres. Distance points use the current distance multiplier; breadPoints includes its combo. */
   distance: number;
   bread: number;
   multiplier: number;

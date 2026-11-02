@@ -3,7 +3,7 @@ import { runSeed, runSeedVersion, RUN_ENGINE_VERSION } from "@/lib/run";
 import { isRunSuspicious } from "@/server/runRules";
 it("pins replay versions", () => {
   expect(runSeedVersion(runSeed("ab12"))).toBe(RUN_ENGINE_VERSION);
-  expect(runSeed("ab12")).toBe("v9.ab12");
+  expect(runSeed("ab12")).toBe("v10.ab12");
   expect(runSeedVersion("v5.ab12")).not.toBe(RUN_ENGINE_VERSION);
   expect(runSeedVersion("v3.ab12")).not.toBe(RUN_ENGINE_VERSION);
   expect(runSeedVersion("v2.ab12")).not.toBe(RUN_ENGINE_VERSION);
@@ -19,4 +19,4 @@ it("flags median gaps below 120ms or active durations strictly over ten minutes"
   expect(isRunSuspicious([], 36001)).toBe(true);
 });
 
-it("rejects the previous engine seed version", () => { expect(runSeedVersion("v8.ab12")).not.toBe(RUN_ENGINE_VERSION); });
+it("rejects the previous engine seed version", () => { expect(runSeedVersion("v9.ab12")).not.toBe(RUN_ENGINE_VERSION); });

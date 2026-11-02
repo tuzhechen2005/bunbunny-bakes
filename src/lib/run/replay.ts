@@ -19,7 +19,7 @@ export function replayRun(seed: string, inputs: readonly RunInput[], endTick: nu
     if (input.tick > endTick) throw new RunReplayError("input beyond end tick");
     previous = input.tick;
   }
-  const game = createRunGame({ seed });
+  const game = createRunGame({ seed, captureEvents: false });
   for (const input of inputs) game.input(input.tick, input.dir);
   game.step(endTick);
   const state = game.state();

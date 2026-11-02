@@ -93,9 +93,12 @@ export function createRunTrack(seed: string): { next(): RunChunk } {
         }
         if (wall) {
           add(open, z, row % 2 === 0 ? "flour" : "awning");
+          const first = objects[objects.length - 1];
+          first.comboId = first.id; first.comboStep = 1;
           // Flour is followed by a lane-change blocker; awnings by a timed
-          // pothole jump. A 26m combo gap also works at maximum coffee speed.
-          add(open, z + (row % 2 === 1 ? 26_000 : 18_000), row % 2 === 1 ? "pothole" : "cart");
+          // pothole jump. A 28m combo gap also works at maximum coffee speed.
+          add(open, z + (row % 2 === 1 ? 28_000 : 18_000), row % 2 === 1 ? "pothole" : "cart");
+          objects[objects.length - 1].comboId = first.id; objects[objects.length - 1].comboStep = 2;
         }
         // A visible bread line leads into the open lane; the side loaves reward a bag.
         for (const offset of (hasVan || wall ? [12_000] : [18_000, 12_000, 6_000])) {
