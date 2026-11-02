@@ -1,6 +1,15 @@
-import { expect, it } from 'vitest';
-import { BREAD_ROLL_SPEED, createTdGame, MAX_LEVEL_TICKS, START_BREAD, tdLevel, towerStats, validTdInput, type TdEvent } from '@/lib/td';
+import { beforeEach, expect, it, vi } from 'vitest';
+import { BREAD_ROLL_SPEED, createTdGame, MAX_LEVEL_TICKS, START_BREAD, tdLevel, towerStats, validTdInput, type TdEvent, type TdLevel } from '@/lib/td';
 import { greedyTd } from '../support/tdBot';
+
+// Bread mechanics use a controlled fixture; canonical balance is tested separately.
+const fixture = vi.hoisted(() => ({ level: null as TdLevel | null }));
+vi.mock('@/lib/td/level', async original => {
+  const actual = await original<typeof import('@/lib/td/level')>();
+  return { ...actual, tdLevelFromSeed: (seed: string) => fixture.level
+    ? structuredClone(fixture.level) : actual.tdLevelFromSeed(seed) };
+});
+beforeEach(() => { fixture.level = null; });
 
 it('requires the branch exactly at tier two and rejects extra transport fields', () => {
   const game = createTdGame({ level: tdLevel('2026-10-26', 20) });
@@ -15,24 +24,29 @@ it('requires the branch exactly at tier two and rejects extra transport fields',
 
 it('previews exact next-wave counts and puts exactly one boss in wave five', () => {
   const level = tdLevel('2026-10-26', 1), game = createTdGame({ level });
-  game.apply({ tick: 0, type: 'place', slot: 0, tower: 'rollingPin' });
-  game.apply({ tick: 0, type: 'place', slot: 1, tower: 'whisk' });
-  for (let wave = 0; wave < 5; wave++) {
-    const preview = game.state().nextWave!;
-    expect(preview.index).toBe(wave + 1);
-    expect(Object.values(preview.counts).reduce((a, b) => a + b, 0)).toBe(level.waves[wave].pests.length);
-    expect(preview.counts.boss).toBe(wave === 4 ? 1 : 0);
-    game.apply({ tick: game.state().tick, type: 'callWave', slot: -1 });
-    const events = game.step(game.state().tick + 1 + (level.waves[wave].pests.length - 1) * level.waves[wave].interval);
-    if (wave === 4) {
-      expect(events.filter(e => e.type === 'bossSpawn')).toHaveLength(1);
-      expect(game.state().pests.find(p => p.boss)).toMatchObject({ kind: 'mouse', armor: 0, speed: 24, carrying: 0 });
+  const run = greedyTd(level), seen = new Set<number>();
+  let inputIndex = 0, bosses = 0;
+  for (let tick = 0; tick <= run.state.tick; tick++) {
+    const state = game.state(), preview = state.nextWave;
+    if (preview) {
+      seen.add(preview.index);
+      expect(preview.index).toBe(state.wave + 1);
+      expect(Object.values(preview.counts).reduce((a, b) => a + b, 0)).toBe(level.waves[state.wave].pests.length);
+      expect(preview.counts.boss).toBe(state.wave === 4 ? 1 : 0);
     }
+    while (run.inputs[inputIndex]?.tick === tick) expect(game.apply(run.inputs[inputIndex++])).toBe(true);
+    bosses += game.step(tick + 1).filter(event => event.type === 'bossSpawn').length;
   }
+  expect([...seen]).toEqual([1, 2, 3, 4, 5]);
+  expect(bosses).toBe(1);
   expect(game.state().nextWave).toBeNull();
 });
 
 it('conserves bread through pickup, death, rollback and recovery, with detached snapshots', () => {
+  fixture.level = tdLevel('2026-10-26', 1);
+  fixture.level.startCoins = 340;
+  fixture.level.mapData.slots = [{ x: 560, y: 350 }, { x: 800, y: 350 }, { x: 350, y: 440 }];
+  for (const wave of fixture.level.waves) for (const pest of wave.pests) pest.hp = pest.boss ? 158 : 28;
   const game = createTdGame({ level: tdLevel('2026-10-26', 1) });
   game.apply({ tick: 0, type: 'callWave', slot: -1 });
   const events: TdEvent[] = [];

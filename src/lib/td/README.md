@@ -1,47 +1,56 @@
-# Deterministic bakery TD — D10 / engine v10
+# Deterministic bakery TD — D11 / engine v11
 
-Canonical seed: `v10.td.<Gregorian Monday>.<level>`. Old v1–v9 unfinished runs
+Canonical seed: `v11.td.<Gregorian Monday>.<level>`. Old v1–v10 unfinished runs
 and saves are rejected; stored results remain intact. The save key derives from
-`TD_ENGINE_VERSION`, so it changes to `bb_td_save_v10` without frontend edits.
+`TD_ENGINE_VERSION`, so it changes to `bb_td_save_v11` without frontend edits.
 60 integer ticks/s; travel uses 16 subunits per drawing unit. Board: 1440×810.
 No clocks, global random state, account progression, or cross-week unlocks.
 
-## Fewer, stronger pests
+## Teaching combat and budgeting income
 
-Ordinary counts are `round(D9 count × 0.6)` at every level, including L1.
-The original draws are consumed before thinning, retaining the species curriculum
-and weekly variation. Each wave scales HP and bounty by its original/reduced
-count ratio (approximately 1.67), with integer rounding. Bosses retain their
-speed, armor and bread capacity, and receive the same count-ratio HP/bounty boost.
-Ordinary HP additionally uses a smooth density correction: 100% at L1, 98% at
-L2–L5, 86% at L10, and 115% at L20+, interpolating between checkpoints. This
-compensates for changed splash value and firing windows while retaining D9's
-win-rate curve. Speeds, armor, tower stats and opening coins are unchanged.
+L1 starts with 75 coins: a 60-coin rolling pin plus 15 in reserve. Ants require
+multiple hits, and a single never-upgraded pin should lose most weeks. Build a
+second pin or upgrade early. The three-slot S route retains slow pests, ten
+bread lives, no items, and no path mechanics. Slot coverage makes placement matter.
 
-Across the first 20 sampled weeks, total pest counts (including bosses) are
-60% of v9 at L1/L5/L10/L20. Total HP is respectively 107%/103%/91%/117% of v9;
-total available bounty is 109%/104%/104%/103%. Thus lower density preserves the
-aggregate economy and approximate threat, despite the seed-version change.
+Every level budgets against the most expensive unlocked tower line: sum its
+base, tier-1 and tier-2 purchase costs, then multiply by the number of slots.
+Start coins plus all bounties plus the maximum four early-call bonuses must fit
+within 75% of that full-build cost. The first wave call earns no bonus; each later
+call can earn at most 30 coins (600 prep ticks). Bounties are proportionally
+reduced and rounded down when necessary. This is computed from generated waves,
+so count variation, species mix, unlocks and integer rounding cannot overrun the
+budget. L1 weights rewards toward its opening wave to fund the next decision.
+Finale bosses pay less, reducing coins awarded too late to invest.
 
-Spawn intervals grow to `ceil(D9 interval / 0.6)` (L1: 100 → 167 ticks).
-Canonical waves set `maxLivePests`: 8 below L20, 12 from L20 onward, including
-bosses and returning thieves across overlapping waves. When full, the next
-arrival waits without consuming its index. It spawns after a space opens; the
-following arrival waits the full interval. Prep time starts only after the final
-actual arrival. This prevents slows, freezes and early wave calls from crowding
-the road and remains deterministic in replay. Custom test fixtures may omit the
-optional cap. The 18,000-tick combat deadline still applies.
+The spending regression uses actual earned income, including call bonuses and
+excluding escaped pests: because the greedy bot never sells, income equals
+remaining coins plus tower investment. Every sampled L1–L30 run must invest at
+least 70%. No bot policy changes are part of this balance revision.
 
-Snapshot week: `2026-10-26`; each version uses its own canonical seed. Counts
-exclude the single finale boss. HP entries are first-wave ordinary pests; boss
-HP is from the finale. Other weeks/waves vary.
+D10's density and queue rules remain: ordinary counts are `round(D9 count × 0.6)`,
+spawn intervals are `ceil(D9 interval / 0.6)` (L1 uses 167 ticks initially and 187 ticks after
+the opening wave), and live caps are 8 below L20 and
+12 thereafter, including bosses and returning thieves across overlapping waves.
+Blocked arrivals wait without consuming their index; prep starts only after the
+final actual arrival. The five-minute combat deadline is unchanged.
 
-| Level | Ordinary pests W1/W2/W3/W4/W5, v9 → v10 | Ant HP | Mouse HP | Sparrow HP | Beetle HP | Boss HP |
-|---|---|---:|---:|---:|---:|---:|
-| 1 | 6/9/10/7/16 → 4/5/7/5/8 | 16 → 28 | — | — | — | 90 → 158 |
-| 5 | 10/13/15/13/18 → 6/8/10/7/11 | 210 → 325 | 489 → 755 | 316 → 487 | 218 → 336 | 1320 → 2280 |
-| 10 | 24/26/28/24/35 → 13/16/17/14/21 | 133 → 199 | 308 → 463 | 199 → 298 | 137 → 207 | 2220 → 3700 |
-| 20 | 37/41/43/40/49 → 23/25/27/24/30 | 295 → 640 | 685 → 1486 | 442 → 960 | 305 → 663 | 4020 → 6700 |
+Snapshot week `2026-10-26`, each version's canonical seed. Ant HP is the
+first-wave value; L2 contains mice only. Possible income includes all bounties
+and the maximum 120 call-bonus coins, even if a particular run cannot earn all of it.
+
+| Level | Start coins v10 → v11 | Ant HP v10 → v11 | Possible income v10 → v11 | Full-build cost |
+|---|---:|---:|---:|---:|
+| 1 | 340 → 75 | 28 → 350 | 1050 → 508 | 702 |
+| 2 | 340 → 240 | — | 1273 → 505 | 702 |
+| 3 | 340 → 340 | 420 → 552 | 1248 → 909 | 1248 |
+| 4 | 340 → 340 | 512 → 515 | 1150 → 915 | 1248 |
+| 5 | 340 → 340 | 325 → 342 | 1337 → 1248 | 1950 |
+
+L8–L12 openings fund a useful initial combination rather than leaving most cash
+waiting for a third tower. HP compensates for that investment; weekly HP pressure
+is narrowed in this band to keep both disjoint checkpoint samples within target.
+The L20 density multiplier is 110%, tapering from 86% at L10.
 
 ## Backend and renderer contract
 
@@ -61,7 +70,7 @@ and travel distances are integer; segment lengths are quantized once.
 
 | Level | New tower/item/path idea |
 |---|---|
-| 1 | Rolling pin; gentle short S; three slots; one base pin at slot 0 wins |
+| 1 | Rolling pin; gentle short S; three slots; build or upgrade early |
 | 2 | Flour bomb |
 | 3 | Flour sifter |
 | 4 | Speed strip |
@@ -152,10 +161,11 @@ geometry; use actual coordinates for drawing and hit testing.
 
 
 
+                       0         1
    S..............                      ................E
-                 ...   0         1    ...
-                   ...              ...
-               2     ................
+                 ...                  ...
+                2  ...              ...
+                     ................
 
 
 
@@ -384,37 +394,47 @@ geometry; use actual coordinates for drawing and hit testing.
 
 ## Regression evidence
 
-The unchanged D9 targets use two disjoint 20-week samples (`tdBotWeeks(20, 0)`
-and offset 100), without purchased inventory:
+The unchanged D9 checkpoint targets use two disjoint 20-week samples
+(`tdBotWeeks(20, 0)` and offset 100), without purchased inventory: L5 85%,
+L10 55%, L20 20%, each ±10 percentage points. L1 uses 100 weeks: greedy ≥95%,
+single never-upgraded pin ≤20%, random 25–60%. Economy checks cover all levels
+1–30 × 20 weeks. The density regression observes spawn ticks across 20 weeks at
+each of L1–L25, L50, L100 and L1000. Queue/replay coverage verifies that blocked
+arrivals cannot skip pests or start prep early. These are regression guardrails,
+not estimates of human win rates.
 
-| Check | Target ±10 | First sample | Held-out sample |
-|---|---:|---:|---:|
-| L5 greedy | 85% | 75% | 75% |
-| L10 greedy | 55% | 45% | 60% |
-| L20 greedy | 20% | 30% | 25% |
+Final v11 samples:
 
-L1 passes across 100 weeks with one unupgraded rolling pin, rotating through all
-three slots. The density regression observes every tick across 20 weeks at each
-of L1–L25, L50, L100 and L1000. A separate queue/replay regression checks that
-blocked arrivals are neither skipped nor allowed to start the prep timer early.
-Client, engine and DB regressions explicitly reject v9 saves/run seeds.
-Small samples are regression guardrails, not estimates of human win rates.
+| Check | Week offset 0 | Week offset 100 |
+|---|---:|---:|
+| L5 greedy (20 weeks) | 80% | 95% |
+| L10 greedy (20 weeks) | 65% | 45% |
+| L20 greedy (20 weeks) | 30% | 10% |
 
-Validation commands use `--configLoader runner` because the shared `node_modules`
-link does not allow Vite's bundled-config temporary writes. Generate the local
-Prisma client with `npx prisma generate` first when absent.
+L1 across 100 weeks: greedy **100%**, random **52%**, a single never-upgraded
+pin rotating through the three slots **1%**. Two base pins (entrance slot 2,
+then slot 0 as soon as affordable) and one entrance pin upgraded through tier 2a
+both win **100/100**, retaining at least two bread. The first upgrade occurs
+with at most two bread lost. These strategies buy during combat and use no items
+or early-call bonuses.
+
+Validation uses `--configLoader runner` because the shared `node_modules` link
+cannot accept Vite's bundled-config temporary writes. Generate the local Prisma
+client with `npx prisma generate` first when absent.
 
 ```sh
 npx tsc --noEmit
 npx eslint src tests --quiet
 npx vitest run --configLoader runner --project unit tests/unit/td*.test.ts
-TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_d10_test TEST_DIRECT_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_d10_test npx vitest run --configLoader runner --project db
+TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_d11_test TEST_DIRECT_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_d11_test npx vitest run --configLoader runner --project db
 ```
 
-Final D10 checks: TypeScript and ESLint pass; all 11 TD unit files / 104 tests
-pass, including all 560 density runs and all six unchanged D9 checkpoints.
-The full DB suite passes 79 files / 890 tests on `bunbunny_d10_test`; the final
-TD/migration rerun passes 2 files / 13 tests, including v8/v9 expiry coverage.
-The tightened maximum-wave-size regression also passes its focused rerun.
+Final validation: TypeScript and ESLint pass. All 136 TD unit cases are verified
+across the full sweep and final focused reruns, including 600 economy runs and
+560 cap runs. All 890 DB cases are verified across the full DB suite and final
+TD/migration rerun (13 tests), using only `bunbunny_d11_test`. The 100-map geometry
+checks have a 30-second timeout to tolerate concurrent simulation load; their
+assertions are unchanged. The e2e version and affordability assertions were
+updated but browser e2e tests were not run.
 
-No frontend component changes or commits are part of D10.
+No frontend component changes or commits are part of D11.

@@ -103,7 +103,7 @@ it('routes expose masked boards, enforce body limits/versions/expiry and allow d
   const board = await (await boardGET(getRequest('/api/game/td/leaderboard?wechatId=WX_ROUTE'))).json();
   expect(board).toMatchObject({nextLevel:2,myBest:1,top:[{score:1,wechatMasked:'wx***te'}]});
   expect((await finishPOST(jsonRequest('/api/game/td/finish',{padding:'x'.repeat(TD_MAX_FINISH_BODY_BYTES)}))).status).toBe(422);
-  for (const version of [8, 9]) {
+  for (const version of [8, 9, 10]) {
     const bad = await start(`old_v${version}`);await db.gameRun.update({where:{id:bad.runId},data:{seed:`v${version}.td.2026-10-19.1`}});
     await expect(finish(bad)).rejects.toMatchObject({message:copy.gameApi.runExpired});
     await expect(progressRun(db,'TD',{runId:bad.runId,log:[],endTick:60},LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});

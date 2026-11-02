@@ -10,9 +10,9 @@ const level = () => tdLevel("2026-10-26", 1);
 
 describe("TD deterministic level and geometry", () => {
   it("pins the version and generates five shared weekly waves", () => {
-    expect(TD_ENGINE_VERSION).toBe(10);
+    expect(TD_ENGINE_VERSION).toBe(11);
     expect(tdSeedVersion(level().seed)).toBe(TD_ENGINE_VERSION);
-    expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([340, 210, 261, 720, 720]);
+    expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([75, 390, 390, 720, 720]);
     expect(level()).toEqual(level());
     expect(level().waves).toHaveLength(5);
     expect(tdLevel("2026-11-02", 1).waves).not.toEqual(level().waves);
@@ -46,7 +46,7 @@ describe("TD deterministic level and geometry", () => {
       expect(() => tdLevel(week, 1)).toThrow();
     }
     for (const n of [0, -1, 1.1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) expect(() => tdLevel("2026-10-26", n)).toThrow();
-    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v4.td.2026-10-26.1", "v5.td.2026-10-26.1", "v6.td.2026-10-26.1", "v7.td.2026-10-26.1", "v8.td.2026-10-26.1", "v9.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
+    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v4.td.2026-10-26.1", "v5.td.2026-10-26.1", "v6.td.2026-10-26.1", "v7.td.2026-10-26.1", "v8.td.2026-10-26.1", "v9.td.2026-10-26.1", "v10.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
       expect(() => createTdGame({ seed })).toThrow();
     }
     for (const tierCount of [0, 101, 1.5, NaN]) expect(() => createTdGame({ level: level(), tierCount })).toThrow();
@@ -110,7 +110,7 @@ describe("TD deterministic level and geometry", () => {
 
 describe("TD input and replay contract", () => {
   it("places, upgrades twice, sells half the total spend and counts ignored actions", () => {
-    const g = createTdGame({ level: level() });
+    const g = createTdGame({ level: tdLevel("2026-10-26", 3) });
     const initial = g.state().coins;
     expect(g.apply({ tick: 0, type: "place", slot: 0, tower: "rollingPin" })).toBe(true);
     expect(g.apply({ tick: 0, type: "place", slot: 0, tower: "oven" })).toBe(false);
@@ -140,11 +140,11 @@ describe("TD input and replay contract", () => {
 
   it("rejects unaffordable purchases without creating or upgrading a tower", () => {
     const g = createTdGame({ level: tdLevel("2026-10-26", 8) });
-    for (const slot of [0]) expect(g.apply({ tick: 0, type: "place", slot, tower: "oven" })).toBe(true);
+    for (const slot of [0, 1]) expect(g.apply({ tick: 0, type: "place", slot, tower: "oven" })).toBe(true);
     expect(g.apply({ tick: 0, type: "place", slot: 2, tower: "oven" })).toBe(false);
     expect(g.apply({ tick: 0, type: "upgrade", slot: 0 })).toBe(false);
-    expect(g.state()).toMatchObject({ coins: tdLevel("2026-10-26", 8).startCoins - 150, inputsAccepted: 1, inputsRejected: 2 });
-    expect(g.state().towers.map(t => t.level)).toEqual([0]);
+    expect(g.state()).toMatchObject({ coins: tdLevel("2026-10-26", 8).startCoins - 300, inputsAccepted: 2, inputsRejected: 2 });
+    expect(g.state().towers.map(t => t.level)).toEqual([0, 0]);
   });
 
   it("strictly validates the whole replay, including malformed tails", () => {
