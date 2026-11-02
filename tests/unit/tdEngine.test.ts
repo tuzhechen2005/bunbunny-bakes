@@ -10,7 +10,7 @@ const level = () => tdLevel("2026-10-26", 1);
 
 describe("TD deterministic level and geometry", () => {
   it("pins the version and generates five shared weekly waves", () => {
-    expect(TD_ENGINE_VERSION).toBe(12);
+    expect(TD_ENGINE_VERSION).toBe(13);
     expect(tdSeedVersion(level().seed)).toBe(TD_ENGINE_VERSION);
     expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([75, 390, 390, 720, 720]);
     expect(level()).toEqual(level());
@@ -31,7 +31,7 @@ describe("TD deterministic level and geometry", () => {
       for (const [wave, w] of l.waves.entries()) {
         if (n >= 5 && wave === 2) {
           expect(w.pests.length).toBeGreaterThanOrEqual(12); expect(w.pests.length).toBeLessThanOrEqual(18);
-          expect(w.pests.every(p => p.tiny && p.speed === 64)).toBe(true); continue;
+          expect(w.pests.every(p => p.tiny && p.speed === 66)).toBe(true); continue;
         }
         const ordinary = w.pests.filter(p => !p.boss);
         const baseCount = Math.min(96, 9 + Math.floor((n - 1) * 1.5) + [0, 3, 6, 2, 12][wave]);
@@ -50,7 +50,7 @@ describe("TD deterministic level and geometry", () => {
       expect(() => tdLevel(week, 1)).toThrow();
     }
     for (const n of [0, -1, 1.1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) expect(() => tdLevel("2026-10-26", n)).toThrow();
-    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v4.td.2026-10-26.1", "v5.td.2026-10-26.1", "v6.td.2026-10-26.1", "v7.td.2026-10-26.1", "v8.td.2026-10-26.1", "v9.td.2026-10-26.1", "v10.td.2026-10-26.1", "v11.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
+    for (const seed of ["unversioned", "v1.td.2026-10-26.1", "v3.td.2026-10-26.1", "v4.td.2026-10-26.1", "v5.td.2026-10-26.1", "v6.td.2026-10-26.1", "v7.td.2026-10-26.1", "v8.td.2026-10-26.1", "v9.td.2026-10-26.1", "v10.td.2026-10-26.1", "v11.td.2026-10-26.1", "v12.td.2026-10-26.1", "v2.td.2026-10-26.01", "v2.td.2026-02-30.1"]) {
       expect(() => createTdGame({ seed })).toThrow();
     }
     for (const tierCount of [0, 101, 1.5, NaN]) expect(() => createTdGame({ level: level(), tierCount })).toThrow();

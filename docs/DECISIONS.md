@@ -230,6 +230,19 @@ safety bound and resolve clears before the bound; retune regression pass-rate
 ceilings that previously counted timeout losses. Engine/server work only; UI
 integration contract is in `src/lib/td/README.md`.
 
+D181 amendment — owner 11/02 “boss吐出来的小老鼠的强度也太低了”: TD v12.1
+(engine 13) rejects v12 unfinished runs/saves. From L5, each phase spits six
+12-unit-spaced mice. Set `B=min(1500,320+36*(L-5)+40*max(0,L-10))`: L5–L17
+uses HP B, speed 180, armor 50; L18+ uses HP `floor(B*55/100)` (cap 825),
+speed 240, armor 55. Bounty is 2; reserve 24 coins in the existing income cap.
+The suggested low HP/speed still allowed pin-only builds to erase both spits;
+existing armor plus capped durability/speed rewards upgraded splash/flour overlap.
+L1–L4 phase mice and arrival escorts retain their v12 stats/counts. Swarm-wave
+mice get a milder bump to HP `min(200,60+6*L)`, speed 66, armor 0. Boss HP's
+multiplier is 1.75 through L17 and 1.4 from L18 to keep add cleanup near the
+20–30-second encounter target; phase timing is unchanged. Engine/tests/docs only; measured rates, leaks and
+boss times are in `docs/TD_V12_1_VALIDATION.md`.
+
 D181 validation clarification: retain the 75% full-build income cap and 70%
 spending guard for clears; a terminal swarm loss may hold less than one tier-2
 purchase while saving. Two base L1 pins can now finish at one bread (one star).

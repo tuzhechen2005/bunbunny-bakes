@@ -127,7 +127,7 @@ export function createTdGame(opts: TdOptions): TdGame {
     pest.slowed = slow > 0;
     return slow;
   };
-  const pendingMice: { parent: TdPest; count: number }[] = [];
+  const pendingMice: { parent: TdPest; count: number; total: number; spit: boolean }[] = [];
   const spawn = (spec: import("./types").TdPestSpec, parent?: TdPest) => {
     const pest: TdPest = { ...spec, ...pathPosition(map, 0), phase: 0, telegraphUntil: 0, dashUntil: 0, phaseReadyTick: tick + (spec.boss ? 360 : 0),
       inTunnel:false, onStrip:false, onJam:false, forkChoices:{...parent?.forkChoices}, slipped:[], slowUntil:0, slowStrength:0,
@@ -163,8 +163,9 @@ export function createTdGame(opts: TdOptions): TdGame {
       pest.phase++;
       pest.telegraphUntil = tick + 48; pest.dashUntil = tick + 72;
       pest.phaseReadyTick = tick + (pest.phase === 1 ? 480 : 360);
-      pendingMice.push({parent: {...pest, forkChoices:{...pest.forkChoices}}, count: 5});
-      events.push({type:"bossPhase",tick,pest:pest.id,phase:pest.phase,telegraphUntil:pest.telegraphUntil,dashUntil:pest.dashUntil,mice:5});
+      const count = level.number < 5 ? 5 : 6;
+      pendingMice.push({parent: {...pest, forkChoices:{...pest.forkChoices}}, count, total: count, spit: true});
+      events.push({type:"bossPhase",tick,pest:pest.id,phase:pest.phase,telegraphUntil:pest.telegraphUntil,dashUntil:pest.dashUntil,mice:count});
     }
     events.push({ type: "hit", tick, projectile: shot.id, pest: pest.id, tower: shot.slot, damage });
     if (pest.hp === 0) {
@@ -210,7 +211,7 @@ export function createTdGame(opts: TdOptions): TdGame {
         && (!level.waves[wave - 1].pests[spawnIndex].boss || pests.length === 0)) {
         const spec = level.waves[wave - 1].pests[spawnIndex++];
         const pest = spawn(spec);
-        if (pest.boss) pendingMice.push({parent: {...pest}, count: 2});
+        if (pest.boss) pendingMice.push({parent: {...pest}, count: 2, total: 2, spit: false});
         if (spawnIndex === level.waves[wave - 1].pests.length) {
           spawnTick = null;
           if (wave < WAVE_COUNT) nextWaveTick = tick + PREP_TICKS;
@@ -219,7 +220,24 @@ export function createTdGame(opts: TdOptions): TdGame {
 
       while (pendingMice.length && pests.length < 16) {
         const pending = pendingMice[0];
-        spawn({kind:"mouse",tiny:true,hp:42 + Math.min(80, (level.number-1)*2),speed:64,bounty:0,armor:0},pending.parent);
+        // L1–L4 and arrival escorts keep their teaching stats. Later spits need
+        // upgraded splash/control; armor prevents double-strike pins deleting the pack.
+        const strong = pending.spit && level.number >= 5;
+        // Spread forward from the saved phase position; queued arrivals keep their index.
+        // Stay on the inherited fork branch and clamp at the bread endpoint.
+        const parent = {...pending.parent, forkChoices: {...pending.parent.forkChoices}, distance: Math.min(end, pending.parent.distance +
+          (strong ? (pending.total - pending.count) * 12 * SUBUNITS : 0))};
+        for (const f of map.features ?? []) if (f.type === "fork" && parent.forkChoices[f.id] === undefined
+          && pending.parent.distance < f.start && parent.distance >= f.start) {
+          parent.forkChoices[f.id] = f.switchable ? switches[f.id] : rng.int(2);
+        }
+        const late = level.number >= 18;
+        const spitHp = Math.min(1500, 320 + 36 * (level.number - 5) + Math.max(0, level.number - 10) * 40);
+        // Faster late adds resolve the return trip sooner; extra armor preserves
+        // single-target pressure with less HP for upgraded splash to chew through.
+        spawn({kind:"mouse",tiny:true,
+          hp:strong ? Math.floor(spitHp * (late ? 55 : 100) / 100) : 42 + Math.min(80, (level.number-1)*2),
+          speed:strong ? (late ? 240 : 180) : 64,bounty:strong ? 2 : 0,armor:strong ? (late ? 55 : 50) : 0},parent);
         if (--pending.count === 0) pendingMice.shift();
       }
       for (const bread of dropped) {

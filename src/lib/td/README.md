@@ -1,8 +1,8 @@
-# Deterministic bakery TD — D181 / engine v12
+# Deterministic bakery TD — D181 / TD v12.1 / engine v13
 
-Canonical seed: `v12.td.<Gregorian Monday>.<level>`. Old v1–v11 unfinished runs
+Canonical seed: `v13.td.<Gregorian Monday>.<level>`. Old v1–v12 unfinished runs
 and saves are rejected; stored results remain intact. The save key derives from
-`TD_ENGINE_VERSION`, so it changes to `bb_td_save_v12` without frontend edits.
+`TD_ENGINE_VERSION`, so it changes to `bb_td_save_v13` without frontend edits.
 60 integer ticks/s; travel uses 16 subunits per drawing unit. Board: 1440×810.
 No clocks, global random state, account progression, or cross-week unlocks.
 
@@ -450,9 +450,11 @@ No component or page changes are included. Integrate these engine/server additio
 - **Boss 大胃王鼠:** `boss: true`, `hp`, `maxHp` describe the three equal HP
   segments (boundaries `ceil(maxHp*2/3)` and `ceil(maxHp/3)`). `phase` is 0/1/2.
   The boss enters after preceding pests clear, with two escorts.
-  Total generated HP is 1.75× the previous formula. The boss walks at 8 subunits/tick.
+  Generated boss HP is 1.75× the previous formula through L17, **1.4× from L18**
+  to budget for stronger adds without lengthening the full encounter. Speed stays 8 subunits/tick.
   `bossSpawn {tick,pest,wave}` is followed by two tiny mouse escorts. Each
-  `bossPhase {tick,pest,phase,telegraphUntil,dashUntil,mice:5}` announces a phase
+  `bossPhase {tick,pest,phase,telegraphUntil,dashUntil,mice}` announces a phase
+  (`mice: 5` at L1–L4, **6** from L5)
   at a health boundary. Draw a warning for 48 ticks (0.8 seconds); the boss stops
   and cannot take damage during this warning. Then it moves at 2× speed for
   24 ticks (0.4 seconds), subject to existing control effects. There is no death
@@ -463,11 +465,24 @@ No component or page changes are included. Integrate these engine/server additio
   next boundary during that window. Show the guarded segment while this applies;
   it prevents one volley from skipping response windows. No extra damage bonus.
 - **Tiny mice:** `tiny: true` identifies the smaller render scale; `kind` remains
-  `mouse`. Wave 3 from L5 contains 12–18, 8 ticks apart, HP `42+min(80,2*(L-1))`,
-  speed 64. Ordinary wave caps remain 8/12; swarm and boss adds share a hard
-  **16 total live pests**, including returners. Blocked adds queue at the phase
-  location and preserve the parent's fork choices and wave. Adds pay zero coins.
-  The standard `spawn` events still identify every actual arrival.
+  `mouse`. From L5, each boss phase spits **6** mice: HP
+  let `B=min(1500,320+36*(L-5)+40*max(0,L-10))`. At **L5–L17**, HP is `B`,
+  speed **180 subunits/tick**, armor **50**. At **L18+**, HP is `floor(B*55/100)`
+  (cap **825**), speed **240**, armor **55**. Bounty is **2** in both bands.
+  Example HP: L5 **320**, L10 **500**, L18 **609**, L20 **693**. Faster late mice
+  finish the return trip sooner; armor preserves pressure with less HP for splash.
+  These are armored adds: use upgraded splash with overlapping flour; base attacks
+  and low-damage torch branches are poor counters. No new damage-resistance rule.
+  Arrival escorts and L1–L4 phase adds retain HP `42+min(80,2*(L-1))`, speed 64,
+  armor/bounty 0; L1–L4 still spit five. Wave 3 from L5 contains 12–18 unarmored
+  mice, 8 ticks apart, HP `min(200,60+6*L)`, speed **66**, base bounty 3 before
+  income-budget scaling. Ordinary wave caps remain 8/12; all share a hard
+  **16 total live pests**, including returners. Strong spits start at offsets
+  **0/12/24/36/48/60 drawing units** along the route from the saved phase position,
+  clamped at the endpoint. Blocked adds retain their individual offsets, wave,
+  and inherited fork choices; an offset crossing a new fork uses the normal choice
+  rule. The standard `spawn` event still identifies every actual arrival.
+  Both spits' maximum **24 coins** are reserved in the 75% income cap.
 - **Clutter:** `tdLevel`, start response, and `state.clutter` expose two objects:
   `{id,kind,x,y,hp,maxHp,reward}`; kinds are `flourSack`, `eggCrate`, `milkCan`.
   Render the fixed **12-coin** reward before targeting. HP is 216. A base pin
@@ -495,7 +510,7 @@ No component or page changes are included. Integrate these engine/server additio
   A 1,200-second replay safety bound remains for pathological stalemates, with
   clearing given priority on its exact tick. The clock imports this bound.
 
-### V12 headless validation
+### Historical V12 headless validation (superseded for current balance)
 
 Reproduce the held-out sample with `npx tsx tests/support/td12Simulation.ts`.
 It runs the existing public-state greedy bot over 20 weeks (offset 200) at
@@ -554,3 +569,24 @@ Other validation:
   using `bunbunny_td12_test` (and the suite's suffixed `_test` scratch databases).
   No production database was used. Frontend rendering and phone frame time
   remain the UI/device validation work.
+
+
+### V12.1 validation
+
+The D181 amendment strengthens the spit and preserves its 6/8/6-second segment
+guards. From L18, the boss HP multiplier falls from 1.75 to 1.4 so the complete
+encounter, including add cleanup, stays near 20–30 seconds for the mixed reference. The suggested HP/speed alone produced zero spit losses even for
+pin-only builds. The final tuning uses existing armor plus higher capped HP and
+speed; a deliberate whisk/flour overlap is the tested counter. L1–L4 mice are unchanged.
+Engine version 13 invalidates v12 unfinished runs and saves; it also changes the
+weekly seed's generated layout/HP variation. Historical v12 rates above are not
+current expectations.
+
+Run `TD_SIM_OFFSET=300 npx tsx tests/support/td121Simulation.ts` for independent
+validation weeks. It replays legal, earned-coin builds and attributes permanent
+`lose` events to each phase's actual mouse IDs. Bread picked up and subsequently
+recovered is not a leak. `single` is the upgraded rolling-pin-only bot; `mixed`
+uses an upgraded opening pin, overlapping rapid whisk / strong flour, and at L18+
+entrance oven coverage and a second whisk. `responsive` is the unchanged v12
+pin/oven response policy, retained for comparison. No items or injected funds.
+Full measurements and check results: [V12.1 validation](../../../docs/TD_V12_1_VALIDATION.md).

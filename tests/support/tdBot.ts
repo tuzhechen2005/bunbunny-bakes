@@ -5,7 +5,7 @@ import {
 } from "../../src/lib/td";
 
 /** Public geometry/stats only; no future waves, RNG state, or private engine injection. */
-function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind, itemsAllowed: TdOptions["itemsAllowed"] = {}, observe?: (state: TdState) => void, respondToBoss = false) {
+function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind, itemsAllowed: TdOptions["itemsAllowed"] = {}, observe?: (state: TdState) => void, respondToBoss = false, mixed = false) {
   const game = createTdGame({ level, itemsAllowed });
   const rng = createRng(`${level.seed}:td-bot`);
   const map = level.mapData;
@@ -34,6 +34,12 @@ function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind, it
   const branchValues = map.slots.map((_, slot) => Object.fromEntries(TOWER_KINDS.map(kind => [kind,
     { a: strength(slot, kind, 2, "a"), b: strength(slot, kind, 2, "b") },
   ])) as Record<TowerKind, Record<TdBranch, number>>);
+  // Reference mixed policy: overlap upgraded splash with slow, then fund boss DPS.
+  // All choices use visible geometry and earned coins; no wave lookahead or items.
+  const mixedOpening: readonly TowerKind[] = ["rollingPin", "whisk", "flourSifter", ...(level.number >= 18 ? ["oven" as const] : [])];
+  const overlap = mixed ? map.slots.map(whisk => map.slots.map(flour => samples.filter(s =>
+    distanceSquared(s.point,whisk) <= towerStats("whisk",2).range**2 &&
+    distanceSquared(s.point,flour) <= towerStats("flourSifter",2).range**2).length)) : [];
   function apply(input: TdInput) {
     if (!game.apply(input)) throw new Error("bot proposed an illegal action");
     inputs.push(input);
@@ -90,12 +96,33 @@ function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind, it
         const tower = state.towers.find(t => t.slot === slot);
         if (!tower) for (const kind of level.unlockedTowers) {
           if (onlyKind && kind !== onlyKind) continue;
+          if (mixed && level.number >= 5) {
+            const needed = mixedOpening.find(k => !state.towers.some(t => t.kind === k));
+            if (needed && kind !== needed) continue;
+            if (level.number >= 18 && (kind === "rollingPin" || kind === "oven") && !state.towers.some(t=>t.kind===kind)) {
+              const entrance = map.slots.map((p,i)=>({i,d:distanceSquared(p,map.path[0])})).filter(p=>!state.towers.some(t=>t.slot===p.i)).sort((a,b)=>a.d-b.d)[0].i;
+              if (slot !== entrance) continue;
+            }
+            if (!needed && level.number >= 18 && state.towers.filter(t=>t.kind === "whisk").length < 2 && kind !== "whisk") continue;
+          }
           let value = values[slot][kind][0];
+          if (mixed && kind === "whisk" && !state.towers.some(t => t.kind === kind)) {
+            const partners = map.slots.map((_,i)=>i).filter(i=>i!==slot && !state.towers.some(t=>t.slot===i));
+            value *= Math.max(0.01,...partners.map(i=>overlap[slot][i]));
+          }
+          if (mixed && kind === "whisk" && state.towers.some(t=>t.kind===kind)) {
+            const flour = state.towers.find(t=>t.kind === "flourSifter");
+            if (flour) value *= overlap[slot][flour.slot];
+          }
           if (kind === "flourSifter") {
             // Extra firing time plus vulnerability, discounted for partial overlap.
             value += state.towers.filter(t => t.kind !== "flourSifter" && distanceSquared(t, map.slots[slot]) < 400 ** 2)
               .reduce((sum, t) => sum + values[t.slot][t.kind][t.level], 0) * 0.65;
             if (state.towers.some(t => t.kind === "flourSifter" && distanceSquared(t, map.slots[slot]) < 340 ** 2)) value = 0;
+          }
+          if (mixed && kind === "flourSifter" && !state.towers.some(t => t.kind === kind)) {
+            const whisk = state.towers.find(t=>t.kind === "whisk");
+            if (whisk) value = overlap[whisk.slot][slot] * 100;
           }
           // Diminishing role value: control, splash and armor coverage complement each other.
           value /= 1 + state.towers.filter(t => t.kind === kind).length * 1.5;
@@ -110,6 +137,18 @@ function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind, it
         }
       }
       if (mode === "greedy") {
+        if (mixed && level.number >= 5) {
+          const pin = state.towers.find(t => t.kind === "rollingPin");
+          const needed = mixedOpening.find(k => !state.towers.some(t => t.kind === k));
+          const focus = pin && pin.level < 2 ? pin : !needed ? ["flourSifter", "whisk", "oven"].map(k => state.towers.find(t => t.kind === k && t.level < 2)).find(Boolean) : undefined;
+          if (focus) {
+            const upgrade = candidates.find(c => c.input.type === "upgrade" && c.input.slot === focus.slot && (!("branch" in c.input) || c.input.branch === (focus.kind === "whisk" || focus.kind === "oven" ? "b" : "a")));
+            if (upgrade) { candidates.length = 0; candidates.push({...upgrade,value:1}); }
+          } else if (needed) {
+            const placements = candidates.filter(c => c.input.type === "place" && c.input.tower === needed);
+            candidates.length = 0; candidates.push(...placements);
+          }
+        }
         candidates.sort((a, b) => b.value - a.value);
         const best = candidates[0];
         if (!best || best.cost > state.coins || best.value <= 0) break;
@@ -150,3 +189,6 @@ export const tdBotWeeks = (count: number, offset = 0): string[] => Array.from({ 
 
 /** Same greedy policy until the visible boss; move distant investment to an approach pin/oven pair. */
 export const responsiveTd = (level: TdLevel) => run(level,"greedy",undefined,{},undefined,true);
+
+/** Upgrade the opening pin, then deliberately include splash and flour coverage. */
+export const mixedTd = (level: TdLevel) => run(level,"greedy",undefined,{},undefined,false,true);

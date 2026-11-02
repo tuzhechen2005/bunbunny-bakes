@@ -116,14 +116,15 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
     wave.interval = Math.ceil(wave.interval / 0.6);
     wave.maxLivePests = n < 20 ? 8 : 12;
   }
-  // D181: one dense low-HP mouse wave after splash becomes available.
+  // D181 amendment: a milder, unarmored swarm teaches splash before the boss spit.
   if (n >= 5) {
     const count = 12 + rng.int(7);
     waves[2] = { interval: 8, maxLivePests: 16, pests: Array.from({length: count}, () => ({
-      ...PESTS.mouse, tiny: true, hp: 42 + Math.min(80, difficulty * 2), speed: 64, bounty: 3,
+      ...PESTS.mouse, tiny: true, hp: Math.min(200, 60 + n * 6), speed: 66, bounty: 3,
     })) };
   }
-  for (const wave of waves) for (const pest of wave.pests) if (pest.boss) { pest.hp = Math.round(pest.hp * 1.75); pest.speed = 8; }
+  // Late fights trade some boss HP for meaningful spit pressure and a shorter cleanup.
+  for (const wave of waves) for (const pest of wave.pests) if (pest.boss) { pest.hp = Math.round(pest.hp * (n >= 18 ? 1.4 : 1.75)); pest.speed = 8; }
   const unlockLevels = [1, 3, 5, 8, 11, 14, 18];
   const mapData = levelMap(seed, n);
   const unlockedTowers = TOWER_KINDS.filter((_, i) => n >= unlockLevels[i]);
@@ -149,7 +150,8 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
     clutter.push({id, kind: (["flourSack", "eggCrate", "milkCan"] as const)[(n + id - 1) % 3],
       ...candidates[0], hp:216, maxHp:216, reward:12});
   }
-  const bountyBudget = Math.floor(fullBuildCost * 0.75) - startCoins - bonusBudget - 24;
+  // Reserve both six-mouse spits (2 coins each); escorts/tutorial adds still pay zero.
+  const bountyBudget = Math.floor(fullBuildCost * 0.75) - startCoins - bonusBudget - 24 - (n >= 5 ? 24 : 0);
   // Fund an early second pin/upgrade instead of a large final payout.
   if (n === 1) for (const wave of waves) for (const pest of wave.pests) {
     pest.bounty = pest.boss ? 10 : wave === waves[0] ? 36 : 8;

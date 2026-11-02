@@ -1,7 +1,10 @@
 import { expect, it } from "vitest";
 import { tdLevel, createTdGame, MAX_LEVEL_TICKS, towerStats, PREP_TICKS, WAVE_COUNT } from "@/lib/td";
 import { greedyTd, randomTd, tdBotWeeks } from "../support/tdBot";
-const checkpoints = [0,100].flatMap(offset => [[5,80],[10,100],[20,65]].map(([level,target])=>({offset,level,target})));
+// V12.1 generic greedy reference: stronger spits punish its inconsistent AoE coverage.
+// A separate mixed-build simulation measures the intended counter, without changing this bot.
+const checkpoints = [[0,5,60],[0,10,100],[0,20,60],[100,5,35],[100,10,95],[100,20,50]]
+  .map(([offset,level,target])=>({offset,level,target}));
 it.each(checkpoints)("D181 L$level curve, week offset $offset", ({offset,level,target}) => {
   const runs=tdBotWeeks(20,offset).map(week=>greedyTd(tdLevel(week,level)));
   const rate=runs.filter(r=>r.state.passed).length * 100 / runs.length;
@@ -71,7 +74,7 @@ it.each(Array.from({ length: 30 }, (_, i) => i + 1))(
         [0, 1, 2].reduce((sum, tier) => sum + towerStats(kind, tier).cost, 0)));
       // First call is free; each subsequent call can earn at most the full prep bonus.
       const maxBonus = (WAVE_COUNT - 1) * Math.floor(PREP_TICKS / 60) * 3;
-      const possibleIncome = level.startCoins + maxBonus + level.clutter!.reduce((sum,c) => sum+c.reward,0)
+      const possibleIncome = (levelNumber >= 5 ? 24 : 0) + level.startCoins + maxBonus + level.clutter!.reduce((sum,c) => sum+c.reward,0)
         + level.waves.flatMap(w => w.pests).reduce((sum, pest) => sum + pest.bounty, 0);
       expect(possibleIncome, `${week} L${levelNumber}`).toBeLessThanOrEqual(fullBuildCost * 0.75);
       const run = greedyTd(level);

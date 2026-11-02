@@ -8,7 +8,8 @@ beforeEach(()=>{
     clutter:[{id:0,kind:'flourSack',x:210,y:350,hp:216,maxHp:216,reward:12}],
     waves:Array.from({length:5},()=>({interval:1,pests:[{kind:'mouse',hp:1,speed:1,armor:0,bounty:0}]}))};
 });
-it('caps burst damage at both segments, telegraphs 48 ticks, spawns five mice twice and never on death',()=>{
+it('caps burst damage at both segments, telegraphs 48 ticks, spawns six mice twice and never on death',()=>{
+  fixture.level!.mapData.path = [{x:100,y:400},{x:13000,y:400}]; // Let escaped adds travel while checking boss timing.
   fixture.level!.waves[0].pests=[{kind:'mouse',hp:90,speed:1,armor:0,bounty:0,boss:true}];
   const game=createTdGame({level:fixture.level!});
   for(const input of [{tick:0,type:'place',slot:0,tower:'rollingPin'},{tick:0,type:'upgrade',slot:0},{tick:0,type:'upgrade',slot:0,branch:'a'},{tick:0,type:'callWave',slot:-1}] as TdInput[]) expect(game.apply(input)).toBe(true);
@@ -26,7 +27,7 @@ it('caps burst damage at both segments, telegraphs 48 ticks, spawns five mice tw
   expect(phases).toBe(2);expect(peak).toBeLessThanOrEqual(16);
   const death=events.find(e=>e.type==='kill'&&e.pest===1)!;
   expect(death).toBeDefined();expect(death.tick).toBeGreaterThanOrEqual(1201);
-  expect(events.filter(e=>e.type==='spawn'&&e.wave===1)).toHaveLength(13);
+  expect(events.filter(e=>e.type==='spawn'&&e.wave===1)).toHaveLength(15);
   expect(events.filter(e=>e.type==='spawn'&&e.tick===death.tick)).toHaveLength(0);
 });
 it('targets clutter for 3–5 seconds with a base pin, pays exactly once and replays',()=>{
@@ -68,9 +69,9 @@ it('packs a real swarm under the hard cap and queues the remaining arrivals',()=
   expect(game.state().nextWaveTick).toBeNull();
 });
 
-it.each([[1,525],[5,2160],[10,3700],[20,6614]])('L%i boss HP remains 1.5–2 times the v11 weekly snapshot', (n,previous)=>{
+it.each([[1,525,1.5,2],[5,2160,1.5,2],[10,3700,1.5,2],[20,6614,1.3,1.5]])('L%i boss HP preserves early segments and budgets for stronger late spits', (n,previous,min,max)=>{
   const hp=tdLevel('2026-10-26',n).waves[4].pests.at(-1)!.hp;
-  expect(hp/previous).toBeGreaterThanOrEqual(1.5);expect(hp/previous).toBeLessThanOrEqual(2);
+  expect(hp/previous).toBeGreaterThanOrEqual(min);expect(hp/previous).toBeLessThanOrEqual(max);
 });
 it('keeps both visible clutter targets separate from tower slots and each other',()=>{
   for(let n=1;n<=100;n++) {
@@ -84,4 +85,68 @@ it('keeps both visible clutter targets separate from tower slots and each other'
     }
     expect(Math.hypot(clutter[0].x-clutter[1].x,clutter[0].y-clutter[1].y)).toBeGreaterThanOrEqual(48);
   }
+});
+
+it.each([[4,48,64,0],[5,320,180,50],[10,500,180,50],[20,693,240,55],[1000,825,240,55]])('L%i spits expose exact stats, deterministic spacing and preserve replay', (n,hp,speed,armor) => {
+  fixture.level!.number=n;
+  fixture.level!.waves[0]={interval:99999,pests:[{kind:'mouse',hp:300,speed:1,armor:0,bounty:0,boss:true},{kind:'mouse',hp:1,speed:1,armor:0,bounty:0}]};
+  const options={level:fixture.level!,itemsAllowed:{bomb:1}};
+  const game=createTdGame(options);
+  const inputs:TdInput[]=[{tick:0,type:'callWave',slot:-1}];
+  game.apply(inputs[0]);game.step(361);
+  const boss=game.state().pests.find(p=>p.boss)!;
+  inputs.push({tick:361,type:'item',item:'bomb',x:boss.x,y:boss.y});
+  expect(game.apply(inputs[1])).toBe(true);
+  expect(game.state().events.find(e=>e.type==='bossPhase')).toMatchObject({mice:n<5?5:6});
+  const ids=game.step(362).filter(e=>e.type==='spawn').map(e=>e.pest);
+  const mice=game.state().pests.filter(p=>ids.includes(p.id));
+  expect(mice).toHaveLength(n<5?5:6);
+  for(const [i,p] of mice.entries()) {
+    expect(p).toMatchObject({kind:'mouse',tiny:true,wave:1,
+      hp,speed,armor,bounty:n<5?0:2});
+    expect(p.distance).toBe(boss.distance+(n<5?0:i*12*16)+speed);
+  }
+  expect(game.state()).toEqual(replayTd(options,inputs,362));
+});
+
+it('queues a full spit under the live cap without collapsing its saved spacing', () => {
+  fixture.level!.waves[0]={interval:1,maxLivePests:16,pests:[
+    {kind:'mouse',hp:300,speed:1,armor:0,bounty:0,boss:true},
+    ...Array.from({length:15},()=>({kind:'mouse' as const,hp:401,speed:1,armor:0,bounty:0})),
+  ]};
+  const game=createTdGame({level:fixture.level!,itemsAllowed:{bomb:1}});
+  game.apply({tick:0,type:'callWave',slot:-1});game.step(361);
+  const boss=game.state().pests.find(p=>p.boss)!;
+  expect(game.state().pests).toHaveLength(16);
+  game.apply({tick:361,type:'item',item:'bomb',x:boss.x,y:boss.y});
+  expect(game.step(362).some(e=>e.type==='spawn')).toBe(false);
+  game.apply({tick:362,type:'place',slot:0,tower:'rollingPin'});
+  const arrivals:number[]=[];
+  for(let tick=363;tick<2500 && arrivals.length<6;tick++) {
+    const events=game.step(tick), state=game.state();
+    expect(state.pests.length).toBeLessThanOrEqual(16);
+    for(const e of events) if(e.type==='spawn') {
+      const p=state.pests.find(p=>p.id===e.pest);
+      if(p?.tiny && p.bounty===2) {
+        expect(p.wave).toBe(1);
+        expect(p.distance).toBe(boss.distance+arrivals.length*12*16+180);
+        arrivals.push(p.id);
+      }
+    }
+  }
+  expect(arrivals).toHaveLength(6);
+});
+
+it('chooses the active branch when a spit offset starts beyond a fork entrance', () => {
+  fixture.level!.mapData.features=[{id:0,type:'fork',start:500,end:5000,switchable:true,geometry:[],
+    branches:[[{x:131,y:400},{x:412,y:400}],[{x:131,y:400},{x:250,y:500},{x:412,y:400}]]}];
+  fixture.level!.waves[0]={interval:99999,pests:[{kind:'mouse',hp:300,speed:1,armor:0,bounty:0,boss:true},{kind:'mouse',hp:1,speed:1,armor:0,bounty:0}]};
+  const game=createTdGame({level:fixture.level!,itemsAllowed:{bomb:1}});
+  game.apply({tick:0,type:'switch',fork:0});game.apply({tick:0,type:'callWave',slot:-1});game.step(361);
+  const boss=game.state().pests.find(p=>p.boss)!;
+  expect(boss.forkChoices[0]).toBeUndefined();
+  game.apply({tick:361,type:'item',item:'bomb',x:boss.x,y:boss.y});game.step(362);
+  const mice=game.state().pests.filter(p=>p.bounty===2);
+  expect(mice).toHaveLength(6);
+  expect(mice.every(p=>p.forkChoices[0]===1)).toBe(true);
 });

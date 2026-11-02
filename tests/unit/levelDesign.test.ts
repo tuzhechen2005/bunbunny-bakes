@@ -30,7 +30,7 @@ it('introduces ants, mice, mixed groups, air immunity, then armor in separate le
     expect([...new Set(level.waves.flatMap(w=>w.pests.filter(p=>!p.boss).map(p=>p.kind)))].sort()).toEqual([...kinds].sort());
     expect(level.waves.flatMap(w=>w.pests).filter(p=>p.boss)).toHaveLength(1);
     expect(level.waves[4].pests.at(-1)?.boss).toBe(true);
-    expect(level.waves[4].pests.at(-1)!.hp).toBe([840, 1517, 1792, 3264, 3780][i]);
+    expect(level.waves[4].pests.at(-1)!.hp).toBe([875, 1517, 1904, 3264, 3850][i]);
     expect(level.waves[4].pests.at(-1)!.armor).toBe(i === 0 ? 0 : i < 3 ? 4 : 8);
     expect(level.waves[3].interval).toBeGreaterThanOrEqual(level.waves[2].interval);
     expect(level.waves[3].pests.length).toBeLessThan(level.waves[2].pests.length);
@@ -116,4 +116,14 @@ it('uses quantized Euclidean travel through rounded diagonals', async () => {
   expect(pathPosition(map, 5 * SUBUNITS)).toEqual({x:3,y:4});
   expect(pathHeading(map, SUBUNITS)).toBe(53);
   expect(pathHeading(map, SUBUNITS, true)).toBe(233);
+});
+
+it('keeps the stronger swarm milder than boss spits and bounds late-level HP', () => {
+  for (const n of [5,10,20,1000]) {
+    const swarm=tdLevel('2026-10-26',n).waves[2];
+    expect(swarm.pests.length).toBeGreaterThanOrEqual(12);
+    expect(swarm.pests.length).toBeLessThanOrEqual(18);
+    expect(swarm).toMatchObject({interval:8,maxLivePests:16});
+    for (const p of swarm.pests) expect(p).toMatchObject({tiny:true,hp:Math.min(200,60+n*6),speed:66,armor:0});
+  }
 });
