@@ -8,6 +8,7 @@
 //
 // Integer maths and the seeded Rng only: identical on server and client.
 
+import { tuRulesVersion, type TuEngineVersion } from "./version";
 import { createRng, type Rng } from "../game/rng";
 
 /** Board extent in tile units: tiles are 1 x 1, x in [0, BOARD_W - 1], y in [0, BOARD_H - 1]. */
@@ -28,13 +29,23 @@ export interface BatchSpec {
 /**
  * Batch n uses BATCHES[n - 1]; every batch after the last repeats the last one. The curve (D130):
  * batch 1 is a warm-up (few breads, 2 layers, ~8% hidden), batch 2 has 4 layers and ~25% hidden,
- * D184 splits the next steps: 54/72 tiles with six kinds/layers, then seven kinds, then eight.
+ * D187 keeps the 54-tile oven 3, then adds kinds and deeper hidden layers at every step.
  * Changing it changes every board: bump TU_ENGINE_VERSION (engine.ts).
  */
 export const BATCHES: readonly BatchSpec[] = [
   { tiers: 4, layers: 2, tiles: 24, spread: 2 },
   { tiers: 5, layers: 4, tiles: 36, spread: 3 },
   { tiers: 6, layers: 6, tiles: 54, spread: 3 },
+  { tiers: 7, layers: 8, tiles: 84, spread: 4 },
+  { tiers: 8, layers: 10, tiles: 108, spread: 4 },
+  { tiers: 8, layers: 12, tiles: 132, spread: 4 },
+  { tiers: 8, layers: 14, tiles: 156, spread: 4 },
+  { tiers: 8, layers: 16, tiles: 180, spread: 4 },
+];
+
+/** Live pre-v6 curve (D184); RNG and layout algorithms are shared unchanged. */
+const V5_BATCHES: readonly BatchSpec[] = [
+  ...BATCHES.slice(0, 3),
   { tiers: 6, layers: 6, tiles: 72, spread: 3 },
   { tiers: 7, layers: 6, tiles: 90, spread: 3 },
   { tiers: 8, layers: 8, tiles: 96, spread: 4 },
@@ -45,12 +56,13 @@ export const BATCHES: readonly BatchSpec[] = [
 // Tuning guard: `spread` must stay 1-4 (= BAG_SIZE - 2). With 5 open triples of one tile each the
 // witness bag holds 5, and the next tile can neither open a triple (the bag would fill) nor complete
 // one, so assignTiers would have no legal tier and a batch would no longer be solvable by construction.
-for (const b of BATCHES) {
+for (const b of [...BATCHES, ...V5_BATCHES]) {
   if (!(b.spread >= 1 && b.spread <= BAG_SIZE - 2) || b.tiles % 3 !== 0) throw new Error("tu: bad BATCHES entry");
 }
 
-export function batchSpec(batch: number): BatchSpec {
-  return BATCHES[Math.min(batch, BATCHES.length) - 1];
+export function batchSpec(batch: number, version: TuEngineVersion = 6): BatchSpec {
+  const batches = version === 5 ? V5_BATCHES : BATCHES;
+  return batches[Math.min(batch, batches.length) - 1];
 }
 
 /** A tile as dealt. `x2`/`y2` are doubled coordinates (integers); `pos` is the tile's index in the batch. */
@@ -245,7 +257,7 @@ function assignTiers(rng: Rng, n: number, spec: BatchSpec, tierPool: number[]): 
  */
 export function dealBatch(seed: string, tierCount: number, batch: number): Batch {
   const rng = createRng(`${seed}:tu:batch:${batch}`);
-  const spec = batchSpec(batch);
+  const spec = batchSpec(batch, tuRulesVersion(seed));
   const pool = shuffle(rng, Array.from({ length: tierCount }, (_, i) => i)).slice(0, Math.min(spec.tiers, tierCount));
   const pos = layout(rng, spec);
   const order = removalOrder(rng, pos);

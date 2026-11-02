@@ -4,6 +4,7 @@
 // server's replay agree exactly.
 
 import { createRng, type Rng } from "../game/rng";
+import { tuRulesVersion } from "./version";
 import { BAG_SIZE, dealBatch, isHidden, overlaps } from "./deal";
 
 export interface TuTierInput {
@@ -66,7 +67,7 @@ export type TuEvent =
   | { type: "order"; index: 0 | 1; tier: number }
   /** A seeded prop draw was granted; full types are skipped without a gain event (D141). */
   | { type: "gain"; p: TuProp }
-  /** Batch `batch` was dealt after the previous one was cleared; `bonus` points for clearing it. */
+  /** Clear reward; `batch` is the next oven, or MAX_OVENS on the terminal clear. */
   | { type: "batch"; batch: number; bonus: number }
   /** A prop was used; `left` of it remain. */
   | { type: "prop"; p: TuProp; left: number }
@@ -93,12 +94,13 @@ export interface TuGame {
 
 export const MIN_TIERS = 2;
 export const MAX_TIERS = 8;
-/**
- * Rules version (C8). Bump it with every change that alters what a log scores. It is part of every
- * new run's seed (tuSeed), so the server refuses to finish a run dealt under another version, and
- * part of the client's save key, so old saves are dropped.
- */
-export const TU_ENGINE_VERSION = 5;
+/** New starts use v6; D189 preserves the live v5 rules until existing runs end. */
+export { TU_ENGINE_VERSION, tuSeed, tuSeedVersion, isSupportedTuSeed } from "./version";
+/** A finite run, including shops with too few kinds to ever fill the bag. */
+export const MAX_OVENS = 12;
+/** Later ovens test skill without multiplying every reward indefinitely. */
+export const MAX_SCORE_MULTIPLIER = 5;
+export const tuScoreMultiplier = (batch: number, version = 6) => version === 5 ? batch : Math.min(batch, MAX_SCORE_MULTIPLIER);
 /** Reserved replay input id for cashing out; real tile ids start at 1. */
 export const STOP_TILE_ID = 0;
 /** Hard cap on accepted log entries (taps, props, cash-out). */
@@ -106,13 +108,13 @@ export const MAX_TAPS = 20_000;
 /** Plausibility for the server: two log entries closer than this (ms) are not a human. */
 export const MIN_TAP_GAP_MS = 120;
 
-/** Points per pack, x batch. */
+/** Points per pack, x min(batch, 5). */
 export const PACK_POINTS = 10;
-/** Extra points when a pack fills an order, x batch. */
+/** Extra points when a pack fills an order, x min(batch, 5). */
 export const ORDER_POINTS = 30;
-/** Points for clearing a batch, x that batch's number. */
+/** Points for clearing a batch, x min(cleared batch, 5). */
 export const BATCH_POINTS = 100;
-/** End bonus per unused prop, x the batch the game ended in (D131). */
+/** End bonus per unused prop, x ending/cleared batch (bounded by MAX_OVENS). */
 export const PROP_BONUS_POINTS = 50;
 /** Every this many filled orders draw one prop; full types are skipped (D131, D141). */
 export const PROP_EVERY_ORDERS = 3;
@@ -120,19 +122,6 @@ export const PROP_EVERY_ORDERS = 3;
 export const MAX_PROPS_PER_TYPE = 2;
 /** Props of each kind at the start (D131). */
 export const START_PROPS = 1;
-
-const SEED_RE = /^v(\d+)\.[0-9a-f]+$/;
-
-/** The seed of a new run: the engine version, a dot, then the server's random hex. */
-export function tuSeed(randomHex: string): string {
-  return `v${TU_ENGINE_VERSION}.${randomHex}`;
-}
-
-/** The engine version a run's seed was made for: 1 for the plain-hex seeds from before versioning. */
-export function tuSeedVersion(seed: string): number {
-  const m = SEED_RE.exec(seed);
-  return m ? Number(m[1]) : 1;
-}
 
 interface Live {
   id: number;
@@ -144,6 +133,8 @@ interface Live {
 
 export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[] }): TuGame {
   const seed = String(opts.seed);
+  const version = tuRulesVersion(seed);
+  const maxOvens = version === 5 ? Infinity : MAX_OVENS;
   const n = opts.tiers.length;
   if (!Number.isInteger(n) || n < MIN_TIERS || n > MAX_TIERS) throw new RangeError(`tu: needs ${MIN_TIERS}-${MAX_TIERS} tiers`);
   // 消除大面包's 大面包 tier is never a 兔了个兔 bread (D123): a server passing it is a bug.
@@ -203,7 +194,7 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
     tiles: board.map((t) => ({ id: t.id, tier: t.tier, x: t.x2 / 2, y: t.y2 / 2, layer: t.layer, free: isFree(t), visible: isVisible(t) })),
     bag: [...bag],
     orders: [orders[0], orders[1]],
-    orderPoints: [ORDER_POINTS * batch, ORDER_POINTS * batch],
+    orderPoints: [ORDER_POINTS * tuScoreMultiplier(batch, version), ORDER_POINTS * tuScoreMultiplier(batch, version)],
     props: { ...props },
     bagSize,
     score,
@@ -233,17 +224,19 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
     if (bag.filter((t) => t === tile.tier).length === 3) {
       bag.splice(first, 3);
       const hit = orders[0] === tile.tier ? 0 : orders[1] === tile.tier ? 1 : -1;
-      const points = PACK_POINTS * batch + (hit >= 0 ? ORDER_POINTS * batch : 0);
+      const points = PACK_POINTS * tuScoreMultiplier(batch, version) + (hit >= 0 ? ORDER_POINTS * tuScoreMultiplier(batch, version) : 0);
       score += points;
       events.push({ type: "pack", tier: tile.tier, slot: first, points, order: hit >= 0 });
       if (revealed.length > 0) events.push({ type: "reveal", tiles: revealed });
       let dealt: { batch: number; bonus: number } | null = null;
       if (board.length === 0) {
         // The bag is always empty here: every tier comes in triples per batch.
-        const bonus = BATCH_POINTS * batch;
+        const bonus = BATCH_POINTS * tuScoreMultiplier(batch, version);
         score += bonus;
-        deal();
-        canStop = true;
+        if (batch < maxOvens) {
+          deal();
+          canStop = true;
+        }
         dealt = { batch, bonus };
       }
       if (hit >= 0) {
@@ -279,7 +272,7 @@ export function createTuGame(opts: { seed: string; tiers: readonly TuTierInput[]
       if (revealed.length > 0) events.push({ type: "reveal", tiles: revealed });
       if (bag.length >= bagSize) end(events);
     }
-    if (!over && taps >= MAX_TAPS) end(events);
+    if (!over && (board.length === 0 || taps >= MAX_TAPS)) end(events);
     return events;
   };
 

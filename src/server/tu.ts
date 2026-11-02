@@ -16,11 +16,10 @@ import {
   MIN_TAP_GAP_MS,
   MIN_TIERS,
   replayTu,
-  TU_ENGINE_VERSION,
+  isSupportedTuSeed,
   TU_PROPS,
   TuReplayError,
   tuSeed,
-  tuSeedVersion,
   type TuLogEntry,
   type TuProp,
   type TuTierInput,
@@ -107,7 +106,7 @@ export async function startTuRun(db: DbClient, input: unknown, ipHash: string, n
   if (tiers.length < MIN_TIERS) {
     throw new AppError("VALIDATION", { message: copy.gameApi.tuNotReady, extra: { fields: {} } });
   }
-  // The seed carries the engine version (C8): finish refuses runs dealt under another version.
+  // New starts use v6; existing v5 seeds retain their rules (D189).
   const seed = tuSeed(randomBytes(16).toString("hex"));
   const run = await db.gameRun.create({
     data: {
@@ -131,10 +130,8 @@ export async function finishTuRun(db: DbClient, input: unknown, ipHash: string, 
   if (!run || run.game !== "TU") throw new AppError("NOT_FOUND", { message: copy.gameApi.runNotFound });
   // Repeating a finish returns the stored result (the first tap log wins).
   if (run.finishedAt) return resultFor(db, run, "TU");
-  // A run dealt under another engine version (e.g. started before a rules change was deployed)
-  // would replay under different rules: it can no longer be finished, like an expired run. Such
-  // runs expire with the week anyway and are cleaned up as unfinished runs.
-  if (now.getTime() >= runExpiresAt(run.startedAt).getTime() || tuSeedVersion(run.seed) !== TU_ENGINE_VERSION) {
+  // D189: retain live v5 runs under their own rules, within the existing weekly expiry.
+  if (now.getTime() >= runExpiresAt(run.startedAt).getTime() || !isSupportedTuSeed(run.seed)) {
     throw new AppError("VALIDATION", { message: copy.gameApi.runExpired });
   }
   if (await isBanned(db, run.wechatId)) {

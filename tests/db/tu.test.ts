@@ -17,6 +17,8 @@ import { prisma } from "@/server/db";
 import { finishRun, getLeaderboard, PLAUSIBILITY_SLACK_MS, START_LIMIT_PER_HOUR, startRun } from "@/server/game";
 import { cleanup } from "@/server/maintenance";
 import { finishTuRun, getTuLeaderboard, isSuspicious, startTuRun, TU_MAX_FINISH_BODY_BYTES } from "@/server/tu";
+import recordedV5 from "../fixtures/tu-v5-run.json";
+import { progressRun } from "@/server/gameProgress";
 import { greedyTu, randomTu } from "../support/tuBot";
 import { getRequest, jsonRequest, NOW } from "./api.helpers";
 import { createDefaultProducts, db, resetDb } from "./helpers";
@@ -77,7 +79,7 @@ describe("start", () => {
     const ids = await createDefaultProducts();
     const r = await start();
     expect(Object.keys(r).sort()).toEqual(["expiresAt", "runId", "seed", "tiers"]);
-    expect(r.seed).toMatch(/^v5\.[0-9a-f]{32}$/);
+    expect(r.seed).toMatch(/^v6\.[0-9a-f]{32}$/);
     expect(r.expiresAt).toBe("2026-10-26T05:00:00.000Z");
     expect(r.tiers.map((t) => t.id)).toEqual([ids.redBean, ids.rockCheese, ids.cheeseHorn, ids.brulee]);
     for (const t of r.tiers) expect(Object.keys(t).sort()).toEqual(["color", "id", "imageUrl", "name", "points", "radius"]);
@@ -357,7 +359,7 @@ describe("suspicious flag (D103 manual check)", () => {
     expect((await getTuLeaderboard(db, LATER)).top[0].nickname).toBe("Fast");
   });
 
-  it("a run that reaches MAX_TAPS (2 bread tiers never fill the bag) is flagged", async () => {
+  it("a two-kind run ends at the final oven without a tap-cap suspicious flag", async () => {
     await db.product.createMany({
       data: [
         { name: "甲", unitPriceCents: 100, capacityMode: "INDEPENDENT", dailyLimit: 5, description: "", sortOrder: 0 },
@@ -367,15 +369,25 @@ describe("suspicious flag (D103 manual check)", () => {
     const run = await start("wx_long", "Long");
     expect(run.tiers).toHaveLength(2);
     const bot = play(run);
-    expect(bot.taps).toHaveLength(MAX_TAPS);
+    expect(bot.taps.length).toBeLessThan(MAX_TAPS);
     const now = new Date(T.getTime() + bot.taps[bot.taps.length - 1].at + 1000);
     const res = await finishTuRun(db, { runId: run.runId, taps: bot.taps }, IP, now);
     expect(res.score).toBe(bot.score);
-    expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).suspicious).toBe(true);
+    expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).suspicious).toBe(false);
   });
 });
 
 describe("board, record and separation from 消除大面包", () => {
+  it("version bumps retain old finished weekly scores (no version filter)", async () => {
+    const old = await insertRun({ wechatId: "old", score: 300_000 });
+    await db.gameRun.update({ where: { id: old.id }, data: { seed: "v5.abc" } });
+    const current = await insertRun({ wechatId: "current", score: 10_000 });
+    await db.gameRun.update({ where: { id: current.id }, data: { seed: tuSeed("abc") } });
+    const board = await getTuLeaderboard(db, T);
+    expect(board.top.map(r => r.score)).toEqual([300_000, 10_000]);
+    expect(board.allTime?.score).toBe(300_000);
+  });
+
   it("weekly board: best per wechat id (case-insensitive), ties earliest, hidden and banned left out", async () => {
     await insertRun({ wechatId: "wx_ali", score: 300, finishedAt: new Date(T.getTime() - 5000) });
     await insertRun({ wechatId: "WX_ALI", score: 500, finishedAt: new Date(T.getTime() - 4000) });
@@ -466,11 +478,11 @@ describe("routes", () => {
     expect((await bigFinishPOST(jsonRequest("/api/game/finish", { runId: run.runId, drops: [] }))).status).toBe(404);
   });
 
-  it("accepts and stores 20000 entries through finish; rejects 20001 without finishing", async () => {
+  it("accepts and stores the final-oven log; rejects input after game over", async () => {
     const seed = tuSeed("ca9");
     const tiers = [{ id: "t0" }, { id: "t1" }];
     const bot = randomTu(seed, tiers, 20_000);
-    expect(bot.taps).toHaveLength(20_000);
+    expect(bot.batch).toBe(12);
     const run = await db.gameRun.create({ data: {
       game: "TU", seed, tiersSnapshot: tiers, startedAt: T, wechatId: "wx_cap", nickname: "Cap",
     } });
@@ -485,7 +497,7 @@ describe("routes", () => {
     expect(accepted.status, JSON.stringify(result)).toBe(200);
     expect(result).toMatchObject({ score: bot.score });
     const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
-    expect(stored).toMatchObject({ dropCount: 20_000, suspicious: true, drops: bot.taps });
+    expect(stored).toMatchObject({ dropCount: bot.taps.length, suspicious: false, drops: bot.taps });
   });
 
   it("a full-length tap log fits the body limit; JSON content type and object shape are required", async () => {
@@ -561,3 +573,33 @@ it("D184 replays cash-out and persists the unused-prop bonus exactly once", asyn
   expect((await finishTuRun(db, { runId: run.runId, taps }, IP, LATER)).score).toBe(g.score);
   expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.runId } })).drops).toEqual(taps);
 });
+
+
+it("D189 accepts live v5 progress and finish with the exact recorded v5 score", async () => {
+  const run = await db.gameRun.create({ data: {
+    game: "TU", seed: recordedV5.seed, tiersSnapshot: recordedV5.tiers,
+    startedAt: T, wechatId: "wx_v5", nickname: "V5",
+  } });
+  const log = recordedV5.taps.slice(0, recordedV5.checkpoint.length);
+  expect(await progressRun(db, "TU", { runId: run.id, log }, LATER)).toMatchObject({
+    score: recordedV5.checkpoint.state.score, live: true,
+  });
+  expect((await finishTuRun(db, { runId: run.id, taps: recordedV5.taps }, IP, LATER)).score).toBe(87_030);
+  expect((await db.gameRun.findUniqueOrThrow({ where: { id: run.id } })).drops).toEqual(recordedV5.taps);
+  expect((await finishTuRun(db, { runId: run.id, taps: [] }, IP, LATER)).score).toBe(87_030);
+});
+
+it.each(["abc", "v1.abc", "v2.abc", "v3.abc", "v4.abc", "v7.abc"])(
+  "D189 rejects unsupported seed %s for progress and finish", async (seed) => {
+    const run = await db.gameRun.create({ data: {
+      game: "TU", seed, tiersSnapshot: recordedV5.tiers,
+      startedAt: T, wechatId: "wx_obsolete", nickname: "Old",
+    } });
+    await expect(progressRun(db, "TU", { runId: run.id, log: [] }, LATER)).rejects.toMatchObject({
+      code: "VALIDATION", message: "这一局已经过期，请重新开始",
+    });
+    await expect(finishTuRun(db, { runId: run.id, taps: [] }, IP, LATER)).rejects.toMatchObject({
+      code: "VALIDATION", message: "这一局已经过期，请重新开始",
+    });
+  },
+);

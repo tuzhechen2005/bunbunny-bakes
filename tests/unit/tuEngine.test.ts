@@ -5,7 +5,7 @@ import {
   createTuGame,
   dealBatch,
   hashTuState,
-  MAX_TAPS,
+  MAX_TAPS, MAX_OVENS, tuScoreMultiplier,
   MIN_TAP_GAP_MS,
   ORDER_POINTS,
   PACK_POINTS,
@@ -148,29 +148,58 @@ describe("bag", () => {
     expect(g.tap(free.id)).toBeNull();
   });
 
-  it("with only 2 tiers the bag can never fill: the game ends at MAX_TAPS", () => {
+  it("with only 2 tiers the bag can never fill: the game ends after the final oven", () => {
     const bot = randomTu("two", tiersOf(2));
-    expect(bot.taps).toHaveLength(20_000);
+    expect(bot.batch).toBe(MAX_OVENS);
+    expect(bot.taps.length).toBeLessThan(MAX_TAPS);
     expect(replayTu("two", tiersOf(2), bot.taps.slice(0, -1)).over).toBe(false);
     expect(bot.over).toBe(true);
-    expect(replayTu("two", tiersOf(2), bot.taps)).toMatchObject({ over: true, taps: MAX_TAPS, score: bot.score });
+    expect(replayTu("two", tiersOf(2), bot.taps)).toMatchObject({ over: true, taps: bot.taps.length, score: bot.score });
   });
 });
 
 describe("scoring and orders", () => {
+  it("all 12 ovens retain a witness, terminate, conserve rewards and stay below 300k", () => {
+    for (const n of [2, 8]) {
+      const seed = `terminal-${n}`;
+      const g = createTuGame({ seed, tiers: tiersOf(n) });
+      let sum = 0;
+      for (let b = 1; b <= MAX_OVENS; b++) {
+        expect(g.over).toBe(false);
+        expect(g.state().orderPoints).toEqual([30, 30].map(p => p * tuScoreMultiplier(b)));
+        const events = playWitness(g, seed, n);
+        for (const e of events) sum += e.type === "pack" || e.type === "bonus" ? e.points : e.type === "batch" ? e.bonus : 0;
+        expect(g.over).toBe(b === MAX_OVENS);
+      }
+      expect(g.score).toBe(sum);
+      expect(g.score).toBeLessThanOrEqual(102_920);
+      expect(g.state()).toMatchObject({ batch: MAX_OVENS, tiles: [], bag: [], canStop: false });
+    }
+  });
+
+  it("cash-out after the multiplier cap pays the cleared oven bonus only once", () => {
+    const g = createTuGame({ seed: "late-stop", tiers: TIERS });
+    for (let b = 1; b <= 7; b++) playWitness(g, "late-stop");
+    const before = g.state();
+    const bonus = Object.values(before.props).reduce((a, b) => a + b, 0) * 50 * 7;
+    expect(g.stop()).toEqual([{ type: "bonus", points: bonus }, { type: "over" }]);
+    expect(g.score).toBe(before.score + bonus);
+    expect(g.stop()).toBeNull();
+  });
+
   it(`pack = ${PACK_POINTS} x batch, order +${ORDER_POINTS} x batch, batch clear +${BATCH_POINTS} x batch`, () => {
     expect([PACK_POINTS, ORDER_POINTS, BATCH_POINTS]).toEqual([10, 30, 100]);
     const g = createTuGame({ seed: "score", tiers: TIERS });
-    for (let b = 1; b <= 3; b++) {
+    for (let b = 1; b <= 8; b++) {
       const before = g.score;
       const ev = playWitness(g, "score");
       const packs = ev.filter((e) => e.type === "pack") as Extract<TuEvent, { type: "pack" }>[];
       const hits = packs.filter((p) => p.order).length;
-      for (const p of packs) expect(p.points).toBe(b * (PACK_POINTS + (p.order ? ORDER_POINTS : 0)));
+      for (const p of packs) expect(p.points).toBe(tuScoreMultiplier(b) * (PACK_POINTS + (p.order ? ORDER_POINTS : 0)));
       expect(packs).toHaveLength(dealBatch("score", 8, b).tiles.length / 3);
       const batchEv = ev.filter((e) => e.type === "batch");
-      expect(batchEv).toEqual([{ type: "batch", batch: b + 1, bonus: BATCH_POINTS * b }]);
-      expect(g.score - before).toBe(b * (PACK_POINTS * packs.length + ORDER_POINTS * hits + BATCH_POINTS));
+      expect(batchEv).toEqual([{ type: "batch", batch: b + 1, bonus: BATCH_POINTS * tuScoreMultiplier(b) }]);
+      expect(g.score - before).toBe(tuScoreMultiplier(b) * (PACK_POINTS * packs.length + ORDER_POINTS * hits + BATCH_POINTS));
     }
   });
 
@@ -367,12 +396,12 @@ describe("determinism, replay and pinned vectors", () => {
     for (const t of bot.taps) for (const e of step(g, t)!) if (e.type === "reveal") revealed.push(...e.tiles);
     expect({ score: bot.score, batch: bot.batch, over: bot.over, taps: bot.taps.length, hash: hashTuState(g.state()), revealed: revealed.length }).toMatchInlineSnapshot(`
       {
-        "batch": 5,
-        "hash": "64473770",
+        "batch": 4,
+        "hash": "932791b9",
         "over": true,
-        "revealed": 103,
-        "score": 8190,
-        "taps": 251,
+        "revealed": 82,
+        "score": 5430,
+        "taps": 181,
       }
     `);
   });
