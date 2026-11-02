@@ -431,12 +431,13 @@ def cobble(x,z,k,width=.478):
     normals=[(0,0,1),(0,0,-1)]+[Vector((xx*.9,-zz*.9,.90)).normalized() for xx,zz in outline]
     me.normals_split_custom_set_from_vertices(normals)
 
-def town():
+def town(variants=None):
     clear()
-    for index,n in enumerate(['bakery','cafe','flower_shop','book_shop','house_rose','house_sage']):
-        group(n);color=['plaster','rose','cream','sage','rose','sage'][index]
-        box('Rounded plaster facade',(0,3.35,0),(6,6.7,2),color,.07,2)
-        box('Roof cap',(0,6.80,0),(6,.18,2),'roof',.04,2)
+    for n in (variants if variants is not None else ['bakery','cafe','flower_shop','book_shop','house_rose','house_sage']):
+        index=['bakery','cafe','flower_shop','book_shop','house_rose','house_sage','patisserie','cheese_shop','tea_house','corner_house'].index(n)
+        group(n);color=['plaster','rose','cream','sage','rose','sage','cream','plaster','sage','rose'][index]
+        box('Rounded plaster facade',(0,3.35,0),(6,6.7,4),color,.07,2)
+        box('Roof cap',(0,6.80,0),(6,.18,4),'roof',.04,2)
         for y in (.18,3.15,6.5):box('Cream cornice',(0,y,2.035),(6,.15,.13),'cream',.025,2)
         # Two rows of rounded terracotta roof tiles at front and rear eaves.
         for z in (-1.78,1.78):
