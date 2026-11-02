@@ -28,12 +28,13 @@ function scene() {
 it('draws one photo token per remaining bread on the plate', () => {
   const { view, state, drawImage } = scene();
   view.draw(state, null, null);
-  // First call paints the cached background layer; the rest are pile tokens (no towers/pests yet).
-  expect(drawImage.mock.calls.length - 1).toBe(state.breadTiers.length);
+  // First call paints the cached background layer; then one sprite per clutter object; the rest are pile tokens (no towers/pests yet).
+  const clutter = state.clutter.length;
+  expect(drawImage.mock.calls.length - 1 - clutter).toBe(state.breadTiers.length);
   drawImage.mockClear();
   state.breadTiers.splice(0, 3);
   view.draw(state, null, null);
-  expect(drawImage.mock.calls.length - 1).toBe(state.breadTiers.length);
+  expect(drawImage.mock.calls.length - 1 - clutter).toBe(state.breadTiers.length);
 });
 
 it('ignores unknown events and keeps drawing with a selection and preview', () => {
