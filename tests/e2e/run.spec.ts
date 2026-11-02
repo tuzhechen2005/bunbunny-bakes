@@ -74,7 +74,8 @@ for(const width of [320,390])test.describe(`RUN ${width}px`,()=>{
   await expect(page.getByTestId("run-board")).toHaveAttribute("data-lane","0");
   const save=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)!),RUN_SAVE_KEY);expect(save.inputs).toHaveLength(1);expect(save.inputs[0].dir).toBe("L");
   await page.clock.runFor(40000);await expect(page.getByTestId("run-over-sheet")).toBeVisible();await expect(page.getByTestId("run-confirmed")).toContainText(g.confirmed);
-  expect(api.starts).toEqual([{wechatId:"runner",nickname:"Baker"}]);expect(api.finishes).toHaveLength(1);
+  // A phone that has not finished a run yet starts with the optional practice (D182).
+  expect(api.starts).toEqual([{wechatId:"runner",nickname:"Baker",startMode:"practice"}]);expect(api.finishes).toHaveLength(1);
   expect(replayRun(SEED,api.finishes[0].inputs,api.finishes[0].endTick).over).toBe(true);
   await expect(page.getByTestId("run-new-record")).toHaveText(g.newRecord);
   await expect.poll(()=>page.evaluate(key=>localStorage.getItem(key),RUN_SAVE_KEY)).toBeNull();

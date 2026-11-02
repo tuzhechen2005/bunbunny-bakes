@@ -19,10 +19,10 @@ import { elapsedTick } from "./runClock";
 import { fetchMenu } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { RunBoard, type RunProgress } from "./RunBoard";
-import type { RunInput } from "@/lib/run";
+import type { RunDeath, RunInput, RunStartMode } from "@/lib/run";
 import { preloadRunArt } from "./runAssets";
 import { fetchRunLeaderboard, finishRun, startRun } from "./runApi";
-import { clearRunSave, readRunSave, writeRunSave, type RunSave } from "./runSave";
+import { clearRunSave, hasFinishedRun, readRunSave, setFinishedRun, writeRunSave, type RunSave } from "./runSave";
 
 import "./run.css";
 
@@ -71,6 +71,8 @@ export function RunPage() {
   const progress = useRef<RunProgress>({ inputs: [], score: 0, elapsedMs: 0, endTick: 0 });
   const [finish, setFinish] = useState<Finish>({ state: "submitting" });
   const [finalScore, setFinalScore] = useState(0);
+  const [death, setDeath] = useState<RunDeath | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [boardVersion, setBoardVersion] = useState(0);
   const [boardFrom, setBoardFrom] = useState<"menu" | "over">("menu");
@@ -97,6 +99,7 @@ export function RunPage() {
     setNickname(r.nickname);
     setSoundOn(r.sound);
     setSave(readRunSave());
+    setMounted(true);
     /* eslint-enable react-hooks/set-state-in-effect */
     let alive = true;
     fetchMenu().then((m) => {
@@ -131,6 +134,7 @@ export function RunPage() {
     if (r.ok) {
       // Keep completed logs retryable until the server acknowledges this exact run.
       if (readRunSave()?.runId === id) clearRunSave();
+      setFinishedRun(readRemembered().wechatId, true);
       setFinish({ state: "ok", result: r.data });
       setBoardVersion((n) => n + 1);
     } else {
@@ -210,7 +214,10 @@ export function RunPage() {
     void begin();
   };
 
-  const begin = async (e?: FormEvent) => {
+  /** Sprint is only offered after a finished run; the server rechecks. First finish unlocks it. */
+  const sprintOk = mounted && hasFinishedRun(wechatId);
+
+  const begin = async (e?: FormEvent, want?: "sprint") => {
     e?.preventDefault();
     if (starting) return;
     const v = validate(wechatId, nickname);
@@ -225,7 +232,14 @@ export function RunPage() {
     const w = wechatId.trim();
     const n = nickname.trim();
     try { await preloadRunArt(); } catch { setFormError(t.loadFailed); setStarting(false); setSheetOpen(false); setPhase("form"); return; }
-    const r = await startRun(w, n);
+    // First run: optional practice (skippable in play). Later: normal, or sprint when asked for.
+    const mode: RunStartMode = want === "sprint" ? "sprint" : hasFinishedRun(w) ? "normal" : "practice";
+    let r = await startRun(w, n, mode);
+    if (!r.ok && mode !== "normal" && r.error.error === "VALIDATION") {
+      // The server's history disagrees with this phone's: trust it, and start a normal run.
+      setFinishedRun(w, mode === "practice");
+      r = await startRun(w, n, "normal");
+    }
     setStarting(false);
     if (!r.ok) {
       setFormError(r.error.message);
@@ -246,6 +260,15 @@ export function RunPage() {
     setPhase("playing");
   };
 
+  const sprintFromMenu = () => {
+    setFormError(null);
+    const v = validate(wechatId, nickname);
+    if (v.wechat || v.nick) {
+      setErrors(v);
+      setPhase("form");
+    } else void begin(undefined, "sprint");
+  };
+
   const onOver = useCallback(
     (p: RunProgress) => {
       if (submitted.current.has(runId.current)) return;
@@ -257,6 +280,7 @@ export function RunPage() {
       persist();
       phaseRef.current = "over";
       setFinalScore(p.score);
+      setDeath(p.death ?? null);
       setRun(r => r ? { ...r, initialInputs: p.inputs, initialElapsedMs: p.elapsedMs } : r);
       setPhase("over");
       const id = runId.current;
@@ -363,17 +387,24 @@ export function RunPage() {
                 </button>
               </>
             ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setFormError(null);
-                  setPhase("form");
-                }}
-                className={primary}
-                data-testid="run-menu-start"
-              >
-                {g.start}
-              </button>
+              <div className={sprintOk ? "grid grid-cols-2 gap-3" : ""}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormError(null);
+                    setPhase("form");
+                  }}
+                  className={primary}
+                  data-testid="run-menu-start"
+                >
+                  {g.start}
+                </button>
+                {sprintOk ? (
+                  <button type="button" onClick={() => void sprintFromMenu()} disabled={starting} className={`${secondary} !h-14 font-display !text-lg`} data-testid="run-menu-sprint">
+                    {t.sprint}
+                  </button>
+                ) : null}
+              </div>
             )}
             <button
               type="button"
@@ -447,9 +478,16 @@ export function RunPage() {
                 {formError}
               </p>
             ) : null}
-            <button type="submit" disabled={starting} className={`${primary} mt-1 disabled:opacity-60`} data-testid="run-start">
-              {starting ? t.loading : g.start}
-            </button>
+            <div className={`mt-1 ${sprintOk ? "grid grid-cols-2 gap-3" : ""}`}>
+              <button type="submit" disabled={starting} className={`${primary} disabled:opacity-60`} data-testid="run-start">
+                {starting ? t.loading : g.start}
+              </button>
+              {sprintOk ? (
+                <button type="button" onClick={() => void begin(undefined, "sprint")} disabled={starting} className={`${secondary} !h-14 font-display !text-lg disabled:opacity-60`} data-testid="run-start-sprint">
+                  {t.sprint}
+                </button>
+              ) : null}
+            </div>
             <button type="button" onClick={() => setPhase("menu")} className={secondary} data-testid="run-form-back">
               {g.closeBoard}
             </button>
@@ -462,6 +500,8 @@ export function RunPage() {
   // ---------------- playing / over ----------------
   const shownScore = finish.state === "ok" ? finish.result.score : finalScore;
   const sameScore = finish.state === "ok" && finish.result.score === finalScore;
+  const deathText = death ? (t.death as Record<string, string>) : null;
+  const deathLine = death && deathText ? (deathText[death.kind] ?? deathText[death.reasonCode] ?? null) : null;
   return (
     <Shell className="run-shell-play">
       {top}
@@ -583,6 +623,11 @@ export function RunPage() {
           </button>
           <GameResultArt record={finish.state === "ok" && !!finish.result.newRecord} />
           <h2 className="font-display m-0 text-center text-[28px] leading-none tracking-[-0.03em]">{g.overTitle}</h2>
+          {deathLine ? (
+            <p className="run-result-hint m-0 mt-2 text-center text-sm font-bold text-c-grey" data-testid="run-death">
+              {deathLine}
+            </p>
+          ) : null}
           <p className="m-0 mt-5 text-center text-xs font-bold text-c-grey">{g.finalScore}</p>
           <p className="font-num m-0 text-center text-[56px] leading-[1.1]" data-testid="run-final-score">
             {shownScore}
@@ -644,9 +689,16 @@ export function RunPage() {
             </div>
           ) : null}
           <div className="mt-4 flex flex-col gap-2.5">
-            <button type="button" onClick={() => closeSheetThen(() => void begin())} className={`${primary} disabled:opacity-50`} disabled={finish.state === "submitting"} data-testid="run-again">
-              {finish.state === "failed" ? g.againDiscard : g.again}
-            </button>
+            <div className={sprintOk && finish.state === "ok" ? "grid grid-cols-2 gap-3" : ""}>
+              <button type="button" onClick={() => closeSheetThen(() => void begin())} className={`${primary} disabled:opacity-50`} disabled={finish.state === "submitting"} data-testid="run-again">
+                {finish.state === "failed" ? g.againDiscard : g.again}
+              </button>
+              {sprintOk && finish.state === "ok" ? (
+                <button type="button" onClick={() => closeSheetThen(() => void begin(undefined, "sprint"))} className={`${secondary} !h-14 font-display !text-lg`} data-testid="run-again-sprint">
+                  {t.sprint}
+                </button>
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={() =>

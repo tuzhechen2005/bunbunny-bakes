@@ -67,6 +67,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(FOG, 34, AHEAD + 4);
   const camera = new THREE.PerspectiveCamera(55, 1, .3, 120);
+  camera.fov = 55;
   scene.add(new THREE.HemisphereLight(0xfff1df, 0xc9a98a, 1.25));
   const sun = new THREE.DirectionalLight(0xffdcb4, 2.1); sun.position.set(-6, 11, -4);
   sun.target.position.set(0, 0, 8); scene.add(sun.target);
@@ -201,6 +202,13 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   const bunnyShadow = new THREE.Mesh(shadowGeo, shadowMat); bunnyShadow.renderOrder = 1; scene.add(bunnyShadow);
   const bubble = new THREE.Mesh(new THREE.SphereGeometry(1.15, 24, 16), new THREE.MeshStandardMaterial({ color: 0xbfe3f5, transparent: true, opacity: .28, roughness: .1, metalness: .2, depthWrite: false }));
   bubble.visible = false; scene.add(bubble);
+  // Fatal-hit highlight (D182): a warm pulsing shell and outline around the obstacle that ended the run.
+  const hlFillMat = new THREE.MeshBasicMaterial({ color: 0xff5a36, transparent: true, opacity: .3, depthWrite: false, fog: false, toneMapped: false });
+  const hlEdgeMat = new THREE.LineBasicMaterial({ color: 0xfff1d6, transparent: true, depthTest: false, fog: false, toneMapped: false });
+  const hlFill = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), hlFillMat);
+  const hlEdge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), hlEdgeMat);
+  const hl = new THREE.Group(); hl.add(hlFill, hlEdge); hl.visible = false; hl.renderOrder = 5; hlEdge.renderOrder = 6; scene.add(hl);
+  let hlId = -1;
 
   // ---- props pool keyed by engine object id ----------------------------------------
   const templates = new Map<string, THREE.Group>();
@@ -308,7 +316,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
     const change = s.player.laneChange;
     const lanePos = change ? change.from + (change.to - change.from) * ease(change.progress / 1000) : s.player.lane;
     const bunnyX = laneX(lanePos);
-    const speedK = s.speed / 320;
+    const speedK = Math.min(2.4, s.speed / 320);
 
     // Street slots recycle by absolute tile index; variants come from a stable hash.
     const firstTile = Math.floor((dist - BEHIND) / TILE);
@@ -337,6 +345,19 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
       e.shadow.visible = false; shadowPool.push(e.shadow); live.delete(id);
     }
 
+    // Fatal obstacle: wrap the live model's real bounds, pulsing while the result sheet waits.
+    const fatal = s.death ? live.get(s.death.id) : undefined;
+    if (fatal) {
+      if (hlId !== s.death!.id) {
+        hlId = s.death!.id;
+        const b = box(fatal.o), size = b.getSize(new THREE.Vector3()).addScalar(.3), mid = b.getCenter(new THREE.Vector3());
+        if (size.y < .6) { size.y = .6; mid.y = .3; } // flat hazards (puddle, pothole) still get a readable volume
+        hl.position.copy(mid); hl.scale.copy(size);
+      }
+      const pulse = quiet ? .75 : .5 + .5 * Math.sin(now * .014);
+      hlFillMat.opacity = .38 + .3 * pulse; hlEdgeMat.opacity = .8 + .2 * pulse; hl.visible = true;
+    } else { hl.visible = false; hlId = -1; }
+
     // Bunny pose → animation.
     const p = s.player as RunState["player"] & { y?: number };
     const lift = (p.y ?? (p.pose === "jump" ? jumpLift(p.progress) : 0)) * MM;
@@ -346,7 +367,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
     else if (p.pose === "slide") to(act.slide, .08);
     else if (change) to(change.to < change.from ? act.leanR : act.leanL, .08);
     else to(act.run, .15);
-    act.run.timeScale = Math.max(.9, speedK * 1.1);
+    act.run.timeScale = Math.max(.9, Math.min(2.4, speedK * 1.1));
     if (s.tick !== lastTick || crashFrame !== null) mixer.update(dt);
     lastTick = s.tick;
     bunny.position.set(bunnyX, lift, 0);
@@ -358,7 +379,9 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
 
     // Camera: behind and above, follows lanes and height, widens with speed.
     const shake = crashFrame !== null && crashFrame < 2 && !quiet ? Math.sin(now * .06) * .12 : 0;
-    camera.fov = 55 + Math.min(8, (speedK - 1) * 9) + (s.powerUps.coffeeTicks > 0 ? 4 : 0);
+    // Field of view follows the 480..720 mm/tick curve (coffee reaches 1080); eased so the coffee burst is not a jump.
+    const fovTarget = 55 + Math.min(11, Math.max(0, (s.speed - 480) / 240) * 7);
+    camera.fov += (fovTarget - camera.fov) * Math.min(1, dt * 6);
     camera.aspect = width / height; camera.updateProjectionMatrix();
     camera.position.set(bunnyX * .8 + shake, 4.6 + lift * .5, -7.2);
     camera.lookAt(bunnyX * .6, 1.1 + lift * .4, 7);
