@@ -63,7 +63,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
   renderer.setClearColor(0x000000, 0);
   // Soft real shadows from one low dawn sun; the box only covers the play area near the bunny.
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(FOG, 34, AHEAD + 4);
   const camera = new THREE.PerspectiveCamera(55, 1, .3, 120);
@@ -194,6 +194,20 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   const seen = new Set<number>();
 
   let width = 1, height = 1, last = performance.now(), lastTick = -1;
+  // Adaptive quality: start at 1.5x pixels; sustained slow frames step the resolution down to 1x,
+  // then drop the real shadows (the blob shadows stay). Never steps back up within a run.
+  let deviceDpr = 1, dprCap = 1.5, frames = 0, slowFrames = 0;
+  const applySize = () => { renderer.setPixelRatio(Math.min(dprCap, deviceDpr)); renderer.setSize(width, height, false); };
+  function watchFrame(ms: number) {
+    if (ms > 250) return; // a pause or a resize, not a slow frame
+    frames++; if (ms > 24) slowFrames++;
+    if (frames < 90) return;
+    if (slowFrames > 30) {
+      if (dprCap > 1 && deviceDpr > 1) { dprCap = Math.max(1, dprCap - .25); applySize(); }
+      else if (sun.castShadow) sun.castShadow = false;
+    }
+    frames = slowFrames = 0;
+  }
 
   function placeObject(o: RunObject, s: RunState, bunnyX: number) {
     const node = o.kind === "bread" && o.value === 5 ? "breadGold" : KIND_NODE[o.kind]; if (!node || !templates.has(node)) return;
@@ -240,7 +254,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   }
 
   function draw(s: RunState, quiet: boolean, crashFrame: number | null) {
-    const now = performance.now(), dt = Math.min(.05, (now - last) / 1000); last = now;
+    const now = performance.now(), dt = Math.min(.05, (now - last) / 1000); watchFrame(now - last); last = now;
     const dist = s.distance * MM;
     const change = s.player.laneChange;
     const lanePos = change ? change.from + (change.to - change.from) * ease(change.progress / 1000) : s.player.lane;
@@ -304,7 +318,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
 
   return {
     webgl: true,
-    resize(w, h, dpr) { width = w; height = h; renderer.setPixelRatio(Math.min(2, dpr)); renderer.setSize(w, h, false); },
+    resize(w, h, dpr) { width = w; height = h; deviceDpr = dpr; applySize(); },
     draw,
     dispose() { renderer.dispose(); },
   };
