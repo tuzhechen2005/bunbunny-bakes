@@ -48,7 +48,13 @@ interface FormState {
   fieldColor: string;
   /** Selected weekdays (0 = Sunday); none = every day. */
   pickupWeekdays: number[];
+  /** N1: shown as 新品 (for 7 days from when it is turned on). */
+  isNew: boolean;
 }
+
+/** True while the stored 新品 period is running. */
+const isNewNow = (p?: ProductDto) => !!p?.newUntil && Date.parse(p.newUntil) > Date.now();
+const chicagoDay = (iso: string) => new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", month: "numeric", day: "numeric" }).format(new Date(iso));
 
 const str = (n: number | null) => (n === null ? "" : String(n));
 
@@ -70,6 +76,7 @@ function initialState(p?: ProductDto): FormState {
       status: "ACTIVE",
       fieldColor: DEFAULT_FIELD_COLOR,
       pickupWeekdays: [],
+      isNew: false,
     };
   }
   return {
@@ -88,6 +95,7 @@ function initialState(p?: ProductDto): FormState {
     status: p.status,
     fieldColor: p.fieldColor ?? DEFAULT_FIELD_COLOR,
     pickupWeekdays: p.pickupWeekdays ?? [],
+    isNew: isNewNow(p),
   };
 }
 
@@ -112,10 +120,10 @@ const API_FIELD_TO_FORM: Record<string, keyof FormState> = {
   pickupWeekdays: "pickupWeekdays",
 };
 
-type Payload = Record<string, string | number | number[] | null>;
+type Payload = Record<string, string | number | number[] | boolean | null>;
 
 /** Validates what can be checked on the client; the server re-validates everything. */
-function buildPayload(f: FormState, storedColor: string | null): { payload: Payload } | { errors: Errors } {
+function buildPayload(f: FormState, storedColor: string | null, wasNew: boolean): { payload: Payload } | { errors: Errors } {
   const errors: Errors = {};
   const payload: Payload = { capacityMode: f.capacityMode, status: f.status };
 
@@ -124,7 +132,7 @@ function buildPayload(f: FormState, storedColor: string | null): { payload: Payl
   payload.name = name;
   payload.description = f.description.trim();
 
-  const intOf = (key: Exclude<keyof FormState, "pickupWeekdays">, required: boolean): number | null => {
+  const intOf = (key: Exclude<keyof FormState, "pickupWeekdays" | "isNew">, required: boolean): number | null => {
     const raw = f[key].trim();
     if (!raw) {
       if (required) errors[key] = t.requiredField;
@@ -160,6 +168,8 @@ function buildPayload(f: FormState, storedColor: string | null): { payload: Payl
   // Untouched default stays "no colour chosen" (null) so a plain save does not write one.
   payload.fieldColor = f.fieldColor === DEFAULT_FIELD_COLOR && storedColor === null ? null : f.fieldColor;
   payload.pickupWeekdays = [...f.pickupWeekdays].sort((a, b) => a - b);
+  // Only a change is sent: sending true again would restart the 7 days on every save.
+  if (f.isNew !== wasNew) payload.isNew = f.isNew;
 
   return Object.keys(errors).length > 0 ? { errors } : { payload };
 }
@@ -257,7 +267,7 @@ export function ProductForm({ product }: Readonly<{ product?: ProductDto }>) {
     setFormError(null);
     setSaved(false);
     setOverLimit([]);
-    const built = buildPayload(form, product?.fieldColor ?? null);
+    const built = buildPayload(form, product?.fieldColor ?? null, isNewNow(product));
     if ("errors" in built) {
       setErrors(built.errors);
       return;
@@ -473,6 +483,13 @@ export function ProductForm({ product }: Readonly<{ product?: ProductDto }>) {
               onChange={(e) => set("batchYield", e.target.value)}
             />
           </Field>
+          <label className="flex min-h-11 items-center gap-3 sm:col-span-2" data-testid="product-new">
+            <input type="checkbox" className="size-5 accent-accent" checked={form.isNew} onChange={(e) => set("isNew", e.target.checked)} />
+            <span className="text-base font-medium">{t.fieldNew}</span>
+            <span className="text-sm text-muted" data-testid="product-new-hint">
+              {!form.isNew ? t.newHintOff : isNewNow(product) && product?.newUntil ? fill(t.newHintUntil, { date: chicagoDay(product.newUntil) }) : t.newHintOn}
+            </span>
+          </label>
           <Field label={t.fieldStatus} error={errors.status}>
             <select
               className={inputClass}

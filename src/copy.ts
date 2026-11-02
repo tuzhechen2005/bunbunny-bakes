@@ -61,6 +61,7 @@ export const copy = {
     },
     home: {
       /** F1 flavours. */
+      newBadge: "新品",
       flavorJoin: " · ", priceFrom: "{price} 起", chooseFlavor: "先选口味", flavorLabel: "口味",
       /** Header entry to /orders (D84): visible word and accessible name. */
       myOrdersEntry: "订单",
@@ -1238,6 +1239,10 @@ export const copy = {
       fieldBatchYield: "一批做几个",
       batchYieldHint: "只用于生产汇总",
       fieldStatus: "状态",
+      fieldNew: "新品",
+      newHintOff: "打开后，顾客页面显示 7 天",
+      newHintOn: "保存后显示 7 天",
+      newHintUntil: "显示到 {date}",
       moneyHint: "例如 2.49",
       moneyInvalid: "请输入金额，最多两位小数，例如 2.49",
       intInvalid: "请输入整数",

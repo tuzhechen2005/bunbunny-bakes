@@ -10,6 +10,7 @@ import { bindDrag } from "./drag";
 import { focusQuietly } from "./focus";
 import { DownIcon, LeftIcon, MinusIcon, PlusIcon, RightIcon } from "./icons";
 import { Peg } from "./Peg";
+import { NewStamp } from "./NewStamp";
 import { PHOTO_AXIS_BIAS, PhotoCarousel } from "./PhotoCarousel";
 import { RollingText } from "./RollingText";
 
@@ -342,6 +343,7 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
         <div ref={ph} className={`hm-dt-ph ${paused ? "is-paused" : ""}`}>
           <Peg />
           <PhotoCarousel key={product.id} product={product} reduced={reduced} />
+          {product.isNew ? <NewStamp key={product.id} className="is-detail" /> : null}
         </div>
         <div ref={body} className="hm-dt-body">
           <h2 className="hm-dt-name" data-testid="detail-name">
