@@ -37,7 +37,12 @@ export class Session {
    * when the log cannot be replayed (corrupt save): the caller then discards it.
    */
   static restore(tiers: TierView[], seed: string, drops: readonly DropLog[]): Session | null {
-    const s = new Session(tiers, seed);
+    let s: Session;
+    try {
+      s = new Session(tiers, seed);
+    } catch {
+      return null; // an old-version seed (D184) is rejected by the engine
+    }
     for (const d of drops) {
       if (!d || !Number.isInteger(d.at) || d.at < s.steps || typeof d.x !== "number" || !Number.isFinite(d.x)) return null;
       while (s.steps < d.at) {
@@ -73,6 +78,13 @@ export class Session {
   /** Tier of the piece after it. */
   upcoming(): number {
     return this.game.state().preview;
+  }
+  /** D184: the highest tier dropped or merged this run (null before the first drop) and the one after it. */
+  get highest(): number | null {
+    return this.game.state().highestTier;
+  }
+  get nextTier(): number | null {
+    return this.game.state().nextTier;
   }
   /** 0..1: how far the cool-down has run since the last drop. */
   get cooled(): number {

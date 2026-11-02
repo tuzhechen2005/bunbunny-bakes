@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { copy } from "@/copy";
-import { BIG_BASE, ROLL_BASE } from "@/lib/m3";
+import { BIG_BASE, ROLL_BASE, m3LevelRules } from "@/lib/m3";
 
 type Kind = "roll" | "big";
 const storageKey = (kind: Kind) => `bb_m3_special_tip_${kind}`;
@@ -43,5 +43,26 @@ export function M3SpecialTip({ board }: { board: readonly (readonly number[])[] 
     {active && <p key={active} className="m3-special-tip" data-testid="m3-special-tip">
       {copy.customer.m3.specialHelp[active].tip}
     </p>}
+  </div>;
+}
+
+const kindKey = (tierCount: number) => `bb_m3_new_kind_${tierCount}`;
+/** D184: the first level that adds a bread kind (7, 19) says so once, until the first move. */
+export function M3KindHint({ level, tierCount, started }: { level: number; tierCount: number; started: boolean }) {
+  const adds = level > 1 && tierCount > m3LevelRules(level - 1).tierCount;
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!adds || started) return;
+    const id = setTimeout(() => {
+      try {
+        if (window.localStorage.getItem(kindKey(tierCount))) return;
+        window.localStorage.setItem(kindKey(tierCount), "1");
+      } catch { /* Without storage the line shows each time this level starts. */ }
+      setShown(true);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [adds, started, tierCount]);
+  return <div className="m3-special-tip-region" role="status" aria-live="polite" aria-atomic="true">
+    {shown && !started && <p className="m3-special-tip m3-kind-hint" data-testid="m3-kind-hint">{copy.customer.m3.newKindHint}</p>}
   </div>;
 }

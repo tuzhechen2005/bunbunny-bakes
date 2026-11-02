@@ -8,6 +8,7 @@
 .m3-board-wrap { position:relative; }
 .m3-special-tip-region { position:absolute; bottom:calc(100% + 4px); inset-inline:0; z-index:3; pointer-events:none; }
 .m3-special-tip { margin:0; padding:7px 4px; border:1px solid var(--c-line); border-radius:10px; background:var(--c-paper); color:var(--c-ink); text-align:center; font-size:12px; line-height:1.5; white-space:nowrap; box-shadow:0 2px 8px color-mix(in srgb,var(--c-ink) 12%,transparent); animation:m3-special-tip-fade 2200ms ease-out both; }
+.m3-special-tip.m3-kind-hint { animation:m3-record-fade 250ms ease-out both; }
 @keyframes m3-special-tip-fade { 0% { opacity:0; } 6%,90.909% { opacity:1; } 100% { opacity:0; } }
 /* At 320px, 3px gutters + 1px board borders leave eight distinct 39px targets. */
 @media (max-width:360px) { .m3-play { padding-inline:3px; } }
@@ -106,6 +107,7 @@
   .m3-play .m3-hint { animation:none !important; }
   .m3-play .m3-piece-face, .m3-play .m3-piece-bounce { animation:none !important; transform:none !important; }
   .m3-play .m3-special-tip { animation-name:m3-special-tip-fade !important; }
+  .m3-play .m3-special-tip.m3-kind-hint { animation-name:m3-record-fade !important; }
 }
 .m3-record-pop { animation:m3-record 600ms ease-out both; }
 .m3-record-fade { animation:m3-record-fade 250ms ease-out both; }

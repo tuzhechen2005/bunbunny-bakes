@@ -5,16 +5,16 @@ import { fill } from "@/components/customer/format";
 import { sound } from "@/components/game/sound";
 import type { TierView } from "@/components/game/types";
 import { copy } from "@/copy";
-import { BIG_BASE, ROLL_BASE, MIN_MOVE_GAP_MS, createM3Game, legalM3Moves, tierOf, type M3Cell, type M3Move, type M3Swap, type M3Level } from "@/lib/m3";
+import { BIG_BASE, ROLL_BASE, MIN_MOVE_GAP_MS, createM3Game, legalM3Moves, tierOf, type M3Cell, type M3FailureGap, type M3Move, type M3Swap, type M3Level } from "@/lib/m3";
 import { motionHealth } from "@/lib/motion/fps";
 import { haptic, useMotionPrefs } from "@/lib/motion/react";
-import { adjacent, animationQueue, sameCell, swipeDirection, swipeTarget, type AnimationFrame, type SwipeDirection } from "./m3Animation";
+import { adjacent, animationQueue, paceQueue, sameCell, swipeDirection, swipeTarget, type AnimationFrame, type SwipeDirection } from "./m3Animation";
 import { BreadFace, PieceFace } from "./M3Art";
-import { M3SpecialTip } from "./M3SpecialTip";
+import { M3KindHint, M3SpecialTip } from "./M3SpecialTip";
 import "./m3.css";
 
 const t = copy.customer.m3;
-export interface M3Progress { moves: M3Move[]; score: number }
+export interface M3Progress { moves: M3Move[]; score: number; gap?: M3FailureGap | null }
 interface Props {
   level?: number; rules?: M3Level;
   tiers: TierView[]; seed: string; initialMoves?: M3Move[]; soundOn: boolean; reduced: boolean;
@@ -73,7 +73,7 @@ export function M3Board({ level, rules, tiers, seed, initialMoves = [], soundOn,
   useEffect(() => {
     if (!snap.over || reported.current) return;
     reported.current = true;
-    onOver({ moves: [...moves.current], score: game.score });
+    onOver({ moves: [...moves.current], score: game.score, gap: game.state().failureGap });
   }, [snap.over, game, onOver]);
   // Monitor only active transitions; no idle animation loop.
   useEffect(() => {
@@ -110,7 +110,7 @@ export function M3Board({ level, rules, tiers, seed, initialMoves = [], soundOn,
     onProgress({ moves: [...moves.current], score: game.score });
     if (soundOn) sound.drop();
     if (!quiet) haptic(10);
-    const queue = animationQueue(before, events);
+    const queue = paceQueue(animationQueue(before, events));
     let i = 0;
     const next = () => {
       const f = queue[i++];
@@ -215,6 +215,7 @@ export function M3Board({ level, rules, tiers, seed, initialMoves = [], soundOn,
     </div>
     <div className="m3-board-wrap">
       <M3SpecialTip board={view.board} />
+      {level && rules && <M3KindHint level={level} tierCount={rules.tierCount} started={busy || snap.movesLeft < rules.moves} />}
       <div ref={board} className={`m3-board ${event?.type === "shuffle" ? "m3-shuffle" : ""}`} role="group" aria-label={t.boardLabel} aria-busy={busy} data-testid="m3-board">
         {view.board.flatMap((row, r) => row.map((code, c) => {
           const p = { r, c };
