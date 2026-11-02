@@ -12,11 +12,11 @@ it('settles old speed, excludes paused/hidden time, caps time and resumes exact 
   const c=createTdClock(10);c.resume(1000);expect(c.tick(2000)).toBe(70);
   c.speed(2,2000);expect(c.tick(2500)).toBe(130);c.pause(2500);
   expect(c.tick(90000)).toBe(130);c.resume(90000);expect(c.tick(90500)).toBe(190);
-  expect(c.tick(1e9)).toBe(18000);
+  expect(c.tick(1e9)).toBe(72000);
 });
 it('restores only canonical unexpired replayable saves, including completed retry evidence', () => {
   const now=Date.parse('2026-10-20T12:00:00Z');
-  expect(TD_SAVE_KEY).toBe('bb_td_save_v11');
+  expect(TD_SAVE_KEY).toBe('bb_td_save_v12');
   expect(parseTdSave(JSON.stringify(save),now)).toEqual(save);
   for (const patch of [{score:999},{endTick:-1},{seed:'v1.td.2026-10-19.1'},{seed:'v5.td.2026-10-19.1'},{seed:'v6.td.2026-10-19.1'},{seed:'v7.td.2026-10-19.1'},{seed:'v8.td.2026-10-19.1'},{seed:'v9.td.2026-10-19.1'},{seed:'v10.td.2026-10-19.1'},{level:2},{tiers:[]},{inputs:[{tick:500,type:'sell',slot:0}]}]) expect(parseTdSave(JSON.stringify({...save,...patch}),now)).toBeNull();
   expect(parseTdSave(JSON.stringify(save),Date.parse(save.expiresAt))).toBeNull();

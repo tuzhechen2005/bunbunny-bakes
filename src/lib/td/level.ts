@@ -1,7 +1,7 @@
 import { levelMap } from "./maps";
 import { PESTS, towerStats, TOWER_KINDS } from "./balance";
 import { createRng } from "../game/rng";
-import { TD_ENGINE_VERSION, WAVE_COUNT, PREP_TICKS, type PestKind, type TdLevel, type TdWave } from "./types";
+import { TD_ENGINE_VERSION, WAVE_COUNT, PREP_TICKS, type TdClutter, type PestKind, type TdLevel, type TdWave } from "./types";
 
 /** Validate a Gregorian Monday without clocks, time zones, or Date parsing. */
 function validWeekKey(value: string): boolean {
@@ -116,6 +116,14 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
     wave.interval = Math.ceil(wave.interval / 0.6);
     wave.maxLivePests = n < 20 ? 8 : 12;
   }
+  // D181: one dense low-HP mouse wave after splash becomes available.
+  if (n >= 5) {
+    const count = 12 + rng.int(7);
+    waves[2] = { interval: 8, maxLivePests: 16, pests: Array.from({length: count}, () => ({
+      ...PESTS.mouse, tiny: true, hp: 42 + Math.min(80, difficulty * 2), speed: 64, bounty: 3,
+    })) };
+  }
+  for (const wave of waves) for (const pest of wave.pests) if (pest.boss) { pest.hp = Math.round(pest.hp * 1.75); pest.speed = 8; }
   const unlockLevels = [1, 3, 5, 8, 11, 14, 18];
   const mapData = levelMap(seed, n);
   const unlockedTowers = TOWER_KINDS.filter((_, i) => n >= unlockLevels[i]);
@@ -124,7 +132,24 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
   const fullBuildCost = mapData.slots.length * Math.max(...unlockedTowers.map(kind =>
     [0, 1, 2].reduce((sum, tier) => sum + towerStats(kind, tier).cost, 0)));
   const bonusBudget = (WAVE_COUNT - 1) * Math.floor(PREP_TICKS / 60) * 3;
-  const bountyBudget = Math.floor(fullBuildCost * 0.75) - startCoins - bonusBudget;
+  // Put clutter beside its tower slot, away from the road and other tap targets.
+  const routes = [mapData.path, ...(mapData.features ?? []).flatMap(f => f.branches ?? [])];
+  const roadDistance = (x: number, y: number) => Math.min(...routes.flatMap(path => path.slice(1).map((b,i) => {
+    const a=path[i], dx=b.x-a.x, dy=b.y-a.y;
+    const t=Math.max(0,Math.min(1,((x-a.x)*dx+(y-a.y)*dy)/(dx*dx+dy*dy || 1)));
+    return Math.hypot(x-a.x-t*dx,y-a.y-t*dy);
+  })));
+  const clutter: TdClutter[] = [];
+  for (const [id,slot] of mapData.slots.slice(0, 2).entries()) {
+    const candidates = [[80,0],[-80,0],[0,80],[0,-80],[57,57],[-57,57],[57,-57],[-57,-57]]
+      .map(([dx,dy])=>({x:slot.x+dx,y:slot.y+dy}))
+      .filter(p=>p.x>=30 && p.x<=1410 && p.y>=30 && p.y<=780 && clutter.every(c=>Math.hypot(c.x-p.x,c.y-p.y)>=48))
+      .sort((a,b)=>Math.min(roadDistance(b.x,b.y),...mapData.slots.map(s=>Math.hypot(b.x-s.x,b.y-s.y)))
+        - Math.min(roadDistance(a.x,a.y),...mapData.slots.map(s=>Math.hypot(a.x-s.x,a.y-s.y))));
+    clutter.push({id, kind: (["flourSack", "eggCrate", "milkCan"] as const)[(n + id - 1) % 3],
+      ...candidates[0], hp:216, maxHp:216, reward:12});
+  }
+  const bountyBudget = Math.floor(fullBuildCost * 0.75) - startCoins - bonusBudget - 24;
   // Fund an early second pin/upgrade instead of a large final payout.
   if (n === 1) for (const wave of waves) for (const pest of wave.pests) {
     pest.bounty = pest.boss ? 10 : wave === waves[0] ? 36 : 8;
@@ -133,7 +158,7 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
   if (totalBounty > bountyBudget) for (const wave of waves) for (const pest of wave.pests) {
     pest.bounty = Math.floor(pest.bounty * bountyBudget / totalBounty);
   }
-  return { mapData, unlockedTowers,
+  return { clutter, mapData, unlockedTowers,
     newlyUnlocked: TOWER_KINDS.filter((_,i) => n === unlockLevels[i]), seed, weekKey, number: n, map: Math.floor((n - 1) / 4) % 3, startCoins, waves };
 }
 

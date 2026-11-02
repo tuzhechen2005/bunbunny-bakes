@@ -1,5 +1,5 @@
 import { TD_ENGINE_VERSION, tdSeedVersion } from "@/lib/td";
-import { tdFinishSchema, verifyTdRun } from "./td";
+import { bestTdStars, tdFinishSchema, verifyTdRun } from "./td";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import type { GameKind } from "@/lib/gameCatalog";
@@ -36,13 +36,13 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
   });
   if (!claimed.count) {
     // Do not load a potentially 20,000-entry stored log on a throttled request.
-    const stored = await db.gameRun.findUnique({ where: { id: data.runId }, select: { game: true, finishedAt: true, score: true } });
+    const stored = await db.gameRun.findUnique({ where: { id: data.runId }, select: { game: true, finishedAt: true, score: true, wechatId: true } });
     if (!stored || stored.game !== game) throw new AppError("NOT_FOUND");
-    if (stored.finishedAt) return { score: stored.score, live: false };
+    if (stored.finishedAt) return { score: stored.score, live: false, ...(game === "TD" ? { bestStars: await bestTdStars(db, weekKeyOf(now), stored.wechatId) } : {}) };
     throw new AppError("RATE_LIMITED");
   }
   const run = await db.gameRun.findUniqueOrThrow({ where: { id: data.runId } });
-  if (run.finishedAt) return { score: run.score, live: false };
+  if (run.finishedAt) return { score: run.score, live: false, ...(game === "TD" ? { bestStars: await bestTdStars(db, weekKeyOf(now), run.wechatId) } : {}) };
   if (now >= runExpiresAt(run.startedAt)
     || (game === "TD" && tdSeedVersion(run.seed) !== TD_ENGINE_VERSION)
     || (game === "TU" && tuSeedVersion(run.seed) !== TU_ENGINE_VERSION)
@@ -76,7 +76,7 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
     data: { score: verified.score, playMs: "playMs" in verified ? verified.playMs : undefined, simSteps: "simSteps" in verified ? verified.simSteps : undefined, suspicious: "suspicious" in verified ? verified.suspicious : undefined, updatedAt, weekKey: weekKeyOf(run.startedAt),
       drops: log, dropCount: log.length },
   });
-  return { score: verified.score, live: saved.count > 0 };
+  return { score: verified.score, live: saved.count > 0, ...(game === "TD" ? { bestStars: await bestTdStars(db, weekKeyOf(now), run.wechatId) } : {}) };
 }
 
 function samePrefix(previous: unknown[], next: unknown): boolean {

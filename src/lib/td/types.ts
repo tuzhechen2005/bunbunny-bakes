@@ -1,10 +1,10 @@
-export const TD_ENGINE_VERSION = 11;
+export const TD_ENGINE_VERSION = 12;
 export const TICKS_PER_SECOND = 60;
 export const FIELD_WIDTH = 1440;
 export const FIELD_HEIGHT = 810;
 /** Movement uses sixteenths of a field unit; drawing coordinates are integer field units. */
 export const SUBUNITS = 16;
-export const MAX_LEVEL_TICKS = 60 * 60 * 5;
+export const MAX_LEVEL_TICKS = 60 * 60 * 20;
 export const MAX_INPUTS = 2000;
 export const MAX_IGNORED_INPUTS = 120;
 export const START_BREAD = 10;
@@ -26,15 +26,17 @@ export interface TdCreamLine { forkChoices: Record<number, number>; id: number; 
 export interface TdMap { features?: readonly TdFeature[]; name: string; path: readonly Readonly<TdPoint>[]; slots: readonly Readonly<TdPoint>[] }
 export type PestKind = "ant" | "mouse" | "sparrow" | "beetle";
 export type TowerKind = "rollingPin" | "flourSifter" | "whisk" | "oven" | "freezer" | "pipingBag" | "caramelTorch";
-export interface TdPestSpec { kind: PestKind; hp: number; speed: number; bounty: number; armor: number; boss?: boolean }
+export interface TdPestSpec { kind: PestKind; hp: number; speed: number; bounty: number; armor: number; boss?: boolean; tiny?: boolean }
 export interface TdWave { pests: TdPestSpec[]; interval: number; maxLivePests?: number }
-export interface TdLevel { mapData: TdMap; unlockedTowers: TowerKind[]; newlyUnlocked: TowerKind[]; seed: string; weekKey: string; number: number; map: number; startCoins: number; waves: TdWave[] }
+export interface TdClutter extends TdPoint { id: number; kind: "flourSack" | "eggCrate" | "milkCan"; hp: number; maxHp: number; reward: number }
+export interface TdLevel { clutter?: TdClutter[]; mapData: TdMap; unlockedTowers: TowerKind[]; newlyUnlocked: TowerKind[]; seed: string; weekKey: string; number: number; map: number; startCoins: number; waves: TdWave[] }
 export type TdOptions = ({ seed: string; level?: never } | { level: TdLevel; seed?: never }) & {
   /** Owner's tiers ordered cheapest first. Only their count/indices enter simulation. */
   tierCount?: number;
   itemsAllowed?: Partial<Record<TdItem, number>>;
 };
 export type TdInput =
+  | { tick: number; type: "target-clutter"; clutter: number | null; slot?: never }
   | { tick: number; type: "switch"; fork: number }
   | { tick: number; type: "item"; item: "bomb"; x: number; y: number }
   | { tick: number; type: "item"; item: "bell" }
@@ -44,6 +46,7 @@ export type TdInput =
   | { tick: number; type: "sell"; slot: number }
   | { tick: number; type: "callWave"; slot: -1 };
 export interface TdPest extends TdPestSpec, TdPoint {
+  phase: number; telegraphUntil: number; dashUntil: number; phaseReadyTick: number;
   inTunnel: boolean; onStrip: boolean; onJam: boolean; forkChoices: Record<number, number>; slipped: number[]; slowUntil: number; slowStrength: number;
   id: number; wave: number; distance: number; maxHp: number; slowed: boolean; heading: number; carrying: number; carriedTiers: number[]; returning: boolean;
   frozenUntil: number; stunnedUntil: number; floured: boolean; burning: boolean; vulnerability: number;
@@ -62,6 +65,9 @@ export interface TdBatterPuddle extends TdPoint { radius: number; until: number 
 export interface TdDroppedBread extends TdPoint { forkChoices: Record<number, number>; id: number; distance: number; tier: number }
 export interface TdWavePreview { index: number; counts: Record<PestKind | "boss", number> }
 export type TdEvent =
+  | { type: "bossPhase"; tick: number; pest: number; phase: number; telegraphUntil: number; dashUntil: number; mice: number }
+  | { type: "clutterHit"; tick: number; clutter: number; slot: number; damage: number }
+  | { type: "clutterCleared"; tick: number; clutter: number; reward: number }
   | { [K in "pickup" | "drop" | "lose"]: { type: K; tick: number; pest: number; tiers: number[]; x: number; y: number } }["pickup" | "drop" | "lose"]
   | { type: "recover"; tick: number; bread: number; tier: number; x: number; y: number }
   | { type: "bossSpawn"; tick: number; pest: number; wave: number }
@@ -76,6 +82,7 @@ export type TdEvent =
   | { type: "steal"; tick: number; pest: number; tier: number }
   | { type: "over"; tick: number; passed: boolean; reason: "cleared" | "bread" | "timeout" };
 export interface TdState {
+  stars: number; clutter: TdClutter[]; targetClutter: number | null;
   mapData: TdMap; unlockedTowers: TowerKind[]; newlyUnlocked: TowerKind[]; itemsUsed: Record<TdItem, number>; switches: Record<number, number>; creamLines: TdCreamLine[];
   tick: number; seed: string; level: number; map: number; coins: number;
   bread: number; breadTiers: number[]; wave: number; waveTargetTier: number;
@@ -99,3 +106,6 @@ export interface TdGame {
 export class TdReplayError extends Error {
   constructor(message: string) { super(message); this.name = "TdReplayError"; }
 }
+
+/** Stars are awarded only for a verified clear. */
+export const tdStars = (bread: number, passed: boolean): number => !passed || bread < 1 ? 0 : bread >= 8 ? 3 : bread >= 4 ? 2 : 1;

@@ -420,6 +420,7 @@ model GameRun {
   seed          String
   /// Weekly level attempts; NULL preserves pre-level and other-game runs.
   level         Int?
+  tdStars       Int?
   passedAt      DateTime? @db.Timestamptz(3)
   wechatId      String
   nickname      String
