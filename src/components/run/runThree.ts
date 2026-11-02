@@ -9,7 +9,8 @@ import { jumpLift } from "@/lib/run/geometry";
 import type { RunView } from "./runGL";
 
 const MM = 1 / 2125; // engine mm → metres
-const LANE = 2.6667, TILE = 6, AHEAD = 48, BEHIND = 10;
+const ROAD_SCALE = .78, LANE = 2.6667 * ROAD_SCALE, TILE = 6, AHEAD = 48, BEHIND = 10;
+const ROAD_HALF = 4 * ROAD_SCALE;
 const FOG = 0xf7dcc6;
 const BUILDINGS = ["bakery", "cafe", "flower_shop", "book_shop", "house_rose", "house_sage"] as const;
 const KIND_NODE: Record<string, string> = { cart: "cart", flour: "flour", awning: "awning", puddle: "puddle", bread: "bread", "paper-bag": "bag", coffee: "coffee", ramp: "ramp", van: "van", truck: "truck" };
@@ -53,7 +54,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   scene.add(new THREE.HemisphereLight(0xfff1df, 0xc9a98a, 1.25));
   const sun = new THREE.DirectionalLight(0xffdcb4, 2.1); sun.position.set(-6, 11, -4);
   sun.target.position.set(0, 0, 8); scene.add(sun.target);
-  sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); sun.shadow.bias = -0.0008; sun.shadow.normalBias = .03;
+  sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); sun.shadow.bias = -0.002; sun.shadow.normalBias = .06; sun.shadow.radius = 3;
   Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 22, bottom: -8, near: 1, far: 40 }); sun.shadow.camera.updateProjectionMatrix();
   scene.add(sun);
   const rim = new THREE.DirectionalLight(0xffb07a, .7); rim.position.set(3, 4, 18); scene.add(rim);
@@ -99,13 +100,14 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   const street: Slot[] = [];
   for (let i = 0; i < slots; i++) {
     const g = new THREE.Group();
-    const road = roadT.clone(); road.traverse(o => { o.receiveShadow = true; }); g.add(road);
-    for (const side of [-1, 1]) { const w = walkT.clone(); w.position.x = side * 5; w.traverse(o => { o.receiveShadow = true; }); g.add(w); }
+    // Tiles overlap by 1% along Z so no hairline gap ever shows between them.
+    const road = roadT.clone(); road.scale.set(ROAD_SCALE, 1, 1.01); road.traverse(o => { o.receiveShadow = true; }); g.add(road);
+    for (const side of [-1, 1]) { const w = walkT.clone(); w.position.x = side * (ROAD_HALF + 1); w.scale.z = 1.01; w.traverse(o => { o.receiveShadow = true; }); g.add(w); }
     const make = (side: number) => facades.map(f => {
-      const b = f.clone(); b.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; b.position.set(side * 8.2, .18, 0); b.visible = false; g.add(b); return b;
+      const b = f.clone(); b.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; b.position.set(side * (ROAD_HALF + 4.2), .18, 0); b.visible = false; g.add(b); return b;
     });
     const left = make(1), right = make(-1);
-    const deco = [tree, lamp].flatMap(d => [1, -1].map(side => { const o = d.clone(); o.position.set(side * 4.7, .18, 0); o.visible = false; g.add(o); return o; }));
+    const deco = [tree, lamp].flatMap(d => [1, -1].map(side => { const o = d.clone(); o.position.set(side * (ROAD_HALF + .7), .18, 0); o.visible = false; g.add(o); return o; }));
     scene.add(g); street.push({ g, left, right, deco, index: -1 });
   }
 
