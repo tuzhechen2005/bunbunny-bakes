@@ -1,14 +1,14 @@
 import { createRng } from "../../src/lib/game/rng";
 import {
-  createTdGame, TD_MAPS, TOWER_KINDS, towerStats, pathLength, pathPosition, distanceSquared,
-  MAX_LEVEL_TICKS, SUBUNITS, type TdInput, type TdLevel, type TowerKind, type TdBranch,
+  createTdGame, TOWER_KINDS, towerStats, pathLength, pathPosition, distanceSquared,
+  MAX_LEVEL_TICKS, SUBUNITS, type TdInput, type TdLevel, type TowerKind, type TdBranch, type TdOptions,
 } from "../../src/lib/td";
 
 /** Public geometry/stats only; no future waves, RNG state, or private engine injection. */
-function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind) {
-  const game = createTdGame({ level });
+function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind, itemsAllowed: TdOptions["itemsAllowed"] = {}) {
+  const game = createTdGame({ level, itemsAllowed });
   const rng = createRng(`${level.seed}:td-bot`);
-  const map = TD_MAPS[level.map];
+  const map = level.mapData;
   const inputs: TdInput[] = [];
   const coverage = (slot: number, kind: TowerKind, tier: number, branch?: TdBranch) => {
     const stats = towerStats(kind, tier, branch);
@@ -21,7 +21,7 @@ function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind) {
   };
   const strength = (slot: number, kind: TowerKind, tier: number, branch?: TdBranch) => {
     const stats = towerStats(kind, tier, branch);
-    return coverage(slot, kind, tier, branch) * (stats.damage * stats.strikes + stats.burn * 4 + stats.vulnerability * 2) * (kind === "whisk" ? (stats.splash > 100 ? 4 : 3) : kind === "oven" ? (stats.pierce ? 1.8 : 0.8) : 1) / Math.max(60 * Number(kind === "flourSifter"), stats.cooldown);
+    return coverage(slot, kind, tier, branch) * (stats.damage * stats.strikes + stats.burn * 4 + stats.vulnerability * 2 + (kind === "freezer" ? 150 : kind === "pipingBag" ? 120 : 0)) * (kind === "whisk" ? (stats.splash > 100 ? 4 : 3) : kind === "oven" ? (stats.pierce ? 1.8 : 0.8) : 1) / Math.max(60 * Number(kind === "flourSifter"), stats.cooldown);
   };
   const values = map.slots.map((_, slot) => Object.fromEntries(TOWER_KINDS.map(kind => [kind,
     [0, 1, 2].map(tier => strength(slot, kind, tier)),
@@ -35,12 +35,27 @@ function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind) {
   }
   while (!game.over) {
     let state = game.state();
+    if (mode === 'greedy') {
+      if (itemsAllowed.bomb && level.number >= 2 && !state.itemsUsed.bomb && state.pests.length >= 8) {
+        const target = [...state.pests].sort((a,b) =>
+          state.pests.filter(p => distanceSquared(p,b) < 180**2).length - state.pests.filter(p => distanceSquared(p,a) < 180**2).length)[0];
+        apply({tick:state.tick,type:'item',item:'bomb',x:target.x,y:target.y});
+      }
+      if (itemsAllowed.bell && level.number >= 6 && !state.itemsUsed.bell && state.pests.filter(p => p.carrying).length >= 3) apply({tick:state.tick,type:'item',item:'bell'});
+      if (itemsAllowed.slide && level.number >= 10 && !state.itemsUsed.slide && state.pests.some(p => p.distance > pathLength(map)*0.6)) apply({tick:state.tick,type:'item',item:'slide',position:Math.floor(pathLength(map)*0.7)});
+      for (const fork of map.features ?? []) if (fork.switchable && fork.branches) {
+        const scores = fork.branches.map(branch => branch.reduce((score,p) => score+state.towers.filter(t => distanceSquared(t,p) <= towerStats(t.kind,t.level,t.branch).range**2).length,0));
+        const best = scores[1] > scores[0] ? 1 : 0;
+        if (state.switches[fork.id] !== best) apply({tick:state.tick,type:'switch',fork:fork.id});
+      }
+      state = game.state();
+    }
     // Spend from a common 2 Hz observation cadence. Same-tick actions retain log order.
     for (let purchase = 0; purchase < 30; purchase++) {
       const candidates: { input: TdInput; cost: number; value: number }[] = [];
       for (let slot = 0; slot < map.slots.length; slot++) {
         const tower = state.towers.find(t => t.slot === slot);
-        if (!tower) for (const kind of TOWER_KINDS) {
+        if (!tower) for (const kind of level.unlockedTowers) {
           if (onlyKind && kind !== onlyKind) continue;
           let value = values[slot][kind][0];
           if (kind === "flourSifter") {
@@ -83,7 +98,7 @@ function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind) {
   return { inputs, state: game.state() };
 }
 
-export const greedyTd = (level: TdLevel) => run(level, "greedy");
+export const greedyTd = (level: TdLevel, itemsAllowed?: TdOptions["itemsAllowed"]) => run(level, "greedy", undefined, itemsAllowed);
 export const singleTowerTd = (level: TdLevel, kind: TowerKind) => run(level, "greedy", kind);
 export const randomTd = (level: TdLevel) => run(level, "random");
 

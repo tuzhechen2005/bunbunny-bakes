@@ -141,24 +141,16 @@ TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_m3_leve
 Only `_test` databases are allowed for DB checks. M3 Playwright specs cover next level, retry,
 autosave/resume, target HUD and v2 rejection; they were updated without launching browsers.
 
-## 保卫大面包 landscape defense (D6)
+## 保卫大面包 progression and maps (D9)
 
-TD engine/replay **v4** uses a **1440 × 810** field, three winding left-entry routes,
-and **11 useful slots per map** (radius 42). Endpoints leave the entire plate inside
-the board. Docker Blender backgrounds contain neither slot pads nor a baked plate;
-the atlas manifest retains its version-3 format. Server replay accepts **1×/2×/3×**
-wall-clock pacing. Old v1–v3 unfinished runs and saves are rejected.
+TD engine/replay **v9** uses per-level data maps in a **1440 × 810** field.
+L1–L10 have authored lesson layouts; L11+ derives varied routes and increasing
+path features from `(weekKey, level)`. Slots grow from 3 to 11. Seven towers unlock
+at L1/3/5/8/11/14/18; bomb, bell and slide unlock at L2/6/10 with server-authorized,
+once-per-type use. Fork switches and items are deterministic replay inputs.
+Old v1–v8 unfinished runs and saves are rejected. The renderer should consume
+`mapData` rather than baked backgrounds or the legacy map index.
 
-Flour sifters slow by **40%** at base and deal **6/10/16 DPS** by tier. Branch a
-slows by 65% with a one-second lingering coating; branch b expands the aura to 310.
-Later waves contain more pests, introduce flyers/armor at L3, and pay lower bounties.
-Over 100 fixed weeks, greedy L1/L3/L10/L20 passes are **100% / 71% / 30% / 6%**;
-random passes after L2 are **0%** at those checkpoints. See the
-[engine rules and independent validation](src/lib/td/README.md) and
-[art pipeline and preview](assets-src/td/README.md).
-
-Checks: `npx tsc --noEmit`, `npm run lint`,
-`npx vitest run --configLoader runner --project unit --maxWorkers=2`, and
-`TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_d6_1649_test npx vitest run --configLoader runner --project db`.
-Only `*_test` databases are used. This backend task does not launch browsers or edit
-`src/components/**` / `src/app/game/**`.
+See [engine contracts, E1 integration and L1–L10 ASCII maps](src/lib/td/README.md).
+This task changes no `src/components/**` or `src/app/game/**`, launches no browsers,
+and makes no commit. DB checks use only an isolated `*_test` database.

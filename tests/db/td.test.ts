@@ -4,7 +4,7 @@ import { POST as startPOST } from '@/app/api/game/td/start/route';
 import { POST as finishPOST } from '@/app/api/game/td/finish/route';
 import { POST as progressPOST } from '@/app/api/game/td/progress/route';
 import { GET as boardGET } from '@/app/api/game/td/leaderboard/route';
-import { startTdRun, finishTdRun, getTdLeaderboard, TD_MAX_FINISH_BODY_BYTES } from '@/server/td';
+import { startTdRun, finishTdRun, getTdLeaderboard, verifyTdRun, TD_MAX_FINISH_BODY_BYTES } from '@/server/td';
 import { progressRun } from '@/server/gameProgress';
 import { getBoard, gameOfRequest } from '@/server/gameAdmin';
 import { getGameHub } from '@/server/gameHub';
@@ -27,6 +27,7 @@ it('migrates TD without changing BIG defaults; deals common levels, gates case-i
   const legacy = await db.gameRun.create({data:{seed:'old',wechatId:'old',nickname:'old',tiersSnapshot:[]}});
   expect(legacy.game).toBe('BIG');
   const a = await start(' alice '), b = await start('bob');
+  expect(a.unlockedTowers).toEqual(['rollingPin']); expect(a.newlyUnlocked).toEqual(['rollingPin']); expect(a.mapData.slots).toHaveLength(3);
   expect(a.seed).toBe(b.seed); expect(a.seed).toBe(tdLevel(WEEK,1).seed);
   await expect(start('ALICE',2)).rejects.toMatchObject({message:copy.gameApi.levelLocked});
   expect(await finish(a)).toMatchObject({passed:true,level:1,best:1,rank:1,personalBest:1});
@@ -97,7 +98,7 @@ it('routes expose masked boards, enforce body limits/versions/expiry and allow d
   const board = await (await boardGET(getRequest('/api/game/td/leaderboard?wechatId=WX_ROUTE'))).json();
   expect(board).toMatchObject({nextLevel:2,myBest:1,top:[{score:1,wechatMasked:'wx***te'}]});
   expect((await finishPOST(jsonRequest('/api/game/td/finish',{padding:'x'.repeat(TD_MAX_FINISH_BODY_BYTES)}))).status).toBe(422);
-  const bad = await start('old');await db.gameRun.update({where:{id:bad.runId},data:{seed:'v7.td.2026-10-19.1'}});
+  const bad = await start('old');await db.gameRun.update({where:{id:bad.runId},data:{seed:'v8.td.2026-10-19.1'}});
   await expect(finish(bad)).rejects.toMatchObject({message:copy.gameApi.runExpired});
   await expect(progressRun(db,'TD',{runId:bad.runId,log:[],endTick:60},LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
   const expired = await start('expired');await expect(finish(expired,new Date('2026-10-26T05:00:00Z'))).rejects.toMatchObject({message:copy.gameApi.runExpired});
@@ -148,4 +149,15 @@ it('replays a long build phase through progress and finish without consuming the
   expect(await finishTdRun(db, { runId: r.runId, inputs, endTick }, 'ip', now)).toMatchObject({ passed: true });
   const forged = await start('forged_builder');
   await expect(finishTdRun(db, { runId: forged.runId, inputs, endTick }, 'ip', T)).rejects.toMatchObject({ code: 'VALIDATION' });
+});
+
+it('replays consumables only with trusted inventory and returns exact accounting', async () => {
+  const attempt = await start('inventory');
+  const run = await db.gameRun.update({where:{id:attempt.runId},data:{level:10,seed:tdLevel(WEEK,10).seed}});
+  const inputs: TdInput[] = [{tick:0,type:'item',item:'bell'},{tick:0,type:'callWave',slot:-1}];
+  const data={runId:run.id,inputs,endTick:1};
+  expect(()=>verifyTdRun(run,data,LATER)).toThrow();
+  expect(verifyTdRun(run,data,LATER,false,{bell:1}).itemsUsed).toEqual({bomb:0,bell:1,slide:0});
+  expect(()=>verifyTdRun(run,{...data,inputs:[inputs[0],...inputs]},LATER,false,{bell:10})).toThrow();
+  expect((await db.gameRun.findUniqueOrThrow({where:{id:run.id}})).finishedAt).toBeNull();
 });

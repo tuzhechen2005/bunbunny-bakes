@@ -8,7 +8,7 @@ it('allows unlimited building, starts once without a bonus, and replays the dela
   expect(game.step(delay)).toEqual([]);
   expect(game.state()).toMatchObject({ tick: delay, awaitingStart: true, startedTick: null, nextWaveTick: null, wave: 0, over: false, pests: [] });
   const inputs: TdInput[] = [
-    { tick: delay, type: 'place', slot: 0, tower: 'oven' },
+    { tick: delay, type: 'place', slot: 0, tower: 'rollingPin' },
     { tick: delay, type: 'callWave', slot: -1 },
     { tick: delay, type: 'callWave', slot: -1 },
   ];

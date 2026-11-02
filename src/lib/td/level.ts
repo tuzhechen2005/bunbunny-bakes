@@ -1,3 +1,5 @@
+import { levelMap } from "./maps";
+import { TOWER_KINDS } from "./balance";
 import { createRng } from "../game/rng";
 import { PESTS } from "./balance";
 import { TD_ENGINE_VERSION, WAVE_COUNT, type PestKind, type TdLevel, type TdWave } from "./types";
@@ -91,8 +93,14 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
     return result;
   });
   // New control/support mechanics replace the old large late opening subsidy.
-  const startCoins = n <= 5 ? 340 : 240 + Math.min(10, Math.max(0, n - 10)) * 58;
-  return { seed, weekKey, number: n, map: Math.floor((n - 1) / 4) % 3, startCoins, waves };
+  const startCoins = n <= 5 ? 340 : n <= 10 ? 340 - (n-5)*26 : 210 + Math.min(10,n-10)*51;
+  if (n === 1) for (const wave of waves) {
+    wave.interval = 100;
+    for (const pest of wave.pests) { pest.hp = pest.boss ? 90 : 16; pest.armor = 0; pest.speed = 24; }
+  }
+  const unlockLevels = [1, 3, 5, 8, 11, 14, 18];
+  return { mapData: levelMap(seed, n), unlockedTowers: TOWER_KINDS.filter((_,i) => n >= unlockLevels[i]),
+    newlyUnlocked: TOWER_KINDS.filter((_,i) => n === unlockLevels[i]), seed, weekKey, number: n, map: Math.floor((n - 1) / 4) % 3, startCoins, waves };
 }
 
 export function tdLevelFromSeed(seed: string): TdLevel {

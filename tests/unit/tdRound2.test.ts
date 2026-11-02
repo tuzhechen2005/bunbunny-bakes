@@ -10,12 +10,12 @@ it('requires the branch exactly at tier two and rejects extra transport fields',
   expect(game.apply({ tick: 0, type: 'upgrade', slot: 0 })).toBe(false);
   expect(game.apply({ tick: 0, type: 'upgrade', slot: 0, branch: 'b' })).toBe(true);
   expect(game.state().towers[0]).toMatchObject({ tier: 2, level: 2, branch: 'b', target: null, lastAttackTick: null, cooldownProgress: 100 });
-  for (const input of [ { tick: 0, type: 'upgrade', slot: 0, branch: 'c' }, { tick: 0, type: 'sell', slot: 0, branch: 'a' }, { tick: 0, type: 'place', slot: 11, tower: 'oven' } ]) expect(validTdInput(input)).toBe(false);
+  for (const input of [ { tick: 0, type: 'upgrade', slot: 0, branch: 'c' }, { tick: 0, type: 'sell', slot: 0, branch: 'a' }, { tick: 0, type: 'place', slot: 11, tower: 'rollingPin' } ]) expect(validTdInput(input)).toBe(false);
 });
 
 it('previews exact next-wave counts and puts exactly one boss in wave five', () => {
   const level = tdLevel('2026-10-26', 1), game = createTdGame({ level });
-  game.apply({ tick: 0, type: 'place', slot: 0, tower: 'oven' });
+  game.apply({ tick: 0, type: 'place', slot: 0, tower: 'rollingPin' });
   game.apply({ tick: 0, type: 'place', slot: 1, tower: 'whisk' });
   for (let wave = 0; wave < 5; wave++) {
     const preview = game.state().nextWave!;
@@ -26,7 +26,7 @@ it('previews exact next-wave counts and puts exactly one boss in wave five', () 
     const events = game.step(game.state().tick + 1 + (level.waves[wave].pests.length - 1) * level.waves[wave].interval);
     if (wave === 4) {
       expect(events.filter(e => e.type === 'bossSpawn')).toHaveLength(1);
-      expect(game.state().pests.find(p => p.boss)).toMatchObject({ kind: 'mouse', armor: 4, speed: 16, carrying: 0 });
+      expect(game.state().pests.find(p => p.boss)).toMatchObject({ kind: 'mouse', armor: 0, speed: 24, carrying: 0 });
     }
   }
   expect(game.state().nextWave).toBeNull();
@@ -48,12 +48,12 @@ it('conserves bread through pickup, death, rollback and recovery, with detached 
     }
     if (!armed && state.pests.some(p => p.carrying)) {
       expect(state.over).toBe(false); expect(state.bread).toBe(START_BREAD);
-      for (const slot of [9, 5]) game.apply({ tick, type: 'place', slot, tower: 'oven' });
+      for (const slot of [0, 1, 2]) game.apply({ tick, type: 'place', slot, tower: 'rollingPin' });
       armed = true;
     }
     // After proving recovery, remove the guards to exercise actual loss too.
     if (armed && !disarmed && events.some(e => e.type === 'recover')) {
-      for (const slot of [9, 5]) game.apply({ tick, type: 'sell', slot });
+      for (const slot of [0, 1, 2]) game.apply({ tick, type: 'sell', slot });
       disarmed = true;
     }
     for (const p of state.pests) p.carriedTiers.push(999);
