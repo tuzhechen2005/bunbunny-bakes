@@ -3,6 +3,7 @@
 // screen-left is +X. Engine units: mm, bunny 3400 mm = 1.6 m, so 1 m = 2125 mm.
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { RunState, RunObject } from "@/lib/run";
 import { jumpLift } from "@/lib/run/geometry";
@@ -12,11 +13,27 @@ const MM = 1 / 2125; // engine mm → metres
 const ROAD_SCALE = .78, LANE = 2.6667 * ROAD_SCALE, TILE = 6, AHEAD = 48, BEHIND = 10;
 const ROAD_HALF = 4 * ROAD_SCALE;
 const FOG = 0xf7dcc6;
-const BUILDINGS = ["bakery", "cafe", "flower_shop", "book_shop", "house_rose", "house_sage"] as const;
 const KIND_NODE: Record<string, string> = { cart: "cart", flour: "flour", awning: "awning", puddle: "puddle", bread: "bread", "paper-bag": "bag", coffee: "coffee", ramp: "ramp", van: "van", truck: "truck" };
 const hash = (i: number) => { const x = Math.sin(i * 127.1 + 31.7) * 43758.5453; return x - Math.floor(x); };
 const laneX = (lane: number) => (1 - lane) * LANE;
 const ease = (t: number) => t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+
+/** Meshopt/quantized glTF stores positions as normalized ints; transforms must run on floats. */
+function floatGeometry(src: THREE.BufferGeometry): THREE.BufferGeometry {
+  const g = new THREE.BufferGeometry();
+  for (const name of ["position", "normal", "color"]) {
+    const a = src.getAttribute(name) as THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined;
+    if (!a) continue;
+    const n = a.count, size = name === "color" ? Math.min(a.itemSize, 4) : 3, out = new Float32Array(n * size);
+    for (let i = 0; i < n; i++) {
+      out[i * size] = a.getX(i); out[i * size + 1] = a.getY(i); out[i * size + 2] = a.getZ(i);
+      if (size === 4) out[i * size + 3] = a.getW(i);
+    }
+    g.setAttribute(name, new THREE.BufferAttribute(out, size));
+  }
+  if (src.index) g.setIndex(Array.from(src.index.array as ArrayLike<number>));
+  return g;
+}
 
 /** Bake a library root into one mesh per material: a building drops from ~20 draw calls to ~4. */
 function bake(root: THREE.Object3D): THREE.Group {
@@ -27,8 +44,7 @@ function bake(root: THREE.Object3D): THREE.Group {
     if (!m.isMesh || (m as THREE.SkinnedMesh).isSkinnedMesh) return;
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     if (mats.length !== 1) return;
-    const g = m.geometry.clone().applyMatrix4(m.matrixWorld);
-    for (const k of Object.keys(g.attributes)) if (!["position", "normal", "color"].includes(k)) g.deleteAttribute(k);
+    const g = floatGeometry(m.geometry).applyMatrix4(m.matrixWorld);
     const list = byMat.get(mats[0]) ?? []; list.push(g); byMat.set(mats[0], list);
   });
   const group = new THREE.Group();
@@ -79,6 +95,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   sky.position.set(0, 30, AHEAD + 40); sky.rotation.y = Math.PI; scene.add(sky);
 
   const loader = new GLTFLoader();
+  loader.setMeshoptDecoder(MeshoptDecoder); // R16 assets are meshopt-compressed
   const [bunnyG, propsG, townG] = await Promise.all(["bunny", "props", "town"].map(n => loader.loadAsync(`/brand/run3d/${n}.glb`)));
   const lib = (g: typeof propsG, name: string) => g.scene.getObjectByName(name)!;
 
@@ -94,9 +111,14 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
   // ---- street: road, sidewalks, facades, trees/lamps, pooled by tile slot ------------
   const slots = Math.ceil((AHEAD + BEHIND) / TILE) + 1;
   const roadT = bake(lib(townG, "road")), walkT = bake(lib(townG, "sidewalk"));
+  // Every library root except the street tiles is a facade variant (10 since R16).
+  const BUILDINGS = townG.scene.children.map(c => c.name).filter(n => n && n !== "sidewalk" && n !== "road");
   const facades = BUILDINGS.map(n => bake(lib(townG, n)));
   const tree = bake(lib(propsG, "tree")), lamp = bake(lib(propsG, "lamp"));
-  interface Slot { g: THREE.Group; left: THREE.Group[]; right: THREE.Group[]; deco: THREE.Group[]; index: number }
+  const extras = ["planter", "bicycle", "crate_stack", "menu_board", "bench"].map(n => propsG.scene.getObjectByName(n)).filter((o): o is THREE.Object3D => !!o).map(bake);
+  const buntingSrc = propsG.scene.getObjectByName("bunting");
+  const bunting = buntingSrc ? bake(buntingSrc) : null;
+  interface Slot { g: THREE.Group; left: THREE.Group[]; right: THREE.Group[]; deco: THREE.Group[]; extra: THREE.Group[]; flag: THREE.Group | null; index: number }
   const street: Slot[] = [];
   for (let i = 0; i < slots; i++) {
     const g = new THREE.Group();
@@ -108,7 +130,11 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
     });
     const left = make(1), right = make(-1);
     const deco = [tree, lamp].flatMap(d => [1, -1].map(side => { const o = d.clone(); o.position.set(side * (ROAD_HALF + .7), .18, 0); o.visible = false; g.add(o); return o; }));
-    scene.add(g); street.push({ g, left, right, deco, index: -1 });
+    // Small shop-front props sit between the trees and the facades, two candidates per side.
+    const extra = extras.flatMap(e => [1, -1].map(side => { const o = e.clone(); o.position.set(side * (ROAD_HALF + 1.55), .18, 1.5); o.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2; o.visible = false; g.add(o); return o; }));
+    let flag: THREE.Group | null = null;
+    if (bunting) { flag = bunting.clone(); flag.position.set(0, 5.2, 0); flag.scale.x = (ROAD_HALF + 2.2) / 4; flag.visible = false; g.add(flag); }
+    scene.add(g); street.push({ g, left, right, deco, extra, flag, index: -1 });
   }
 
   // ---- bunny -----------------------------------------------------------------------
@@ -198,6 +224,9 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
         // Deco: [tree L, tree R, lamp L, lamp R] — alternate per tile so both pavements always feel lived-in.
         const even = idx % 2 === 0;
         sl.deco.forEach((o, k) => { o.visible = k < 2 ? (k === 0 ? even : !even) : (k === 2 ? !even : even); });
+        const pickL = Math.floor(hash(idx * 3.7) * (sl.extra.length / 2 + 2)), pickR = Math.floor(hash(idx * 5.1) * (sl.extra.length / 2 + 2));
+        sl.extra.forEach((o, k) => { o.visible = k % 2 === 0 ? k / 2 === pickL : (k - 1) / 2 === pickR; });
+        if (sl.flag) sl.flag.visible = idx % 4 === 0;
       }
     }
 
