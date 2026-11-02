@@ -1,4 +1,4 @@
-export const TD_ENGINE_VERSION = 8;
+export const TD_ENGINE_VERSION = 9;
 export const TICKS_PER_SECOND = 60;
 export const FIELD_WIDTH = 1440;
 export const FIELD_HEIGHT = 810;
@@ -16,24 +16,37 @@ export const TD_SLOT_RADIUS = 42;
 export type TdBranch = "a" | "b";
 
 export interface TdPoint { x: number; y: number }
-export interface TdMap { name: string; path: readonly Readonly<TdPoint>[]; slots: readonly Readonly<TdPoint>[] }
+export type TdItem = "bomb" | "bell" | "slide";
+export interface TdFeature {
+  id: number; type: "portal" | "strip" | "jam" | "fork" | "tunnel";
+  start: number; end: number; geometry: readonly TdPoint[]; geometries?: readonly (readonly TdPoint[])[];
+  branches?: readonly (readonly TdPoint[])[]; switchable?: boolean;
+}
+export interface TdCreamLine { forkChoices: Record<number, number>; id: number; start: number; end: number; until: number; back: number; geometry: TdPoint[]; geometries: TdPoint[][] }
+export interface TdMap { features?: readonly TdFeature[]; name: string; path: readonly Readonly<TdPoint>[]; slots: readonly Readonly<TdPoint>[] }
 export type PestKind = "ant" | "mouse" | "sparrow" | "beetle";
-export type TowerKind = "rollingPin" | "flourSifter" | "whisk" | "oven";
+export type TowerKind = "rollingPin" | "flourSifter" | "whisk" | "oven" | "freezer" | "pipingBag" | "caramelTorch";
 export interface TdPestSpec { kind: PestKind; hp: number; speed: number; bounty: number; armor: number; boss?: boolean }
 export interface TdWave { pests: TdPestSpec[]; interval: number }
-export interface TdLevel { seed: string; weekKey: string; number: number; map: number; startCoins: number; waves: TdWave[] }
+export interface TdLevel { mapData: TdMap; unlockedTowers: TowerKind[]; newlyUnlocked: TowerKind[]; seed: string; weekKey: string; number: number; map: number; startCoins: number; waves: TdWave[] }
 export type TdOptions = ({ seed: string; level?: never } | { level: TdLevel; seed?: never }) & {
   /** Owner's tiers ordered cheapest first. Only their count/indices enter simulation. */
   tierCount?: number;
+  itemsAllowed?: Partial<Record<TdItem, number>>;
 };
 export type TdInput =
+  | { tick: number; type: "switch"; fork: number }
+  | { tick: number; type: "item"; item: "bomb"; x: number; y: number }
+  | { tick: number; type: "item"; item: "bell" }
+  | { tick: number; type: "item"; item: "slide"; position: number }
   | { tick: number; type: "place"; slot: number; tower: TowerKind }
   | { tick: number; type: "upgrade"; slot: number; branch?: TdBranch }
   | { tick: number; type: "sell"; slot: number }
   | { tick: number; type: "callWave"; slot: -1 };
 export interface TdPest extends TdPestSpec, TdPoint {
+  inTunnel: boolean; onStrip: boolean; onJam: boolean; forkChoices: Record<number, number>; slipped: number[]; slowUntil: number; slowStrength: number;
   id: number; wave: number; distance: number; maxHp: number; slowed: boolean; heading: number; carrying: number; carriedTiers: number[]; returning: boolean;
-  stunnedUntil: number; floured: boolean; burning: boolean; vulnerability: number;
+  frozenUntil: number; stunnedUntil: number; floured: boolean; burning: boolean; vulnerability: number;
   burnUntil: number; burnTick: number; burnDamage: number; burnTower: number;
 }
 export interface TdTower extends TdPoint {
@@ -46,7 +59,7 @@ export interface TdProjectile extends TdPoint {
   bornTick: number; hitTick: number; damage: number; splash: number; strikes: number; knockback: number; burn: number; pierce: number;
 }
 export interface TdBatterPuddle extends TdPoint { radius: number; until: number }
-export interface TdDroppedBread extends TdPoint { id: number; distance: number; tier: number }
+export interface TdDroppedBread extends TdPoint { forkChoices: Record<number, number>; id: number; distance: number; tier: number }
 export interface TdWavePreview { index: number; counts: Record<PestKind | "boss", number> }
 export type TdEvent =
   | { [K in "pickup" | "drop" | "lose"]: { type: K; tick: number; pest: number; tiers: number[]; x: number; y: number } }["pickup" | "drop" | "lose"]
@@ -63,6 +76,7 @@ export type TdEvent =
   | { type: "steal"; tick: number; pest: number; tier: number }
   | { type: "over"; tick: number; passed: boolean; reason: "cleared" | "bread" | "timeout" };
 export interface TdState {
+  mapData: TdMap; unlockedTowers: TowerKind[]; newlyUnlocked: TowerKind[]; itemsUsed: Record<TdItem, number>; switches: Record<number, number>; creamLines: TdCreamLine[];
   tick: number; seed: string; level: number; map: number; coins: number;
   bread: number; breadTiers: number[]; wave: number; waveTargetTier: number;
   awaitingStart: boolean; startedTick: number | null;

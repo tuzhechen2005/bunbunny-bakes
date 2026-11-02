@@ -2,10 +2,10 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import type { TdLevel, TdPestSpec, TowerKind, TdBranch } from '@/lib/td/types';
 const fixture = vi.hoisted(() => ({ level: null as TdLevel | null }));
 vi.mock('@/lib/td/level', async original => ({ ...await original<object>(), tdLevelFromSeed: () => fixture.level }));
-import { createTdGame, pathLength, TD_MAPS, type TdEvent } from '@/lib/td';
+import { createTdGame, pathLength, TD_MAPS, TOWER_KINDS, type TdEvent } from '@/lib/td';
 
 beforeEach(() => {
-  fixture.level = { seed: 'combat-fixture', weekKey: '2026-10-26', number: 1, map: 0, startCoins: 10000,
+  fixture.level = { mapData: TD_MAPS[0], unlockedTowers: [...TOWER_KINDS], newlyUnlocked: [], seed: 'combat-fixture', weekKey: '2026-10-26', number: 1, map: 0, startCoins: 10000,
     waves: Array.from({ length: 5 }, () => ({ interval: 20, pests: [{ kind: 'mouse', hp: 10000, armor: 0, speed: 32, bounty: 10 }] })) };
 });
 function setup(kind: TowerKind, branch: TdBranch) {
@@ -99,5 +99,5 @@ it.each([0, 1, 2])('sifter tier %i grounds birds and does not deal chip damage',
   game.step(400);
   for (const pest of game.state().pests.slice(0, 2)) expect(pest).toMatchObject({ hp: 10000, floured: true, slowed: true, vulnerability: 25 });
   game.apply({ tick: 400, type: 'sell', slot: 0 }); game.step(401);
-  expect(game.state().pests.every(p => !p.floured && !p.slowed && p.vulnerability === 0)).toBe(true);
+  expect(game.state().pests.every(p => !p.floured && p.slowed && p.vulnerability === 0)).toBe(true);
 });

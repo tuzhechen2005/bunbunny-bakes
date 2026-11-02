@@ -16,7 +16,9 @@ export function replayTd(opts: TdOptions, inputs: readonly TdInput[], toTick?: n
   }
   const game = createTdGame(opts);
   for (const input of inputs) {
-    game.apply(input);
+    const accepted = game.apply(input);
+    // Inventory accounting consumes this verified log; rejected item attempts cannot be charged.
+    if (!accepted && input.type === "item") throw new TdReplayError("invalid item use");
     if (game.over) throw new TdReplayError("input at or after game over");
     if (game.inputsRejected > MAX_IGNORED_INPUTS) throw new TdReplayError("too many ignored inputs");
   }

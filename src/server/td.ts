@@ -6,7 +6,7 @@ import type { GameRun } from "@/generated/prisma/client";
 import { z } from "zod";
 import { copy } from "@/copy";
 import type { Prisma } from "@/generated/prisma/client";
-import { MAX_INPUTS, replayTd, TD_ENGINE_VERSION, tdLevel, tdSeedVersion, validTdInput, validTdTick, type TdInput } from "@/lib/td";
+import { MAX_INPUTS, replayTd, TD_ENGINE_VERSION, tdLevel, tdSeedVersion, validTdInput, validTdTick, type TdInput, type TdLevel, type TdOptions } from "@/lib/td";
 import { isTdSuspicious, tdTierCount } from "./tdRules";
 import { isDeepStrictEqual } from "node:util";
 import type { DbClient } from "./db";
@@ -30,7 +30,7 @@ import { runExpiresAt, weekKeyOf } from "./gameWeek";
 
 export const TD_MAX_FINISH_BODY_BYTES = MAX_INPUTS * 100 + 4096;
 export const tdStartSchema = startSchema.extend({ level: z.number().int().min(1).max(2_147_483_646).optional() });
-export type TdStartResult = StartResult & { level: number; weekKey: string };
+export type TdStartResult = StartResult & Pick<TdLevel, "mapData" | "unlockedTowers" | "newlyUnlocked"> & { level: number; weekKey: string };
 export type TdFinishResult = FinishResult & { level: number; passed: boolean };
 export const tdFinishSchema = z.object({
   runId: z.uuid(),
@@ -77,7 +77,7 @@ export async function startTdRun(db: DbClient, input: unknown, ipHash: string, n
       ipHash,
     },
   });
-  return { runId: run.id, seed, level, weekKey, tiers, expiresAt: runExpiresAt(now).toISOString() };
+  return { mapData: definition.mapData, unlockedTowers: definition.unlockedTowers, newlyUnlocked: definition.newlyUnlocked, runId: run.id, seed, level, weekKey, tiers, expiresAt: runExpiresAt(now).toISOString() };
 }
 
 export async function finishTdRun(db: DbClient, input: unknown, ipHash: string, now: Date): Promise<TdFinishResult> {
@@ -129,14 +129,14 @@ export async function getTdLeaderboard(db: DbClient, now: Date, myWechatId?: str
 }
 
 /** Server derives the entire level; client scores, waves and win flags are ignored. */
-export function verifyTdRun(run: GameRun, data: z.output<typeof tdFinishSchema>, now: Date, complete = false) {
+export function verifyTdRun(run: GameRun, data: z.output<typeof tdFinishSchema>, now: Date, complete = false, itemsAllowed: TdOptions["itemsAllowed"] = {}) {
   const badRun = () => new AppError("VALIDATION", { message: copy.gameApi.badRun });
   let outcome;
   try {
     if (!run.level) throw badRun();
     const level = tdLevel(weekKeyOf(run.startedAt), run.level);
     if (run.seed !== level.seed) throw badRun();
-    outcome = replayTd({ level, tierCount: tdTierCount(run.tiersSnapshot) }, data.inputs, data.endTick);
+    outcome = replayTd({ level, itemsAllowed, tierCount: tdTierCount(run.tiersSnapshot) }, data.inputs, data.endTick);
     if (outcome.tick !== data.endTick || (complete && !outcome.over)) throw badRun();
   } catch { throw badRun(); }
   // 3x is the fastest supported presentation speed. Pauses consume no simulation time.
@@ -144,5 +144,5 @@ export function verifyTdRun(run: GameRun, data: z.output<typeof tdFinishSchema>,
   if (playMs / 3 > now.getTime() - run.startedAt.getTime() + PLAUSIBILITY_SLACK_MS
     || (run.playMs !== null && playMs < run.playMs)
     || (Array.isArray(run.drops) && !run.drops.every((v, i) => isDeepStrictEqual(v, data.inputs[i])))) throw badRun();
-  return { score: outcome.wave, playMs, suspicious: isTdSuspicious(data.inputs), passed: outcome.passed };
+  return { itemsUsed: outcome.itemsUsed, score: outcome.wave, playMs, suspicious: isTdSuspicious(data.inputs), passed: outcome.passed };
 }

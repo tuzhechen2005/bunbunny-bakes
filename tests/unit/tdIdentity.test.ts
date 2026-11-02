@@ -1,3 +1,5 @@
+import { TD_MAPS } from "@/lib/td/maps";
+import { TOWER_KINDS } from "@/lib/td/balance";
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createTdGame } from '@/lib/td/engine';
 import { tdLevelFromSeed } from '@/lib/td/level';
@@ -10,7 +12,7 @@ vi.mock('@/lib/td/maps', async importOriginal => ({
 }));
 let fixture: TdLevel;
 beforeEach(() => {
-  fixture = { seed: 'fixture', weekKey: '2026-10-26', number: 1, map: 0, startCoins: 10000,
+  fixture = { mapData: TD_MAPS[0], unlockedTowers: [...TOWER_KINDS], newlyUnlocked: [], seed: 'fixture', weekKey: '2026-10-26', number: 1, map: 0, startCoins: 10000,
     waves: Array.from({ length: 5 }, () => ({ interval: 1, pests: Array.from({ length: 3 }, () => ({ kind: 'mouse', hp: 10000, speed: 16, bounty: 1, armor: 0 })) })) };
   vi.mocked(tdLevelFromSeed).mockImplementation(() => structuredClone(fixture));
 });
@@ -108,7 +110,7 @@ it('knockback refreshes flour membership before later hits and snapshots', () =>
   let hit = false;
   for (let tick = 1; tick <= 300; tick++) {
     hit ||= g.step(tick).some(e => e.type === 'hit');
-    for (const p of g.state().pests) expect(p.floured).toBe((p.x - 100) ** 2 + (p.y - 5) ** 2 <= 170 ** 2);
+    for (const p of g.state().pests) expect(p.floured).toBe((p.x - 100) ** 2 + (p.y - 5) ** 2 <= 238 ** 2);
   }
   expect(hit).toBe(true);
 });

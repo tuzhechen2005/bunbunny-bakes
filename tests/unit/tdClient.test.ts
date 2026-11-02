@@ -16,9 +16,9 @@ it('settles old speed, excludes paused/hidden time, caps time and resumes exact 
 });
 it('restores only canonical unexpired replayable saves, including completed retry evidence', () => {
   const now=Date.parse('2026-10-20T12:00:00Z');
-  expect(TD_SAVE_KEY).toBe('bb_td_save_v8');
+  expect(TD_SAVE_KEY).toBe('bb_td_save_v9');
   expect(parseTdSave(JSON.stringify(save),now)).toEqual(save);
-  for (const patch of [{score:999},{endTick:-1},{seed:'v1.td.2026-10-19.1'},{seed:'v5.td.2026-10-19.1'},{seed:'v6.td.2026-10-19.1'},{seed:'v7.td.2026-10-19.1'},{level:2},{tiers:[]},{inputs:[{tick:500,type:'sell',slot:0}]}]) expect(parseTdSave(JSON.stringify({...save,...patch}),now)).toBeNull();
+  for (const patch of [{score:999},{endTick:-1},{seed:'v1.td.2026-10-19.1'},{seed:'v5.td.2026-10-19.1'},{seed:'v6.td.2026-10-19.1'},{seed:'v7.td.2026-10-19.1'},{seed:'v8.td.2026-10-19.1'},{level:2},{tiers:[]},{inputs:[{tick:500,type:'sell',slot:0}]}]) expect(parseTdSave(JSON.stringify({...save,...patch}),now)).toBeNull();
   expect(parseTdSave(JSON.stringify(save),Date.parse(save.expiresAt))).toBeNull();
   const inputs: TdInput[] = [{tick:0,type:'callWave',slot:-1}];
   const terminal=replayTd({seed,tierCount:1},inputs);
@@ -52,11 +52,10 @@ it('caps rejected client attempts at 100 while valid actions stay replayable, in
   for (const input of inputs) game.apply(input);
   applyTdClientInput(game, inputs, invalid);
   expect(game.inputsRejected).toBe(100);
-  expect(applyTdClientInput(game, inputs, {tick: 0, type: 'place', slot: 0, tower: 'oven'})).toBe(true);
+  expect(applyTdClientInput(game, inputs, {tick: 0, type: 'place', slot: 0, tower: 'rollingPin'})).toBe(true);
   expect(applyTdClientInput(game, inputs, {tick: 0, type: 'upgrade', slot: 0})).toBe(true);
   for (const input of [
     {tick: 0, type: 'place', slot: 0, tower: 'rollingPin'},
-    {tick: 0, type: 'upgrade', slot: 0},
     {tick: 0, type: 'upgrade', slot: 1},
   ] as TdInput[]) expect(applyTdClientInput(game, inputs, input)).toBe(false);
   expect(applyTdClientInput(game, inputs, {tick: 0, type: 'sell', slot: 0})).toBe(true);
