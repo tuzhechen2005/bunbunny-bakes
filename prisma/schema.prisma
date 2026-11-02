@@ -132,17 +132,20 @@ model Product {
 }
 
 model ProductFlavor {
-  id         String   @id @default(uuid()) @db.Uuid
-  productId  String   @db.Uuid
-  name       String
-  priceCents Int
-  active     Boolean  @default(true)
-  sort       Int      @default(0)
-  createdAt  DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  id               String   @id @default(uuid()) @db.Uuid
+  productId        String   @db.Uuid
+  name             String
+  priceCents       Int
+  dailyLimit       Int?
+  bundlePriceCents Int?
+  active           Boolean  @default(true)
+  sort             Int      @default(0)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  items   OrderItem[]
+  product    Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  items      OrderItem[]
+  dateLimits OpenDateFlavorLimit[]
 
   @@unique([id, productId])
   @@index([productId, sort])
@@ -173,6 +176,7 @@ model OpenDate {
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
+  flavorLimits  OpenDateFlavorLimit[]
   productLimits OpenDateProductLimit[]
   orders        Order[]
 }
@@ -186,6 +190,17 @@ model OpenDateProductLimit {
   product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@id([date, productId])
+}
+
+model OpenDateFlavorLimit {
+  date     DateTime @db.Date
+  flavorId String   @db.Uuid
+  limit    Int
+
+  openDate OpenDate      @relation(fields: [date], references: [date], onDelete: Cascade)
+  flavor   ProductFlavor @relation(fields: [flavorId], references: [id], onDelete: Cascade)
+
+  @@id([date, flavorId])
 }
 
 model Order {

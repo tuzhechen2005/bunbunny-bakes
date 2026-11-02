@@ -10,7 +10,7 @@
 // work per date is bounded no matter what the request contains.
 
 import type { DateState, OpenDay } from "./availability";
-import { productDough } from "./capacity";
+import { productDough, effectiveFlavorLimit, flavorUsage } from "./capacity";
 import { compareLocalDate, parseLocalDate } from "./dates";
 import { allowsDate } from "./weekdays";
 import {
@@ -66,6 +66,12 @@ export function largestFittingKeep(
   products: Record<string, CapacityProduct>,
   day: OpenDay,
 ): number[] {
+  const usedFlavors = flavorUsage(day.orders);
+  // Inputs are merged by product/flavour before hint search; bound each flavour first.
+  cart = cart.map(line => {
+    const limit = line.flavorId ? effectiveFlavorLimit(products[line.productId], line.flavorId, day.limits) : null;
+    return { ...line, qty: limit === null ? line.qty : Math.min(line.qty, Math.max(0, limit - (usedFlavors[line.flavorId!] ?? 0))) };
+  });
   const counted = day.orders.filter((o) => OCCUPYING_STATUSES.includes(o.status));
   const existing = new Map<string, number>();
   for (const o of counted) {

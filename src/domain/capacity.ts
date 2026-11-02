@@ -161,6 +161,20 @@ export function doughUsed(orders: DayOrder[], products: ProductMap): number {
   return usage(orders, products).doughG;
 }
 
+/** Per-flavour totals; legacy null lines consume product capacity only. */
+export function flavorUsage(orders: DayOrder[]): Record<string, number> {
+  const totals: Record<string, number> = {};
+  for (const order of orders.filter(isOccupying)) for (const line of order.items) {
+    if (line.flavorId) totals[line.flavorId] = (totals[line.flavorId] ?? 0) + line.qty;
+  }
+  return totals;
+}
+
+export function effectiveFlavorLimit(product: CapacityProduct, flavorId: string, limits: DayLimits): number | null {
+  const resolved = limits.flavorLimits?.[flavorId] ?? product.flavors?.find(f => f.id === flavorId)?.dailyLimit;
+  return resolved == null ? null : assertLimit(`limit of flavour "${flavorId}"`, resolved);
+}
+
 /** Can the candidate fit into this day? Returns every violation it causes. */
 export function checkDay(input: CheckDayInput): CheckDayResult {
   const { date, existing, candidate, excludeOrderId, products, limits } = input;
@@ -222,6 +236,15 @@ export function checkDay(input: CheckDayInput): CheckDayResult {
     if (used > limit) {
       violations.push({ kind: "PRODUCT", date, productId, limit, after: used, over: used - limit });
     }
+  }
+
+  const flavorTotals = flavorUsage([...counted, candidateOrder]);
+  for (const flavorId of new Set(candidate.items.map(l => l.flavorId))) {
+    if (!flavorId) continue;
+    const productId = candidate.items.find(l => l.flavorId === flavorId)!.productId;
+    const limit = effectiveFlavorLimit(lookup(products, productId), flavorId, limits);
+    const used = flavorTotals[flavorId] ?? 0;
+    if (limit !== null && used > limit) violations.push({ kind: "PRODUCT", date, productId, flavorId, limit, after: used, over: used - limit });
   }
 
   if (candidate.fulfillment === "DELIVERY") {

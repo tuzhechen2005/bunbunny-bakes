@@ -149,6 +149,7 @@ describe("POST /api/availability with weekdays and hints", () => {
       [FRI, "WEEKDAY"],
     ]);
     expect(dates[1]).toEqual({
+      soldOutFlavorIds: [],
       date: THU,
       state: "WEEKDAY",
       hints: [
@@ -172,6 +173,7 @@ describe("POST /api/availability with weekdays and hints", () => {
     const { dates } = await res.json();
     const thu = dates.find((d: { date: string }) => d.date === THU);
     expect(thu).toEqual({
+      soldOutFlavorIds: [],
       date: THU,
       state: "FULL",
       hints: [

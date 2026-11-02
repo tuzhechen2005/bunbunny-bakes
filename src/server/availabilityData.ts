@@ -48,6 +48,7 @@ export async function loadAvailabilityInput(
         ? await tx.openDateProductLimit.findMany({ where: { date: { in: dbDates } } })
         : [];
       const overrideLimit = new Map(overrides.map((o) => [`${fromDbDate(o.date)}|${o.productId}`, o.limit]));
+      const flavorOverrides = await tx.openDateFlavorLimit.findMany({ where: { date: { in: dbDates } } });
       const orders = dbDates.length
         ? await tx.order.findMany({
             where: { pickupDate: { in: dbDates } },
@@ -56,7 +57,7 @@ export async function loadAvailabilityInput(
               pickupDate: true,
               status: true,
               fulfillment: true,
-              items: { select: { productId: true, qty: true }, orderBy: { id: "asc" } },
+              items: { select: { productId: true, flavorId: true, qty: true }, orderBy: { id: "asc" } },
             },
             orderBy: [{ pickupDate: "asc" }, { seq: "asc" }],
           })
@@ -69,7 +70,7 @@ export async function loadAvailabilityInput(
           id: o.id,
           status: o.status,
           fulfillment: o.fulfillment,
-          items: o.items.map((i) => ({ productId: i.productId, qty: i.qty })),
+          items: o.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, qty: i.qty })),
         });
         ordersByDate.set(d, list);
       }
@@ -91,6 +92,7 @@ export async function loadAvailabilityInput(
           deliveryEnabled: od.deliveryEnabled,
           deliveryLimit: od.deliveryLimit ?? settings.defaultDeliveryLimit,
           productLimits,
+          flavorLimits: Object.fromEntries(flavorOverrides.filter(o => fromDbDate(o.date) === date).map(o => [o.flavorId, o.limit])),
         };
         return {
           date,

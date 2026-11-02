@@ -121,3 +121,32 @@ it("rolls back a flavour change when its AuditLog insert fails", async () => {
     await db.$executeRawUnsafe(`DROP FUNCTION f1_fail_audit()`);
   }
 });
+
+it("F2: API bundle quotes and date flags never expose internal flavour limits", async () => {
+  const { addDays, localDateOf } = await import("@/domain/dates");
+  const { createOpenDate } = await import("./helpers");
+  const date = addDays(localDateOf(new Date()), 3);
+  await createOpenDate(date);
+  const ctx = patchCtx(P.redBean);
+  const created = await POST(request("POST", { name: "原味", priceCents: 450, bundlePriceCents: 1600, dailyLimit: 0 }), ctx);
+  expect(created.status).toBe(201);
+  const f = (await created.json()).product.flavors[0];
+  expect(f).toMatchObject({ dailyLimit: 0, bundlePriceCents: 1600 });
+  const quote = await QUOTE(request("POST", { items: [{ productId: P.redBean, flavorId: f.id, qty: 5 }], fulfillment: "PICKUP" }));
+  expect(quote.status).toBe(200);
+  const body = await quote.json();
+  expect(body.pricing.subtotalCents).toBe(2050);
+  expect(body.dates).toEqual([{ date, state: "FULL", soldOutFlavorIds: [f.id] }]);
+  expect(JSON.stringify(body)).not.toMatch(/"(dailyLimit|flavorLimits|used|limit|after)"/);
+  const { GET: MENU } = await import("@/app/api/menu/route");
+  const menu = await (await MENU()).json();
+  expect(menu.products.find((p: { id: string }) => p.id === P.redBean).flavors).toEqual([{ id: f.id, name: "原味", priceCents: 450, bundlePriceCents: 1600 }]);
+  const { POST: ORDER } = await import("@/app/api/orders/route");
+  vi.stubEnv("IP_HASH_SECRET", "f2-test-only");
+  const result = await ORDER(request("POST", { items: [{ productId: P.redBean, flavorId: f.id, qty: 1 }], fulfillment: "PICKUP", pickupDate: date, wechatId: "test-customer" }));
+  vi.unstubAllEnvs();
+  expect(result.status).toBe(409);
+  const error = await result.json();
+  expect(error).toMatchObject({ error: "FLAVOR_FULL", flavorId: f.id, productId: P.redBean });
+  expect(Object.keys(error).sort()).toEqual(["error", "flavorId", "message", "productId"]);
+});

@@ -255,3 +255,40 @@ X+1 不是开放日期时写"明天没有开放"。只统计占名额的订单�
 
 - 面包：红豆包 6、岩烧乳酪包 6、奶酪角 6（**做 2 个大圆包，多出 2 角**）；面团 420 + 420 + 680 = **1520 g / 1600 g**。
 - 今晚布蕾：20 杯 → **7 批**，多出 1 杯。
+
+## F2 — flavour limits and bundles (D180)
+
+A flavour line uses its own unit price and nullable bundle price, and the product's
+bundle size. A null flavour bundle never inherits the base product bundle. Bundles
+remain separate by product + flavour. Existing order lines keep their snapshots.
+
+Flavour capacity is an additional constraint in every product mode, in pieces:
+`effective = OpenDateFlavorLimit.limit ?? ProductFlavor.dailyLimit ?? unlimited`.
+After locking OpenDate, sum all occupying orders for that pickup date and flavour,
+exclude the edited order, merge its replacement, then compare the entire after total.
+Product overrides, product daily capacity, whole-day round rounding and delivery
+checks continue to apply. Null historical flavour lines consume product capacity only.
+Owner overrides require a reason and AuditLog, including status restoration.
+Customer availability exposes only sold-out IDs, never limits/usage. A flavour is sold
+out if adding one piece fails either its flavour limit or the product/dough limit;
+cutoff, weekdays and delivery continue to have separate date states.
+
+Every example below is tested in `tests/unit/flavorLimits.test.ts`:
+
+| ID | Inputs | Result |
+|---|---|---|
+| FP1 | 5 pieces, flavour unit 450, size 4, bundle 1600 | 2050 cents |
+| FP2 | Same, flavour bundle null, base product bundle 1000 | 2250 cents |
+| FP3 | Flavour A ×3 + B ×1, each unit 450 / bundle 4 for 1600 | 1800 cents, no mixing |
+| FC1 | Round 4 pieces / 340 g; dough limit 340; flavour A limit 3, existing A2, add A1 | allowed, flavour after 3 |
+| FC2 | Same, add A2 | flavour after 4 exceeds 3 although round still fits |
+| FC3 | Same, date override 0 then 4 | A1 rejected at 0; A2 allowed at 4 |
+| FC4 | Same, override 9, add A3 | product round after 5 needs 680 g: rejected |
+| FC5 | Replace existing A2 order with A3, flavour limit 3 | allowed, after 3 rather than 5 |
+| FC6 | Existing A2 is CANCELLED or REJECTED, add A3 | allowed |
+| FC7 | Independent product default 8; existing A2; B unlimited, add B3 | product date limit 5 allows; limit 4 rejects |
+| FH1 | FC1 settings, cart A3 + unlimited B3 | keep A1 + B1; both flavour and shared round fit |
+
+Real Postgres tests in `tests/db/flavors.test.ts` additionally cover the last-slot
+race, owner create/edit/restoration override audits, cancellation release, per-date
+set/clear and below-usage confirmation, and immutable bundle snapshots.

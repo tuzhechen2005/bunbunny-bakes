@@ -15,7 +15,7 @@ export interface FormProduct {
   id: string;
   name: string;
   status: ProductStatus;
-  flavors?: { id: string; name: string; priceCents: number; active: boolean; sort: number }[];
+  flavors?: { id: string; name: string; priceCents: number; bundlePriceCents: number | null; dailyLimit: number | null; active: boolean; sort: number }[];
   unitPriceCents: number;
   bundleSize: number;
   bundlePriceCents: number | null;
@@ -72,7 +72,7 @@ export async function loadOrderFormData(db: DbClient, now: Date): Promise<OrderF
         id: p.id,
         name: p.name,
         status: p.status,
-        flavors: p.flavors?.map(({ id, name, priceCents, active, sort }) => ({ id, name, priceCents, active, sort })) ?? [],
+        flavors: p.flavors?.map(({ id, name, priceCents, bundlePriceCents, dailyLimit, active, sort }) => ({ id, name, priceCents, bundlePriceCents, dailyLimit, active, sort })) ?? [],
         unitPriceCents: p.unitPriceCents,
         bundleSize: p.bundleSize,
         bundlePriceCents: p.bundlePriceCents,

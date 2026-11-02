@@ -77,10 +77,10 @@ export async function POST(request: Request): Promise<Response> {
       cartProblems: result.cartProblems,
       dates: result.dates.map((d) =>
         d.state === "AVAILABLE"
-          ? { date: d.date, state: d.state, cutoffAt: d.cutoffAt.toISOString(), cutoffLabel: d.cutoffLabel }
+          ? { date: d.date, soldOutFlavorIds: d.soldOutFlavorIds, state: d.state, cutoffAt: d.cutoffAt.toISOString(), cutoffLabel: d.cutoffLabel }
           : d.hints
-            ? { date: d.date, state: d.state, hints: d.hints }
-            : { date: d.date, state: d.state },
+            ? { date: d.date, soldOutFlavorIds: d.soldOutFlavorIds, state: d.state, hints: d.hints }
+            : { date: d.date, soldOutFlavorIds: d.soldOutFlavorIds, state: d.state },
       ),
     });
   } catch (e) {

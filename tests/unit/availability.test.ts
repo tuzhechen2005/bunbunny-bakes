@@ -207,6 +207,7 @@ describe("cutoff (CAPACITY_RULES §6)", () => {
         state: "AVAILABLE",
         cutoffAt: new Date("2026-10-30T01:00:00Z"),
         cutoffLabel: "10/29 周四 20:00 截止",
+        soldOutFlavorIds: [],
       },
     ]);
   });

@@ -1,3 +1,4 @@
+import { flavorPrice } from "@/domain/flavorPricing";
 // 小小🐰 tools (C3, D117). All read-only; every output is public data only: names, prices,
 // dates, states and cart quantities. Never grams, limits, used/remaining amounts, orders or
 // customers (there is no tool that reads orders). Arguments come from the model, so they are
@@ -245,7 +246,7 @@ function priceFor(ctx: ToolContext, lines: CartLine[], fulfillment: Fulfillment)
       productId: l.productId,
       flavorId: l.flavorId,
       qty: l.qty,
-      price: { unitPriceCents: flavor?.priceCents ?? p.unitPriceCents, bundleSize: p.bundleSize, bundlePriceCents: flavor ? null : p.bundlePriceCents },
+      price: flavorPrice(p, flavor),
     };
   });
   const pricing = priceCart(priced, fulfillment, ctx.menu);

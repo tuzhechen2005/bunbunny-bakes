@@ -396,8 +396,9 @@ export async function adminCorrectStatus(
 
     let violations: Violation[] = [];
     if (correctionReoccupies(order.status, data.to)) {
+      await lockCartProducts(tx, order.items);
       violations = await violationsFor(tx, order.id, date, {
-        items: order.items.map((i) => ({ productId: i.productId, qty: i.qty })),
+        items: order.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, qty: i.qty })),
         fulfillment: order.fulfillment,
       });
       if (violations.length > 0 && !data.override) {

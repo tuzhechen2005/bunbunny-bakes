@@ -542,3 +542,15 @@ describe("POST /api/assistant: time budget (fake timers)", () => {
     expect(sent).toHaveLength(3);
   });
 });
+
+it("F2: assistant shares flavour bundle prices and rejects full flavour dates", async () => {
+  await createOpenDate("2026-10-22");
+  const flavor = await db.productFlavor.create({ data: { productId: ids.redBean, name: "matcha", priceCents: 450, bundlePriceCents: 1600, dailyLimit: 0 } });
+  script.push({ tool_calls: [
+    { id: "price", name: "propose_cart", args: { items: [{ product: "p1", flavorId: flavor.id, qty: 5 }], note: "" } },
+    { id: "full", name: "check_date", args: { items: [{ product: "p1", flavorId: flavor.id, qty: 1 }], date: "2026-10-22" } },
+  ] }, { content: "好的" });
+  expect((await call(user("多少钱"))).status).toBe(200);
+  expect(toolResults().price).toMatchObject({ ok: true, 小计: "$20.50" });
+  expect(toolResults().full).toMatchObject({ state: "FULL" });
+});

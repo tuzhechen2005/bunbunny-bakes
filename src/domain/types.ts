@@ -40,6 +40,7 @@ export interface PriceSnapshot {
 /** Current capacity settings of a product (capacity always uses current settings, D45). */
 export interface CapacityProduct {
   id: string;
+  flavors?: readonly { id: string; dailyLimit?: number | null; active?: boolean }[];
   capacityMode: CapacityMode;
   doughG: number | null;
   roundG: number | null;
@@ -76,6 +77,8 @@ export interface DayLimits {
   deliveryLimit: number;
   /** productId -> limit, for every INDEPENDENT product. */
   productLimits: Record<string, number>;
+  /** Per-date overrides by flavour ID; omitted keys fall back to the flavour default. */
+  flavorLimits?: Record<string, number>;
 }
 
 export interface Usage {
@@ -87,7 +90,8 @@ export interface Usage {
 
 export type Violation =
   | { kind: "DOUGH"; date: LocalDate; limit: number; after: number; over: number }
-  | { kind: "PRODUCT"; date: LocalDate; productId: string; limit: number; after: number; over: number }
+  /** flavorId present = flavour limit; absent = whole-product limit. */
+  | { kind: "PRODUCT"; date: LocalDate; productId: string; flavorId?: string; limit: number; after: number; over: number }
   | { kind: "DELIVERY"; date: LocalDate; limit: number; after: number; over: number }
   | { kind: "DELIVERY_DISABLED"; date: LocalDate }
   /** The product cannot be picked up on this weekday (D115); `weekdays` = the allowed ones. */

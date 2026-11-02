@@ -212,6 +212,8 @@ async function replayByIdempotencyKey(
 
 /** First DOUGH/PRODUCT violation -> FULL; DELIVERY/DELIVERY_DISABLED -> DELIVERY_FULL. */
 function capacityError(violations: Violation[]): AppError | null {
+  const flavor = violations.find(v => v.kind === "PRODUCT" && v.flavorId);
+  if (flavor?.kind === "PRODUCT" && flavor.flavorId) return new AppError("FLAVOR_FULL", { extra: { flavorId: flavor.flavorId, productId: flavor.productId } });
   if (violations.some((v) => v.kind === "DOUGH" || v.kind === "PRODUCT")) return new AppError("FULL");
   if (violations.length > 0) return new AppError("DELIVERY_FULL");
   return null;
