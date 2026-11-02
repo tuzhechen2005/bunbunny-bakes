@@ -21,6 +21,8 @@ for action in bpy.data.actions:
         lowest=min(lowest,bottom);highest=max(highest,max(p.z for p in points));count+=1
     name=action.name.split('_')[0];report[name]={'sampledPoses':count,'minimumY':round(lowest,6),'maximumY':round(highest,6)}
     print(f'{name}: {count} poses; floor {lowest:.4f} m; maximum height {highest:.4f} m')
-print('POSE_ASSET_SHA256='+hashlib.sha256((out/'bunny.glb').read_bytes()).hexdigest())
+source=Path(os.environ.get('RUN3D_COMPRESSED_SOURCE',str(out/'bunny.glb')))
+print('POSE_DECODED_SHA256='+hashlib.sha256((out/'bunny.glb').read_bytes()).hexdigest())
+print('POSE_ASSET_SHA256='+hashlib.sha256(source.read_bytes()).hexdigest())
 print('POSE_REPORT='+json.dumps(report,sort_keys=True))
 print('All seven imported actions: finite skinning, no ground penetration at keys or midpoints.')
