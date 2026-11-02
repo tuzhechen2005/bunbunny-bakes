@@ -267,3 +267,47 @@ pages changed. Measurements and limits are recorded in engine READMEs and docs/D
 
 D185（[店主] 11/02 F3）：取代 D175 的“历史 NULL 在后台显示「未选口味」”；flavorName 为 NULL 表示无口味，后台订单列表显示商品名×数量，详情 flavorLabel 为 null（string | null），有口味行显示不变；口味汇总及邮件先列具名口味，再将无口味数量合并为「其他 N个」（沿用原单位），使用 copy.flavors.other。
 | D186 | QA 手机登录后台（店主 11/02 选 B）：环境变量 `QA_INSECURE_COOKIE=1` 且 `SITE_URL` 是 http 的 localhost / 局域网地址（10/8、172.16/12、192.168/16）时，登录 cookie 不加 Secure；https 或公网地址即使误设该变量也保持 Secure。只在本机 QA 启动脚本里设置，Netlify 正式环境永不设置 | [你] 11/02 |
+
+
+### D187 — TU difficulty and score bounds (owner 11/02)
+
+TU engine v6. Preserve oven 3 at 54 tiles / 6 layers / 6 kinds, then ovens 4–8 use
+84/108/132/156/180 tiles, 8/10/12/14/16 layers and 7/8/8/8/8 kinds (spread 4).
+Ovens 9–12 use the final configuration; clearing oven 12 ends the run, including two-kind
+shops where a bag loss is impossible. Construction witnesses still clear without props.
+Pack, order and clear multipliers cap at ×5. Unused props keep ×ending/cleared oven,
+bounded by the 12-oven run cap (at most 3,600 points), preserving the existing cash-out preview. 收工 remains available after
+nonterminal clears and pays unused props once, based on the cleared oven. Maximum theoretical
+score is 102,920. In matched 200-seed simulations, casual median ends at oven 4 (4,760 points),
+strategy at oven 5 (10,200 points); 57.5% casual end at 3–4 and 57% strategy at 5–6.
+
+**Leaderboard correction:** existing `game.ts` / `gameLevels.ts` queries do not partition TU
+by engine version. This week's scores therefore **do not reset by version**. Old finished
+scores, old verified progress scores, weekly ranking, all-time and personal records remain
+eligible under existing visibility/ban rules. D189 supersedes the original invalidation:
+live v5 runs can finish/report progress under v5 rules; v1–v4 remain rejected. Finished retries still return their stored result. No rows are deleted,
+no award policy or ranking query is changed. Fresh v6 results coexist with historical scores;
+a separate leaderboard reset would be a policy change. The regression test pins this behavior.
+
+[Measured pre-D184 / v5 / v6 distributions and validation](D187-validation.md).
+Engine/tests/docs only; no `src/components/**` edits; leave uncommitted.
+
+
+### D189 — D188-TU: preserve runs in progress (owner 11/02)
+
+“不要动正在玩的局”. Extend D188's rule to TU (D188 itself lives in the TD branch).
+The live pre-v6 seed format is `v5.<hex>`. New starts issue v6 only; existing v5 runs
+keep their exact v5 generation, scores and unlimited oven progression through finish.
+One engine parametrizes the oven curve, score multiplier and oven cap by seed version.
+Progress/finish accept v5 and v6 using the matching replay; v1–v4 and unknown future
+versions remain rejected. Weekly expiry and all leaderboard/week/award logic are unchanged.
+Client saves must retain their seed and snapshot and resume with the same version; never
+purge a supported in-progress save merely because a new engine shipped. Future upgrades
+must preserve this rule. Supersedes D184/D187's TU old-run invalidation statements.
+
+`createTuGame` and `dealBatch` are seed-aware; `resumeTuGame` returns the replayed engine.
+The fixture `tests/fixtures/tu-v5-run.json` was recorded using unmodified HEAD v5 source:
+13 ovens then cash-out, 1,201 inputs, exact score 87,030, with a saved oven-7 state.
+Unit tests pin replay and resume; DB tests cover v5 progress/finish and obsolete rejection.
+No component edits: Claude must preserve/read the v5 storage key in `tuSave.ts` and pass
+original save data through `TuPage.tsx` / `TuPlay.tsx` (engine README has the handoff).

@@ -1,12 +1,10 @@
-// Game feel is part of the contract (D130, numbers tuned with scripts/tu-tune.mts). With the
-// owner's 8 tiers and information-limited bots (they only see visible tiles, plus everything for
-// one decision right after a peek): a random tapper is out in batch 1; a simple greedy player
-// gets stuck in batch 2-3 (median 3 with props, 2-3 without) and rarely gets past batch 4.
-// Changing BATCHES, BAG_SIZE, the props or the generator moves these numbers.
+// D187 game-feel regression: 200 seeded, information-limited bots with the owner's eight kinds.
+// Casual greedy play usually ends at ovens 3–4; strategy digging usually ends at 5–6.
+// Changing BATCHES, BAG_SIZE, props or the generator moves these distributions.
 
 import { describe, expect, it } from "vitest";
 import { createTuGame, MAX_TAPS } from "@/lib/tu";
-import { greedyTu, playerView, randomTu } from "../support/tuBot";
+import { diggerTu, greedyTu, playerView, randomTu } from "../support/tuBot";
 
 const median = (a: number[]) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
 const TIERS = Array.from({ length: 8 }, (_, i) => ({ id: `t${i}` }));
@@ -23,11 +21,21 @@ describe("game length with 8 tiers", () => {
   it("greedy play with props reaches the gradual middle ovens without hitting the cap", () => {
     const runs = seeds.map((s) => greedyTu(s, TIERS));
     expect(median(runs.map((r) => r.batch))).toBeGreaterThanOrEqual(4);
-    expect(median(runs.map((r) => r.batch))).toBeLessThanOrEqual(6);
+    expect(median(runs.map((r) => r.batch))).toBeLessThanOrEqual(4);
     expect(runs.filter((r) => r.batch <= 2).length).toBeLessThanOrEqual(0.15 * seeds.length);
     expect(runs.filter((r) => r.batch >= 8).length).toBeLessThanOrEqual(0.2 * seeds.length);
     expect(runs.filter((r) => r.taps.length >= MAX_TAPS)).toEqual([]);
     expect(runs.every((r) => r.taps.some((t) => "p" in t))).toBe(true);
+  });
+
+  it("D187 casual ends around 3–4; strategy around 5–6, with bounded scores", () => {
+    const casual = seeds.map(s => greedyTu(s, TIERS));
+    const strong = seeds.map(s => diggerTu(s, TIERS));
+    expect(casual.filter(r => r.batch >= 3 && r.batch <= 4).length).toBeGreaterThan(100);
+    expect(strong.filter(r => r.batch >= 5 && r.batch <= 6).length).toBeGreaterThan(100);
+    expect(median(strong.map(r => r.score))).toBeGreaterThanOrEqual(10_000);
+    expect(median(strong.map(r => r.score))).toBeLessThan(30_000);
+    expect(Math.max(...strong.map(r => r.score))).toBeLessThan(100_000);
   });
 
   it("greedy play without props reaches the middle ovens", () => {

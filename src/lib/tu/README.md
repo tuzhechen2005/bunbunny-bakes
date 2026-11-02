@@ -4,7 +4,7 @@ Pure TS, deterministic: integer maths and the seeded PRNG from `src/lib/game/rng
 `Date.now`, no `Math.random`, no floats that could round differently). The client plays it, the
 server re-plays the log with `replayTu`, and both get the same score. No DOM, no server code.
 
-Decisions: D121–D124, D128 (hidden tiles), D130 (curve), D131 (props), D132 (order rewards), D141 (prop cap) in
+Decisions: D121–D124, D128 (hidden tiles), D130 (curve), D131 (props), D132 (order rewards), D141 (prop cap), D187 (finite harder curve and bounded scoring) in
 `docs/DECISIONS.md`.
 
 ## API
@@ -33,7 +33,7 @@ interface TuState {
   tiles: { id: number; tier: number; x: number; y: number; layer: number; free: boolean; visible: boolean }[];
   bag: number[]; // tier per slot, ≤ bagSize, equal tiers next to each other
   orders: [number, number]; // tier each customer wants (3 of it)
-  orderPoints: [number, number]; // bonus each order pays when filled = ORDER_POINTS × batch (the card's 「+N」, D132)
+  orderPoints: [number, number]; // bonus each order pays when filled = ORDER_POINTS × min(batch, 5) (the card's 「+N」, D132)
   props: { peek: number; bag: number; swap: number }; // props left, 0..MAX_PROPS_PER_TYPE (2) per type
   bagSize: 6 | 7; // 7 after the "bag" prop, until the next batch is dealt
   score: number;
@@ -68,10 +68,10 @@ A tap returns, in this order:
 | `reveal` | `tiles` | ids (deal order) of tiles that were hidden before this tap and are visible now; only when non-empty; never the tiles of a newly dealt batch |
 | `order` | `index, tier` | order `index` (0/1) now wants `tier`: first the filled order, then (after a deal) orders whose bread is not on the new board |
 | `gain` | `p` | right after the filled order's `order` event: every `PROP_EVERY_ORDERS`-th (3rd) filled order draws one prop with the seeded RNG; emitted only if that type is below `MAX_PROPS_PER_TYPE` (2) |
-| `batch` | `batch, bonus` | the board was cleared: `bonus` points for it, batch `batch` (the new number) is dealt |
+| `batch` | `batch, bonus` | the board was cleared: `bonus` points for it, batch `batch` is dealt unless this is the terminal clear (batch stays 12) |
 | `bagSize` | `size` | after `batch`, only when the extra slot was in use: the bag is back to 6 |
 | `bonus` | `points` | the game ended: `PROP_BONUS_POINTS × batch` (50) per unused prop; always sent (may be 0), right before `over` |
-| `over` | — | the game ended (bag full without a pack, or `MAX_TAPS` log entries) |
+| `over` | — | the game ended (bag full without a pack, 12 ovens cleared, or `MAX_TAPS` log entries) |
 
 `use(p)` returns `[prop { p, left }]`, plus `bagSize { size: 7 }` for "bag" and two `order`
 events (index 0, then 1) for "swap"; `[…, bonus, over]` if it was the `MAX_TAPS`-th entry.
@@ -89,11 +89,11 @@ use this batch.
 - Two orders, each "3 of tier X", no timer, initially two different tiers from batch 1's board. A
   pack whose tier an order wants fills it (the first one if both want it); that order gets a new
   tier, seeded, from the tiers still on the board and not the other order's, when possible.
-- When the board is empty the next batch is dealt. The bag is always empty at that moment (each
+- When the board is empty the next batch is dealt, except oven 12 ends the run. The bag is always empty at that moment (each
   tier comes in triples per batch, and the bag never holds 3 of a tier, whatever its size), so
   every batch starts fresh. After a deal, an order whose tier is not on the new board gets a new one.
-- Scoring (constants exported): pack `PACK_POINTS × batch` (10), order bonus `ORDER_POINTS × batch`
-  (+30), clearing a batch `BATCH_POINTS × batch` (+100, the cleared batch's number), at the end
+- Scoring (constants exported): pack `PACK_POINTS × min(batch, 5)` (10), order bonus `ORDER_POINTS × min(batch, 5)`
+  (+30), clearing a batch `BATCH_POINTS × min(batch, 5)` (+100, the cleared batch's number), at the end
   `PROP_BONUS_POINTS × batch` (+50) per unused prop.
 - Props (D131, our own; no shuffle, undo or taking tiles out of the bag): 1 of each at the start
   (`START_PROPS`), one seeded random draw every 3rd filled order. D141 caps each type at
@@ -117,13 +117,13 @@ use this batch.
 | 1 | 4 | 2 | 24 | 2 | ~8% |
 | 2 | 5 | 4 | 36 | 3 | ~28% |
 | 3 | 6 | 6 | 54 | 3 | ~43% |
-| 4 | 6 | 6 | 72 | 3 | measured in layout tests |
-| 5 | 7 | 6 | 90 | 3 | measured in layout tests |
-| 6 | 8 | 8 | 96 | 4 | ~54% |
-| 7 | 8 | 8 | 108 | 4 | ~55% |
-| 8+ | 8 | 8 | 120 | 4 | ~56% |
+| 4 | 7 | 8 | 84 | 4 | ~55% |
+| 5 | 8 | 10 | 108 | 4 | ~60% |
+| 6 | 8 | 12 | 132 | 4 | ~65% |
+| 7 | 8 | 14 | 156 | 4 | ~68% |
+| 8–12 | 8 | 16 | 180 | 4 | ~71% |
 
-Batch 1 is the warm-up, batch 2 is where careless play stops, D184 separates tile-count and kind-count increases after batch 2.
+Batch 1 is the warm-up, batch 2 is where careless play stops, D187 preserves the softer oven 3, then increases kinds and hidden layers.
 
 Breads per batch are capped at the shop's tier count and are the first k of a per-batch seeded
 shuffle of all tiers.
@@ -157,14 +157,32 @@ entries and a last `at` beyond the real elapsed time plus slack.
 
 ### Engine version (C8)
 
-`TU_ENGINE_VERSION` (5) changes whenever a rules change would make an old log score differently
-(this one: D184 changes the oven curve and adds boundary cash-out). The server starts every run with `tuSeed(hex)` =
-`v5.<hex>`, and `finishTuRun` refuses (422 「这一局已经过期，请重新开始」) a run whose
-`tuSeedVersion(seed)` is not the current one; seeds from before versioning are plain hex =
-version 1. So a run started before a deploy can simply not be finished (it would expire at the
-weekly reset anyway and is cleaned up as an unfinished run) instead of being replayed under new
-rules. The client includes the version in its autosave key, so old saves are dropped. Bump the
-constant again with the next rule change.
+D189 / D188-TU, owner 11/02: “不要动正在玩的局”. New starts use `tuSeed(hex)` =
+`v6.<hex>`. The live pre-v6 version is **v5**, whose `v5.<hex>` seed retains the
+D184 oven curve, uncapped oven reward multiplier and no 12-oven limit until it ends.
+`createTuGame({ seed, tiers })`, `dealBatch(seed, tierCount, batch)` and `replayTu`
+select those rules automatically. The RNG seed is never rewritten. `resumeTuGame(seed,
+tiers, log)` validates/replays the saved log and returns the playable engine.
+
+Both progress and finish admit seeds through `isSupportedTuSeed`: v5 and v6 only.
+Plain-hex v1 and v2–v4 (also unknown future versions) remain rejected. Bare seed
+labels are still supported for local simulations under v6, not server admission.
+Weekly expiry, leaderboard queries, bans, snapshots and finished retries are unchanged.
+A future engine upgrade must retain rules for supported in-progress runs too.
+
+**Claude UI handoff (components intentionally untouched):**
+- `TuPlay.tsx` already calls `createTuGame`; keep the original saved seed and tier snapshot.
+  It now selects v5/v6 automatically. Resume may use `resumeTuGame` instead of its manual
+  log loop; use state `orderPoints` for version-correct values.
+- `tuSave.ts` must use `isSupportedTuSeed` when parsing and retain/read `bb_tu_save_v5`
+  alongside `bb_tu_save_v6`. Its current sweep deletes v5, so remove that deletion for
+  supported saves; write/clear the selected run's key (via `tuSeedVersion(seed)`), and
+  remove only obsolete/expired saves. Do not relabel a v5 seed to v6.
+- `TuPage.tsx` must pass the selected save's seed, tiers and taps unchanged into `TuPlay`
+  and clear only that save on completion. Test actual localStorage discovery in the UI pass.
+Engine tests cover serialized-save reconstruction and continued play; storage discovery is
+pending this component wiring. `MAX_OVENS`, `MAX_SCORE_MULTIPLIER` and `BATCHES` describe
+v6 defaults, not the limits of a resumed v5 run.
 
 ## Tuning
 
@@ -188,15 +206,16 @@ historical D131 baseline predates the D141 cap (8 tiers, 1000 seeds, end batch):
 | digger, props | 3 / 6 / 18 | long tail, 9% reach batch 19+ |
 
 `tuTuning.test.ts` checks the broad game-length bounds with the current rules (200 seeds). With 4 or fewer tiers the game is much easier
-(with 2 tiers the bag can never fill and the game always runs to `MAX_TAPS`).
+(with 2 tiers the bag can never fill, but the game ends after oven 12).
 
 `hashTuState(state)` (FNV-1a) is for pinned vectors and debugging.
 
 ## UI contract
 
-D184 (owner 11/02), engine v5. The existing `batch { batch, bonus }` event still deals the
-next oven immediately and awards only the cleared-oven bonus. New `state().canStop` is
-true at that boundary. Offer 收工 / continue; continuing is simply the next accepted tap
+D184/D187 (owner 11/02), engine v6. The existing `batch { batch, bonus }` event still deals the
+next oven immediately and awards only the cleared-oven bonus, except on the terminal clear:
+`batch=12` stays unchanged, tiles are empty, and `bonus`, `over` follow in the same tap. New `state().canStop` is
+true at each nonterminal boundary. Offer 收工 / continue; continuing is simply the next accepted tap
 or prop use. Invalid inputs leave the window open. Prop use also closes it, so no prop
 can be spent on the new oven and then cashed out against the old one.
 
@@ -218,7 +237,7 @@ input shape and compute its score from replay, with the same timing checks.
 `peek { usable, hiddenTileCount }`, `bag { usable, slotsAdded }`, and
 `swap { usable, orderIndexes: [0,1] }`. These describe effects before spending; no hidden
 bread tier or future random order is disclosed. Peek duration remains the existing UI's 3s.
-Old v4 unfinished runs and saves are rejected by the existing version mechanism.
+D189 supersedes version invalidation: live v5 runs/saves retain v5 rules; only v1–v4 remain obsolete.
 
 ### D184 verification (v5)
 
@@ -228,3 +247,13 @@ All eight configurations: **11,200 witness oven clears** across 500 eight-kind s
 need for cash-out. Oven 3 still has 25/94 greedy failures versus oven 2's 4/98: the review's
 no-doubling aspiration is **not met**. Two spread variants did not resolve it.
 [Full measurements and reproduction](../../../docs/D184-validation.md).
+
+### D187 verification (v6)
+
+200 matched seeds per bot and revision, full runs: casual median oven 4 / 4,760 points;
+strategy median oven 5 / 10,200 points, P90 23,200, maximum 40,470.
+Pack/order/clear rewards use `tuScoreMultiplier`, capped at 5; unused props keep the
+ending/cleared oven multiplier (at most 3,600 points), matching the existing UI preview; 12 ovens cap total possible score at
+102,920 even if every pack matches an order and all six props remain. Cash-out pays once.
+Historical leaderboard scores are retained: the shared queries do **not** filter TU versions.
+[Comparison, histograms and checks](../../../docs/D187-validation.md).

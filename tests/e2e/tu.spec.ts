@@ -5,7 +5,7 @@ import path from "node:path";
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { copy } from "../../src/copy";
 import { fill } from "../../src/components/customer/format";
-import { createTuGame, MAX_TAPS, PROP_BONUS_POINTS, replayTu, TU_ENGINE_VERSION } from "../../src/lib/tu";
+import { createTuGame, MAX_OVENS, PROP_BONUS_POINTS, replayTu, TU_ENGINE_VERSION } from "../../src/lib/tu";
 import { greedyTu, randomTu } from "../support/tuBot";
 import { screensDir } from "./support/screensDir";
 
@@ -328,12 +328,12 @@ test("a saved run that is already over resumes into the result flow and is submi
   expect(await page.evaluate((key) => localStorage.getItem(key), TU_SAVE_KEY)).toBeNull();
 });
 
-test("the 20000th tap shows the cap reason; tapping the ended board reopens the result", async ({ page }) => {
+test("the final oven ends the run; tapping the ended board reopens the result", async ({ page }) => {
   const tiers = TIERS.slice(0, 2);
   const api = await mockApi(page, tiers);
   const bot = randomTu(SEED, tiers);
-  expect(bot.taps).toHaveLength(20_000);
-  const taps = bot.taps.slice(0, MAX_TAPS - 1);
+  expect(bot.batch).toBe(MAX_OVENS);
+  const taps = bot.taps.slice(0, -1);
   await page.goto("/game/tu");
   await page.evaluate(({ key, save }) => localStorage.setItem(key, JSON.stringify(save)), {
     key: TU_SAVE_KEY,
@@ -344,16 +344,16 @@ test("the 20000th tap shows the cap reason; tapping the ended board reopens the 
   await page.getByTestId(`tu-tile-${bot.taps.at(-1)!.id}`).click();
   const sheet = page.getByTestId("tu-over-sheet");
   await expect(sheet).toBeVisible();
-  await expect(page.getByTestId("tu-cap-reason")).toHaveText("点击次数已到上限，本局结束");
+  await expect(page.getByTestId("tu-cap-reason")).toHaveCount(0);
   await expect(page.getByTestId("tu-confirmed")).toBeVisible();
   expect(api.finishes).toHaveLength(1);
-  expect(api.finishes[0].taps).toHaveLength(20_000);
+  expect(api.finishes[0].taps).toHaveLength(bot.taps.length);
   await expect(page.getByTestId("tu-final-score")).toHaveText(String(bot.score));
   await page.getByTestId("tu-over-close").click();
   await expect(sheet).toHaveCount(0);
   await page.getByTestId("tu-board-result").click();
   await expect(sheet).toBeVisible();
-  await expect(page.getByTestId("tu-cap-reason")).toHaveText(copy.customer.tu.capReached);
+  await expect(page.getByTestId("tu-cap-reason")).toHaveCount(0);
   await expect(page.getByTestId("tu-final-score")).toHaveText(String(bot.score));
   expect(api.finishes).toHaveLength(1);
 });

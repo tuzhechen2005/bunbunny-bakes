@@ -12,21 +12,21 @@ describe("dealBatch layout", () => {
     expect(dealBatch("s", 8, 3).tiles).not.toEqual(dealBatch("s", 8, 4).tiles);
   });
 
-  it("batch 1 is 4 breads, 2 layers, 24 tiles (D128 warm-up); later batches grow to 8 breads and 8 layers, then repeat", () => {
+  it("batch 1 is 4 breads, 2 layers, 24 tiles (D128 warm-up); later batches grow to 8 breads and 16 layers, then repeat", () => {
     expect(batchSpec(1)).toMatchObject({ tiers: 4, layers: 2, tiles: 24 });
     for (let b = 2; b <= BATCHES.length; b++) {
       expect(batchSpec(b).tiers).toBeGreaterThanOrEqual(batchSpec(b - 1).tiers);
       expect(batchSpec(b).layers).toBeGreaterThanOrEqual(batchSpec(b - 1).layers);
       expect(batchSpec(b).tiles).toBeGreaterThan(batchSpec(b - 1).tiles);
     }
-    expect(batchSpec(BATCHES.length)).toMatchObject({ tiers: 8, layers: 8 });
+    expect(batchSpec(BATCHES.length)).toMatchObject({ tiers: 8, layers: 16 });
     expect(batchSpec(50)).toEqual(batchSpec(BATCHES.length));
     for (const s of BATCHES) expect(s.tiles % 3).toBe(0);
     // spread 5+ can dead-end the witness (5 singletons in the bag): see the guard in deal.ts.
     for (const s of BATCHES) expect(s.spread).toBeLessThanOrEqual(4);
   });
 
-  it("the D184 curve introduces six-layer ovens before eight-layer ovens", () => {
+  it("D187 preserves oven 3 and increases concealment afterwards", () => {
     const hiddenShare = (b: number) => {
       let hidden = 0;
       let all = 0;
@@ -37,15 +37,18 @@ describe("dealBatch layout", () => {
       }
       return hidden / all;
     };
+    expect(hiddenShare(4)).toBeGreaterThan(hiddenShare(3));
+    expect(hiddenShare(8)).toBeGreaterThan(hiddenShare(4));
+    expect(batchSpec(3)).toMatchObject({ tiles: 54, layers: 6, tiers: 6 });
     expect(batchSpec(2).layers).toBe(4);
     expect(hiddenShare(1)).toBeLessThan(0.12);
     expect(hiddenShare(2)).toBeGreaterThan(0.2);
     expect(hiddenShare(2)).toBeLessThan(0.32);
     for (let b = 3; b <= BATCHES.length + 1; b++) {
       expect(batchSpec(b).layers).toBeGreaterThanOrEqual(6);
-      expect(batchSpec(b).layers).toBeLessThanOrEqual(8);
+      expect(batchSpec(b).layers).toBeLessThanOrEqual(16);
       expect(hiddenShare(b)).toBeGreaterThan(b < 6 ? 0.40 : 0.5);
-      expect(hiddenShare(b)).toBeLessThan(0.6);
+      expect(hiddenShare(b)).toBeLessThan(0.85);
     }
   });
 

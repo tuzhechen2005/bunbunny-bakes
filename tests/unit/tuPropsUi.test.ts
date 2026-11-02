@@ -3,7 +3,7 @@ import { isPropEntry, orderCompleteText, propEvents } from "@/components/tu/tuPr
 import { parseTuSave, readTuSave, writeTuSave, TU_SAVE_KEY } from "@/components/tu/tuSave";
 import { TU_ENGINE_VERSION, type TuEvent } from "@/lib/tu";
 
-const raw = JSON.stringify({ v: 1, runId: "r", seed: "s", tiers: [{}, {}], taps: [{ p: "peek", at: 200 }], nickname: "n", expiresAt: "2099-01-01T00:00:00Z", score: 0 });
+const raw = JSON.stringify({ v: 1, runId: "r", seed: `v${TU_ENGINE_VERSION}.ab12`, tiers: [{}, {}], taps: [{ p: "peek", at: 200 }], nickname: "n", expiresAt: "2099-01-01T00:00:00Z", score: 0 });
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -37,6 +37,10 @@ describe("tu props (C8)", () => {
     expect(isPropEntry({ id: 3, at: 5 })).toBe(false);
     expect(TU_SAVE_KEY).toBe(`bb_tu_save_v${TU_ENGINE_VERSION}`);
     expect(parseTuSave(raw)).not.toBeNull();
+    // D189: a v5 run in progress keeps its rules and still restores; older or unversioned seeds do not.
+    expect(parseTuSave(raw.replace(`"v${TU_ENGINE_VERSION}.ab12"`, '"v5.ab12"'))).not.toBeNull();
+    expect(parseTuSave(raw.replace(`"v${TU_ENGINE_VERSION}.ab12"`, '"v4.ab12"'))).toBeNull();
+    expect(parseTuSave(raw.replace(`"v${TU_ENGINE_VERSION}.ab12"`, '"s"'))).toBeNull();
   });
   it("removes every other save version without skipping adjacent keys or unrelated storage", () => {
     const entries = new Map([
@@ -44,6 +48,7 @@ describe("tu props (C8)", () => {
       ["bb_tu_save_v1", "old"],
       ["bb_tu_save_v2", "old"],
       ["bb_tu_save_v3", "old"],
+      ["bb_tu_save_v5", "kept but unparseable"],
       [TU_SAVE_KEY, raw],
       [`bb_tu_save_v${TU_ENGINE_VERSION + 1}`, "future"],
       ["bb_tu_orders_seen_v1", "1"],
@@ -58,7 +63,7 @@ describe("tu props (C8)", () => {
       },
     });
     expect(readTuSave()).toEqual(JSON.parse(raw));
-    expect([...entries.keys()]).toEqual([TU_SAVE_KEY, "bb_tu_orders_seen_v1", "bb_game_save_v1"]);
+    expect([...entries.keys()]).toEqual(["bb_tu_save_v5", TU_SAVE_KEY, "bb_tu_orders_seen_v1", "bb_game_save_v1"]);
   });
   it("round-trips a 20000-entry local save within a 2 MiB storage budget; rejects 20001", () => {
     const save = { ...JSON.parse(raw), taps: Array.from({ length: 20_000 }, (_, i) => ({ id: i + 1, at: 604_800_000 - 20_000 * 500 + i * 500 })) };
@@ -71,7 +76,8 @@ describe("tu props (C8)", () => {
         expect((value.length + TU_SAVE_KEY.length) * 2).toBeLessThan(2 * 1024 * 1024);
         stored = value;
       },
-      getItem: () => stored,
+      getItem: (key: string) => key === TU_SAVE_KEY ? stored : null,
+      removeItem: () => {},
     } });
     writeTuSave(save);
     expect(readTuSave()).toEqual(save);

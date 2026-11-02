@@ -11,7 +11,7 @@ import {
   PROP_BONUS_POINTS,
   PROP_EVERY_ORDERS,
   replayTu,
-  TU_ENGINE_VERSION,
+  TU_ENGINE_VERSION, MAX_OVENS,
   TU_PROPS,
   TuReplayError,
   tuSeed,
@@ -268,17 +268,20 @@ describe("earning props and the end bonus", () => {
     expect(last.slice(-2)).toEqual([{ type: "bonus", points: 0 }, { type: "over" }]);
   });
 
-  it("MAX_TAPS counts prop uses too; a prop use that reaches it ends the game", () => {
-    // With 2 breads the bag never fills, so the game runs to the cap.
+  it("final oven pays the bounded unused-prop bonus once and refuses more input", () => {
     const g = createTuGame({ seed: "cap", tiers: tiersOf(2) });
     g.use("peek");
-    while (g.taps < MAX_TAPS - 1) g.tap(firstFree(g));
-    const props = g.state().props;
-    expect(props.swap).toBeGreaterThan(0);
-    expect(g.use("swap")!.slice(-2).map((e) => e.type)).toEqual(["bonus", "over"]);
-    expect(g.over).toBe(true);
-    expect(g.taps).toBe(MAX_TAPS);
+    let last: TuEvent[] = [];
+    while (!g.over) last = g.tap(firstFree(g))!;
+    expect(g.batch).toBe(MAX_OVENS);
+    expect(g.state().tiles).toEqual([]);
+    expect(last.slice(-2).map(e => e.type)).toEqual(["bonus", "over"]);
+    const score = g.score;
+    expect(score).toBeLessThan(300_000);
+    expect(g.stop()).toBeNull();
     expect(g.use("bag")).toBeNull();
+    expect(g.tap(1)).toBeNull();
+    expect(g.score).toBe(score);
   });
 });
 
@@ -330,16 +333,15 @@ describe("replay of mixed logs (C8)", () => {
       hash: hashTuState(g.state()),
     }).toMatchInlineSnapshot(`
       {
-        "batch": 5,
-        "hash": "64473770",
+        "batch": 4,
+        "hash": "932791b9",
         "props": [
           "peek",
           "peek",
           "bag",
-          "peek",
         ],
-        "score": 8190,
-        "taps": 251,
+        "score": 5430,
+        "taps": 181,
       }
     `);
   });
@@ -347,10 +349,10 @@ describe("replay of mixed logs (C8)", () => {
 
 describe("engine version (C8)", () => {
   it(`is ${TU_ENGINE_VERSION}, and new seeds carry it; plain hex seeds are version 1`, () => {
-    expect(TU_ENGINE_VERSION).toBe(5);
+    expect(TU_ENGINE_VERSION).toBe(6);
     const s = tuSeed("0123456789abcdef0123456789abcdef");
-    expect(s).toBe("v5.0123456789abcdef0123456789abcdef");
-    expect(tuSeedVersion(s)).toBe(5);
+    expect(s).toBe("v6.0123456789abcdef0123456789abcdef");
+    expect(tuSeedVersion(s)).toBe(6);
     expect(tuSeedVersion("0123456789abcdef0123456789abcdef")).toBe(1);
     expect(tuSeedVersion("v3.abc")).toBe(3);
     expect(tuSeedVersion("v2.")).toBe(1);

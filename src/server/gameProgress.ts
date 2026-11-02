@@ -5,7 +5,7 @@ import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import type { GameKind } from "@/lib/gameCatalog";
 import { PROGRESS_MIN_GAP_MS } from "@/lib/liveScores";
-import { TU_ENGINE_VERSION, tuSeedVersion } from "@/lib/tu";
+import { isSupportedTuSeed } from "@/lib/tu";
 import { M3_ENGINE_VERSION, m3SeedVersion } from "@/lib/m3";
 import { copy } from "@/copy";
 import type { DbClient } from "./db";
@@ -47,7 +47,7 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
   if (now >= runExpiresAt(run.startedAt)
     || (game === "BIG" && bigSeedVersion(run.seed) !== BIG_ENGINE_VERSION)
     || (game === "TD" && tdSeedVersion(run.seed) !== TD_ENGINE_VERSION)
-    || (game === "TU" && tuSeedVersion(run.seed) !== TU_ENGINE_VERSION)
+    || (game === "TU" && !isSupportedTuSeed(run.seed))
     || (game === "M3" && m3SeedVersion(run.seed) !== M3_ENGINE_VERSION)
     || (game === "GRAB" && grabSeedVersion(run.seed) !== GRAB_ENGINE_VERSION)
     || (game === "RUN" && runSeedVersion(run.seed) !== RUN_ENGINE_VERSION)) {

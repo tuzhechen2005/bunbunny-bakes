@@ -1,6 +1,6 @@
 // Server-side (and test) replay of a 兔了个兔 run: same seed + tiers + log = same score.
 
-import { createTuGame, MAX_TAPS, STOP_TILE_ID, TU_PROPS, type TuProp, type TuTierInput } from "./engine";
+import { createTuGame, MAX_TAPS, STOP_TILE_ID, TU_PROPS, type TuProp, type TuTierInput, type TuGame } from "./engine";
 
 export interface TuTap {
   /** Tile id from state().tiles, or STOP_TILE_ID (0) to cash out at a clear boundary. */
@@ -43,6 +43,12 @@ export class TuReplayError extends Error {
  * (MIN_TAP_GAP_MS, wall clock) is the server's job.
  */
 export function replayTu(seed: string, tiers: readonly TuTierInput[], log: readonly TuLogEntry[]): TuReplayResult {
+  const game = resumeTuGame(seed, tiers, log);
+  return { score: game.score, over: game.over, batch: game.batch, taps: game.taps };
+}
+
+/** Version-aware resume entry: reconstruct the playable engine from a saved seed and log. */
+export function resumeTuGame(seed: string, tiers: readonly TuTierInput[], log: readonly TuLogEntry[]): TuGame {
   if (!Array.isArray(log)) throw new TuReplayError("taps is not an array");
   if (log.length > MAX_TAPS) throw new TuReplayError("too many taps");
   const game = createTuGame({ seed, tiers });
@@ -63,5 +69,5 @@ export function replayTu(seed: string, tiers: readonly TuTierInput[], log: reado
     } else if ((e.id === STOP_TILE_ID ? game.stop() : game.tap(e.id as number)) === null) throw new TuReplayError("tile not tappable");
     prev = at;
   }
-  return { score: game.score, over: game.over, batch: game.batch, taps: game.taps };
+  return game;
 }
