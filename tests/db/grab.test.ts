@@ -15,7 +15,7 @@ import { copy } from "@/copy";
 import { greedyGrab } from "../support/grabBot";
 import { db, resetDb } from "./helpers";
 import { getRequest, jsonRequest, NOW } from "./api.helpers";
-const T = NOW, LATER = new Date(+T + 110_000), IP = "grab-ip";
+const T = NOW, LATER = new Date(+T + 600_000), IP = "grab-ip";
 process.env.IP_HASH_SECRET = "test-secret";
 beforeEach(async () => { await resetDb(); });
 afterEach(() => vi.useRealTimers());
@@ -54,7 +54,7 @@ it("rejects bad replay logs, observation ticks, too many ignored launches and im
 it("expires on weekly reset and engine version mismatch for finish and progress", async () => {
  await tiers(); const r=await start();
  await expect(finishGrabRun(db,play(r),IP,new Date(r.expiresAt))).rejects.toMatchObject({message:copy.gameApi.runExpired});
- for (const [index, seed] of ["v1.abcdef", "v2.abcdef", "v3.abcdef", "v4.abcdef", "v999.abcdef"].entries()) {
+ for (const [index, seed] of ["v1.abcdef", "v2.abcdef", "v3.abcdef", "v4.abcdef", "v5.abcdef", "v999.abcdef"].entries()) {
   await db.gameRun.update({where:{id:r.runId},data:{seed}});
   await expect(finishGrabRun(db,play(r),IP,LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
   await expect(progressRun(db,"GRAB",{runId:r.runId,log:[],endTick:0},new Date(+LATER + index * 10_000))).rejects.toMatchObject({message:copy.gameApi.runExpired});
@@ -122,4 +122,21 @@ it("accepts a clock-extended run using only the snapshot and active duration", a
  const result = await finishGrabRun(db, body, IP, new Date(+T + Math.round(bot.ticks * 1000 / 60)));
  expect(result.score).toBe(bot.score);
  expect((await db.gameRun.findUniqueOrThrow({ where: { id: r.runId } })).playMs).toBeGreaterThan(60_000);
+});
+
+it("ranks GRAB by reached level, then score, with the same best-run selection for each identity", async () => {
+ const insert = (wechatId: string, level: number, score: number, hidden = false) => db.gameRun.create({ data: {
+  game: "GRAB", seed: "s", tiersSnapshot: [], nickname: wechatId, wechatId, level, score, hidden,
+  startedAt: T, finishedAt: T, weekKey: "2026-10-19",
+ } });
+ await insert("low", 2, 90000);
+ await insert("HIGH", 4, 100);
+ await insert("high", 3, 80000);
+ await insert("tie", 4, 200);
+ await insert("hidden", 9, 99999, true);
+ const board = await getGrabLeaderboard(db, T, "high");
+ expect(board.top.map(r => [r.level, r.score])).toEqual([[4, 200], [4, 100], [2, 90000]]);
+ expect(board.myLevel).toBe(4);
+ expect(board.myBest).toBe(100);
+ expect(board.allTime).toMatchObject({ level: 4, score: 200 });
 });

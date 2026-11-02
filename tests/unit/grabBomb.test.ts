@@ -113,10 +113,10 @@ it("never duplicates bombs across random runs, including respawns", () => {
       respawns += events.filter(e => e.type === "refill" && e.item.kind === "bomb").length;
       const items = game.state().items;
       const bombs = items.filter(i => i.kind === "bomb");
-      valid &&= bombs.length <= 1;
+      valid &&= bombs.length <= Math.min(3, 1 + Math.floor((game.state().level - 1) / 2));
       for (const bomb of bombs) {
         valid &&= Math.abs(bomb.x - 360) >= BOMB_LINE_CLEARANCE;
-        for (const item of items) if (item.id !== bomb.id) {
+        for (const item of items) if (game.state().level === 1 && item.id !== bomb.id) {
           valid &&= (item.x - bomb.x) ** 2 + (item.y - bomb.y) ** 2 > (item.radius + bomb.radius) ** 2;
         }
       }

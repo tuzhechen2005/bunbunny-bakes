@@ -1,7 +1,7 @@
 import { createGrabGame } from "./engine";
 import { MAX_IGNORED_LAUNCHES, MAX_LAUNCHES, MAX_RUN_TICKS, type GrabTierInput } from "./types";
 
-export interface GrabReplayResult { score: number; over: boolean; grabs: number; launchesAccepted: number }
+export interface GrabReplayResult { score: number; over: boolean; grabs: number; launchesAccepted: number; level: number; completedOrders: number }
 export class GrabReplayError extends Error {
   constructor(message: string) { super(message); this.name = "GrabReplayError"; }
 }
@@ -24,5 +24,5 @@ export function replayGrab(
     prev = tick;
   }
   game.step(toTick);
-  return { score: game.score, over: game.over, grabs: game.grabs, launchesAccepted: game.launchesAccepted };
+  return { level: game.state().level, completedOrders: game.state().completedOrders, score: game.score, over: game.over, grabs: game.grabs, launchesAccepted: game.launchesAccepted };
 }

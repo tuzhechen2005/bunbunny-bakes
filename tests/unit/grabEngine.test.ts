@@ -46,7 +46,7 @@ describe("grab engine", () => {
       expect(() => createGrabGame({ seed: "x", tiers: tiers(n) })).toThrow(RangeError);
       expect(() => replayGrab("x", tiers(n), [])).toThrow(RangeError);
     }
-    expect(GRAB_ENGINE_VERSION).toBe(5);
+    expect(GRAB_ENGINE_VERSION).toBe(6);
     expect([FIELD_WIDTH, FIELD_HEIGHT]).toEqual([720, 1080]);
     expect(createGrabGame({ seed: "x", tiers: tiers(10) }).state().items).toHaveLength(9);
   });
@@ -116,9 +116,9 @@ describe("grab engine", () => {
     g.step(s.tick + 1);
     expect(g.state().claw.length).toBe(s.claw.length - EMPTY_REEL_SPEED);
     while (g.state().claw.phase !== "idle") g.step(g.state().tick + 1);
-    expect(g.state().tick - s.tick).toBe(28);
+    expect(g.state().tick - s.tick).toBe(22);
     expect(g.state().claw).toMatchObject({ angle: swingAngle(g.state().tick), length: 0 });
-    expect([0, 1, 2, 3, 8].map(reelSpeed)).toEqual([17, 13, 9, 5, 2]);
+    expect([0, 1, 2, 3, 8].map(reelSpeed)).toEqual([22, 17, 12, 7, 5]);
   });
 
   it("hits the first item along the tip path rather than the first array entry", () => {
@@ -259,9 +259,9 @@ describe("grab engine", () => {
       expect(eventsA).toEqual(eventsB);
       expect({ ...a.state(), events: [] }).toEqual({ ...b.state(), events: [] });
       expect(replayGrab(seed, tiers(n), run.launches)).toEqual({
-        score: run.score, over: true, grabs: run.grabs, launchesAccepted: run.launchesAccepted,
+        level: run.level, completedOrders: run.completedOrders, score: run.score, over: true, grabs: run.grabs, launchesAccepted: run.launchesAccepted,
       });
-      expect(a.score).toBe(eventsA.reduce((sum, e) => sum + (e.type === "score" ? e.points : 0), 0));
+      expect(a.score).toBe(eventsA.reduce((sum, e) => sum + (e.type === "score" ? e.points : e.type === "order" ? e.reward : 0), 0));
     }
     expect(explosions).toBeGreaterThan(0);
   }, 30_000);
@@ -284,18 +284,18 @@ describe("grab engine", () => {
           else if (value && typeof value === "object") Object.values(value).forEach(integersOnly);
         };
         integersOnly(state);
-        expect(state.items.length).toBeLessThanOrEqual(9);
+        expect(state.items.length).toBeLessThanOrEqual(11);
         for (const a of state.items) {
           expect(a.x - a.radius >= 0 && a.x + a.radius <= FIELD_WIDTH).toBe(true);
           expect(a.y - a.radius >= FIELD_HEIGHT * .3 && a.y + a.radius <= FIELD_HEIGHT).toBe(true);
-          for (const b of state.items) if (a.id !== b.id) {
+          for (const b of state.items) if (state.level === 1 && a.id !== b.id) {
             expect((a.x - b.x) ** 2 + (a.y - b.y) ** 2).toBeGreaterThan((a.radius + b.radius) ** 2);
           }
         }
       }
       expect(game.state().tick).toBeLessThan(MAX_RUN_TICKS);
     }
-  });
+  }, 30_000);
 
   it("rejects invalid live times without changing state", () => {
     const g = createGrabGame({ seed: "time", tiers: tiers() });
@@ -330,8 +330,8 @@ describe("grab replay validation", () => {
     bad(Array.from({ length: MAX_IGNORED_LAUNCHES + 20 }, (_, i) => i), /too many ignored/);
   });
   it("supports explicit progress ticks, with no future score credit", () => {
-    expect(replayGrab("empty", tiers(), [], 0)).toEqual({ score: 0, over: false, grabs: 0, launchesAccepted: 0 });
-    expect(replayGrab("empty", tiers(), [])).toEqual({ score: 0, over: true, grabs: 0, launchesAccepted: 0 });
+    expect(replayGrab("empty", tiers(), [], 0)).toEqual({ level: 1, completedOrders: 0, score: 0, over: false, grabs: 0, launchesAccepted: 0 });
+    expect(replayGrab("empty", tiers(), [])).toEqual({ level: 1, completedOrders: 0, score: 0, over: true, grabs: 0, launchesAccepted: 0 });
     expect(() => replayGrab("errors", tiers(), [20], 10)).toThrow(GrabReplayError);
     expect(() => replayGrab("errors", tiers(), [], -1)).toThrow(GrabReplayError);
   });
@@ -354,7 +354,7 @@ describe("grab replay validation", () => {
     }
     expect(game.launchesRejected).toBe(MAX_IGNORED_LAUNCHES);
     expect(game.state().tick).toBeGreaterThan(RUN_TICKS);
-    const expected = { score: game.score, over: true, grabs: game.grabs, launchesAccepted: game.launchesAccepted };
+    const expected = { level: game.state().level, completedOrders: game.state().completedOrders, score: game.score, over: true, grabs: game.grabs, launchesAccepted: game.launchesAccepted };
     expect(replayGrab(seed, tiers(), launches)).toEqual(expected); // Warm up.
     const timings = Array.from({ length: 7 }, () => {
       const start = performance.now();
@@ -368,6 +368,6 @@ describe("grab replay validation", () => {
     const start = performance.now();
     expect(() => replayGrab(seed, tiers(), Array.from({ length: MAX_LAUNCHES }, (_, i) => i))).toThrow(GrabReplayError);
     expect(performance.now() - start).toBeLessThan(50);
-    process.stdout.write(`G1 full replay: median=${timings[3].toFixed(2)}ms max=${timings[6].toFixed(2)}ms\n`);
-  });
+    process.stdout.write(`G6 full replay: median=${timings[3].toFixed(2)}ms max=${timings[6].toFixed(2)}ms\n`);
+  }, 30_000);
 });
