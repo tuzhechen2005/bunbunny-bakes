@@ -3,10 +3,12 @@
 // and may still get the old copy while it does, for up to a minute more); admin writes drop it at
 // once (revalidateMenu, called by adminHandler). The page refetches /api/menu on mount, so what the
 // visitor sees is corrected within a moment anyway (ordering closed, a paused product).
+// Cache only the internal data: project expiry/order at request time, outside `use cache`.
 
+import { connection } from "next/server";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import { prisma } from "./db";
-import { getMenu, type Menu } from "./menu";
+import { getMenuData, presentMenu, type Menu, type MenuData } from "./menu";
 
 export const MENU_TAG = "menu";
 
@@ -16,12 +18,12 @@ function cacheSeconds(): number {
   return Number.isFinite(n) && n >= 0 ? n : 60;
 }
 
-async function cachedMenu(): Promise<Menu> {
+async function cachedMenu(): Promise<MenuData> {
   "use cache";
   cacheTag(MENU_TAG);
   const revalidate = cacheSeconds();
   cacheLife({ stale: 30, revalidate, expire: revalidate + 60 });
-  return getMenu(prisma);
+  return getMenuData(prisma);
 }
 
 /**
@@ -31,7 +33,9 @@ async function cachedMenu(): Promise<Menu> {
 export async function getInitialMenu(): Promise<Menu | null> {
   if (process.env.HOME_INITIAL_MENU === "off") return null;
   try {
-    return await cachedMenu();
+    await connection();
+    const now = new Date();
+    return presentMenu(await cachedMenu(), now);
   } catch {
     return null;
   }

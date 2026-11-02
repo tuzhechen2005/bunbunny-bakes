@@ -42,7 +42,7 @@
   "orderingEnabled": true,
   "products": [{ "id": "…", "name": "奶酥红豆包", "description": "…", "imageUrl": null, "images": [], "field": { "bg": "#EFE7DA", "ink": "#…", "ink2": "#…" },
                  "unitPriceCents": 249, "bundleSize": 4, "bundlePriceCents": 899,
-                 "status": "ACTIVE", "leadDays": 1, "pickupWeekdays": [] }],
+                 "status": "ACTIVE", "leadDays": 1, "pickupWeekdays": [], "isNew": false }],
   "pickupNote": "自提时间在下午 5 点以后，具体时间微信确认",
   "deliveryFeeCents": 500, "freeDeliveryMinCents": 2500, "maxQtyPerItem": 8
 }
@@ -50,7 +50,9 @@
 
 `pickupWeekdays`：可取货的星期几（0 = 周日 … 6 = 周六），`[]` = 每天（D115）。`images`：公开照片地址，按显示顺序，封面在前，0–6 张；`imageUrl` 永远等于 `images[0] ?? null`。`field`：这款商品的首页颜色（背景、字色、次要字色，十六进制），永远有值（没设置时是奶白）。订单视图里的商品 `imageUrl` 仍是封面。
 
-不返回任何克数、上限、已用量。`ARCHIVED` 商品不返回。
+不返回任何克数、上限、已用量或 `newUntil`。`ARCHIVED` 商品不返回。
+
+`isNew: boolean`（D179 / N1）：服务器以本次请求时间计算 `now < newUntil`，空值或恰好到期均为 false。新品排在前面，每组内保持原有 `sortOrder ASC, name ASC` 顺序。首页缓存保存内部数据，在缓存读取之后按请求时间计算标记及顺序并去掉 `newUntil`，因此到期无需写库或等待缓存刷新。
 
 ### POST /api/availability
 
@@ -223,7 +225,7 @@
 
 | 工具 | 参数 | 返回 |
 |---|---|---|
-| `get_menu` | — | 商品（短 id `p1…`、名字、价格、组合价、状态、提前天数、可取货的日子、简介）、每种上限、是否接单 |
+| `get_menu` | — | 商品（短 id `p1…`、名字、价格、组合价、状态、提前天数、可取货的日子、简介、`isNew: boolean`）、每种上限、是否接单 |
 | `check_date` | `items, date, fulfillment?` | 服务器算的小计（配送时含运费、合计）、这一天的状态（`planCart`；不开放的日子是 `NOT_OFFERED`）、可订时的截止时间、FULL/WEEKDAY 时的办法（REDUCE / SPLIT，只有商品名和件数） |
 | `find_dates` | `items, fulfillment?` | 最近 ≤ 5 个 AVAILABLE 的日子和截止时间 |
 | `propose_cart` | `items, date?, note` | 校验（商品存在且在售、每种 ≤ `maxQtyPerItem`、日期填了就必须 AVAILABLE）后成为响应里的 `suggestion`，并返回服务器算的小计（配送时含运费、合计） |
@@ -388,3 +390,12 @@ Names are snapshots; null gets the legacy display label. Product qty/rounds/batc
 remain based on the combined product total. Render each flavour's quantity followed by the
 product total; see the Chinese example and picker requirements in PAGES.md.
 Summary quantities use Product.unitLabel (D173).
+
+### 商品新品标记（N1 / D179）
+
+- `POST /api/admin/products`：原有创建字段之外接受 `isNew?: boolean`，返回 `201 { product }`。
+- `PATCH /api/admin/products/{id}`：原有修改字段之外接受 `isNew?: boolean`，返回 `200 { product, overLimitDates }`。
+- `isNew: true` 将 `newUntil` 设为服务器本次请求时间 + `7 × 24 × 60 × 60 × 1000` 毫秒，再次传 true 重新计时；false 清空为 null；省略时更新保持原值、创建默认为 null。不按芝加哥日历天计算。
+- `GET /api/admin/products` 返回 `200 { products }`；列表、创建及修改返回的商品均含 `newUntil: string | null`（UTC ISO 8601，例如 `2026-11-09T12:00:00.000Z`）。后台商品不额外返回 `isNew`。输入不接受 `newUntil`，`isNew` 只接受 boolean（null、字符串、数字均 `422 VALIDATION`）。
+- 标记写入与既有 `product.create` / `product.update` AuditLog 在同一事务；创建 after、修改 before/after 均含 `newUntil`。自动到期只影响读取结果，不写数据库或日志。
+- 客户菜单和助手 `get_menu` 只返回 `isNew`，不返回 `newUntil`；前端负责后台开关及客户特效（Claude）。

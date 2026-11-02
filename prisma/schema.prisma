@@ -118,6 +118,7 @@ model Product {
   /// Sorted, distinct, never all seven; [] = every day.
   pickupWeekdays   Int[]         @default([])
   status           ProductStatus @default(ACTIVE)
+  newUntil         DateTime?     @db.Timestamptz(3)
   sortOrder        Int           @default(0)
   createdAt        DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
