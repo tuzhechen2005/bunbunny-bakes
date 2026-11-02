@@ -13,6 +13,7 @@ import { nextGameLevel } from '@/server/gameLevels';
 import { prisma } from '@/server/db';
 import { replayTd, tdLevel, MAX_LEVEL_TICKS, type TdInput } from '@/lib/td';
 import { copy } from '@/copy';
+import legacy from '../fixtures/td13-run.json';
 import { greedyTd } from '../support/tdBot';
 import { jsonRequest, getRequest } from './api.helpers';
 import { db, resetDb } from './helpers';
@@ -103,7 +104,7 @@ it('routes expose masked boards, enforce body limits/versions/expiry and allow d
   const board = await (await boardGET(getRequest('/api/game/td/leaderboard?wechatId=WX_ROUTE'))).json();
   expect(board).toMatchObject({nextLevel:2,myBest:1,top:[{score:1,wechatMasked:'wx***te'}]});
   expect((await finishPOST(jsonRequest('/api/game/td/finish',{padding:'x'.repeat(TD_MAX_FINISH_BODY_BYTES)}))).status).toBe(422);
-  for (const version of [8, 9, 10, 11, 12]) {
+  for (const version of [1, 8, 9, 10, 11, 12, 15]) {
     const bad = await start(`old_v${version}`);await db.gameRun.update({where:{id:bad.runId},data:{seed:`v${version}.td.2026-10-19.1`}});
     await expect(finish(bad)).rejects.toMatchObject({message:copy.gameApi.runExpired});
     await expect(progressRun(db,'TD',{runId:bad.runId,log:[],endTick:60},LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
@@ -197,4 +198,18 @@ it('stores replay-derived stars once and returns weekly case-insensitive best st
   const failed=await finishTdRun(db,{runId:retry.runId,inputs,endTick:loss.tick,stars:3},'ip',LATER);
   expect(failed.stars).toBe(0);expect(failed.bestStars).toEqual(result.bestStars);
   expect(await finish(r)).toEqual(result);
+});
+
+// Recorded with the committed v13 engine, before the v14 tuning patch.
+it('keeps v13 progress and finish valid under their original rules', async () => {
+  const fresh = await start();
+  expect(fresh.seed).toMatch(/^v14\./);
+  await db.gameRun.update({where:{id:fresh.runId},data:{seed:legacy.seed}});
+  const inputs = legacy.inputs as TdInput[];
+  await progressRun(db,'TD',{runId:fresh.runId,log:inputs.filter(i=>i.tick<=3000),endTick:3000},LATER);
+  const payload = {runId:fresh.runId,inputs,endTick:legacy.state.tick};
+  const result = await finishTdRun(db,payload,'ip',LATER);
+  expect(result).toMatchObject({passed:legacy.state.passed,stars:legacy.state.stars,level:1});
+  expect(await db.gameRun.findUniqueOrThrow({where:{id:fresh.runId}})).toMatchObject({score:legacy.state.wave,seed:legacy.seed});
+  expect(await finishTdRun(db,payload,'ip',LATER)).toEqual(result);
 });

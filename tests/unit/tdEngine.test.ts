@@ -10,9 +10,9 @@ const level = () => tdLevel("2026-10-26", 1);
 
 describe("TD deterministic level and geometry", () => {
   it("pins the version and generates five shared weekly waves", () => {
-    expect(TD_ENGINE_VERSION).toBe(13);
+    expect(TD_ENGINE_VERSION).toBe(14);
     expect(tdSeedVersion(level().seed)).toBe(TD_ENGINE_VERSION);
-    expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([75, 390, 390, 720, 720]);
+    expect([1, 10, 11, 20, 21].map(n => tdLevel("2026-10-26", n).startCoins)).toEqual([130, 390, 390, 720, 720]);
     expect(level()).toEqual(level());
     expect(level().waves).toHaveLength(5);
     expect(tdLevel("2026-11-02", 1).waves).not.toEqual(level().waves);

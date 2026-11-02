@@ -1,0 +1,1990 @@
+{
+  "seed": "v13.td.2026-10-19.1",
+  "inputs": [
+    {
+      "tick": 0,
+      "type": "place",
+      "slot": 2,
+      "tower": "rollingPin"
+    },
+    {
+      "tick": 0,
+      "type": "callWave",
+      "slot": -1
+    },
+    {
+      "tick": 2430,
+      "type": "upgrade",
+      "slot": 2
+    },
+    {
+      "tick": 6870,
+      "type": "upgrade",
+      "slot": 2,
+      "branch": "a"
+    }
+  ],
+  "state": {
+    "stars": 2,
+    "clutter": [
+      {
+        "id": 0,
+        "kind": "flourSack",
+        "x": 617,
+        "y": 347,
+        "hp": 216,
+        "maxHp": 216,
+        "reward": 12
+      },
+      {
+        "id": 1,
+        "kind": "eggCrate",
+        "x": 743,
+        "y": 342,
+        "hp": 216,
+        "maxHp": 216,
+        "reward": 12
+      }
+    ],
+    "targetClutter": null,
+    "mapData": {
+      "name": "Gentle S",
+      "path": [
+        {
+          "x": 80,
+          "y": 330
+        },
+        {
+          "x": 400,
+          "y": 330
+        },
+        {
+          "x": 520,
+          "y": 450
+        },
+        {
+          "x": 850,
+          "y": 450
+        },
+        {
+          "x": 970,
+          "y": 330
+        },
+        {
+          "x": 1340,
+          "y": 330
+        }
+      ],
+      "slots": [
+        {
+          "x": 560,
+          "y": 290
+        },
+        {
+          "x": 800,
+          "y": 285
+        },
+        {
+          "x": 370,
+          "y": 415
+        }
+      ],
+      "features": []
+    },
+    "unlockedTowers": [
+      "rollingPin"
+    ],
+    "newlyUnlocked": [
+      "rollingPin"
+    ],
+    "itemsUsed": {
+      "bomb": 0,
+      "bell": 0,
+      "slide": 0
+    },
+    "switches": {},
+    "creamLines": [],
+    "tick": 9349,
+    "seed": "v13.td.2026-10-19.1",
+    "level": 1,
+    "map": 0,
+    "coins": 47,
+    "bread": 5,
+    "breadTiers": [
+      0,
+      0,
+      1
+    ],
+    "wave": 5,
+    "waveTargetTier": 2,
+    "nextWave": null,
+    "dropped": [
+      {
+        "forkChoices": {},
+        "id": 15,
+        "tier": 5,
+        "distance": 9464,
+        "x": 621,
+        "y": 450
+      },
+      {
+        "forkChoices": {},
+        "id": 16,
+        "tier": 2,
+        "distance": 7164,
+        "x": 490,
+        "y": 420
+      }
+    ],
+    "lost": 5,
+    "awaitingStart": false,
+    "startedTick": 0,
+    "nextWaveTick": null,
+    "spawning": false,
+    "over": true,
+    "passed": true,
+    "inputsAccepted": 4,
+    "inputsRejected": 0,
+    "pests": [],
+    "towers": [
+      {
+        "x": 370,
+        "y": 415,
+        "slot": 2,
+        "kind": "rollingPin",
+        "level": 2,
+        "spent": 234,
+        "readyTick": 9363,
+        "tier": 2,
+        "branch": "a",
+        "target": null,
+        "cooldownProgress": 30,
+        "lastAttackTick": 9343,
+        "hitCount": 355
+      }
+    ],
+    "batterPuddles": [],
+    "projectiles": [],
+    "events": [
+      {
+        "type": "pickup",
+        "tick": 6873,
+        "pest": 24,
+        "tiers": [
+          5
+        ],
+        "x": 1340,
+        "y": 330
+      },
+      {
+        "type": "shot",
+        "tick": 6882,
+        "projectile": 243,
+        "slot": 2,
+        "target": 28
+      },
+      {
+        "type": "hit",
+        "tick": 6888,
+        "projectile": 243,
+        "pest": 28,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "hit",
+        "tick": 6888,
+        "projectile": 243,
+        "pest": 28,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "shot",
+        "tick": 6902,
+        "projectile": 244,
+        "slot": 2,
+        "target": 28
+      },
+      {
+        "type": "hit",
+        "tick": 6908,
+        "projectile": 244,
+        "pest": 28,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "hit",
+        "tick": 6908,
+        "projectile": 244,
+        "pest": 28,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "shot",
+        "tick": 6922,
+        "projectile": 245,
+        "slot": 2,
+        "target": 28
+      },
+      {
+        "type": "hit",
+        "tick": 6928,
+        "projectile": 245,
+        "pest": 28,
+        "tower": 2,
+        "damage": 2
+      },
+      {
+        "type": "kill",
+        "tick": 6928,
+        "pest": 28,
+        "bounty": 6,
+        "x": 431,
+        "y": 361
+      },
+      {
+        "type": "shot",
+        "tick": 6942,
+        "projectile": 246,
+        "slot": 2,
+        "target": 29
+      },
+      {
+        "type": "hit",
+        "tick": 6948,
+        "projectile": 246,
+        "pest": 29,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "hit",
+        "tick": 6948,
+        "projectile": 246,
+        "pest": 29,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "shot",
+        "tick": 6962,
+        "projectile": 247,
+        "slot": 2,
+        "target": 29
+      },
+      {
+        "type": "hit",
+        "tick": 6968,
+        "projectile": 247,
+        "pest": 29,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "hit",
+        "tick": 6968,
+        "projectile": 247,
+        "pest": 29,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "shot",
+        "tick": 6982,
+        "projectile": 248,
+        "slot": 2,
+        "target": 29
+      },
+      {
+        "type": "hit",
+        "tick": 6988,
+        "projectile": 248,
+        "pest": 29,
+        "tower": 2,
+        "damage": 44
+      },
+      {
+        "type": "kill",
+        "tick": 6988,
+        "pest": 29,
+        "bounty": 6,
+        "x": 279,
+        "y": 330
+      },
+      {
+        "type": "pickup",
+        "tick": 7014,
+        "pest": 25,
+        "tiers": [
+          2
+        ],
+        "x": 1340,
+        "y": 330
+      },
+      {
+        "type": "spawn",
+        "tick": 7020,
+        "pest": 30,
+        "kind": "ant",
+        "wave": 5
+      },
+      {
+        "type": "shot",
+        "tick": 7096,
+        "projectile": 249,
+        "slot": 2,
+        "target": 30
+      },
+      {
+        "type": "hit",
+        "tick": 7102,
+        "projectile": 249,
+        "pest": 30,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "hit",
+        "tick": 7102,
+        "projectile": 249,
+        "pest": 30,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "shot",
+        "tick": 7116,
+        "projectile": 250,
+        "slot": 2,
+        "target": 30
+      },
+      {
+        "type": "hit",
+        "tick": 7122,
+        "projectile": 250,
+        "pest": 30,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "hit",
+        "tick": 7122,
+        "projectile": 250,
+        "pest": 30,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "shot",
+        "tick": 7136,
+        "projectile": 251,
+        "slot": 2,
+        "target": 30
+      },
+      {
+        "type": "hit",
+        "tick": 7142,
+        "projectile": 251,
+        "pest": 30,
+        "tower": 2,
+        "damage": 44
+      },
+      {
+        "type": "kill",
+        "tick": 7142,
+        "pest": 30,
+        "bounty": 6,
+        "x": 234,
+        "y": 330
+      },
+      {
+        "type": "pickup",
+        "tick": 7224,
+        "pest": 26,
+        "tiers": [
+          1
+        ],
+        "x": 1340,
+        "y": 330
+      },
+      {
+        "type": "shot",
+        "tick": 7571,
+        "projectile": 252,
+        "slot": 2,
+        "target": 24
+      },
+      {
+        "type": "hit",
+        "tick": 7577,
+        "projectile": 252,
+        "pest": 24,
+        "tower": 2,
+        "damage": 26
+      },
+      {
+        "type": "drop",
+        "tick": 7577,
+        "pest": 24,
+        "tiers": [
+          5
+        ],
+        "x": 553,
+        "y": 450
+      },
+      {
+        "type": "kill",
+        "tick": 7577,
+        "pest": 24,
+        "bounty": 6,
+        "x": 553,
+        "y": 450
+      },
+      {
+        "type": "shot",
+        "tick": 7712,
+        "projectile": 253,
+        "slot": 2,
+        "target": 25
+      },
+      {
+        "type": "hit",
+        "tick": 7718,
+        "projectile": 253,
+        "pest": 25,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "hit",
+        "tick": 7718,
+        "projectile": 253,
+        "pest": 25,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "shot",
+        "tick": 7732,
+        "projectile": 254,
+        "slot": 2,
+        "target": 25
+      },
+      {
+        "type": "hit",
+        "tick": 7738,
+        "projectile": 254,
+        "pest": 25,
+        "tower": 2,
+        "damage": 56
+      },
+      {
+        "type": "drop",
+        "tick": 7738,
+        "pest": 25,
+        "tiers": [
+          2
+        ],
+        "x": 529,
+        "y": 450
+      },
+      {
+        "type": "kill",
+        "tick": 7738,
+        "pest": 25,
+        "bounty": 6,
+        "x": 529,
+        "y": 450
+      },
+      {
+        "type": "recover",
+        "tick": 7786,
+        "bread": 12,
+        "tier": 5,
+        "x": 1340,
+        "y": 330
+      },
+      {
+        "type": "shot",
+        "tick": 7922,
+        "projectile": 255,
+        "slot": 2,
+        "target": 26
+      },
+      {
+        "type": "hit",
+        "tick": 7928,
+        "projectile": 255,
+        "pest": 26,
+        "tower": 2,
+        "damage": 26
+      },
+      {
+        "type": "drop",
+        "tick": 7928,
+        "pest": 26,
+        "tiers": [
+          1
+        ],
+        "x": 553,
+        "y": 450
+      },
+      {
+        "type": "kill",
+        "tick": 7928,
+        "pest": 26,
+        "bounty": 6,
+        "x": 553,
+        "y": 450
+      },
+      {
+        "type": "bossSpawn",
+        "tick": 7929,
+        "pest": 31,
+        "wave": 5
+      },
+      {
+        "type": "spawn",
+        "tick": 7929,
+        "pest": 31,
+        "kind": "mouse",
+        "wave": 5
+      },
+      {
+        "type": "spawn",
+        "tick": 7929,
+        "pest": 32,
+        "kind": "mouse",
+        "wave": 5
+      },
+      {
+        "type": "spawn",
+        "tick": 7929,
+        "pest": 33,
+        "kind": "mouse",
+        "wave": 5
+      },
+      {
+        "type": "recover",
+        "tick": 7953,
+        "bread": 13,
+        "tier": 2,
+        "x": 1340,
+        "y": 330
+      },
+      {
+        "type": "shot",
+        "tick": 7957,
+        "projectile": 256,
+        "slot": 2,
+        "target": 32
+      },
+      {
+        "type": "hit",
+        "tick": 7963,
+        "projectile": 256,
+        "pest": 32,
+        "tower": 2,
+        "damage": 42
+      },
+      {
+        "type": "kill",
+        "tick": 7963,
+        "pest": 32,
+        "bounty": 0,
+        "x": 220,
+        "y": 330
+      },
+      {
+        "type": "shot",
+        "tick": 7977,
+        "projectile": 257,
+        "slot": 2,
+        "target": 33
+      },
+      {
+        "type": "hit",
+        "tick": 7983,
+        "projectile": 257,
+        "pest": 33,
+        "tower": 2,
+        "damage": 42
+      },
+      {
+        "type": "kill",
+        "tick": 7983,
+        "pest": 33,
+        "bounty": 0,
+        "x": 300,
+        "y": 330
+      },
+      {
+        "type": "recover",
+        "tick": 8137,
+        "bread": 14,
+        "tier": 1,
+        "x": 1340,
+        "y": 330
+      },
+      {
+        "type": "shot",
+        "tick": 8158,
+        "projectile": 258,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8164,
+        "projectile": 258,
+        "pest": 31,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "hit",
+        "tick": 8164,
+        "projectile": 258,
+        "pest": 31,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "shot",
+        "tick": 8178,
+        "projectile": 259,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8184,
+        "projectile": 259,
+        "pest": 31,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "hit",
+        "tick": 8184,
+        "projectile": 259,
+        "pest": 31,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "shot",
+        "tick": 8198,
+        "projectile": 260,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8204,
+        "projectile": 260,
+        "pest": 31,
+        "tower": 2,
+        "damage": 3
+      },
+      {
+        "type": "hit",
+        "tick": 8204,
+        "projectile": 260,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8218,
+        "projectile": 261,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8224,
+        "projectile": 261,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8224,
+        "projectile": 261,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8238,
+        "projectile": 262,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8244,
+        "projectile": 262,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8244,
+        "projectile": 262,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8258,
+        "projectile": 263,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8264,
+        "projectile": 263,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8264,
+        "projectile": 263,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8278,
+        "projectile": 264,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8284,
+        "projectile": 264,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8284,
+        "projectile": 264,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8298,
+        "projectile": 265,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "bossPhase",
+        "tick": 8304,
+        "pest": 31,
+        "phase": 1,
+        "telegraphUntil": 8352,
+        "dashUntil": 8376,
+        "mice": 5
+      },
+      {
+        "type": "hit",
+        "tick": 8304,
+        "projectile": 265,
+        "pest": 31,
+        "tower": 2,
+        "damage": 1
+      },
+      {
+        "type": "spawn",
+        "tick": 8305,
+        "pest": 34,
+        "kind": "mouse",
+        "wave": 5
+      },
+      {
+        "type": "spawn",
+        "tick": 8305,
+        "pest": 35,
+        "kind": "mouse",
+        "wave": 5
+      },
+      {
+        "type": "spawn",
+        "tick": 8305,
+        "pest": 36,
+        "kind": "mouse",
+        "wave": 5
+      },
+      {
+        "type": "spawn",
+        "tick": 8305,
+        "pest": 37,
+        "kind": "mouse",
+        "wave": 5
+      },
+      {
+        "type": "spawn",
+        "tick": 8305,
+        "pest": 38,
+        "kind": "mouse",
+        "wave": 5
+      },
+      {
+        "type": "shot",
+        "tick": 8318,
+        "projectile": 266,
+        "slot": 2,
+        "target": 34
+      },
+      {
+        "type": "hit",
+        "tick": 8324,
+        "projectile": 266,
+        "pest": 34,
+        "tower": 2,
+        "damage": 42
+      },
+      {
+        "type": "kill",
+        "tick": 8324,
+        "pest": 34,
+        "bounty": 0,
+        "x": 305,
+        "y": 330
+      },
+      {
+        "type": "shot",
+        "tick": 8338,
+        "projectile": 267,
+        "slot": 2,
+        "target": 35
+      },
+      {
+        "type": "hit",
+        "tick": 8344,
+        "projectile": 267,
+        "pest": 35,
+        "tower": 2,
+        "damage": 42
+      },
+      {
+        "type": "kill",
+        "tick": 8344,
+        "pest": 35,
+        "bounty": 0,
+        "x": 385,
+        "y": 330
+      },
+      {
+        "type": "shot",
+        "tick": 8358,
+        "projectile": 268,
+        "slot": 2,
+        "target": 36
+      },
+      {
+        "type": "hit",
+        "tick": 8364,
+        "projectile": 268,
+        "pest": 36,
+        "tower": 2,
+        "damage": 42
+      },
+      {
+        "type": "kill",
+        "tick": 8364,
+        "pest": 36,
+        "bounty": 0,
+        "x": 445,
+        "y": 375
+      },
+      {
+        "type": "shot",
+        "tick": 8378,
+        "projectile": 269,
+        "slot": 2,
+        "target": 37
+      },
+      {
+        "type": "hit",
+        "tick": 8384,
+        "projectile": 269,
+        "pest": 37,
+        "tower": 2,
+        "damage": 42
+      },
+      {
+        "type": "kill",
+        "tick": 8384,
+        "pest": 37,
+        "bounty": 0,
+        "x": 502,
+        "y": 432
+      },
+      {
+        "type": "shot",
+        "tick": 8398,
+        "projectile": 270,
+        "slot": 2,
+        "target": 38
+      },
+      {
+        "type": "hit",
+        "tick": 8404,
+        "projectile": 270,
+        "pest": 38,
+        "tower": 2,
+        "damage": 42
+      },
+      {
+        "type": "kill",
+        "tick": 8404,
+        "pest": 38,
+        "bounty": 0,
+        "x": 575,
+        "y": 450
+      },
+      {
+        "type": "shot",
+        "tick": 8418,
+        "projectile": 271,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8424,
+        "projectile": 271,
+        "pest": 31,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "hit",
+        "tick": 8424,
+        "projectile": 271,
+        "pest": 31,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "shot",
+        "tick": 8438,
+        "projectile": 272,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8444,
+        "projectile": 272,
+        "pest": 31,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "hit",
+        "tick": 8444,
+        "projectile": 272,
+        "pest": 31,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "shot",
+        "tick": 8458,
+        "projectile": 273,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8464,
+        "projectile": 273,
+        "pest": 31,
+        "tower": 2,
+        "damage": 3
+      },
+      {
+        "type": "hit",
+        "tick": 8464,
+        "projectile": 273,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8478,
+        "projectile": 274,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8484,
+        "projectile": 274,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8484,
+        "projectile": 274,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8498,
+        "projectile": 275,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8504,
+        "projectile": 275,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8504,
+        "projectile": 275,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8518,
+        "projectile": 276,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8524,
+        "projectile": 276,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8524,
+        "projectile": 276,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8538,
+        "projectile": 277,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8544,
+        "projectile": 277,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8544,
+        "projectile": 277,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8558,
+        "projectile": 278,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8564,
+        "projectile": 278,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8564,
+        "projectile": 278,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8578,
+        "projectile": 279,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8584,
+        "projectile": 279,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8584,
+        "projectile": 279,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8598,
+        "projectile": 280,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8604,
+        "projectile": 280,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8604,
+        "projectile": 280,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8618,
+        "projectile": 281,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8624,
+        "projectile": 281,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8624,
+        "projectile": 281,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8638,
+        "projectile": 282,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8644,
+        "projectile": 282,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8644,
+        "projectile": 282,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8658,
+        "projectile": 283,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8664,
+        "projectile": 283,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8664,
+        "projectile": 283,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8678,
+        "projectile": 284,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8684,
+        "projectile": 284,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8684,
+        "projectile": 284,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8698,
+        "projectile": 285,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8704,
+        "projectile": 285,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8704,
+        "projectile": 285,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8718,
+        "projectile": 286,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8724,
+        "projectile": 286,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8724,
+        "projectile": 286,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8738,
+        "projectile": 287,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8744,
+        "projectile": 287,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8744,
+        "projectile": 287,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8758,
+        "projectile": 288,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8764,
+        "projectile": 288,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8764,
+        "projectile": 288,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8778,
+        "projectile": 289,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "bossPhase",
+        "tick": 8784,
+        "pest": 31,
+        "phase": 2,
+        "telegraphUntil": 8832,
+        "dashUntil": 8856,
+        "mice": 5
+      },
+      {
+        "type": "hit",
+        "tick": 8784,
+        "projectile": 289,
+        "pest": 31,
+        "tower": 2,
+        "damage": 1
+      },
+      {
+        "type": "spawn",
+        "tick": 8785,
+        "pest": 39,
+        "kind": "mouse",
+        "wave": 5
+      },
+      {
+        "type": "spawn",
+        "tick": 8785,
+        "pest": 40,
+        "kind": "mouse",
+        "wave": 5
+      },
+      {
+        "type": "spawn",
+        "tick": 8785,
+        "pest": 41,
+        "kind": "mouse",
+        "wave": 5
+      },
+      {
+        "type": "spawn",
+        "tick": 8785,
+        "pest": 42,
+        "kind": "mouse",
+        "wave": 5
+      },
+      {
+        "type": "spawn",
+        "tick": 8785,
+        "pest": 43,
+        "kind": "mouse",
+        "wave": 5
+      },
+      {
+        "type": "shot",
+        "tick": 8798,
+        "projectile": 290,
+        "slot": 2,
+        "target": 39
+      },
+      {
+        "type": "hit",
+        "tick": 8804,
+        "projectile": 290,
+        "pest": 39,
+        "tower": 2,
+        "damage": 42
+      },
+      {
+        "type": "kill",
+        "tick": 8804,
+        "pest": 39,
+        "bounty": 0,
+        "x": 403,
+        "y": 333
+      },
+      {
+        "type": "shot",
+        "tick": 8818,
+        "projectile": 291,
+        "slot": 2,
+        "target": 40
+      },
+      {
+        "type": "hit",
+        "tick": 8824,
+        "projectile": 291,
+        "pest": 40,
+        "tower": 2,
+        "damage": 42
+      },
+      {
+        "type": "kill",
+        "tick": 8824,
+        "pest": 40,
+        "bounty": 0,
+        "x": 459,
+        "y": 389
+      },
+      {
+        "type": "shot",
+        "tick": 8838,
+        "projectile": 292,
+        "slot": 2,
+        "target": 41
+      },
+      {
+        "type": "hit",
+        "tick": 8844,
+        "projectile": 292,
+        "pest": 41,
+        "tower": 2,
+        "damage": 42
+      },
+      {
+        "type": "kill",
+        "tick": 8844,
+        "pest": 41,
+        "bounty": 0,
+        "x": 516,
+        "y": 446
+      },
+      {
+        "type": "shot",
+        "tick": 8858,
+        "projectile": 293,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8864,
+        "projectile": 293,
+        "pest": 31,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "hit",
+        "tick": 8864,
+        "projectile": 293,
+        "pest": 31,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "shot",
+        "tick": 8878,
+        "projectile": 294,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8884,
+        "projectile": 294,
+        "pest": 31,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "hit",
+        "tick": 8884,
+        "projectile": 294,
+        "pest": 31,
+        "tower": 2,
+        "damage": 69
+      },
+      {
+        "type": "shot",
+        "tick": 8898,
+        "projectile": 295,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8904,
+        "projectile": 295,
+        "pest": 31,
+        "tower": 2,
+        "damage": 3
+      },
+      {
+        "type": "hit",
+        "tick": 8904,
+        "projectile": 295,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8918,
+        "projectile": 296,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8924,
+        "projectile": 296,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8924,
+        "projectile": 296,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8938,
+        "projectile": 297,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8944,
+        "projectile": 297,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8944,
+        "projectile": 297,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8958,
+        "projectile": 298,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8964,
+        "projectile": 298,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8964,
+        "projectile": 298,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8978,
+        "projectile": 299,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 8984,
+        "projectile": 299,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 8984,
+        "projectile": 299,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 8998,
+        "projectile": 300,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 9004,
+        "projectile": 300,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 9004,
+        "projectile": 300,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 9018,
+        "projectile": 301,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 9024,
+        "projectile": 301,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 9024,
+        "projectile": 301,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 9038,
+        "projectile": 302,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 9044,
+        "projectile": 302,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 9044,
+        "projectile": 302,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 9058,
+        "projectile": 303,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "pickup",
+        "tick": 9063,
+        "pest": 42,
+        "tiers": [
+          5
+        ],
+        "x": 1340,
+        "y": 330
+      },
+      {
+        "type": "pickup",
+        "tick": 9063,
+        "pest": 43,
+        "tiers": [
+          2
+        ],
+        "x": 1340,
+        "y": 330
+      },
+      {
+        "type": "hit",
+        "tick": 9064,
+        "projectile": 303,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 9064,
+        "projectile": 303,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 9078,
+        "projectile": 304,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 9084,
+        "projectile": 304,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 9084,
+        "projectile": 304,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 9098,
+        "projectile": 305,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 9104,
+        "projectile": 305,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 9104,
+        "projectile": 305,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 9118,
+        "projectile": 306,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 9124,
+        "projectile": 306,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "hit",
+        "tick": 9124,
+        "projectile": 306,
+        "pest": 31,
+        "tower": 2,
+        "damage": 0
+      },
+      {
+        "type": "shot",
+        "tick": 9138,
+        "projectile": 307,
+        "slot": 2,
+        "target": 31
+      },
+      {
+        "type": "hit",
+        "tick": 9144,
+        "projectile": 307,
+        "pest": 31,
+        "tower": 2,
+        "damage": 1
+      },
+      {
+        "type": "kill",
+        "tick": 9144,
+        "pest": 31,
+        "bounty": 8,
+        "x": 397,
+        "y": 330
+      },
+      {
+        "type": "shot",
+        "tick": 9323,
+        "projectile": 308,
+        "slot": 2,
+        "target": 42
+      },
+      {
+        "type": "hit",
+        "tick": 9329,
+        "projectile": 308,
+        "pest": 42,
+        "tower": 2,
+        "damage": 42
+      },
+      {
+        "type": "drop",
+        "tick": 9329,
+        "pest": 42,
+        "tiers": [
+          5
+        ],
+        "x": 541,
+        "y": 450
+      },
+      {
+        "type": "kill",
+        "tick": 9329,
+        "pest": 42,
+        "bounty": 0,
+        "x": 541,
+        "y": 450
+      },
+      {
+        "type": "shot",
+        "tick": 9343,
+        "projectile": 309,
+        "slot": 2,
+        "target": 43
+      },
+      {
+        "type": "hit",
+        "tick": 9349,
+        "projectile": 309,
+        "pest": 43,
+        "tower": 2,
+        "damage": 42
+      },
+      {
+        "type": "drop",
+        "tick": 9349,
+        "pest": 43,
+        "tiers": [
+          2
+        ],
+        "x": 490,
+        "y": 420
+      },
+      {
+        "type": "kill",
+        "tick": 9349,
+        "pest": 43,
+        "bounty": 0,
+        "x": 490,
+        "y": 420
+      },
+      {
+        "type": "over",
+        "tick": 9349,
+        "passed": true,
+        "reason": "cleared"
+      }
+    ]
+  },
+  "hashes": [
+    {
+      "n": 1,
+      "hash": "2aaec737cacc3c1269667eaaf5caa68bd1fc1deeba140e82e19963d97e294e05"
+    },
+    {
+      "n": 2,
+      "hash": "7211a242986c31474047d7e02f138a617fafeb695912144f2adceaa8a6beabe7"
+    },
+    {
+      "n": 3,
+      "hash": "97d1fa045433421770e3c7f32859c89019d3667911486ee8ae9fcb1f858862af"
+    },
+    {
+      "n": 4,
+      "hash": "6327e81e183b4be0915e1ccf4cb0e48b502e1b0348103cd497aa8b366683eb86"
+    },
+    {
+      "n": 5,
+      "hash": "ed594c935fda5050642ef66d7b827dbac0a01b7b23b1c347e4064f27f64d7e37"
+    },
+    {
+      "n": 6,
+      "hash": "b55d3740e2d0ff13ceaa221ab416d1a3d3b4aabfbb36fa79783219b64fd66c66"
+    },
+    {
+      "n": 8,
+      "hash": "aefd52b0b47754f6dc1a41e43256075b4919c253a8bba462c688adce78e95a46"
+    },
+    {
+      "n": 18,
+      "hash": "d6758a42e68a8716bf36d8985314b4654322ea7cc2f07d2c09a288cdd7ad93a5"
+    },
+    {
+      "n": 30,
+      "hash": "353615525a78aae82bb21180cae585ebc7f381b2dc4132a4579f93d28da8b1d3"
+    },
+    {
+      "n": 1000,
+      "hash": "5fc01a5621d766cc1675bb995f524c67076e7ead26de0ceb820c140adb20ffd0"
+    }
+  ]
+}

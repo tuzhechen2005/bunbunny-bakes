@@ -30,10 +30,23 @@ export function tdSeedVersion(seed: string): number | null {
   return Number(match[1]);
 }
 
+/** Only live versions explicitly retained by D188 are replayable. */
+export function isSupportedTdSeed(seed: string): boolean {
+  const version = tdSeedVersion(seed);
+  return version === 13 || version === 14;
+}
+
 /** No owner/run randomness: everyone gets exactly this week's numbered level. */
 export function tdLevel(weekKey: string, n: number): TdLevel {
-  const seed = tdSeed(weekKey, n);
-  const rng = createRng(seed);
+  return generateTdLevel(weekKey, n, TD_ENGINE_VERSION);
+}
+
+function generateTdLevel(weekKey: string, n: number, version: 13 | 14): TdLevel {
+  const seed = tdSeed(weekKey, n).replace(/^v14/, `v${version}`);
+  const onboarding = version === 14;
+  // Replay identity advances, but preserve v13 weekly layouts/counts outside this tuning.
+  const generationSeed = `v13.td.${weekKey}.${n}`;
+  const rng = createRng(generationSeed);
   // Saturate physical tuning at L1000 to keep even MAX_SAFE_INTEGER levels bounded.
   const difficulty = Math.min(n - 1, 999);
   const hpGrowth = 50 + Math.floor(Math.min(10, Math.max(0, difficulty - 9)) * 14 / 10);
@@ -96,11 +109,15 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
   });
   // Small teaching purse; midgame openings fund a combination rather than
   // stranding most of the purse below the next useful purchase price.
-  const startCoins = n === 1 ? 75 : n === 2 ? 240 : n <= 5 ? 340
+  const startCoins = n === 1 ? (onboarding ? 130 : 75) : n === 2 ? 240 : n <= 5 ? 340
     : n <= 7 ? 340 - (n - 5) * 26 : n <= 12 ? 390 : 210 + Math.min(10, n - 10) * 51;
-  if (n === 1) for (const wave of waves) {
-    wave.interval = wave === waves[0] ? 100 : 112;
-    for (const pest of wave.pests) { pest.hp = pest.boss ? 300 : 200; pest.armor = 0; pest.speed = 24; }
+  if (n === 1) for (const [index, wave] of waves.entries()) {
+    wave.interval = index === 0 ? 100 : 112;
+    for (const pest of wave.pests) {
+      pest.hp = pest.boss ? (onboarding ? 400 : 300) : onboarding && index < 2 ? 140 : 200;
+      pest.armor = 0;
+      pest.speed = 24;
+    }
   }
   // Sparse waves reduce splash value and extend single-target firing windows.
   // Interpolate compensation across the same D9 difficulty checkpoints.
@@ -116,6 +133,10 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
     wave.interval = Math.ceil(wave.interval / 0.6);
     wave.maxLivePests = n < 20 ? 8 : 12;
   }
+  // The first two mouse waves teach L2's new consumable without requiring it.
+  if (onboarding && n === 2) for (const wave of waves.slice(0, 2)) for (const pest of wave.pests) {
+    pest.hp = Math.min(pest.hp, 240);
+  }
   // D181 amendment: a milder, unarmored swarm teaches splash before the boss spit.
   if (n >= 5) {
     const count = 12 + rng.int(7);
@@ -124,9 +145,14 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
     })) };
   }
   // Late fights trade some boss HP for meaningful spit pressure and a shorter cleanup.
-  for (const wave of waves) for (const pest of wave.pests) if (pest.boss) { pest.hp = Math.round(pest.hp * (n >= 18 ? 1.4 : 1.75)); pest.speed = 8; }
+  for (const wave of waves) for (const pest of wave.pests) if (pest.boss) {
+    // Tutorial bosses use the pre-v12 base, without sparse-wave HP compensation.
+    if (onboarding && n <= 4) pest.hp = n <= 3 ? 400 + difficulty * 120 : 600 + difficulty * 180;
+    else pest.hp = Math.round(pest.hp * (onboarding && n === 5 || n >= 18 ? 1.4 : 1.75));
+    pest.speed = 8;
+  }
   const unlockLevels = [1, 3, 5, 8, 11, 14, 18];
-  const mapData = levelMap(seed, n);
+  const mapData = levelMap(generationSeed, n);
   const unlockedTowers = TOWER_KINDS.filter((_, i) => n >= unlockLevels[i]);
   // Reserve even bonuses that a particular strategy may not be able to earn.
   // Floor each scaled bounty so integer rounding can never exceed the budget.
@@ -152,7 +178,7 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
   }
   // Reserve both six-mouse spits (2 coins each); escorts/tutorial adds still pay zero.
   const bountyBudget = Math.floor(fullBuildCost * 0.75) - startCoins - bonusBudget - 24 - (n >= 5 ? 24 : 0);
-  // Fund an early second pin/upgrade instead of a large final payout.
+  // Fund an early third pin/upgrade instead of a large final payout.
   if (n === 1) for (const wave of waves) for (const pest of wave.pests) {
     pest.bounty = pest.boss ? 10 : wave === waves[0] ? 36 : 8;
   }
@@ -165,9 +191,9 @@ export function tdLevel(weekKey: string, n: number): TdLevel {
 }
 
 export function tdLevelFromSeed(seed: string): TdLevel {
-  if (tdSeedVersion(seed) !== TD_ENGINE_VERSION) throw new RangeError("td: unsupported or malformed seed");
+  if (!isSupportedTdSeed(seed)) throw new RangeError("td: unsupported or malformed seed");
   const parts = seed.split(".");
-  const level = tdLevel(parts[2], Number(parts[3]));
+  const level = generateTdLevel(parts[2], Number(parts[3]), tdSeedVersion(seed) as 13 | 14);
   if (level.seed !== seed) throw new RangeError("td: noncanonical seed");
   return level;
 }

@@ -1,5 +1,5 @@
 import { BIG_ENGINE_VERSION, bigSeedVersion } from "@/lib/game";
-import { TD_ENGINE_VERSION, tdSeedVersion } from "@/lib/td";
+import { isSupportedTdSeed } from "@/lib/td";
 import { bestTdStars, tdFinishSchema, verifyTdRun } from "./td";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
@@ -46,7 +46,7 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
   if (run.finishedAt) return { score: run.score, live: false, ...(game === "TD" ? { bestStars: await bestTdStars(db, weekKeyOf(now), run.wechatId) } : {}) };
   if (now >= runExpiresAt(run.startedAt)
     || (game === "BIG" && bigSeedVersion(run.seed) !== BIG_ENGINE_VERSION)
-    || (game === "TD" && tdSeedVersion(run.seed) !== TD_ENGINE_VERSION)
+    || (game === "TD" && !isSupportedTdSeed(run.seed))
     || (game === "TU" && tuSeedVersion(run.seed) !== TU_ENGINE_VERSION)
     || (game === "M3" && m3SeedVersion(run.seed) !== M3_ENGINE_VERSION)
     || (game === "GRAB" && grabSeedVersion(run.seed) !== GRAB_ENGINE_VERSION)

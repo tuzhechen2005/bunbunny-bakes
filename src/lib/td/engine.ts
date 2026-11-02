@@ -1,6 +1,6 @@
 import { createRng } from "../game/rng";
 import { towerStats, TOWER_KINDS } from "./balance";
-import { tdLevelFromSeed } from "./level";
+import { tdLevelFromSeed, tdSeedVersion } from "./level";
 import { distanceSquared, pathLength, pathPosition, pathHeading, pestRoute } from "./maps";
 import {
   tdStars, FIELD_WIDTH, FIELD_HEIGHT, SUBUNITS, type TdCreamLine, type TdItem, type TdPoint,
@@ -45,7 +45,8 @@ export function createTdGame(opts: TdOptions): TdGame {
   };
   const map = level.mapData, end = pathLength(map);
   freezeMap(map);
-  const rng = createRng(`${level.seed}:forks`);
+  // Keep weekly fork choices stable across the v14 onboarding-only adjustment.
+  const rng = createRng(`v13.td.${level.weekKey}.${level.number}:forks`);
   const switches: Record<number, number> = {};
   for (const f of map.features ?? []) if (f.switchable) switches[f.id] = 0;
   const itemsUsed: Record<TdItem, number> = { bomb: 0, bell: 0, slide: 0 };
@@ -163,7 +164,7 @@ export function createTdGame(opts: TdOptions): TdGame {
       pest.phase++;
       pest.telegraphUntil = tick + 48; pest.dashUntil = tick + 72;
       pest.phaseReadyTick = tick + (pest.phase === 1 ? 480 : 360);
-      const count = level.number < 5 ? 5 : 6;
+      const count = tdSeedVersion(level.seed) === 13 ? (level.number < 5 ? 5 : 6) : Math.min(6, level.number + 1);
       pendingMice.push({parent: {...pest, forkChoices:{...pest.forkChoices}}, count, total: count, spit: true});
       events.push({type:"bossPhase",tick,pest:pest.id,phase:pest.phase,telegraphUntil:pest.telegraphUntil,dashUntil:pest.dashUntil,mice:count});
     }

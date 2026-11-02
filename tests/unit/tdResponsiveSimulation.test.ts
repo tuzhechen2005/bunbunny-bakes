@@ -9,4 +9,4 @@ it('replays the boss response build using only earned coins and logged purchases
   expect(run.state.inputsRejected).toBe(0);
   const verified=replayTd({level},run.inputs,run.state.tick);
   expect({...verified,events:[]}).toEqual(run.state);
-});
+},30000); // Full replay shares CPU with the balance sweep.

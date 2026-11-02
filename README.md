@@ -143,13 +143,21 @@ autosave/resume, target HUD and v2 rejection; they were updated without launchin
 
 ## 保卫大面包 progression and maps (D9)
 
-TD engine/replay **v9** uses per-level data maps in a **1440 × 810** field.
+TD engine/replay **v14** uses per-level data maps in a **1440 × 810** field.
 L1–L10 have authored lesson layouts; L11+ derives varied routes and increasing
 path features from `(weekKey, level)`. Slots grow from 3 to 11. Seven towers unlock
 at L1/3/5/8/11/14/18; bomb, bell and slide unlock at L2/6/10 with server-authorized,
 once-per-type use. Fork switches and items are deterministic replay inputs.
-Old v1–v8 unfinished runs and saves are rejected. The renderer should consume
+D188: in-progress v13 runs and saves retain v13 rules through completion; only
+new starts use v14. Progress and finish replay the seed’s version. V12 and older
+remain rejected; retain only explicitly supported versions that were live. The renderer should consume
 `mapData` rather than baked backgrounds or the legacy map index.
+
+V14 restores the early-level teaching curve: L1 starts with 130 coins (two pins),
+L1–L2 opening pests are gentler, L1–L4 bosses use pre-v12 base HP, and boss HP
+pressure ramps through L5 to full strength at L6. Weekly v13 generation and fork
+choices remain stable. Across 40 weeks, novice and strategy bots each cleared
+40/40 at every level L1–L4; a lone unupgraded L1 pin still loses bread.
 
 See [engine contracts, E1 integration and L1–L10 ASCII maps](src/lib/td/README.md).
 This task changes no `src/components/**` or `src/app/game/**`, launches no browsers,

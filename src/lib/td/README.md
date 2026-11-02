@@ -1,16 +1,17 @@
-# Deterministic bakery TD — D181 / TD v12.1 / engine v13
+# Deterministic bakery TD — D181 / TD v14 / engine v14
 
-Canonical seed: `v13.td.<Gregorian Monday>.<level>`. Old v1–v12 unfinished runs
-and saves are rejected; stored results remain intact. The save key derives from
-`TD_ENGINE_VERSION`, so it changes to `bb_td_save_v13` without frontend edits.
+Canonical seed: `v14.td.<Gregorian Monday>.<level>`. D188 retains v13 unfinished runs
+and saves with their original rules; v12 and older remain rejected. Stored
+results remain intact. New starts use v14. Client storage must preserve v13 saves.
 60 integer ticks/s; travel uses 16 subunits per drawing unit. Board: 1440×810.
 No clocks, global random state, account progression, or cross-week unlocks.
 
 ## Teaching combat and budgeting income
 
-L1 starts with 75 coins: a 60-coin rolling pin plus 15 in reserve. Ants require
-multiple hits, and a single never-upgraded pin should lose most weeks. Build a
-second pin or upgrade early. The three-slot S route retains slow pests, ten
+L1 starts with 130 coins: two 60-coin rolling pins plus 10 in reserve. Ants require
+multiple hits; waves 1–2 use 140 base HP before sparse-wave scaling, while waves
+3–5 retain 200. L2 opening mouse HP is capped at 240. A single never-upgraded pin
+still loses bread; wave income funds a third pin or upgrade before wave 3. The three-slot S route retains slow pests, ten
 bread lives, no items, and no path mechanics. Slot coverage makes placement matter.
 
 Every level budgets against the most expensive unlocked tower line: sum its
@@ -450,11 +451,12 @@ No component or page changes are included. Integrate these engine/server additio
 - **Boss 大胃王鼠:** `boss: true`, `hp`, `maxHp` describe the three equal HP
   segments (boundaries `ceil(maxHp*2/3)` and `ceil(maxHp/3)`). `phase` is 0/1/2.
   The boss enters after preceding pests clear, with two escorts.
-  Generated boss HP is 1.75× the previous formula through L17, **1.4× from L18**
+  Generated boss HP is 400/520/640/1140 at L1–L4 (no sparse-wave compensation),
+  then 1.4× at L5, 1.75× at L6–L17, **1.4× from L18**
   to budget for stronger adds without lengthening the full encounter. Speed stays 8 subunits/tick.
   `bossSpawn {tick,pest,wave}` is followed by two tiny mouse escorts. Each
   `bossPhase {tick,pest,phase,telegraphUntil,dashUntil,mice}` announces a phase
-  (`mice: 5` at L1–L4, **6** from L5)
+  (`mice: 2/3/4/5` at L1/L2/L3/L4, **6** from L5)
   at a health boundary. Draw a warning for 48 ticks (0.8 seconds); the boss stops
   and cannot take damage during this warning. Then it moves at 2× speed for
   24 ticks (0.4 seconds), subject to existing control effects. There is no death
@@ -474,7 +476,7 @@ No component or page changes are included. Integrate these engine/server additio
   These are armored adds: use upgraded splash with overlapping flour; base attacks
   and low-damage torch branches are poor counters. No new damage-resistance rule.
   Arrival escorts and L1–L4 phase adds retain HP `42+min(80,2*(L-1))`, speed 64,
-  armor/bounty 0; L1–L4 still spit five. Wave 3 from L5 contains 12–18 unarmored
+  armor/bounty 0; L1–L4 spit 2/3/4/5 respectively. Wave 3 from L5 contains 12–18 unarmored
   mice, 8 ticks apart, HP `min(200,60+6*L)`, speed **66**, base bounty 3 before
   income-budget scaling. Ordinary wave caps remain 8/12; all share a hard
   **16 total live pests**, including returners. Strong spits start at offsets
@@ -590,3 +592,72 @@ uses an upgraded opening pin, overlapping rapid whisk / strong flour, and at L18
 entrance oven coverage and a second whisk. `responsive` is the unchanged v12
 pin/oven response policy, retained for comparison. No items or injected funds.
 Full measurements and check results: [V12.1 validation](../../../docs/TD_V12_1_VALIDATION.md).
+
+
+## D181 amendment — v14 onboarding (owner 11/02)
+
+New starts use replay version 14; v13 progress and finish remain valid under
+D188 and replay the original v13 parameters. Generation and fork RNG deliberately keep the v13 namespace so this
+patch does not reroll later weekly maps, waves, or fork choices. A v13 golden
+hash covers L5/6/8/10/18/20/30/1000 across three weeks (only L5 boss HP excluded).
+L5's HP multiplier is 1.4, reaching the existing 1.75 at L6. Later combat,
+spit stats, timings, economy and unlocks remain unchanged. Early phases retain
+telegraphs and 6/8/6-second segment guards, with fewer weak adds.
+
+Run `npx tsx tests/support/td14Simulation.ts` to reproduce the 40-week sample
+starting 2026-01-05. The novice bot uses noisy coarse coverage (±25%), two pins
+before starting, a third when affordable, then at most three upgrades. It reacts
+every 60–120 ticks, makes at most one purchase per observation, and uses no
+items, sales, clutter rewards, early-call bonuses or future-wave information.
+The strategy bot is the existing `greedyTd` policy, with unlocked towers only.
+These are deterministic policy checks, not measured human pass rates.
+
+| Level | Novice clears | Strategy clears | Novice bread lost | Strategy bread lost |
+|---|---:|---:|---:|---:|
+| 1 | 40/40 (100%) | 40/40 (100%) | 0 | 0 |
+| 2 | 40/40 (100%) | 40/40 (100%) | 0–8 | 0 |
+| 3 | 40/40 (100%) | 40/40 (100%) | 0–5 | 0 |
+| 4 | 40/40 (100%) | 40/40 (100%) | 0–4 | 0 |
+
+L1 two base pins at slots 2+0: no opening-wave pickups and 0 final losses in
+40/40 weeks, with another purchase affordable before wave 3. Every single-pin
+slot across the same 40 weeks loses bread (9–10); only 1/120 runs clears. L2
+retains 240 starting coins; two base pins in any pair lose no bread before wave
+3, but a few temporary pickups remain and later waves require reinvestment.
+The 75% full-build income ceiling remains enforced; the larger L1 purse reduces
+bounties through the existing budget rather than flooding the level with gold.
+
+Validation commands are the same as above, restricted to the TD unit and DB
+files; database: `bunbunny_td12_test`. Browser e2e is not run; its version pin
+is updated to 14. No component edits or commits.
+
+Final v14 verification: 178 TD unit cases verified across the full sweep and
+focused rerun; 14 TD/migration DB cases passed on `bunbunny_td12_test`.
+TypeScript, ESLint and `git diff --check` passed. The full sweep used
+`--maxWorkers 2` and took 553 seconds; its only failure was the responsive
+replay's default 5-second timeout. That test now allows 30 seconds, with the same
+assertions, and passes on rerun. No gameplay assertion was relaxed for timing.
+
+
+## D188 client handoff (components intentionally unchanged)
+
+`tdLevelFromSeed(seed)` is the shared version-aware entry; `createTdGame` and
+`replayTd` already call it internally. `tdLevel(weekKey, n)` creates current-version
+levels and must not validate or reconstruct an existing run.
+
+- `src/components/td/tdSave.ts`: replace current-version seed equality with
+  `tdLevelFromSeed(s.seed)` and compare its weekKey/number to saved metadata.
+  Preserve and read `bb_td_save_v13` as well as v14; do not delete supported keys.
+  Write/clear the selected run's key without erasing another active save.
+- `src/components/td/TdBoard.tsx`: keep passing `save.seed` to `createTdGame`;
+  this now resumes the correct rules automatically. Never rewrite a saved seed.
+
+The compatibility fixture in `tests/fixtures/td13-run.json` was generated from
+committed v13 sources using `greedyTd`. It pins full terminal state plus level
+hashes for L1/2/3/4/5/6/8/18/30/1000. Save resumption is tested at the engine
+input-log boundary; browser save discovery/validation needs the Claude UI wiring.
+
+D188 verification: `npx tsc --noEmit`, `npx eslint .`, and `git diff --check`
+passed. `npx vitest run --project unit 'tests/unit/td' --maxWorkers 2` passed
+181 tests in 16 files (506 seconds). TD and migration DB tests passed 15 tests
+in 2 files with `TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_td12_test`.

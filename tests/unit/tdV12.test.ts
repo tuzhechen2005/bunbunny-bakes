@@ -8,7 +8,8 @@ beforeEach(()=>{
     clutter:[{id:0,kind:'flourSack',x:210,y:350,hp:216,maxHp:216,reward:12}],
     waves:Array.from({length:5},()=>({interval:1,pests:[{kind:'mouse',hp:1,speed:1,armor:0,bounty:0}]}))};
 });
-it('caps burst damage at both segments, telegraphs 48 ticks, spawns six mice twice and never on death',()=>{
+it.each([1,2,3,4,5])('L%i caps burst damage, telegraphs, ramps phase adds and never spawns on death', n=>{
+  fixture.level!.number=n;
   fixture.level!.mapData.path = [{x:100,y:400},{x:13000,y:400}]; // Let escaped adds travel while checking boss timing.
   fixture.level!.waves[0].pests=[{kind:'mouse',hp:90,speed:1,armor:0,bounty:0,boss:true}];
   const game=createTdGame({level:fixture.level!});
@@ -27,7 +28,7 @@ it('caps burst damage at both segments, telegraphs 48 ticks, spawns six mice twi
   expect(phases).toBe(2);expect(peak).toBeLessThanOrEqual(16);
   const death=events.find(e=>e.type==='kill'&&e.pest===1)!;
   expect(death).toBeDefined();expect(death.tick).toBeGreaterThanOrEqual(1201);
-  expect(events.filter(e=>e.type==='spawn'&&e.wave===1)).toHaveLength(15);
+  expect(events.filter(e=>e.type==='spawn'&&e.wave===1)).toHaveLength(3 + 2 * Math.min(6,n+1));
   expect(events.filter(e=>e.type==='spawn'&&e.tick===death.tick)).toHaveLength(0);
 });
 it('targets clutter for 3–5 seconds with a base pin, pays exactly once and replays',()=>{
@@ -69,7 +70,7 @@ it('packs a real swarm under the hard cap and queues the remaining arrivals',()=
   expect(game.state().nextWaveTick).toBeNull();
 });
 
-it.each([[1,525,1.5,2],[5,2160,1.5,2],[10,3700,1.5,2],[20,6614,1.3,1.5]])('L%i boss HP preserves early segments and budgets for stronger late spits', (n,previous,min,max)=>{
+it.each([[1,400,1,1],[5,2160,1.3,1.5],[10,3700,1.5,2],[20,6614,1.3,1.5]])('L%i boss HP preserves early segments and budgets for stronger late spits', (n,previous,min,max)=>{
   const hp=tdLevel('2026-10-26',n).waves[4].pests.at(-1)!.hp;
   expect(hp/previous).toBeGreaterThanOrEqual(min);expect(hp/previous).toBeLessThanOrEqual(max);
 });
@@ -87,7 +88,7 @@ it('keeps both visible clutter targets separate from tower slots and each other'
   }
 });
 
-it.each([[4,48,64,0],[5,320,180,50],[10,500,180,50],[20,693,240,55],[1000,825,240,55]])('L%i spits expose exact stats, deterministic spacing and preserve replay', (n,hp,speed,armor) => {
+it.each([[2,44,64,0],[3,46,64,0],[4,48,64,0],[5,320,180,50],[10,500,180,50],[20,693,240,55],[1000,825,240,55]])('L%i spits expose exact stats, deterministic spacing and preserve replay', (n,hp,speed,armor) => {
   fixture.level!.number=n;
   fixture.level!.waves[0]={interval:99999,pests:[{kind:'mouse',hp:300,speed:1,armor:0,bounty:0,boss:true},{kind:'mouse',hp:1,speed:1,armor:0,bounty:0}]};
   const options={level:fixture.level!,itemsAllowed:{bomb:1}};
@@ -97,10 +98,10 @@ it.each([[4,48,64,0],[5,320,180,50],[10,500,180,50],[20,693,240,55],[1000,825,24
   const boss=game.state().pests.find(p=>p.boss)!;
   inputs.push({tick:361,type:'item',item:'bomb',x:boss.x,y:boss.y});
   expect(game.apply(inputs[1])).toBe(true);
-  expect(game.state().events.find(e=>e.type==='bossPhase')).toMatchObject({mice:n<5?5:6});
+  expect(game.state().events.find(e=>e.type==='bossPhase')).toMatchObject({mice:Math.min(6,n+1)});
   const ids=game.step(362).filter(e=>e.type==='spawn').map(e=>e.pest);
   const mice=game.state().pests.filter(p=>ids.includes(p.id));
-  expect(mice).toHaveLength(n<5?5:6);
+  expect(mice).toHaveLength(Math.min(6,n+1));
   for(const [i,p] of mice.entries()) {
     expect(p).toMatchObject({kind:'mouse',tiny:true,wave:1,
       hp,speed,armor,bounty:n<5?0:2});

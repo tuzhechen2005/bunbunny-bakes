@@ -8,7 +8,7 @@ import type { GameRun } from "@/generated/prisma/client";
 import { z } from "zod";
 import { copy } from "@/copy";
 import type { Prisma } from "@/generated/prisma/client";
-import { MAX_INPUTS, replayTd, TD_ENGINE_VERSION, tdLevel, tdSeedVersion, validTdInput, validTdTick, type TdInput, type TdLevel, type TdOptions } from "@/lib/td";
+import { MAX_INPUTS, replayTd, isSupportedTdSeed, tdLevel, tdLevelFromSeed, validTdInput, validTdTick, type TdInput, type TdLevel, type TdOptions } from "@/lib/td";
 import { isTdSuspicious, tdTierCount } from "./tdRules";
 import { isDeepStrictEqual } from "node:util";
 import type { DbClient } from "./db";
@@ -88,7 +88,7 @@ export async function finishTdRun(db: DbClient, input: unknown, ipHash: string, 
   const run = await db.gameRun.findUnique({ where: { id: data.runId } });
   // Run ids from other games cannot submit TD evidence.
   if (!run || run.game !== "TD") throw new AppError("NOT_FOUND", { message: copy.gameApi.runNotFound });
-  if (!run.level || tdSeedVersion(run.seed) !== TD_ENGINE_VERSION) throw new AppError("VALIDATION", { message: copy.gameApi.runExpired });
+  if (!run.level || !isSupportedTdSeed(run.seed)) throw new AppError("VALIDATION", { message: copy.gameApi.runExpired });
   // Repeating a finish returns the stored result (the first input log wins).
   if (run.finishedAt) return tdResult(db, run);
   if (now.getTime() >= runExpiresAt(run.startedAt).getTime()) {
@@ -138,8 +138,8 @@ export function verifyTdRun(run: GameRun, data: z.output<typeof tdFinishSchema>,
   let outcome;
   try {
     if (!run.level) throw badRun();
-    const level = tdLevel(weekKeyOf(run.startedAt), run.level);
-    if (run.seed !== level.seed) throw badRun();
+    const level = tdLevelFromSeed(run.seed);
+    if (level.weekKey !== weekKeyOf(run.startedAt) || level.number !== run.level) throw badRun();
     outcome = replayTd({ level, itemsAllowed, tierCount: tdTierCount(run.tiersSnapshot) }, data.inputs, data.endTick);
     if (outcome.tick !== data.endTick || (complete && !outcome.over)) throw badRun();
   } catch { throw badRun(); }

@@ -267,3 +267,27 @@ pages changed. Measurements and limits are recorded in engine READMEs and docs/D
 
 D185（[店主] 11/02 F3）：取代 D175 的“历史 NULL 在后台显示「未选口味」”；flavorName 为 NULL 表示无口味，后台订单列表显示商品名×数量，详情 flavorLabel 为 null（string | null），有口味行显示不变；口味汇总及邮件先列具名口味，再将无口味数量合并为「其他 N个」（沿用原单位），使用 copy.flavors.other。
 | D186 | QA 手机登录后台（店主 11/02 选 B）：环境变量 `QA_INSECURE_COOKIE=1` 且 `SITE_URL` 是 http 的 localhost / 局域网地址（10/8、172.16/12、192.168/16）时，登录 cookie 不加 Secure；https 或公网地址即使误设该变量也保持 Secure。只在本机 QA 启动脚本里设置，Netlify 正式环境永不设置 | [你] 11/02 |
+
+
+D181 amendment — owner 11/02 “第一关就过不去 / 小兵都打不死 第一关的金币只够放一个”:
+TD engine v14 starts L1 at 130 coins, softens only L1/L2 opening pests, restores
+L1–L4 boss base HP to 400/520/640/1140 and ramps phase adds 2/3/4/5/6. L5 uses
+1.4× boss HP, L6 restores 1.75×; later tuning and v13 weekly generation/fork RNG
+are preserved. Spit stats and telegraphs stay intact. V13 runs/saves remain valid under D188 below.
+40-week novice (1–2 s reaction, three pins, at most three upgrades) and existing
+strategy samples each pass 40/40 at L1, L2, L3 and L4. L1 novice loses 0 bread;
+a lone base pin loses 9–10 (1/120 clears). Two sensible base pins prevent opening
+pickups and fund another purchase by wave 3; the 75% income cap still applies.
+See `src/lib/td/README.md` for reproducible policies and per-level results.
+
+
+### D188 — Preserve in-progress engine versions (owner 11/02: “不要动正在玩的局”)
+
+An engine rollout must not invalidate a run already in progress. TD seeds pin
+rules for the entire attempt: v13 retains its level generation, economy, HP,
+boss phase adds and score; only new starts issue v14. Progress, finish and saved
+input-log resumption use `tdLevelFromSeed(seed)`. Keep only explicitly supported
+versions that were live; this rollout retains v13 and v14, not v12 or older.
+Normal run expiry, week attribution and leaderboard rules remain unchanged.
+Client integration must preserve/read `bb_td_save_v13` alongside v14 and validate
+the saved week/level against the seed-aware descriptor, without upgrading seeds.
