@@ -9,10 +9,10 @@ import { focusRing } from "@/components/ui/focus";
 import { copy } from "@/copy";
 import { formatCents } from "@/domain/pricing";
 import type { MenuProduct } from "@/lib/api";
-import { cart as cartStore, type CartItem } from "@/lib/cart";
+import { cart as cartStore, lineKey, type CartItem } from "@/lib/cart";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { BAG_ROW_WIDTH, photoUrl } from "@/lib/photo";
-import { fill, safeLineTotal } from "../format";
+import { cartLineName, cartLineTotal, fill } from "../format";
 import { EASE, arrowZoom, done, play } from "./anim";
 import type { Landing } from "./bagFlights";
 import { ArrowIcon, CloseIcon } from "./icons";
@@ -198,7 +198,7 @@ export const BagSheet = forwardRef<BagSheetHandle, BagSheetProps>(function BagSh
           <ul className="mt-3 list-none p-0" data-testid="bag-lines">
             {lines.map(({ item, product }, i) => (
               <li
-                key={item.productId}
+                key={lineKey(item)}
                 className="bag-ln grid grid-cols-[62px_1fr_auto] items-center gap-x-3.5 border-b border-c-line py-3.5"
                 style={{ "--i": i } as React.CSSProperties}
                 data-testid="bag-line"
@@ -213,12 +213,12 @@ export const BagSheet = forwardRef<BagSheetHandle, BagSheetProps>(function BagSh
                   )}
                 </div>
                 <div className="min-w-0">
-                  <div className="text-[15.5px] leading-[1.3] font-bold text-c-ink">{product.name}</div>
+                  <div className="text-[15.5px] leading-[1.3] font-bold text-c-ink">{cartLineName(item, product)}</div>
                   {item.qty >= maxQty ? <div className="mt-0.5 text-xs leading-snug text-c-grey">{t.maxReached}</div> : null}
                 </div>
                 <div className="flex flex-col items-end gap-1.5">
                   <RollText
-                    value={formatCents(safeLineTotal(item.qty, product))}
+                    value={formatCents(cartLineTotal(item, product))}
                     className="font-num text-[17px] font-bold text-c-ink"
                   />
                   <Stepper
@@ -234,11 +234,11 @@ export const BagSheet = forwardRef<BagSheetHandle, BagSheetProps>(function BagSh
                     qtyTestId="bag-line-qty"
                     onDecrease={() => {
                       kick(-24);
-                      onDecrease(item.productId);
+                      onDecrease(lineKey(item));
                     }}
                     onIncrease={() => {
                       kick(30);
-                      onIncrease(item.productId);
+                      onIncrease(lineKey(item));
                     }}
                   />
                 </div>

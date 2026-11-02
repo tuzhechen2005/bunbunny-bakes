@@ -8,7 +8,7 @@ import { dayLabel } from "@/domain/dates";
 import type { MenuProduct } from "@/lib/api";
 import { ASSISTANT_MAX_CHARS, type AssistantSuggestion } from "@/lib/assistant";
 import { CloseIcon } from "../bag/icons";
-import { fill } from "../format";
+import { cartLineName, fill } from "../format";
 import { IridescentOrb } from "./IridescentOrb";
 
 const t = copy.customer.assistant;
@@ -52,7 +52,7 @@ function SuggestionCard({
     <div className="mt-2 rounded-2xl border border-c-line bg-c-paper p-4" data-testid="assistant-suggestion">
       <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[15px] font-bold">
         {lines.map((i) => (
-          <li key={i.productId}>{fill(t.itemLine, { name: byId.get(i.productId)!.name, qty: i.qty })}</li>
+          <li key={`${i.productId}:${(i as { flavorId?: string | null }).flavorId ?? ''}`}>{fill(t.itemLine, { name: cartLineName(i as { flavorId?: string | null }, byId.get(i.productId)!), qty: i.qty })}</li>
         ))}
       </ul>
       {date ? <p className="mt-2 text-sm font-semibold">{fill(t.dateLine, { date })}</p> : null}

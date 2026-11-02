@@ -2,6 +2,7 @@
 
 import { copy } from "@/copy";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { FlavorsPanel } from "./FlavorsPanel";
 import { ProductForm } from "./ProductForm";
 import { useProducts } from "./useProducts";
 
@@ -27,6 +28,7 @@ export function ProductEditor({ id }: Readonly<{ id: string }>) {
         </p>
       )}
       {product && <ProductForm key={product.id} product={product} />}
+      {product && <FlavorsPanel key={`f-${product.id}`} product={product} />}
     </>
   );
 }

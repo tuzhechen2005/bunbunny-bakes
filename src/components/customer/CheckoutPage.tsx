@@ -21,13 +21,13 @@ import {
   type Fulfillment,
   type MenuProduct,
 } from "@/lib/api";
-import { cart, clearPreferredDate, getPreferredDate, setPreferredDate, useCart, useHydrated, type CartItem } from "@/lib/cart";
+import { cart, clearPreferredDate, getPreferredDate, lineKey, setPreferredDate, useCart, useHydrated, type CartItem } from "@/lib/cart";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { myOrders } from "@/lib/myOrders";
 import { pendingSave } from "@/lib/pendingSave";
 import { FieldError } from "./checkout/FieldError";
 import { RollNumber } from "./checkout/RollNumber";
-import { breakdownText, fill, formatDollars, weekdayList } from "./format";
+import { breakdownText, cartLineName, cartLineTotal, fill, formatDollars, weekdayList } from "./format";
 import { ProductPhoto } from "./ProductCard";
 import { SiteFooter } from "./SiteFooter";
 import { useMenu } from "./useMenu";
@@ -530,8 +530,9 @@ export function CheckoutPage() {
 
   const applyReduce = (hint: Extract<DateHint, { kind: "REDUCE" }>) => {
     for (const r of hint.remove) {
-      const current = cart.getItems().find((i) => i.productId === r.productId)?.qty ?? 0;
-      cart.setQty(r.productId, current - r.qty, current);
+      const key = lineKey(r as { productId: string; flavorId?: string | null });
+      const current = cart.getItems().find((i) => lineKey(i) === key)?.qty ?? 0;
+      cart.setQty(key, current - r.qty, current);
     }
     if (hintDate) setSelectedDate(hintDate);
     setHintDate(null);
@@ -565,7 +566,7 @@ export function CheckoutPage() {
     inflight.current = true;
     setSubmitting(true);
     const result = await submitOrder({
-      items: items.map(({ productId, qty }) => ({ productId, qty })),
+      items: items.map(({ productId, qty, flavorId }) => (flavorId ? { productId, flavorId, qty } : { productId, qty })),
       pickupDate: selectedDate,
       fulfillment,
       wechatId: trimmed.slice(0, WECHAT_MAX),
@@ -588,7 +589,7 @@ export function CheckoutPage() {
           JSON.stringify({
             orderNo,
             token: viewToken,
-            items: lines.map((l) => ({ name: l.product.name, imageUrl: l.product.imageUrl, qty: l.qty })),
+            items: lines.map((l) => ({ name: cartLineName(l, l.product), imageUrl: l.product.imageUrl, qty: l.qty })),
           }),
         );
       } catch {
@@ -604,7 +605,7 @@ export function CheckoutPage() {
               token: viewToken,
               items: split.rest.flatMap((r) => {
                 const p = byId.get(r.productId);
-                return p ? [{ productId: r.productId, name: p.name, qty: r.qty }] : [];
+                return p ? [{ productId: r.productId, flavorId: (r as { flavorId?: string | null }).flavorId ?? null, name: cartLineName(r as { flavorId?: string | null }, p), qty: r.qty }] : [];
               }),
             }),
           );
@@ -716,22 +717,24 @@ export function CheckoutPage() {
 
           {/* Cart lines */}
           <ul className="mt-3 flex flex-col divide-y divide-c-line" aria-label={t.cartTitle} data-rise="">
-            {lines.map(({ productId, qty, product }) => {
+            {lines.map((line) => {
+              const { productId, qty, product } = line;
+              const key = lineKey(line);
               const problem = problems.get(productId);
               const unavailable = product.status === "PAUSED" || problem === "PRODUCT_UNAVAILABLE";
               const overLimit = problem === "QTY_LIMIT" || qty > menu.maxQtyPerItem;
               const atMax = qty >= menu.maxQtyPerItem;
               return (
-                <li key={productId} className="flex items-center gap-3 py-3" data-testid="cart-line" data-product-id={productId}>
+                <li key={key} className="flex items-center gap-3 py-3" data-testid="cart-line" data-product-id={productId}>
                   <ProductPhoto
                     product={product}
                     variant="thumb"
                     className={`h-14 w-14 shrink-0 overflow-hidden rounded-[14px] ${unavailable ? "opacity-50 grayscale" : ""}`}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[15px] leading-snug font-bold break-words">{product.name}</p>
+                    <p className="text-[15px] leading-snug font-bold break-words">{cartLineName(line, product)}</p>
                     <p className="font-num text-[13px] leading-snug font-semibold text-c-grey" data-testid="line-breakdown">
-                      {breakdownText(qty, product)}
+                      {line.flavorId ? formatCents(cartLineTotal(line, product)) : breakdownText(qty, product)}
                     </p>
                     {unavailable ? (
                       <p className="text-xs font-semibold text-c-red">{home.paused}</p>
@@ -744,7 +747,7 @@ export function CheckoutPage() {
                       type="button"
                       className={`min-h-11 shrink-0 px-2 text-sm font-bold underline ${focusRing}`}
                       disabled={submitting}
-                      onClick={() => cart.remove(productId)}
+                      onClick={() => cart.remove(key)}
                     >
                       {t.remove}
                     </button>
@@ -759,8 +762,8 @@ export function CheckoutPage() {
                       increaseLabel={fill(bagCopy.increaseNamed, { name: product.name })}
                       qtyLabel={fill(bagCopy.qtyNamed, { name: product.name, qty })}
                       qtyTestId="qty"
-                      onDecrease={() => cart.decrement(productId)}
-                      onIncrease={() => cart.increment(productId, menu.maxQtyPerItem)}
+                      onDecrease={() => cart.decrement(key)}
+                      onIncrease={() => cart.increment(key, menu.maxQtyPerItem)}
                     />
                   )}
                 </li>

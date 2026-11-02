@@ -43,7 +43,7 @@ export interface DetailProps {
   /** Hang back (chevron button, pull-down, Esc is handled by the page). */
   onClose: () => void;
   /** Add `qty` of `product` to the bag; `from` is the photo's rect. */
-  onAdd: (product: MenuProduct, qty: number, from: DOMRect) => void;
+  onAdd: (product: MenuProduct, qty: number, from: DOMRect, flavorId?: string | null) => void;
   /** Opened by key (the close button gets a focus ring) or by touch / mouse (no ring anywhere). */
   via: "key" | "pointer";
   ref?: Ref<DetailHandle>;
@@ -57,6 +57,8 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
   const n = products.length;
   const [i, setI] = useState(startIndex);
   const [qty, setQty] = useState(1);
+  /** F1: chosen flavour per product (cleared when the sheet moves to another product). */
+  const [flavorOf, setFlavorOf] = useState<Record<string, string>>({});
   const product = products[i];
   const root = useRef<HTMLDivElement>(null);
   const bg = useRef<HTMLDivElement>(null);
@@ -302,13 +304,17 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
   const paused = product.status === "PAUSED";
   const room = Math.max(0, maxQty - inCart(product.id));
   const q = clamp(qty, 1, Math.max(1, room));
-  const sum = formatCents(safeLineTotal(q, product));
-  const canAdd = !paused && room > 0;
+  const flavors = product.flavors ?? [];
+  const flavorId = flavors.length ? flavorOf[product.id] ?? null : null;
+  const flavor = flavors.find((f) => f.id === flavorId) ?? null;
+  const needsFlavor = flavors.length > 0 && !flavor;
+  const sum = formatCents(flavor ? flavor.priceCents * q : needsFlavor ? 0 : safeLineTotal(q, product));
+  const canAdd = !paused && room > 0 && !needsFlavor;
 
   const add = () => {
     const rect = ph.current?.getBoundingClientRect();
     if (!rect || !canAdd) return;
-    onAdd(product, q, rect);
+    onAdd(product, q, rect, flavorId);
     setQty(1);
     cta.current?.animate?.([{ transform: "scale(.95)" }, { transform: "none" }], { duration: 260, easing: EASE });
   };
@@ -342,13 +348,23 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
             {product.name}
           </h2>
           {product.description ? <p className="hm-dt-desc">{product.description}</p> : null}
+          {flavors.length ? (
+            <div className="hm-dt-flavors" role="radiogroup" aria-label={t.flavorLabel} data-testid="detail-flavors">
+              {flavors.map((f) => (
+                <button key={f.id} type="button" role="radio" aria-checked={f.id === flavorId} className="hm-flavor" data-testid={`detail-flavor-${f.id}`}
+                  onClick={() => setFlavorOf((m) => ({ ...m, [product.id]: f.id }))}>
+                  <span>{f.name}</span><b className="hm-n">{formatCents(f.priceCents)}</b>
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="hm-dt-prices">
             <div>
               <b className="hm-n" data-testid="detail-unit">
-                {formatCents(product.unitPriceCents)}
+                {formatCents(flavor ? flavor.priceCents : flavors.length ? product.priceFromCents ?? product.unitPriceCents : product.unitPriceCents)}
               </b>
             </div>
-            {product.bundlePriceCents !== null ? (
+            {product.bundlePriceCents !== null && !flavors.length ? (
               <div>
                 <b className="hm-n" data-testid="detail-bundle">
                   {formatCents(product.bundlePriceCents)}
@@ -394,7 +410,7 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
         </div>
         <div ref={dock} className="hm-dt-dock">
           <button ref={cta} type="button" className="hm-cta" disabled={!canAdd} onClick={add} data-testid="detail-add">
-            {b.addToBag} {b.addSeparator} <RollingText value={sum} className="hm-n" />
+            {needsFlavor && !paused ? t.chooseFlavor : <>{b.addToBag} {b.addSeparator} <RollingText value={sum} className="hm-n" /></>}
           </button>
         </div>
       </div>

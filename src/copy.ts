@@ -60,6 +60,8 @@ export const copy = {
       stampRing: "BUNBUNNY BAKES · 现做现烤 · 当天出炉 ·",
     },
     home: {
+      /** F1 flavours. */
+      flavorJoin: " · ", priceFrom: "{price} 起", chooseFlavor: "先选口味", flavorLabel: "口味",
       /** Header entry to /orders (D84): visible word and accessible name. */
       myOrdersEntry: "订单",
       myOrdersLabel: "我的订单",
@@ -1307,6 +1309,13 @@ export const copy = {
     },
     /** Product management (PAGES.md /admin/products). */
     products: {
+      /** F1 flavours panel on the product edit page. */
+      flavors: {
+        title: "口味", hint: "有口味的商品，顾客必须先选口味；每个口味按自己的价格，共用这个商品的名额",
+        name: "口味名", price: "价格", add: "加一个口味", save: "保存", up: "上移", down: "下移",
+        onSale: "在售", offSale: "已下架", takeOff: "下架", putOn: "上架", empty: "还没有口味", failed: "没保存成功，请重试",
+        invalid: "口味名 1–12 个字，价格填数字",
+      },
       title: "商品",
       newTitle: "新增商品",
       editTitle: "编辑商品",

@@ -991,3 +991,12 @@
     transition: none;
   }
 }
+
+/* F1 flavour chips: one tap picks the flavour; its price shows on the chip. */
+.hm-dt-flavors { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.hm-flavor { display: inline-flex; align-items: baseline; gap: 6px; min-height: 40px; padding: 8px 14px; border: 1.5px solid var(--c-line); border-radius: 999px; background: var(--c-paper); color: var(--c-ink); font-size: 14px; font-weight: 700; cursor: pointer; transition: transform 90ms ease-out, background-color 150ms, border-color 150ms; }
+.hm-flavor b { font-size: 13px; font-weight: 600; color: var(--c-grey); }
+.hm-flavor[aria-checked="true"] { border-color: var(--c-ink); background: var(--c-ink); color: var(--c-paper); }
+.hm-flavor[aria-checked="true"] b { color: var(--c-paper); opacity: .8; }
+.hm-flavor:active { transform: scale(.96); }
+@media (prefers-reduced-motion: reduce) { .hm-flavor { transition: none; } }

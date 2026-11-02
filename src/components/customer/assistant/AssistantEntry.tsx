@@ -6,7 +6,7 @@ import { focusRing } from "@/components/ui/focus";
 import { copy } from "@/copy";
 import type { Fulfillment, MenuProduct } from "@/lib/api";
 import { askAssistant, ASSISTANT_MAX_CHARS, type AssistantMessage, type AssistantSuggestion } from "@/lib/assistant";
-import { cart, setPreferredDate, useCart } from "@/lib/cart";
+import { cart, lineKey, parseLineKey, setPreferredDate, useCart } from "@/lib/cart";
 import { flyToBag, getBagTargetRect } from "@/lib/flyToBag";
 import { AssistantSheet, type ChatRow } from "./AssistantSheet";
 import { IridescentOrb } from "./IridescentOrb";
@@ -86,7 +86,7 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
       for (const r of next) if (r.role === "user" || r.role === "assistant") history.push({ role: r.role, content: r.content });
       const result = await askAssistant({
         messages: history,
-        cart: cart.getItems().map((i) => ({ productId: i.productId, qty: i.qty })),
+        cart: cart.getItems().map((i) => (i.flavorId ? { productId: i.productId, flavorId: i.flavorId, qty: i.qty } : { productId: i.productId, qty: i.qty })),
         ...(fulfillment ? { fulfillment } : {}),
       });
       let added: ChatRow;
@@ -109,11 +109,15 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
       const known = new Map(products.map((p) => [p.id, p]));
       // Unknown / inactive products are dropped, duplicate lines merged, then each qty clamped to maxQty.
       const merged = new Map<string, number>();
-      for (const i of s.items) {
-        if (known.get(i.productId)?.status !== "ACTIVE" || !Number.isFinite(i.qty)) continue;
-        merged.set(i.productId, (merged.get(i.productId) ?? 0) + Math.floor(i.qty));
+      for (const i of s.items as { productId: string; qty: number; flavorId?: string | null }[]) {
+        const p = known.get(i.productId);
+        if (p?.status !== "ACTIVE" || !Number.isFinite(i.qty)) continue;
+        // F1: a flavoured product needs one of its active flavours; otherwise the line is dropped.
+        if ((p.flavors?.length ?? 0) > 0 && !p.flavors!.some((f) => f.id === i.flavorId)) continue;
+        const key = lineKey(i);
+        merged.set(key, (merged.get(key) ?? 0) + Math.floor(i.qty));
       }
-      const lines = [...merged].map(([productId, qty]) => ({ productId, qty: Math.max(1, Math.min(qty, maxQty)) }));
+      const lines = [...merged].map(([key, qty]) => ({ ...parseLineKey(key), qty: Math.max(1, Math.min(qty, maxQty)) }));
       if (lines.length === 0) return;
       // The date first: the checkout page reads it when the cart change makes it re-query.
       if (s.date) setPreferredDate(s.date);
