@@ -593,7 +593,7 @@ export const copy = {
 
   /** Default `message` per API error code (API_SPEC.md §1, PAGES.md checkout errors). */
   flavors: {
-    unspecified: "未选口味",
+    other: "其他",
     summary: "{name}：{flavors}，共 {qty}{unit}",
   },
   errors: {
@@ -1261,6 +1261,9 @@ export const copy = {
       unpaid: "未付款",
       clearFilters: "清除筛选",
       copyWechat: "复制微信号",
+      /** One tap copies the whole order (to paste into WeChat when confirming, owner 11/02). */
+      copyOrder: "复制订单",
+      copyText: { head: "订单 {orderNo}", when: "{date} · {how}", item: "{name} ×{qty}", itemFlavor: "{name}（{flavor}）×{qty}", total: "合计 {total}", note: "备注：{note}" },
       copied: "已复制",
       copyFailed: "复制失败，请手动选择",
       copyLink: "复制订单链接",

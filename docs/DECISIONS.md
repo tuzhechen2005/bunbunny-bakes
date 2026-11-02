@@ -264,3 +264,5 @@ any next-oven accepted input closes that window. Expose public-information plann
 previews. BIG v2 exposes highest attained / next tier and first-record events only; physics
 and scoring stay unchanged. Version checks reject old unfinished runs; no UI components or
 pages changed. Measurements and limits are recorded in engine READMEs and docs/D184-validation.md.
+
+D185（[店主] 11/02 F3）：取代 D175 的“历史 NULL 在后台显示「未选口味」”；flavorName 为 NULL 表示无口味，后台订单列表显示商品名×数量，详情 flavorLabel 为 null（string | null），有口味行显示不变；口味汇总及邮件先列具名口味，再将无口味数量合并为「其他 N个」（沿用原单位），使用 copy.flavors.other。

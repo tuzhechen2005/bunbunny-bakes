@@ -74,6 +74,18 @@ function LogItem({
   );
 }
 
+/** The order as plain text for WeChat: number, day and pickup/delivery, lines, total, note. */
+function orderText(order: OrderDetail): string {
+  const c = t.copyText;
+  return [
+    fill(c.head, { orderNo: order.orderNo }),
+    fill(c.when, { date: order.pickupDateLabel, how: order.fulfillment === "DELIVERY" ? t.delivery : t.pickup }),
+    ...order.items.map((i) => i.flavorName ? fill(c.itemFlavor, { name: i.name, flavor: i.flavorName, qty: i.qty }) : fill(c.item, { name: i.name, qty: i.qty })),
+    fill(c.total, { total: money(order.totalCents) }),
+    ...(order.note ? [fill(c.note, { note: order.note })] : []),
+  ].join("\n");
+}
+
 export function OrderDetailPage({ id }: Readonly<{ id: string }>) {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -209,7 +221,7 @@ export function OrderDetailPage({ id }: Readonly<{ id: string }>) {
           <ul className="space-y-1">
             {order.items.map((i) => (
               <li key={i.id} className="flex justify-between gap-2">
-                <span>{fill(t.itemLine, { name: i.name, qty: i.qty })}</span>
+                <span>{i.flavorName ? fill(t.copyText.itemFlavor, { name: i.name, flavor: i.flavorName, qty: i.qty }) : fill(t.itemLine, { name: i.name, qty: i.qty })}</span>
                 <span>{money(i.lineTotalCents)}</span>
               </li>
             ))}
@@ -228,6 +240,7 @@ export function OrderDetailPage({ id }: Readonly<{ id: string }>) {
               <dd>{money(order.totalCents)}</dd>
             </div>
           </dl>
+          <CopyButton text={orderText(order)} label={t.copyOrder} className="mt-3 w-full" />
         </AdminCard>
 
         <AdminCard title={t.sectionInfo}>

@@ -2,7 +2,6 @@
 // detail view with its audit log (API_SPEC.md §3, PAGES.md /admin/orders). Business
 // writes live in orders.ts / orderAdmin.ts.
 
-import { copy } from "@/copy";
 import { z } from "zod";
 import { dayLabel, isLocalDate, localDateOf } from "@/domain/dates";
 import { adminTransition } from "@/domain/status";
@@ -199,7 +198,7 @@ export async function listOrders(db: DbClient, query: ListOrdersQuery, now: Date
 
 /** 「红豆包×4、奶酪角×4」 from the snapshots. */
 export function itemsSummary(items: { nameSnapshot: string; flavorName?: string | null; qty: number }[]): string {
-  return items.map((i) => `${i.nameSnapshot}（${i.flavorName ?? copy.flavors.unspecified}）×${i.qty}`).join("、");
+  return items.map((i) => `${i.nameSnapshot}${i.flavorName == null ? "" : `（${i.flavorName}）`}×${i.qty}`).join("、");
 }
 
 // ---------------------------------------------------------------------------------------
@@ -208,7 +207,7 @@ export function itemsSummary(items: { nameSnapshot: string; flavorName?: string 
 export interface OrderDetailItem {
   flavorId: string | null;
   flavorName: string | null;
-  flavorLabel: string;
+  flavorLabel: string | null;
   id: string;
   productId: string;
   name: string;
@@ -291,7 +290,7 @@ export async function getOrderDetail(db: DbClient, id: string): Promise<OrderDet
       name: i.nameSnapshot,
       flavorId: i.flavorId,
       flavorName: i.flavorName,
-      flavorLabel: i.flavorName ?? copy.flavors.unspecified,
+      flavorLabel: i.flavorName,
       qty: i.qty,
       unitPriceCents: i.unitPriceCents,
       bundleSize: i.bundleSize,

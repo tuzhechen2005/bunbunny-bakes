@@ -450,8 +450,11 @@ product; omission does not grant the legacy exemption. New orders have no legacy
 For products with no active flavours, omission/null retains the ordinary product pricing flow.
 
 `GET /api/o/{viewToken}` items add `flavorName: string | null` from the snapshot. Admin order
-detail items add `flavorId`, `flavorName`, and `flavorLabel`; the latter displays the Chinese
-legacy label from `copy.flavors.unspecified` for nulls. Admin list `itemsSummary` includes this label.
+detail items add `flavorId`, `flavorName`, and `flavorLabel: string | null`; `flavorLabel` equals
+the flavour-name snapshot and is null when `flavorName` is null (D185). Admin list `itemsSummary`
+uses `商品名×数量` for null flavours and `商品名（口味）×数量` otherwise. Summary/email flavour
+breakdowns list named flavours, then combine null-flavour quantities as `其他 N个` (keeping the
+caller’s unit); ordinary unflavoured order lines use the plain product name.
 Availability REDUCE/SPLIT `remove/here/rest` retain `flavorId`; apply changes by product + flavour,
 keeping original cart order. Assistant cart/tool items also accept flavorId, and get_menu exposes
 flavours; a proposal cannot omit a required flavour.

@@ -132,7 +132,7 @@ F1 回归：`tests/db/flavors.test.ts` 覆盖混合口味的整天取整、独�
 | productId | uuid | |
 | nameSnapshot | text | 下单时的商品名 |
 | flavorId | uuid? | → ProductFlavor；与 productId 复合外键保证口味归属；历史 NULL |
-| flavorName | text? | 下单时的口味名快照；历史 NULL；后台显示「未选口味」 |
+| flavorName | text? | 下单时的口味名快照；NULL 表示无口味，后台仅显示商品名（D185） |
 | qty | int | ≥ 1 |
 | unitPriceCents / bundleSize / bundlePriceCents | 快照 | 价格按快照算，以后改价不影响 |
 | lineTotalCents | int | |

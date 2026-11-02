@@ -115,7 +115,10 @@ it("allows explicit legacy null on edits only and keeps its price snapshot", asy
   await adminEditOrder(db, { orderId: legacy.id, expectedUpdatedAt: legacy.updatedAt.toISOString(), items: [line(null, 2), line(matcha)] }, now);
   const { getOrderDetail } = await import("@/server/orderQueries");
   const detail = await getOrderDetail(db, legacy.id);
-  expect(detail.items.find(i => i.flavorId === null)?.flavorLabel).toBe("\u672a\u9009\u53e3\u5473");
+  expect(detail.items.find(i => i.flavorId === null)?.flavorLabel).toBeNull();
+  expect(detail.items.find(i => i.flavorId === matcha)?.flavorLabel).toBe("抹茶");
+  expect(detail.itemsSummary).toContain("奶酪角×2");
+  expect(detail.itemsSummary).toContain("奶酪角（抹茶）×1");
   const changed = await stored(legacy.id);
   expect(changed.items.find(i => i.flavorId === null)).toMatchObject({ flavorName: null, unitPriceCents: 299, qty: 2 });
 });
@@ -356,4 +359,35 @@ it("exposes readable flavour bundles to the assistant without raw bundle cents",
   expect(JSON.stringify(view)).not.toContain("bundlePriceCents");
   const fallback = publicProduct(menu, { ...product, flavors: [], bundlePriceCents: 1600 }, "p1");
   expect(fallback.bundle).toBe(view.flavors[0].bundle);
+});
+
+it("F3 renders mixed null-flavour order notifications and daily summaries as 其他", async () => {
+  const { loadDailySummary } = await import("@/server/summaryJob");
+  const { renderNotification } = await import("@/server/emails");
+  await db.product.update({ where: { id: productId }, data: {
+    name: "泡芙", capacityMode: "INDEPENDENT", roundG: null, piecesPerRound: null, dailyLimit: 8, batchYield: 3,
+  } });
+  const legacy = await createOrder({ date, items: [{ productId, qty: 2 }] });
+  await adminEditOrder(db, {
+    orderId: legacy.id, expectedUpdatedAt: legacy.updatedAt.toISOString(), items: [line(null, 2), line(original, 5)],
+  }, now);
+  const previousSite = process.env.SITE_URL;
+  process.env.SITE_URL = "https://example.test";
+  try {
+    for (const kind of ["NEW_ORDER", "CUSTOMER_CANCELLED"] as const) {
+      const email = await renderNotification(db, {
+        id: kind, kind, dedupeKey: kind, payload: { orderId: legacy.id },
+      }, now);
+      expect(email.text).toContain("泡芙：原味 5、其他 2，共 7");
+      expect(email.text).not.toContain("未选口味");
+    }
+    const daily = await loadDailySummary(db, new Date("2026-11-03T15:00:00Z"));
+    const summary = await renderNotification(db, {
+      id: "summary", kind: "DAILY_SUMMARY", dedupeKey: "summary", payload: daily,
+    }, now);
+    expect(summary.text).toContain("泡芙：原味 5个、其他 2个，共 7个");
+    expect(summary.text).not.toContain("未选口味");
+  } finally {
+    if (previousSite === undefined) delete process.env.SITE_URL; else process.env.SITE_URL = previousSite;
+  }
 });

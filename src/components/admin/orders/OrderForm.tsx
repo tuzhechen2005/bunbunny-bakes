@@ -155,7 +155,7 @@ export function OrderForm({ data, order }: OrderFormProps) {
       active.map((f) => ({ key: formLineKey({ productId: p.id, flavorId: f.id }), line: { productId: p.id, flavorId: f.id }, name: `${p.name} · ${f.name}`, product: p }));
     for (const i of onOrder) {
       const line = lineFromOrder(i, flavoredIds), key = formLineKey(line);
-      if (!list.some((r) => r.key === key)) list.push({ key, line, name: `${p.name} · ${i.flavorName ?? copy.flavors.unspecified}`, product: p });
+      if (!list.some((r) => r.key === key)) list.push({ key, line, name: i.flavorName ? `${p.name} · ${i.flavorName}` : p.name, product: p });
     }
     return list;
   }), [products, order, flavoredIds]);

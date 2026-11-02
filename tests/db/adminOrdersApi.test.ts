@@ -128,7 +128,7 @@ describe("GET /api/admin/orders", () => {
     const a2 = await createOrder({ date: D1, items: [{ productId: P.redBean, qty: 1 }], wechatId: "a2" });
     const r = await list();
     expect(r.orders.map((o) => o.id)).toEqual([a1.id, a2.id, b.id]);
-    expect(r.orders[0].itemsSummary).toBe("奶酥红豆包（未选口味）×4、奶酪角（未选口味）×4");
+    expect(r.orders[0].itemsSummary).toBe("奶酥红豆包×4、奶酪角×4");
     expect(r.orders[0].nextStatuses.map((n) => n.to)).toContain("CONTACTED");
   });
 

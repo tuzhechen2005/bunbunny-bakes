@@ -203,11 +203,11 @@
 - Token order views display the flavour-name snapshot. Admin product controls use the flavour
   create/patch/reorder endpoints; deactivation replaces deletion. Admin create also requires a
   valid flavour. Edits retain prices on the same flavour; changing flavour uses its current price.
-- Legacy null lines display the label in `copy.flavors.unspecified`. To retain one while editing,
+- Null-flavour lines display the plain product name (D185). To retain one while editing,
   explicitly send flavorId:null; this exemption belongs only to an existing null line, not a new order.
 - Production, tonight and daily summaries use the product line's flavours breakdown and total.
   Keep existing units and show rounds/batches from the combined product quantity, never rounded
   separately per flavour. The backend formatter accepts optional unit text for integration.
 
-Example display: 泡芙：原味 5、抹茶 3，共 8。Legacy label: 未选口味。
+Example display: 泡芙：原味 5个、其他 2个，共 7个。Null-flavour quantities in a flavour breakdown use `copy.flavors.other` and follow named flavours.
 Full shapes/errors are in API_SPEC.md, F1. No customer/admin UI is implemented in this task.
