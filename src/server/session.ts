@@ -19,14 +19,34 @@ export const LOGIN_PATH = "/admin/login";
 export interface CookieEnv {
   siteUrl?: string;
   nodeEnv?: string;
+  /** QA_INSECURE_COOKIE: "1" only on the owner's LAN QA server (never set in production). */
+  qaInsecure?: string;
 }
 
 function currentEnv(): CookieEnv {
-  return { siteUrl: process.env.SITE_URL, nodeEnv: process.env.NODE_ENV };
+  return { siteUrl: process.env.SITE_URL, nodeEnv: process.env.NODE_ENV, qaInsecure: process.env.QA_INSECURE_COOKIE };
 }
 
-/** Secure when the site is served over https or in production. */
+/** An http:// SITE_URL on localhost or a private LAN address (10/8, 172.16/12, 192.168/16). */
+function isPlainHttpLan(siteUrl: string | undefined): boolean {
+  let url: URL;
+  try { url = new URL(siteUrl ?? ""); } catch { return false; }
+  if (url.protocol !== "http:") return false;
+  const h = url.hostname;
+  if (h === "localhost" || h === "127.0.0.1") return true;
+  const m = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(h);
+  if (!m) return false;
+  const [a, b] = [Number(m[1]), Number(m[2])];
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+}
+
+/**
+ * Secure when the site is served over https or in production. The one exception (owner 11/02, QA
+ * login from the phone): QA_INSECURE_COOKIE=1 together with a plain-http LAN SITE_URL — an https or
+ * public SITE_URL keeps the cookie Secure even if the flag is set by mistake.
+ */
 export function cookieIsSecure(env: CookieEnv = currentEnv()): boolean {
+  if (env.qaInsecure === "1" && isPlainHttpLan(env.siteUrl)) return false;
   return env.nodeEnv === "production" || (env.siteUrl ?? "").toLowerCase().startsWith("https:");
 }
 

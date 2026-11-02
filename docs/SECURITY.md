@@ -16,7 +16,7 @@
 - 只有一个管理员。初始用户名和密码来自环境变量，第一次运行种子脚本时创建；之后在后台修改密码。
 - 密码：argon2id 哈希；至少 10 位。
 - 连续 5 次失败锁 15 分钟，按用户名计数；失败和成功都写日志。失败提示统一为「用户名或密码错误」。
-- Session：32 字节随机数放在 httpOnly、Secure、SameSite=Lax 的 cookie 里，数据库只存 sha256；30 天过期；改密码后所有 session 失效。
+- Session：32 字节随机数放在 httpOnly、Secure、SameSite=Lax 的 cookie 里，数据库只存 sha256；30 天过期；改密码后所有 session 失效。 唯一例外见 D186：本机局域网 QA 设 `QA_INSECURE_COOKIE=1` 时（仅限 http 的局域网 SITE_URL）不加 Secure，正式环境不设。
 - 所有 `/admin/**` 页面和 `/api/admin/**` 接口在服务器端检查 session（middleware + 每个接口内部再查一次，不只依赖 middleware）。
 - 非 GET 请求检查 `Origin` 头等于 `SITE_URL`。
 

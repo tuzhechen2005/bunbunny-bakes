@@ -266,3 +266,4 @@ and scoring stay unchanged. Version checks reject old unfinished runs; no UI com
 pages changed. Measurements and limits are recorded in engine READMEs and docs/D184-validation.md.
 
 D185（[店主] 11/02 F3）：取代 D175 的“历史 NULL 在后台显示「未选口味」”；flavorName 为 NULL 表示无口味，后台订单列表显示商品名×数量，详情 flavorLabel 为 null（string | null），有口味行显示不变；口味汇总及邮件先列具名口味，再将无口味数量合并为「其他 N个」（沿用原单位），使用 copy.flavors.other。
+| D186 | QA 手机登录后台（店主 11/02 选 B）：环境变量 `QA_INSECURE_COOKIE=1` 且 `SITE_URL` 是 http 的 localhost / 局域网地址（10/8、172.16/12、192.168/16）时，登录 cookie 不加 Secure；https 或公网地址即使误设该变量也保持 Secure。只在本机 QA 启动脚本里设置，Netlify 正式环境永不设置 | [你] 11/02 |
