@@ -42,6 +42,14 @@ export function CalendarView() {
   const [data, setData] = useState<CalendarResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<LocalDate | null>(null);
+  // F2: every product's name (the calendar response only names independent-limit products).
+  const [allNames, setAllNames] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    void adminApi<{ products: { id: string; name: string }[] }>("/api/admin/products").then((r) => {
+      if (r.ok && Array.isArray(r.data.products)) setAllNames(Object.fromEntries(r.data.products.map((p) => [p.id, p.name])));
+    });
+  }, []);
 
   useEffect(() => {
     const d = localDateOf(new Date());
@@ -129,7 +137,7 @@ export function CalendarView() {
         {cells.map((date, i) => {
           if (!date) return <div key={`b${i}`} />;
           const day = byDate.get(date);
-          const over = !!day && (day.over.dough || day.over.delivery || day.over.products.length > 0);
+          const over = !!day && (day.over.dough || day.over.delivery || day.over.products.length > 0 || day.flavors.some((f) => f.limit !== null && f.used > f.limit));
           const open = !!day?.isOpen;
           const { day: dayNum, month: m } = parseLocalDate(date);
           const status = !day ? t.loading : open ? (over ? t.statusOver : t.statusOpen) : t.closed;
@@ -192,6 +200,7 @@ export function CalendarView() {
           key={selected}
           day={byDate.get(selected)!}
           products={data.independentProducts}
+          productNames={allNames}
           onClose={() => setSelected(null)}
           onSaved={() => {
             setSelected(null);

@@ -2,10 +2,11 @@
 
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref } from "react";
 import { copy } from "@/copy";
+import { flavorPrice } from "@/domain/flavorPricing";
 import { formatCents } from "@/domain/pricing";
 import type { MenuProduct } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
-import { fill, safeLineTotal, weekdayTag } from "../format";
+import { fill, flavorBundleText, safeLineTotal, weekdayTag } from "../format";
 import { bindDrag } from "./drag";
 import { focusQuietly } from "./focus";
 import { DownIcon, LeftIcon, MinusIcon, PlusIcon, RightIcon } from "./icons";
@@ -309,7 +310,7 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
   const flavorId = flavors.length ? flavorOf[product.id] ?? null : null;
   const flavor = flavors.find((f) => f.id === flavorId) ?? null;
   const needsFlavor = flavors.length > 0 && !flavor;
-  const sum = formatCents(flavor ? flavor.priceCents * q : needsFlavor ? 0 : safeLineTotal(q, product));
+  const sum = formatCents(flavor ? safeLineTotal(q, flavorPrice(product, flavor)) : needsFlavor ? 0 : safeLineTotal(q, product));
   const canAdd = !paused && room > 0 && !needsFlavor;
 
   const add = () => {
@@ -356,6 +357,7 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
                 <button key={f.id} type="button" role="radio" aria-checked={f.id === flavorId} className="hm-flavor" data-testid={`detail-flavor-${f.id}`}
                   onClick={() => setFlavorOf((m) => ({ ...m, [product.id]: f.id }))}>
                   <span>{f.name}</span><b className="hm-n">{formatCents(f.priceCents)}</b>
+                  {flavorBundleText(product, f) ? <small className="hm-n" data-testid={`detail-flavor-bundle-${f.id}`}>{flavorBundleText(product, f)}</small> : null}
                 </button>
               ))}
             </div>

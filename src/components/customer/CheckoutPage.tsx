@@ -500,6 +500,8 @@ export function CheckoutPage() {
     return product ? [{ ...i, product }] : [];
   });
   const data = avail.data;
+  // F2: flavours sold out on the chosen pickup date (advisory; the server rechecks on submit).
+  const soldOutFlavors = new Set(data?.dates.find((d) => d.date === selectedDate)?.soldOutFlavorIds ?? []);
   const problems = new Map<string, string>();
   for (const p of data?.cartProblems ?? []) if (!problems.has(p.productId)) problems.set(p.productId, p.error);
   // D96: the product with the longest lead time (ties: the first in the bag) names the hint.
@@ -651,6 +653,7 @@ export function CheckoutPage() {
             : { message: copy.errors.FULL_NO_SUGGESTION, where: "date" },
         );
         break;
+      case "FLAVOR_FULL":
       case "DELIVERY_FULL":
       case "CUTOFF_PASSED":
       case "DATE_CLOSED":
@@ -722,6 +725,7 @@ export function CheckoutPage() {
               const { productId, qty, product } = line;
               const key = lineKey(line);
               const problem = problems.get(productId);
+              const flavorFull = !!line.flavorId && soldOutFlavors.has(line.flavorId);
               const unavailable = product.status === "PAUSED" || problem === "PRODUCT_UNAVAILABLE";
               const overLimit = problem === "QTY_LIMIT" || qty > menu.maxQtyPerItem;
               const atMax = qty >= menu.maxQtyPerItem;
@@ -730,7 +734,7 @@ export function CheckoutPage() {
                   <ProductPhoto
                     product={product}
                     variant="thumb"
-                    className={`h-14 w-14 shrink-0 overflow-hidden rounded-[14px] ${unavailable ? "opacity-50 grayscale" : ""}`}
+                    className={`h-14 w-14 shrink-0 overflow-hidden rounded-[14px] ${unavailable || flavorFull ? "opacity-50 grayscale" : ""}`}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="text-[15px] leading-snug font-bold break-words">{cartLineName(line, product)}</p>
@@ -739,6 +743,8 @@ export function CheckoutPage() {
                     </p>
                     {unavailable ? (
                       <p className="text-xs font-semibold text-c-red">{home.paused}</p>
+                    ) : flavorFull ? (
+                      <p className="text-xs font-semibold text-c-red" data-testid="line-flavor-full">{t.stateFull}</p>
                     ) : overLimit || atMax ? (
                       <p className="text-xs font-semibold text-c-red">{home.maxReached}</p>
                     ) : null}
