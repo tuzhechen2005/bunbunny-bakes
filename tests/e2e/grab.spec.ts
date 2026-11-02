@@ -147,7 +147,7 @@ for(const width of [320,390]) {
     const tick = Number(await page.getByTestId("grab-board").getAttribute("data-tick"));
     const game = createGrabGame({seed:SEED,tiers:TIERS});
     (await stored(page)).launches.forEach((at:number)=>game.launch(at)); game.step(tick);
-    // Re-aim against the actual v4 board after each delivery/oven refill.
+    // Re-aim against the actual v5 board after each delivery/oven refill.
     // Use the widest window's actual margin; still send exactly one input per launch.
     const target = aimGrabBread(game.state());
     await page.clock.runFor((target.tick-tick)*1000/TICKS_PER_SECOND);

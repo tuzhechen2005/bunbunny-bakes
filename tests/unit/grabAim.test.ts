@@ -6,7 +6,7 @@ const tiers = Array.from({ length: 6 }, (_, i) => ({ id: `t${i}` }));
 
 it.each([
   { seed: `v${GRAB_ENGINE_VERSION}.abcdef0123456789`, secondMargin: 1 },
-  // Retain another RNG fixture under v4 geometry and oven renewal.
+  // Retain another RNG fixture under v5 geometry and oven renewal.
   { seed: "v2.abcdef0123456789", secondMargin: 1 },
 ])("aims both deliveries for $seed within their actual hit windows", ({ seed, secondMargin }) => {
   const game = createGrabGame({ seed, tiers });

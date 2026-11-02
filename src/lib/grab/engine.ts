@@ -1,6 +1,7 @@
 import { createRng } from "../game/rng";
 import { clawTip, fieldLength, firstContact, swingAngle } from "./geometry";
 import {
+  BLAST_RADIUS, BOMB_RADIUS, BOMB_PENALTY_TICKS, BOMB_RESPAWN_TICKS,
   BREAD_REFRESH_AGE, CLOCK_BONUS_TICKS, EMPTY_REEL_SPEED, EXTEND_SPEED, FIELD_ITEMS, MIN_TIERS,
   OVEN_X, OVEN_Y, REFILL_DELAY_TICKS, RUN_TICKS,
   type GrabEvent, type GrabGame, type GrabItem, type GrabKind, type GrabSize,
@@ -30,6 +31,7 @@ export function reelSpeed(weight: number): number {
 interface LiveItem extends Omit<GrabItem, "age" | "stage"> { born: number; slot: number }
 
 const cloneEvent = (e: GrabEvent): GrabEvent => {
+  if (e.type === "explode") return { ...e, item: { ...e.item }, destroyed: e.destroyed.map(item => ({ ...item })) };
   if (e.type === "pop") return { ...e, item: { ...e.item } };
   if (e.type === "refill") return { ...e, item: { ...e.item }, from: { ...e.from } };
   return { ...e };
@@ -48,6 +50,7 @@ export function createGrabGame(opts: { seed: string; tiers: readonly GrabTierInp
   let events: GrabEvent[] = [];
   const items: LiveItem[] = [];
   const refills: number[] = [];
+  let bombRefill: number | null = null;
   let deck: GrabKind[] = [];
 
   const snapshotItem = (item: LiveItem): GrabItem => {
@@ -56,29 +59,34 @@ export function createGrabGame(opts: { seed: string; tiers: readonly GrabTierInp
     return { id, kind, tier, size, x, y, radius, weight, age, stage: kind === "bread" ? breadStage(age) : "none" };
   };
 
-  const spawn = (): LiveItem => {
+  const spawn = (bomb = false): LiveItem => {
     // One clock per shuffled 32-item oven batch: rare, with bounded replay duration.
-    if (!deck.length) {
+    if (!bomb && !deck.length) {
       deck = [...Array<GrabKind>(23).fill("bread"), "flour", ...Array<GrabKind>(7).fill("butter"), "clock"];
       for (let i = deck.length - 1; i > 0; i--) {
         const j = rng.int(i + 1);
         [deck[i], deck[j]] = [deck[j], deck[i]];
       }
     }
-    const kind = deck.pop()!;
-    const size: GrabSize = kind === "bread" ? (["S", "M", "L"] as const)[rng.int(3)] : kind === "flour" ? "L" : "S";
+    const kind = bomb ? "bomb" : deck.pop()!;
+    const size: GrabSize = bomb ? "M" : kind === "bread" ? (["S", "M", "L"] as const)[rng.int(3)] : kind === "flour" ? "L" : "S";
     const tier = kind === "bread" ? rng.int(tierCount) : null;
     const free = Array.from({ length: 16 }, (_, i) => i).filter((slot) => !items.some((item) => item.slot === slot));
-    const slot = free[rng.int(free.length)];
+    const sides = free.filter(slot => slot % 4 === 0 || slot % 4 === 3);
+    // Keep one safe slot available while the bomb is pending (also during initial setup).
+    const available = bomb ? sides : !items.some(item => item.kind === "bomb") && sides.length === 1
+      ? free.filter(slot => slot !== sides[0]) : free;
+    const slot = available[rng.int(available.length)];
     return {
       id: nextId++, kind, tier, size, slot, born: tick,
       x: 90 + (slot % 4) * 180 + rng.int(29) - 14,
       y: 420 + Math.trunc(slot / 4) * 190 + rng.int(33) - 16,
-      radius: kind === "bread" ? BREAD[size].radius : kind === "flour" ? 44 : 25,
+      radius: bomb ? BOMB_RADIUS : kind === "bread" ? BREAD[size].radius : kind === "flour" ? 44 : 25,
       weight: kind === "bread" ? BREAD[size].weight : kind === "flour" ? 8 : 0,
     };
   };
   for (let i = 0; i < FIELD_ITEMS; i++) items.push(spawn());
+  items.push(spawn(true));
 
   const advance = (toTick: number) => {
     events = [];
@@ -93,6 +101,12 @@ export function createGrabGame(opts: { seed: string; tiers: readonly GrabTierInp
       while (refills.length && refills[0] <= tick) {
         refills.shift();
         const item = spawn();
+        items.push(item);
+        events.push({ type: "refill", tick, item: snapshotItem(item), from: { x: OVEN_X, y: OVEN_Y } });
+      }
+      if (bombRefill !== null && bombRefill <= tick) {
+        bombRefill = null;
+        const item = spawn(true);
         items.push(item);
         events.push({ type: "refill", tick, item: snapshotItem(item), from: { x: OVEN_X, y: OVEN_Y } });
       }
@@ -112,10 +126,26 @@ export function createGrabGame(opts: { seed: string; tiers: readonly GrabTierInp
         if (contact) {
           length = contact.length;
           const item = items.splice(contact.index, 1)[0];
-          held = snapshotItem(item);
-          events.push({ type: "pop", tick, item: { ...held } });
-          refills.push(tick + REFILL_DELAY_TICKS);
           phase = "reeling";
+          if (item.kind === "bomb") {
+            const destroyed = items.filter(other => (other.x - item.x) ** 2 + (other.y - item.y) ** 2 <= BLAST_RADIUS ** 2);
+            events.push({ type: "explode", tick, item: snapshotItem(item), destroyed: destroyed.map(snapshotItem), penaltyTicks: BOMB_PENALTY_TICKS });
+            for (const victim of destroyed) {
+              items.splice(items.indexOf(victim), 1);
+              events.push({ type: "pop", tick, item: snapshotItem(victim) });
+              refills.push(tick + REFILL_DELAY_TICKS);
+            }
+            bombRefill = tick + BOMB_RESPAWN_TICKS;
+            deadline = Math.max(tick, deadline - BOMB_PENALTY_TICKS);
+            if (deadline === tick) {
+              over = true;
+              events.push({ type: "over", tick });
+            }
+          } else {
+            held = snapshotItem(item);
+            events.push({ type: "pop", tick, item: { ...held } });
+            refills.push(tick + REFILL_DELAY_TICKS);
+          }
         } else {
           length = nextLength;
           if (length === edge) phase = "reeling";

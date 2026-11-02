@@ -13,6 +13,7 @@ export interface GrabBotResult {
   over: boolean;
   launchesAccepted: number;
   ticks: number;
+  explosions: number;
 }
 
 /** Visible-board ray estimate. The bot does not simulate unseen refills. */
@@ -27,7 +28,9 @@ export function chooseGrabWait(state: GrabState): number {
   let best = -1, bestWait = 1;
   for (let wait = 0; wait <= SWING_PERIOD_TICKS / 2; wait += 2) {
     const hit = target(state, wait);
-    if (!hit || hit.item.kind === "flour") continue;
+    if (!hit || hit.item.kind === "bomb") continue;
+    if (best < 0) bestWait = wait; // A safe fallback even when only flour is reachable.
+    if (hit.item.kind === "flour") continue;
     const outward = Math.ceil(hit.distance / EXTEND_SPEED);
     const cost = wait + outward + Math.ceil(hit.distance / reelSpeed(hit.item.weight));
     if (cost >= state.timeLeft) continue;
@@ -43,7 +46,7 @@ function run(seed: string, tiers: readonly GrabTierInput[], greedy: boolean): Gr
   const game = createGrabGame({ seed, tiers });
   const rng = createRng(`${seed}:grab:bot`);
   const launches: number[] = [];
-  let nextLaunch = -1;
+  let nextLaunch = -1, explosions = 0;
   while (!game.over) {
     const state = game.state();
     if (state.claw.phase === "idle") {
@@ -54,9 +57,9 @@ function run(seed: string, tiers: readonly GrabTierInput[], greedy: boolean): Gr
         nextLaunch = -1;
       }
     }
-    game.step(state.tick + 1);
+    explosions += game.step(state.tick + 1).filter(e => e.type === "explode").length;
   }
-  return { launches, score: game.score, grabs: game.grabs, over: game.over, launchesAccepted: game.launchesAccepted, ticks: game.state().tick };
+  return { launches, explosions, score: game.score, grabs: game.grabs, over: game.over, launchesAccepted: game.launchesAccepted, ticks: game.state().tick };
 }
 
 export const randomGrab = (seed: string, tiers: readonly GrabTierInput[]) => run(seed, tiers, false);

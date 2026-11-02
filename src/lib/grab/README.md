@@ -1,4 +1,4 @@
-# src/lib/grab — 兔兔夹面包 (G4 / D149)
+# src/lib/grab — 兔兔夹面包 (G5 / D177)
 
 Original grab-and-reel rules, shared by client and server. Pure TypeScript: integer field
 coordinates, fixed integer ticks, integer scores, and the shared seeded RNG in `../game/rng.ts`.
@@ -58,6 +58,7 @@ stepping and a single large step produce the same world and concatenated event s
 
 | Event | Fields | Meaning |
 | --- | --- | --- |
+| `explode` | `tick, item, destroyed: GrabItem[], penaltyTicks` | Bomb contact; detached bomb and victim snapshots, before victim pops. `destroyed` excludes the bomb; nominal penalty is 300 even when remaining time is lower. |
 | `pop` | `tick, item` | Item leaves the field; item snapshot records contact age/stage/position. |
 | `refill` | `tick, item, from: { x, y }` | Newly spawned item at its settled position, animation origin at the top-right oven. |
 | `score` | `tick, item` (id), `points, bonusTicks` | Delivery at the pivot; clocks score zero and grant 300 ticks. |
@@ -88,6 +89,7 @@ The engine supplies logical positions and animation events, not artwork or UI la
 | Flour | 44 | 8 | 2 | 20 |
 | Butter | 25 | 0 | 17 | 20 |
 | Clock | 25 | 0 | 17 | 0 (+300 ticks) |
+| Bomb (M) | 57 | 0 | 14 (empty claw) | 0 (−300 ticks) |
 
 Bread points are based on age **at contact**: ages 0–239 ticks are raw ×0.5; 240–540 inclusive
 are perfect ×1.5; 541+ are burnt ×0.3. Thus exactly 4 seconds is perfect, exactly 9 seconds
@@ -101,7 +103,7 @@ without a `pop` or score; it consumes no RNG or item-deck draw and cannot create
 Held bread never refreshes. This repeats throughout bonus time, so unattended bread cannot
 stay burnt for the rest of the run. Its visual is a small crust border, never a dark photo filter.
 
-Eight initial items start at age zero. Each contact schedules one replacement 30 ticks later,
+Eight regular items plus exactly one bomb start at age zero. Each ordinary contact schedules one replacement 30 ticks later,
 even if the caught item is still returning. Slots are chosen from a seeded 4 × 4 lower-field
 lattice with independent seeded x/y jitter (±14/±16 units). The spacing guarantees non-overlap
 without retry loops, including at the largest radius. Column centres are 90/270/450/630;
@@ -115,6 +117,22 @@ The oven draws shuffled 32-item batches: 23 breads, 7 butter, 1 flour, 1 clock. 
 photo tier are independently seeded. This gives rare clocks without an arbitrary bonus cap.
 The same RNG stream controls batches, sizes, tiers, slots and jitter; busy inputs consume no RNG.
 
+Bombs have `tier: null`, `stage: "none"`, size M and weight 0. They use the same seeded
+slot/jitter placement, restricted to the outer columns: centre distance from the pivot's
+straight-down line is at least 140 units (actual minimum 256). During the 300-tick bomb absence,
+regular refills keep one outer slot free. Bombs never overlap field items and never draw from
+the regular item deck; total field population is at most nine.
+
+The first swept contact with a bomb removes it immediately and emits `explode`, followed by
+one `pop` for each other field item whose centre is at distance **≤170** from the bomb centre.
+Victims include clocks and all other kinds; they grant no points, grabs or time bonus and each
+refills 30 ticks later from the usual oven origin. Held items are outside the field array and
+cannot be blast victims. The bomb itself has no `pop`; render its removal/blast from `explode`.
+The countdown loses 300 ticks, floored at zero. If that expires the run, `over` follows the
+victim pops on that same tick, and no subsequent refill happens. Otherwise the claw reels
+empty at 14 units/tick from its exact contact length, and a new bomb emits `refill` exactly
+300 ticks after the explosion. No bomb is held or scored. All event snapshots are detached.
+
 The initial deadline is 3600 ticks (60 seconds). A fully returned clock adds 300 ticks (5 seconds).
 At the deadline, expiry runs **before** movement/refill/scoring: even a clock that would have
 arrived on that exact tick cannot save the run. A held item remains visible in the frozen final
@@ -127,7 +145,10 @@ contact is at least 309 units below the pivot (331 minimum photo edge minus 22 t
 Each completed grab takes more than 32 ticks (at least 23 outward and 19 inward with the
 fastest held return). At time `T`, at most `9 + floor(T/32)` items can have been drawn from
 the deck, including the initial eight and a pending grab. Automatic bread renewal draws
-nothing from that deck and therefore does not affect the clock bound.
+nothing from that deck and therefore does not affect the clock bound. With E explosions,
+blast replacements add at most 8E deck draws, but penalties subtract 300E ticks. Since
+`ceil(a + 8E/32) ≤ ceil(a) + E`, those extra potential clocks cannot increase the bound below.
+Bomb spawning itself draws no deck card.
 With one clock per 32-item batch, a run's duration `T` satisfies
 `T ≤ 3600 + 300 × ceil((9 + T/32)/32)`, which implies `T < 5636`. Thus stepping to 6000 always
 finishes naturally. Even `step(Number.MAX_SAFE_INTEGER)` stops at the natural deadline.
@@ -149,8 +170,8 @@ The result is exactly `{ score, over, grabs, launchesAccepted }`.
 
 Configuration errors (fewer than 3 tiers) remain `RangeError`. Wall-clock plausibility and
 suspicious-rate checks live in `src/server/grab.ts` and `grabRules.ts`; this engine does not trust or read wall time.
-`GRAB_ENGINE_VERSION = 4` is exported. Version 4 shortens the field, widens swept contact
-and renews burnt field bread; v1/v2/v3 saves and server runs are rejected by the existing
+`GRAB_ENGINE_VERSION = 5` is exported. Version 5 adds seeded bombs, blasts and time penalties;
+v1/v2/v3/v4 saves and server runs are rejected by the existing
 version guards. `grabSeed(randomHex)` embeds it in server-issued seeds;
 `grabSeedVersion(seed)` returns the encoded version or null for malformed/unversioned seeds. Bump it for any
 future rules/RNG/geometry change that changes the score of an existing seed and input log.
@@ -160,7 +181,7 @@ future rules/RNG/geometry change that changes the score of an existing seed and 
 `tests/support/grabBot.ts` contains both bots. Random launches after a seeded uniform 0–17 tick
 delay each time the claw becomes idle, without inspecting targets. Greedy inspects only the
 current public items, uses the shared swept-contact geometry over the next half-swing in two-tick increments,
-and chooses points per travel-plus-wait time. It predicts contact age modulo the 601-tick bread renewal, avoids flour, and values
+and chooses points per travel-plus-wait time. It predicts contact age modulo the 601-tick bread renewal, avoids flour and bomb targets, and values
 a clock's time bonus; it never sees future refills or clones the engine RNG. Both log actual
 launches and simulate the same engine. Bot prediction may use floating point; engine/replay do not.
 
@@ -168,12 +189,17 @@ Reproduce with `npx tsx scripts/grab-tune.mts [seeds=200] [tiers=6] [seedPrefix=
 
 | Corpus | Random mean score | Greedy mean score | Ratio | Greedy mean grabs |
 | --- | ---: | ---: | ---: | ---: |
-| `grab-tune0…199`, 6 tiers | 2391.97 | 4446.86 | 53.79% | 21.105 |
-| `grab-check0…999`, 3 tiers | 2378.296 | 4451.822 | 53.42% | 21.146 |
+| G4 `grab-tune0…199`, 6 tiers | 2391.97 | 4446.86 | 53.79% | 21.105 |
+| G5 `grab-tune0…199`, 6 tiers | 1949.09 | 4338.96 | 44.92% | 21.225 |
+| G4 `grab-check0…999`, 3 tiers | 2378.296 | 4451.822 | 53.42% | 21.146 |
 
 G4 intentionally supersedes the old 25–35% ratio / 15–20 grab target: the owner asked for
-clearly more forgiving play. The 200-seed regression now allows a 45–65% score ratio and
-18–26 mean completed greedy grabs, retaining a strategy advantage without narrowing the hitbox.
+clearly more forgiving play. The G4 200-seed regression allowed a 45–65% random/greedy score ratio and
+18–26 mean completed greedy grabs. G5 retains the grab band and pins greedy mean score to
+4002.174–4891.546 (±10% of G4's 4446.86); measured change is −2.43%. Only the ratio floor
+moves from 45% to 44% (upper bound stays 65%): random bomb penalties put the measured ratio
+at 44.92%. No gameplay scoring, speeds or deck weights were retuned. The random bot must
+hit a bomb in more than half of the 200 runs (measured 163/200, 81.5%).
 The table records measurements, not a reason to tune away the requested forgiveness.
 Other tests cover deterministic events and snapshots, chunked stepping, replay/live equality,
 bad logs, exact doneness/contact/delivery boundaries, clocks, timeout ties, refill separation,

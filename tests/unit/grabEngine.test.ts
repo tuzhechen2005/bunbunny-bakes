@@ -46,9 +46,9 @@ describe("grab engine", () => {
       expect(() => createGrabGame({ seed: "x", tiers: tiers(n) })).toThrow(RangeError);
       expect(() => replayGrab("x", tiers(n), [])).toThrow(RangeError);
     }
-    expect(GRAB_ENGINE_VERSION).toBe(4);
+    expect(GRAB_ENGINE_VERSION).toBe(5);
     expect([FIELD_WIDTH, FIELD_HEIGHT]).toEqual([720, 1080]);
-    expect(createGrabGame({ seed: "x", tiers: tiers(10) }).state().items).toHaveLength(8);
+    expect(createGrabGame({ seed: "x", tiers: tiers(10) }).state().items).toHaveLength(9);
   });
 
   it("pins raw/perfect/burnt boundaries and exact integer multipliers", () => {
@@ -75,7 +75,7 @@ describe("grab engine", () => {
       const g = createGrabGame({ seed: `initial${i}`, tiers: tiers() });
       const s = g.state();
       expect(s).toMatchObject({ tick: 0, timeLeft: RUN_TICKS, score: 0, over: false, grabs: 0 });
-      expect(s.items).toHaveLength(8);
+      expect(s.items).toHaveLength(9);
       for (const a of s.items) {
         expect([a.x, a.y, a.radius, a.age, a.weight].every(Number.isSafeInteger)).toBe(true);
         expect(a.y - a.radius).toBeGreaterThanOrEqual(FIELD_HEIGHT * .3);
@@ -142,7 +142,7 @@ describe("grab engine", () => {
       expect(before.filter(i => i.kind === "bread").every(i => i.stage === "burnt" && i.age === 600)).toBe(true);
       const events = game.step((cycle + 1) * 601);
       const after = game.state().items;
-      expect(after).toHaveLength(8);
+      expect(after).toHaveLength(9);
       for (let i = 0; i < after.length; i++) {
         expect(after[i]).toMatchObject({ kind: initial[i].kind, tier: initial[i].tier, size: initial[i].size, x: initial[i].x, y: initial[i].y });
         if (after[i].kind === "bread") {
@@ -208,7 +208,7 @@ describe("grab engine", () => {
   it("refills after the delay from the oven, and returns detached items, held items and events", () => {
     const { game, contactTick, seed, at } = fixture((item) => item.kind === "bread" && item.size === "L");
     const s = game.state();
-    expect(s.items).toHaveLength(7);
+    expect(s.items).toHaveLength(8);
     s.items[0].x = -999;
     s.claw.held!.weight = 1000;
     const pop = s.events.find((e) => e.type === "pop")!;
@@ -217,9 +217,9 @@ describe("grab engine", () => {
     twin.launch(at); twin.step(contactTick);
     expect(game.state()).toEqual(twin.state());
     game.step(contactTick + REFILL_DELAY_TICKS - 1);
-    expect(game.state().items).toHaveLength(7);
-    const events = game.step(contactTick + REFILL_DELAY_TICKS);
     expect(game.state().items).toHaveLength(8);
+    const events = game.step(contactTick + REFILL_DELAY_TICKS);
+    expect(game.state().items).toHaveLength(9);
     const refill = events.find((e) => e.type === "refill")!;
     expect(refill).toMatchObject({ type: "refill", tick: contactTick + REFILL_DELAY_TICKS, from: { x: 680, y: 80 }, item: { age: 0 } });
     if (refill.type === "refill") { refill.item.x = -999; refill.from.x = -999; }
@@ -239,11 +239,13 @@ describe("grab engine", () => {
   });
 
   it.each([3, 6, 10])("matches live, replay and differently chunked stepping (%i tiers)", (n) => {
+    let explosions = 0;
     for (let i = 0; i < 12; i++) for (const bot of [greedyGrab, randomGrab]) {
       const seed = `live${i}`;
       const run = bot(seed, tiers(n));
       const a = createGrabGame({ seed, tiers: tiers(n) });
       const b = createGrabGame({ seed, tiers: tiers(n) });
+      expect(a.state().items.filter(item => item.kind === "bomb")).toHaveLength(1);
       const eventsA: GrabEvent[] = [], eventsB: GrabEvent[] = [];
       let tick = 0;
       for (const launch of run.launches) {
@@ -253,6 +255,7 @@ describe("grab engine", () => {
       }
       eventsA.push(...a.step(MAX_RUN_TICKS));
       while (!b.over) eventsB.push(...b.step(++tick));
+      explosions += eventsA.filter(event => event.type === "explode").length;
       expect(eventsA).toEqual(eventsB);
       expect({ ...a.state(), events: [] }).toEqual({ ...b.state(), events: [] });
       expect(replayGrab(seed, tiers(n), run.launches)).toEqual({
@@ -260,6 +263,7 @@ describe("grab engine", () => {
       });
       expect(a.score).toBe(eventsA.reduce((sum, e) => sum + (e.type === "score" ? e.points : 0), 0));
     }
+    expect(explosions).toBeGreaterThan(0);
   }, 30_000);
 
   it("keeps all refills in bounds, separated, uniquely identified and integer-valued", () => {
@@ -280,8 +284,7 @@ describe("grab engine", () => {
           else if (value && typeof value === "object") Object.values(value).forEach(integersOnly);
         };
         integersOnly(state);
-        expect(state.items.length).toBeGreaterThanOrEqual(7);
-        expect(state.items.length).toBeLessThanOrEqual(8);
+        expect(state.items.length).toBeLessThanOrEqual(9);
         for (const a of state.items) {
           expect(a.x - a.radius >= 0 && a.x + a.radius <= FIELD_WIDTH).toBe(true);
           expect(a.y - a.radius >= FIELD_HEIGHT * .3 && a.y + a.radius <= FIELD_HEIGHT).toBe(true);
