@@ -22,6 +22,9 @@ interface Props {
   onProgress: (p: GrabProgress) => void; onOver: (p: GrabProgress) => void; onShowResult?: () => void;
 }
 type ScorePop = Extract<GrabEvent, { type: "score" }>;
+type Blast = Extract<GrabEvent, { type: "explode" }>;
+/** A blast stays on screen this many ticks (the boom, flying breads and the −5 秒 tag). */
+const BLAST_TICKS = 54;
 
 const GrabSprite = memo(function GrabSprite({ bread, tiers, held = false, refilling = false }: {
   bread: GrabItem; tiers: TierView[]; held?: boolean; refilling?: boolean;
@@ -51,6 +54,19 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
   const [ovenWarm, setOvenWarm] = useState(false);
   const ovenUntil = useRef(-1);
   const livePops = useRef<ScorePop[]>([]);
+  const [blasts, setBlasts] = useState<Blast[]>([]);
+  const liveBlasts = useRef<Blast[]>([]);
+  const frame = useRef<HTMLDivElement>(null);
+  const shaken = useRef(-1);
+  // A short board shake per new blast, via WAAPI so no element remounts.
+  useEffect(() => {
+    const last = blasts.at(-1);
+    if (!last || last.item.id === shaken.current) return;
+    shaken.current = last.item.id;
+    if (quiet) return;
+    frame.current?.animate?.([{ transform: "translate(0,0)" }, { transform: "translate(-6px,3px)" }, { transform: "translate(5px,-4px)" },
+      { transform: "translate(-3px,2px)" }, { transform: "translate(0,0)" }], { duration: 360, easing: "ease-out" });
+  }, [blasts, quiet]);
   const presentation = useRef("");
   const board = useRef<HTMLButtonElement>(null);
   const arm = useRef<HTMLSpanElement>(null);
@@ -92,13 +108,20 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
       livePops.current = [...livePops.current.filter(e => state.tick - e.tick < 48), ...scores]
         .filter(e => state.tick - e.tick < 48).slice(-4);
       for (const event of events) if (event.type === "refill") ovenUntil.current = event.tick + 30;
+      const booms = events.filter((e): e is Blast => e.type === "explode");
+      liveBlasts.current = [...liveBlasts.current, ...booms].filter(e => state.tick - e.tick < BLAST_TICKS);
       const warm = state.tick < ovenUntil.current;
-      const key = `${grabPresentationKey(state)}|${warm}|${livePops.current.map(e => e.item).join(",")}`;
+      const key = `${grabPresentationKey(state)}|${warm}|${livePops.current.map(e => e.item).join(",")}|${liveBlasts.current.map(e => e.item.id).join(",")}`;
       if (key !== presentation.current) {
         presentation.current = key;
         setSnap(state);
         setPops(livePops.current);
         setOvenWarm(warm);
+        setBlasts(liveBlasts.current);
+      }
+      if (booms.length) {
+        if (soundOn) sound.boom();
+        if (!quiet) haptic(40);
       }
       if (scores.length && state.tick !== lastFeedback.current) {
         lastFeedback.current = state.tick;
@@ -174,13 +197,14 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
   const seconds = Math.ceil(snap.timeLeft / 60);
   return <section className={`grab-play${quiet ? " grab-quiet" : ""}${paused || hidden || snap.over ? " grab-still" : ""}${seconds <= 10 && !snap.over ? " grab-hurry" : ""}`}>
     <div className="grab-hud">
-      <p>{t.timer}<b className="font-num" data-testid="grab-timer">{seconds}</b></p>
+      <p className="grab-timer-wrap">{t.timer}<b className="font-num" data-testid="grab-timer">{seconds}</b>
+        {blasts.map(e => <span key={e.item.id} className="grab-penalty font-num" data-testid="grab-penalty">{fill(t.penalty, { n: e.penaltyTicks / 60 })}</span>)}</p>
       <p>{t.score}<b key={snap.score} className={`font-num${snap.score ? " grab-bump" : ""}`} data-testid="grab-score">{snap.score}</b></p>
     </div>
     <div className="grab-timebar" aria-hidden="true"><i style={{ transform: `scaleX(${Math.min(1, Math.max(0, snap.timeLeft - 60) / RUN_TICKS)})` }} /></div>
     <div className="grab-bakery" aria-hidden="true" />
     <div className="grab-field-space">
-    <div className="grab-field-frame" style={{ aspectRatio: `${FIELD_WIDTH} / ${FIELD_HEIGHT}`, "--grab-aspect": FIELD_WIDTH / FIELD_HEIGHT } as CSSProperties}>
+    <div ref={frame} className="grab-field-frame" style={{ aspectRatio: `${FIELD_WIDTH} / ${FIELD_HEIGHT}`, "--grab-aspect": FIELD_WIDTH / FIELD_HEIGHT } as CSSProperties}>
     <GrabArt name="bunny" className="grab-bunny" />
     <button ref={board} type="button" className="grab-board"
       onPointerDown={e => {
@@ -205,6 +229,18 @@ export function GrabBoard({ ref, seed, tiers, initialLaunches = [], initialElaps
       <span ref={heldPosition} className="grab-held-position">
         {snap.claw.held && <GrabSprite key={snap.claw.held.id} bread={snap.claw.held} tiers={tiers} held />}
       </span>
+      {blasts.map(e => <span key={e.item.id} className="grab-blast" data-testid="grab-blast"
+        style={{ left: `${e.item.x / FIELD_WIDTH * 100}%`, top: `${e.item.y / FIELD_HEIGHT * 100}%` } as CSSProperties}>
+        {e.destroyed.map((d, i) => {
+          // Each destroyed piece flies away from the bomb and fades.
+          const dx = d.x - e.item.x, dy = d.y - e.item.y, n = Math.max(1, Math.hypot(dx, dy));
+          return <span key={d.id} className="grab-debris" style={{ left: `${dx / FIELD_WIDTH * 100}%`, top: `${dy / FIELD_HEIGHT * 100}%`,
+            width: `${d.radius * 2 / FIELD_WIDTH * 100}%`, height: `${d.radius * 2 / FIELD_HEIGHT * 100}%`,
+            "--dx": `${dx / n * 140}%`, "--dy": `${dy / n * 140 - 60}%`, "--spin": `${(i % 2 ? 1 : -1) * (120 + i * 40)}deg` } as CSSProperties}>
+            <GrabFace item={d} tiers={tiers} /></span>;
+        })}
+        <GrabArt name="boom" className="grab-boom" />
+      </span>)}
       {pops.map(e => <span key={e.item}>
         <span className="grab-burst" aria-hidden="true" />
         <span className="grab-score-pop font-num">{e.bonusTicks ? t.bonus : fill(t.reward, { n: e.points })}</span>

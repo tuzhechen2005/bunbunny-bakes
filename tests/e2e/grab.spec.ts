@@ -113,11 +113,24 @@ for(const width of [320,390]) {
    expect(filters.every(filter=>filter==="none")).toBe(true);
    await page.clock.runFor(1100);
    await expect(page.locator('.grab-item[data-stage="burnt"]')).toHaveCount(0);
-   await expect(page.locator(".grab-item")).toHaveCount(8);
+   await expect(page.locator(".grab-item:not([data-kind=bomb])")).toHaveCount(8);
    expect(await photo!.evaluate(node=>node.isConnected)).toBe(false);
    await page.clock.runFor(35000);
-   await expect(page.locator(".grab-item")).toHaveCount(8);
+   await expect(page.locator(".grab-item:not([data-kind=bomb])")).toHaveCount(8);
    await expect(page.locator(".grab-score-pop")).toHaveCount(0);
+  });
+  test("grabbing the bomb shows the blast and a −5 秒 tag",async({page})=>{
+   let hit=-1;
+   for(let t=1;t<600&&hit<0;t++){const g=createGrabGame({seed:SEED,tiers:TIERS});g.step(t);g.launch(t);if(g.step(t+200).some(e=>e.type==="explode"))hit=t;}
+   expect(hit).toBeGreaterThan(0);
+   await mockApi(page); await page.clock.install(); await page.goto("/game/grab");
+   await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000)); await start(page);
+   await expect(page.locator('.grab-item[data-kind="bomb"]')).toHaveCount(1);
+   await page.clock.runFor(Math.floor(hit*1000/60)+5); await page.getByTestId("grab-board").click();
+   await expect.poll(async()=>{await page.clock.runFor(100);return page.getByTestId("grab-blast").count();},{timeout:10000}).toBe(1);
+   await expect(page.getByTestId("grab-penalty")).toHaveText(t.penalty.replace("{n}","5"));
+   await page.clock.runFor(1500);
+   await expect(page.getByTestId("grab-blast")).toHaveCount(0);
   });
   test("accepts a press before the deferred animation boot",async({page})=>{
    await mockApi(page); await page.clock.install(); await page.goto("/game/grab");

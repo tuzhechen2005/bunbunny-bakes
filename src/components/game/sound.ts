@@ -78,6 +78,19 @@ export const sound = {
     [12, 16, 19, 24].forEach((s) => tone("sine", freq(s), t + 0.38, 1.3, 0.22));
     tone("sine", freq(28), t + 0.4, 0.9, 0.12, freq(16));
   },
+  /** A soft clay "boom": filtered noise burst over a falling low thump. */
+  boom() {
+    const c = ensure();
+    if (!c || !master) return;
+    const t = c.currentTime, len = 0.6;
+    const buf = c.createBuffer(1, Math.floor(c.sampleRate * len), c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length) ** 2;
+    const src = c.createBufferSource(); src.buffer = buf;
+    const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.setValueAtTime(1800, t); lp.frequency.exponentialRampToValueAtTime(200, t + len);
+    const g = c.createGain(); g.gain.value = 0.55;
+    src.connect(lp).connect(g).connect(master); src.start(t);
+    tone("sine", 140, t, 0.45, 0.5, 45);
+  },
   over() {
     const c = ensure();
     if (!c) return;

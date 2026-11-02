@@ -6,7 +6,7 @@ import type { TierView } from "@/components/game/types";
 import { bakedVariants, type BakedSet } from "./grabBake";
 
 // D167 clay sprites; anything without a clay version keeps its original SVG.
-const CLAY = new Set(["bunny", "oven", "tongs", "arm", "flour", "butter", "clock", "sparkle"]);
+const CLAY = new Set(["bunny", "oven", "tongs", "arm", "flour", "butter", "clock", "sparkle", "bomb", "boom", "bomb-card"]);
 export const grabArtSrc = (name: string) => CLAY.has(name) ? `/brand/art/game/grab-${name}.webp` : `/brand/grab/${name}.svg`;
 export function GrabArt({ name, className = "" }: { name: string; className?: string }) {
   // eslint-disable-next-line @next/next/no-img-element
@@ -44,7 +44,7 @@ export function GrabFace({ item, tiers }: { item: GrabItem; tiers: TierView[] })
 export function GrabRules() {
   const t = copy.customer.grab;
   return <div className="grab-help-cards">
-    {[["tongs", t.tongs, t.tongRule], ["bread", t.bread, t.breadRule], ["clock", t.clock, t.clockRule]].map(([art, title, text]) =>
+    {[["tongs", t.tongs, t.tongRule], ["bread", t.bread, t.breadRule], ["clock", t.clock, t.clockRule], ["bomb-card", t.bomb, t.bombRule]].map(([art, title, text]) =>
       <div key={art} className="grab-help-card" data-testid={`grab-help-${art}`}>
         <GrabArt name={art} /><b className="font-display">{title}</b><span>{text}</span>
       </div>)}
