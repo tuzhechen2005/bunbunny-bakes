@@ -13,7 +13,7 @@ export async function readShop(db: DbClient, input: unknown, ipHash: string, now
   await rateLimit(db, `shop_read_ip:${ipHash}`, SHOP_READ_LIMIT, now);
   const { wechatId } = parseGameInput(identitySchema, input);
   await rateLimit(db, `shop_read_wechat:${normalizeWechat(wechatId)}`, SHOP_READ_LIMIT, now);
-  return db.$transaction(tx => shopView(tx, wechatId, now));
+  return db.$transaction(tx => shopView(tx, wechatId));
 }
 
 export async function buyShop(db: DbClient, input: unknown, ipHash: string, now: Date) {

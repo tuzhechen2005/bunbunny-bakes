@@ -23,11 +23,13 @@ it("opens both routes without ownership proof, scopes data and logs purchases at
   expect(response.headers.get("cache-control")).toBe("no-store");
   const view = await response.json();
   expect(view.balance).toBe(200);
-  expect(view.recentOrderAwards).toHaveLength(1);
+  expect(Object.keys(view).sort()).toEqual(["balance", "catalog", "inventory"]);
   expect(JSON.stringify(view)).not.toMatch(/wechatId|refId|other-private-player/);
   const bought = await buy();
   expect(bought.status).toBe(200);
-  expect(await bought.json()).toMatchObject({ balance: 140, inventory: { bomb: 1, bell: 0, slide: 0 } });
+  const purchaseView = await bought.json();
+  expect(Object.keys(purchaseView).sort()).toEqual(["balance", "catalog", "inventory"]);
+  expect(purchaseView).toMatchObject({ balance: 140, inventory: { bomb: 1, bell: 0, slide: 0 }, catalog: view.catalog });
   expect(await db.auditLog.findFirst()).toMatchObject({ actor: "CUSTOMER", action: "shop.purchase", after: { wechatIdNorm: "wx", item: "bomb", qty: 1, cost: 60 } });
   expect((await (await get("other-private-player")).json()).balance).toBe(200);
 });

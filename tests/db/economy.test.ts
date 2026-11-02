@@ -76,18 +76,17 @@ it("rolls order status and audit back if coin insertion fails, without outbox ch
   await adminChangeStatus(db, { orderId: order.id, to: "CANCELLED", reason: "not picked up", expectedUpdatedAt: order.updatedAt.toISOString() }, now);
   expect(await db.coinLedger.count()).toBe(0);
 });
-it("shop projection scopes inventory and recent order awards to the normalized caller", async () => {
+it("shop projection returns only balance, inventory and catalog for the normalized caller", async () => {
   const { shopView } = await import("@/server/economy");
   for (const id of ["wx", "other"]) {
     await db.coinLedger.create({ data: { wechatIdNorm: id, delta: 90, reason: "ORDER", refId: id, createdAt: now } });
     await db.inventory.create({ data: { wechatIdNorm: id, item: "bell", count: 1 } });
   }
   await db.coinLedger.create({ data: { wechatIdNorm: "wx", delta: 10, reason: "ORDER", refId: "old", createdAt: new Date("2026-10-01Z") } });
-  const result = await db.$transaction(tx => shopView(tx, " WX ", now));
+  const result = await db.$transaction(tx => shopView(tx, " WX "));
   expect(result.balance).toBe(100);
   expect(result.inventory).toEqual({ bomb: 0, bell: 1, slide: 0 });
-  expect(result.recentOrderAwards).toHaveLength(1);
-  expect(result.recentOrderAwards[0]).not.toHaveProperty("refId");
+  expect(Object.keys(result).sort()).toEqual(["balance", "catalog", "inventory"]);
   expect(JSON.stringify(result)).not.toContain("wechatId");
 });
 
@@ -114,4 +113,16 @@ it("purchase audit failure rolls back both payment and inventory", async () => {
     await db.$executeRawUnsafe(`DROP TRIGGER fail_shop_audit_test ON "AuditLog"`);
     await db.$executeRawUnsafe(`DROP FUNCTION fail_shop_audit_test()`);
   }
+});
+
+it.each(["BIG", "TU", "RUN", "M3", "TD", "GRAB"] as const)("does not award coins when a %s finish flags the run suspicious", async game => {
+  const run = await db.gameRun.create({ data: { game, seed: "s", wechatId: "Wx", nickname: "n", tiersSnapshot: [], level: 6 } });
+  const claimed = await claimCoinFinish(db, {
+    where: { id: run.id, finishedAt: null },
+    data: { finishedAt: now, passedAt: now, score: 3000, suspicious: true },
+  }, now, {}, 3000);
+  expect(claimed.count).toBe(1);
+  expect(await db.gameRun.findUniqueOrThrow({ where: { id: run.id } })).toMatchObject({ finishedAt: now, suspicious: true });
+  expect(await db.coinLedger.count()).toBe(0);
+  expect(await db.$transaction(tx => balance(tx, "wx"))).toBe(0);
 });

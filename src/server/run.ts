@@ -8,7 +8,7 @@ import { z } from "zod";
 import { copy } from "@/copy";
 import type { Prisma } from "@/generated/prisma/client";
 import { MAX_INPUTS, MAX_RUN_TICKS, replayRun, RUN_ENGINE_VERSION,
-  RunReplayError, runSeed, runSeedVersion } from "@/lib/run";
+  RunReplayError, runSeed, runSeedVersion, UNITS_PER_METRE } from "@/lib/run";
 import { isRunSuspicious, inputTime } from "./runRules";
 export { isRunSuspicious, RUN_SUSPICIOUS_MEDIAN_GAP_MS } from "./runRules";
 import type { DbClient } from "./db";
@@ -120,5 +120,5 @@ export function verifyRun(run: GameRun, data: z.output<typeof runFinishSchema>, 
       const prior = entry as { tick?: unknown; dir?: unknown } | null;
       return prior?.tick === data.inputs[i]?.tick && prior?.dir === data.inputs[i]?.dir;
     }))) throw badRun();
-  return { score: outcome.score, distance: outcome.distance / 1000, playMs, suspicious: isRunSuspicious(data.inputs, data.endTick) };
+  return { score: outcome.score, distance: outcome.distance / UNITS_PER_METRE, playMs, suspicious: isRunSuspicious(data.inputs, data.endTick) };
 }

@@ -37,7 +37,7 @@ export async function claimCoinFinish(db: DbClient, args: { where: { id: string;
       })).count !== 1) throw new AppError("VALIDATION");
     }
     const banned = await tx.$queryRaw<{ n: number }[]>`SELECT count(*)::int n FROM "GameBan" WHERE lower(btrim("wechatId")) = ${normalizeWechat(run.wechatId)}`;
-    if (!run.hidden && !banned[0].n) {
+    if (!run.hidden && !run.suspicious && !banned[0].n) {
       const daily = await tx.$queryRaw<{ total: number }[]>`SELECT COALESCE(sum(delta), 0)::int total FROM "CoinLedger"
         WHERE "wechatIdNorm" = ${normalizeWechat(run.wechatId)} AND reason = 'GAME_RUN'
         AND ("createdAt" AT TIME ZONE 'America/Chicago')::date = ${localDateOf(now)}::date`;
@@ -74,17 +74,13 @@ export async function purchase(tx: Tx, id: string, item: ShopItem, qty: number, 
   await tx.coinLedger.create({ data: { wechatIdNorm, delta: -cost, reason: "PURCHASE", refId: purchaseId, createdAt: now } });
   await tx.inventory.upsert({ where: { wechatIdNorm_item: { wechatIdNorm, item } }, create: { wechatIdNorm, item, count: qty }, update: { count: { increment: qty } } });
   await writeAudit(tx, { actor: "CUSTOMER", action: "shop.purchase", entityType: "CoinLedger", entityId: purchaseId, after: { wechatIdNorm, item, qty, cost }, at: now });
-  return { purchaseId, balance: await balance(tx, id), inventory: await inventory(tx, id) };
+  return { balance: await balance(tx, id), inventory: await inventory(tx, id), catalog: SHOP_CATALOG };
 }
 
-/** Identity is self-reported, as in the games (D170); no ownership verification. No order ids/tokens or player ids leave this projection. */
-export async function shopView(tx: Tx, id: string, now: Date) {
+/** Identity is self-reported, as in the games (D170); no ownership verification. Only balance, inventory and catalog may leave this projection; no per-order details. */
+export async function shopView(tx: Tx, id: string) {
   await lockWallet(tx, id);
   return {
     balance: await balance(tx, id), inventory: await inventory(tx, id), catalog: SHOP_CATALOG,
-    recentOrderAwards: await tx.coinLedger.findMany({
-      where: { wechatIdNorm: normalizeWechat(id), reason: "ORDER", delta: { gt: 0 }, createdAt: { gte: new Date(now.getTime() - 7 * 86400000), lte: now } },
-      select: { id: true, delta: true, createdAt: true }, orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    }),
   };
 }
