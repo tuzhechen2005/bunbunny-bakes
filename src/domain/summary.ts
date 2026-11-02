@@ -6,6 +6,7 @@ import { addDays } from "./dates";
 import {
   OCCUPYING_STATUSES,
   type CapacityProduct,
+  type CartLine,
   type DayLimits,
   type DayOrder,
   type LocalDate,
@@ -15,6 +16,7 @@ export interface SummaryProduct extends CapacityProduct {
   name: string;
   sortOrder: number;
   batchYield: number | null;
+  flavors?: readonly { id: string }[];
 }
 
 export interface SummaryOrder extends DayOrder {
@@ -38,7 +40,14 @@ export interface SummaryInput {
   products: Record<string, SummaryProduct>;
 }
 
+export interface FlavorQuantity {
+  flavorId: string | null;
+  flavorName: string | null;
+  qty: number;
+}
+
 export interface BreadLine {
+  flavors?: FlavorQuantity[];
   productId: string;
   name: string;
   qty: number;
@@ -46,6 +55,7 @@ export interface BreadLine {
 }
 
 export interface BatchLine {
+  flavors?: FlavorQuantity[];
   productId: string;
   name: string;
   qty: number;
@@ -127,6 +137,28 @@ function totalsOf(orders: DayOrder[], products: ProductMap): Map<string, number>
   return totals;
 }
 
+/** Snapshot names survive renames and deactivation; null remains explicit legacy data. */
+export function flavorQuantities(lines: readonly CartLine[]): FlavorQuantity[] {
+  const totals = new Map<string, FlavorQuantity>();
+  for (const line of lines) {
+    const key = JSON.stringify([line.flavorId ?? null, line.flavorName ?? null]);
+    const old = totals.get(key);
+    if (old) old.qty += line.qty;
+    else totals.set(key, { flavorId: line.flavorId ?? null, flavorName: line.flavorName ?? null, qty: line.qty });
+  }
+  return [...totals.values()].sort((a, b) => {
+    const left = a.flavorName ?? "";
+    const right = b.flavorName ?? "";
+    return (left < right ? -1 : left > right ? 1 : 0) || (a.flavorId ?? "").localeCompare(b.flavorId ?? "");
+  });
+}
+
+function flavorSection(orders: DayOrder[], product: SummaryProduct): { flavors?: FlavorQuantity[] } {
+  const lines = orders.flatMap(o => o.items).filter(l => l.productId === product.id);
+  return product.flavors?.length || lines.some(l => l.flavorId)
+    ? { flavors: flavorQuantities(lines) } : {};
+}
+
 function compareProducts(a: SummaryProduct, b: SummaryProduct): number {
   if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
   if (a.name !== b.name) return a.name < b.name ? -1 : 1;
@@ -163,7 +195,7 @@ function breadSection(day: ProductionDay | undefined, products: ProductMap): Dai
         const n = Math.ceil(qty / per);
         rounds = { rounds: n, leftover: n * per - qty };
       }
-      return { productId: product.id, name: product.name, qty, rounds };
+      return { productId: product.id, name: product.name, ...flavorSection(orders, product), qty, rounds };
     },
   );
 
@@ -175,14 +207,15 @@ function breadSection(day: ProductionDay | undefined, products: ProductMap): Dai
 }
 
 function batchLines(day: ProductionDay | undefined, products: ProductMap): BatchLine[] {
-  const totals = totalsOf(occupyingOrders(day), products);
+  const orders = occupyingOrders(day);
+  const totals = totalsOf(orders, products);
   return sortedEntries(totals, products, isIndependent).map(({ product, qty }) => {
     const y = product.batchYield;
     if (!isPositiveInt(y)) {
-      return { productId: product.id, name: product.name, qty, batches: null, leftover: null };
+      return { productId: product.id, name: product.name, ...flavorSection(orders, product), qty, batches: null, leftover: null };
     }
     const batches = Math.ceil(qty / y);
-    return { productId: product.id, name: product.name, qty, batches, leftover: batches * y - qty };
+    return { productId: product.id, name: product.name, ...flavorSection(orders, product), qty, batches, leftover: batches * y - qty };
   });
 }
 

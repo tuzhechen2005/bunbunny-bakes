@@ -57,7 +57,7 @@ export const AssistantBody = z.object({
     .max(MAX_MESSAGES)
     .refine((m) => m[m.length - 1]?.role === "user", { message: "Last message must be from the user" }),
   cart: z
-    .array(z.object({ productId: z.uuid(), qty: z.number().int().min(1).max(MAX_QTY_SCHEMA) }))
+    .array(z.object({ productId: z.uuid(), flavorId: z.uuid().nullable().optional(), qty: z.number().int().min(1).max(MAX_QTY_SCHEMA) }))
     .max(MAX_LINES),
   fulfillment: z.enum(["PICKUP", "DELIVERY"]).optional(),
 });

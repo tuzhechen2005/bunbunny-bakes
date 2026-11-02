@@ -56,6 +56,8 @@ export interface CapacityProduct {
 
 export interface CartLine {
   productId: string;
+  flavorId?: string | null;
+  flavorName?: string | null;
   qty: number;
 }
 

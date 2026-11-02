@@ -4,6 +4,8 @@
 // pickup date's OpenDate row (`SELECT … FOR UPDATE`). All creates for one day queue on that
 // lock, so the capacity check and the insert can never interleave with another create.
 
+import { mergeCartLines as mergeLines, productQuantities } from "@/domain/cart";
+import { lockCartProducts, validateFlavors, currentLinePrice } from "./flavorPricing";
 import { suggestNextDate } from "@/domain/availability";
 import { checkDay } from "@/domain/capacity";
 import { cutoffAt as computeCutoffAt, isBeforeCutoff, leadDaysOf } from "@/domain/cutoff";
@@ -66,12 +68,7 @@ const IP_LIMIT_PER_WINDOW = 5;
 const WECHAT_UNCONFIRMED_LIMIT = 2;
 const IP_WINDOW_MS = 10 * 60 * 1000;
 
-/** Sums qty per product, keeping first-seen order. */
-export function mergeLines(lines: CartLine[]): CartLine[] {
-  const totals = new Map<string, number>();
-  for (const l of lines) totals.set(l.productId, (totals.get(l.productId) ?? 0) + l.qty);
-  return [...totals].map(([productId, qty]) => ({ productId, qty }));
-}
+export { mergeCartLines as mergeLines } from "@/domain/cart";
 
 function has(map: object, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(map, key);
@@ -106,11 +103,7 @@ async function insertOrder(tx: Tx, input: InsertInput) {
       productId: l.productId,
       qty: l.qty,
       name: p.name,
-      price: {
-        unitPriceCents: p.unitPriceCents,
-        bundleSize: p.bundleSize,
-        bundlePriceCents: p.bundlePriceCents,
-      },
+      ...currentLinePrice(l, p),
     };
   });
   const pricing = priceCart(lines, fulfillment, {
@@ -145,6 +138,8 @@ async function insertOrder(tx: Tx, input: InsertInput) {
       items: {
         create: lines.map((l, i) => ({
           productId: l.productId,
+          flavorId: l.flavorId,
+          flavorName: l.flavorName,
           nameSnapshot: l.name,
           qty: l.qty,
           unitPriceCents: l.price.unitPriceCents,
@@ -172,6 +167,8 @@ async function insertOrder(tx: Tx, input: InsertInput) {
       note: input.note,
       items: lines.map((l, i) => ({
         productId: l.productId,
+        flavorId: l.flavorId,
+        flavorName: l.flavorName,
         name: l.name,
         qty: l.qty,
         lineTotalCents: pricing.lines[i].lineTotalCents,
@@ -257,6 +254,7 @@ export async function createCustomerOrder(
       }
 
       // 5. Products and the per-item max (on merged quantities).
+      await lockCartProducts(tx, cart);
       const products = await loadProductMap(tx);
       const unavailable = cart.filter(
         (l) => !has(products, l.productId) || products[l.productId].status !== "ACTIVE",
@@ -266,7 +264,10 @@ export async function createCustomerOrder(
           extra: { productIds: unavailable.map((l) => l.productId) },
         });
       }
-      const overMax = cart.filter((l) => l.qty > settings.maxQtyPerItem);
+      validateFlavors(cart, products);
+      const overMax = [...productQuantities(cart)]
+        .filter(([, qty]) => qty > settings.maxQtyPerItem)
+        .map(([productId]) => ({ productId }));
       if (overMax.length) {
         throw new AppError("QTY_LIMIT", { extra: { productIds: overMax.map((l) => l.productId) } });
       }
@@ -394,6 +395,7 @@ export async function createAdminOrder(
     }
 
     const settings = await loadSettings(tx);
+    await lockCartProducts(tx, cart);
     const products = await loadProductMap(tx);
     const unavailable = cart.filter(
       (l) => !has(products, l.productId) || products[l.productId].status === "ARCHIVED",
@@ -404,6 +406,7 @@ export async function createAdminOrder(
       });
     }
 
+    validateFlavors(cart, products);
     const day = await loadDayContext(tx, date, settings, products);
     // Weekday restrictions (D115) are overridable like capacity, with the same reason flow.
     const violations: Violation[] = [

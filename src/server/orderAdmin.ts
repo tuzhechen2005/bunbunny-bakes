@@ -11,6 +11,8 @@
 // Admin mutations compare `expectedUpdatedAt` with the locked row (mismatch -> STALE) and
 // set updatedAt = max(now, previous updatedAt + 1 ms), so the token always changes.
 
+import { lineKey } from "@/domain/cart";
+import { lockCartProducts, validateFlavors, currentLinePrice } from "./flavorPricing";
 import { checkDay } from "@/domain/capacity";
 import { weekdayViolations } from "@/domain/weekdays";
 import { cutoffAt as computeCutoffAt, leadDaysOf } from "@/domain/cutoff";
@@ -477,8 +479,8 @@ function sameCart(a: CartLine[], b: CartLine[]): boolean {
   if (a.length !== b.length) return false;
   const key = (l: CartLine[]) =>
     [...l]
-      .sort((x, y) => (x.productId < y.productId ? -1 : x.productId > y.productId ? 1 : 0))
-      .map((x) => `${x.productId}:${x.qty}`)
+      .sort((x, y) => lineKey(x).localeCompare(lineKey(y)))
+      .map((x) => `${lineKey(x)}:${x.qty}`)
       .join(",");
   return key(a) === key(b);
 }
@@ -497,7 +499,7 @@ export async function adminEditOrder(
     assertFresh(order, data.expectedUpdatedAt);
 
     // --- new content
-    const oldCart: CartLine[] = mergeLines(order.items.map((i) => ({ productId: i.productId, qty: i.qty })));
+    const oldCart: CartLine[] = mergeLines(order.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, qty: i.qty })));
     const newDate = data.pickupDate ?? oldDate;
     const dateChanged = newDate !== oldDate;
     const newCart = data.items ? mergeLines(data.items) : oldCart;
@@ -517,8 +519,14 @@ export async function adminEditOrder(
 
     // --- products: new ones must exist and not be ARCHIVED (PAUSED is fine for the owner)
     const settings = await loadSettings(tx);
+    await lockCartProducts(tx, newCart);
     const products = await loadProductMap(tx);
     const existingByProduct = new Map(order.items.map((i) => [i.productId, i]));
+    const existingByLine = new Map(order.items.map((i) => [lineKey(i), i]));
+    if (data.items) {
+      const legacyProducts = new Set(order.items.filter(i => i.flavorId === null).map(i => i.productId));
+      validateFlavors(newCart, products, legacyProducts);
+    }
     const unavailable = newCart.filter(
       (l) =>
         !existingByProduct.has(l.productId) &&
@@ -546,20 +554,21 @@ export async function adminEditOrder(
 
     // --- prices: snapshots for products already on the order (D45), current for new ones
     const lines = newCart.map((l) => {
-      const existing = existingByProduct.get(l.productId);
+      const existing = existingByLine.get(lineKey(l));
       const price: PriceSnapshot = existing
         ? {
             unitPriceCents: existing.unitPriceCents,
             bundleSize: existing.bundleSize,
             bundlePriceCents: existing.bundlePriceCents,
           }
-        : {
-            unitPriceCents: products[l.productId].unitPriceCents,
-            bundleSize: products[l.productId].bundleSize,
-            bundlePriceCents: products[l.productId].bundlePriceCents,
-          };
+        : currentLinePrice(l, products[l.productId]).price;
       const name = existing ? existing.nameSnapshot : products[l.productId].name;
-      return { productId: l.productId, qty: l.qty, price, name };
+      return {
+        productId: l.productId,
+        flavorId: l.flavorId ?? null,
+        flavorName: existing ? existing.flavorName : currentLinePrice(l, products[l.productId]).flavorName,
+        qty: l.qty, price, name,
+      };
     });
     const repriced = itemsChanged || fulfillmentChanged;
     const pricing = priceCart(lines, newFulfillment, {
@@ -594,6 +603,8 @@ export async function adminEditOrder(
         data: lines.map((l, i) => ({
           orderId: order.id,
           productId: l.productId,
+          flavorId: l.flavorId,
+          flavorName: l.flavorName,
           nameSnapshot: l.name,
           qty: l.qty,
           unitPriceCents: l.price.unitPriceCents,
@@ -632,6 +643,8 @@ export async function adminEditOrder(
         note: order.note,
         items: order.items.map((i) => ({
           productId: i.productId,
+          flavorId: i.flavorId,
+          flavorName: i.flavorName,
           name: i.nameSnapshot,
           qty: i.qty,
           lineTotalCents: i.lineTotalCents,
@@ -649,6 +662,8 @@ export async function adminEditOrder(
         note: newNote,
         items: lines.map((l, i) => ({
           productId: l.productId,
+          flavorId: l.flavorId,
+          flavorName: l.flavorName,
           name: l.name,
           qty: l.qty,
           lineTotalCents: pricing.lines[i].lineTotalCents,

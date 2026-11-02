@@ -22,6 +22,7 @@ const codePoints = (s: string) => [...s].length;
 
 const cartLine = z.object({
   productId: z.uuid(),
+  flavorId: z.uuid().nullable().optional(),
   qty: z.number().int().min(1).max(MAX_QTY_SCHEMA),
 });
 

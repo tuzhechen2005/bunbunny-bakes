@@ -1,4 +1,5 @@
 // Pricing (CAPACITY_RULES.md §2). Pure functions; all money is integer cents.
+import { lineKey } from "./cart";
 import type { Cents, FeeSettings, Fulfillment, PriceSnapshot } from "./types";
 
 function assertCents(value: number, name: string): void {
@@ -49,12 +50,13 @@ export function deliveryFee(subtotal: Cents, fulfillment: Fulfillment, fees: Fee
 
 export interface PricedLine {
   productId: string;
+  flavorId?: string | null;
   qty: number;
   price: PriceSnapshot;
 }
 
 export interface CartPricing {
-  lines: { productId: string; qty: number; lineTotalCents: Cents }[];
+  lines: { productId: string; flavorId?: string | null; qty: number; lineTotalCents: Cents }[];
   subtotalCents: Cents;
   deliveryFeeCents: Cents;
   totalCents: Cents;
@@ -64,21 +66,21 @@ export interface CartPricing {
 
 /**
  * Prices a whole cart. Each line is priced on its own: bundles never mix
- * across products.
+ * across product/flavour identities.
  *
  * Callers must merge lines first: if the same productId appears in more than
- * one line this throws an Error, because pricing split lines separately would
+ * one line with the same flavour this throws an Error, because pricing split lines separately would
  * miss bundles (e.g. 2 + 2 would not get the 4-piece price).
  */
 export function priceCart(lines: PricedLine[], fulfillment: Fulfillment, fees: FeeSettings): CartPricing {
   assertFees(fees);
   const seen = new Set<string>();
   const priced = lines.map((line) => {
-    if (seen.has(line.productId)) {
+    if (seen.has(lineKey(line))) {
       throw new Error(`duplicate productId in cart: ${line.productId} (merge lines before pricing)`);
     }
-    seen.add(line.productId);
-    return { productId: line.productId, qty: line.qty, lineTotalCents: lineTotal(line.qty, line.price) };
+    seen.add(lineKey(line));
+    return { productId: line.productId, ...(line.flavorId !== undefined ? { flavorId: line.flavorId } : {}), qty: line.qty, lineTotalCents: lineTotal(line.qty, line.price) };
   });
   const subtotalCents = priced.reduce((sum, l) => sum + l.lineTotalCents, 0);
   const deliveryFeeCents = deliveryFee(subtotalCents, fulfillment, fees);

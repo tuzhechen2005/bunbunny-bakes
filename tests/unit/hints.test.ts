@@ -330,3 +330,50 @@ describe("search bounds", () => {
     expect(plan).toEqual({ state: "FULL", hints: [] });
   });
 });
+
+it("mixed flavours share round/independent capacity and hints retain flavour identity", () => {
+  const cart = [
+    { productId: "wedge", flavorId: "plain", qty: 2 },
+    { productId: "wedge", flavorId: "matcha", qty: 3 },
+  ];
+  const day = { date: WED, isOpen: true, limits: limits({ doughLimitG: 340 }), orders: [] };
+  expect(largestFittingKeep(cart, products, day)).toEqual([2, 2]);
+  expect(planCart(input(cart, [day]), WED)?.hints).toEqual([
+    { kind: "REDUCE", remove: [{ productId: "wedge", flavorId: "matcha", qty: 1 }] },
+  ]);
+  expect(largestFittingKeep([
+    { productId: "brulee", flavorId: "plain", qty: 2 },
+    { productId: "brulee", flavorId: "matcha", qty: 3 },
+  ], products, { ...day, limits: limits({ productLimits: { brulee: 4 } }) })).toEqual([2, 2]);
+});
+
+it("keeps the original line tie order when flavours of one product are interleaved", () => {
+  const cart = [
+    { productId: "redBean", flavorId: "a", qty: 1 },
+    { productId: "cheeseBun", qty: 1 },
+    { productId: "redBean", flavorId: "b", qty: 1 },
+  ];
+  expect(largestFittingKeep(cart, products, { date: WED, isOpen: true, limits: limits({ doughLimitG: 140 }), orders: [] })).toEqual([1, 1, 0]);
+});
+
+it("matches exhaustive optimal keeps for interleaved flavours and round boundaries", () => {
+  const cart = [
+    { productId: "wedge", flavorId: "a", qty: 2 },
+    { productId: "redBean", qty: 2 },
+    { productId: "wedge", flavorId: "b", qty: 3 },
+    { productId: "brulee", flavorId: "a", qty: 2 },
+    { productId: "brulee", flavorId: "b", qty: 2 },
+  ];
+  for (const existing of [0, 1, 3, 4]) for (const doughLimitG of [340, 410, 680, 750]) {
+    const day: OpenDay = { date: WED, isOpen: true, limits: limits({ doughLimitG, productLimits: { brulee: 3 } }), orders: existing ? [order([{ productId: "wedge", qty: existing }])] : [] };
+    let best = [0, 0, 0, 0, 0];
+    let bestCount = -1;
+    for (let a = 0; a <= 2; a++) for (let b = 0; b <= 2; b++) for (let c = 0; c <= 3; c++) for (let d = 0; d <= 2; d++) for (let e = 0; e <= 2; e++) {
+      const keep = [a, b, c, d, e];
+      if (Math.ceil((existing + a + c) / 4) * 340 + b * 70 > doughLimitG || d + e > 3) continue;
+      const count = a + b + c + d + e;
+      if (count > bestCount || (count === bestCount && keep.join("") > best.join(""))) { best = keep; bestCount = count; }
+    }
+    expect(largestFittingKeep(cart, products, day)).toEqual(best);
+  }
+});

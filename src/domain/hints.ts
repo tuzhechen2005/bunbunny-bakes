@@ -6,7 +6,7 @@
 //
 // Complexity of the sub-cart search: an exact dynamic programme over "pieces kept",
 // O(n · K²) worst case for n lines and K pieces in the cart (each line has ≤ q_i + 1
-// choices, Σ q_i = K), O(n · K) memory. Carts above MAX_HINT_PIECES get no hints, so the
+// choices, Σ q_i = K), O(K) working memory. Carts above MAX_HINT_PIECES get no hints, so the
 // work per date is bounded no matter what the request contains.
 
 import type { DateState, OpenDay } from "./availability";
@@ -29,7 +29,7 @@ export type DateHint =
 export const MAX_HINT_PIECES = 300;
 
 export interface HintInput {
-  /** The merged cart (one line per product, cart order), known products only, non-empty. */
+  /** The merged cart (one line per product/flavour, cart order), known products only, non-empty. */
   cart: CartLine[];
   products: Record<string, CapacityProduct>;
   fulfillment: Fulfillment;
@@ -81,54 +81,64 @@ export function largestFittingKeep(
   const doughBlocked = budget < 0;
   if (doughBlocked) budget = 0;
 
-  // Per line: the most pieces that may be kept, and the extra dough of keeping s pieces.
-  const caps: number[] = [];
-  const weights: number[][] = [];
+  // Capacity belongs to a product, even when its flavour lines are interleaved.
+  // Each group offers a total quantity; the dough cost rounds the merged day total once.
+  const groups = new Map<string, { min: number; max: number; weight: number[] }>();
   for (const line of cart) {
-    const product = products[line.productId];
-    const ex = existing.get(line.productId) ?? 0;
-    if (product.capacityMode === "INDEPENDENT") {
-      const limit = has(day.limits.productLimits, line.productId)
-        ? day.limits.productLimits[line.productId]
-        : (product.dailyLimit ?? 0);
-      caps.push(Math.max(0, Math.min(line.qty, limit - ex)));
-      weights.push(new Array<number>(line.qty + 1).fill(0));
-    } else {
-      caps.push(doughBlocked ? 0 : line.qty);
-      const base = productDough(product, ex);
-      weights.push(Array.from({ length: line.qty + 1 }, (_, s) => productDough(product, ex + s) - base));
-    }
+    const group = groups.get(line.productId) ?? { min: 0, max: 0, weight: [] };
+    group.max += line.qty;
+    groups.set(line.productId, group);
   }
-
-  // best[i][k] = least extra dough to keep exactly k pieces from lines i..n-1.
-  const n = cart.length;
+  for (const [id, group] of groups) {
+    const product = products[id];
+    const ex = existing.get(id) ?? 0;
+    const limit = has(day.limits.productLimits, id) ? day.limits.productLimits[id] : (product.dailyLimit ?? 0);
+    const cap = product.capacityMode === "INDEPENDENT"
+      ? Math.max(0, limit - ex) : doughBlocked ? 0 : group.max;
+    const base = productDough(product, ex);
+    group.weight = Array.from({ length: group.max + 1 }, (_, qty) =>
+      qty > cap ? Infinity : productDough(product, ex + qty) - base);
+  }
   const total = pieces(cart);
-  const best: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(total + 1).fill(Infinity));
-  best[n][0] = 0;
-  for (let i = n - 1; i >= 0; i--) {
-    const next = best[i + 1];
-    const row = best[i];
-    for (let k = 0; k <= total; k++) {
-      let min = Infinity;
-      for (let s = 0; s <= caps[i] && s <= k; s++) {
-        const w = weights[i][s] + next[k - s];
-        if (w < min) min = w;
+  // Minimum dough for each total count under already fixed line choices.
+  const costs = (exclude?: string): number[] => {
+    let best = new Array<number>(total + 1).fill(Infinity);
+    best[0] = 0;
+    let bound = 0;
+    for (const [id, group] of groups) {
+      if (id === exclude) continue;
+      const next = new Array<number>(total + 1).fill(Infinity);
+      for (let k = 0; k <= bound; k++) {
+        if (!Number.isFinite(best[k])) continue;
+        for (let qty = group.min; qty <= group.max; qty++) {
+          next[k + qty] = Math.min(next[k + qty], best[k] + group.weight[qty]);
+        }
       }
-      row[k] = min;
+      bound += group.max;
+      best = next;
     }
-  }
-
-  let k = total;
-  while (k > 0 && !(best[0][k] <= budget)) k--;
+    return best;
+  };
+  const initial = costs();
+  let target = total;
+  while (target > 0 && initial[target] > budget) target--;
   const keep: number[] = [];
-  let remaining = budget;
-  for (let i = 0; i < n; i++) {
-    // Keep as much as possible of earlier lines (= remove from the latest line first).
-    let s = Math.min(caps[i], k);
-    while (s > 0 && !(weights[i][s] + best[i + 1][k - s] <= remaining)) s--;
-    keep.push(s);
-    remaining -= weights[i][s];
-    k -= s;
+  // Fix original lines from first to last, keeping as many as possible while a completion
+  // remains feasible. This preserves the original tie rule even for A/B/A flavour order.
+  for (const line of cart) {
+    const group = groups.get(line.productId)!;
+    const other = costs(line.productId);
+    let chosen = 0;
+    for (let s = line.qty; s >= 0; s--) {
+      let fits = false;
+      for (let qty = group.min + s; qty <= group.max - line.qty + s && qty <= target; qty++) {
+        if (group.weight[qty] + other[target - qty] <= budget) { fits = true; break; }
+      }
+      if (fits) { chosen = s; break; }
+    }
+    keep.push(chosen);
+    group.min += chosen;
+    group.max -= line.qty - chosen;
   }
   return keep;
 }
@@ -160,8 +170,8 @@ export function hintsFor(input: HintInput): DateHint[] {
   }
 
   const keep = largestFittingKeep(cart, products, day);
-  const here = cart.flatMap((l, i) => (keep[i] > 0 ? [{ productId: l.productId, qty: keep[i] }] : []));
-  const rest = cart.flatMap((l, i) => (keep[i] < l.qty ? [{ productId: l.productId, qty: l.qty - keep[i] }] : []));
+  const here = cart.flatMap((l, i) => (keep[i] > 0 ? [{ ...l, qty: keep[i] }] : []));
+  const rest = cart.flatMap((l, i) => (keep[i] < l.qty ? [{ ...l, qty: l.qty - keep[i] }] : []));
   // Empty: nothing fits. The real rules decide (e.g. delivery full, or a formula mismatch).
   if (here.length === 0 || rest.length === 0 || input.stateOf(here, day) !== "AVAILABLE") return [];
 

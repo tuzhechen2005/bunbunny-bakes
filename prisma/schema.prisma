@@ -126,6 +126,24 @@ model Product {
   manualItems ManualIncomeItem[]
   gameTiers   GameTier[]
   images      ProductImage[]
+  flavors     ProductFlavor[]
+}
+
+model ProductFlavor {
+  id         String   @id @default(uuid()) @db.Uuid
+  productId  String   @db.Uuid
+  name       String
+  priceCents Int
+  active     Boolean  @default(true)
+  sort       Int      @default(0)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  items   OrderItem[]
+
+  @@unique([id, productId])
+  @@index([productId, sort])
 }
 
 /// Product photos in display order, cover = sortOrder 0 (D98). Product.imageUrl mirrors the cover.
@@ -207,6 +225,8 @@ model OrderItem {
   id               String @id @default(uuid()) @db.Uuid
   orderId          String @db.Uuid
   productId        String @db.Uuid
+  flavorId         String? @db.Uuid
+  flavorName       String?
   nameSnapshot     String
   qty              Int
   unitPriceCents   Int
@@ -217,6 +237,9 @@ model OrderItem {
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
+  flavor ProductFlavor? @relation(fields: [flavorId, productId], references: [id, productId], onDelete: Restrict)
+
+  @@unique([orderId, productId, flavorId])
   @@index([orderId])
   @@index([productId])
 }

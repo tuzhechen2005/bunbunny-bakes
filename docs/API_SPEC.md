@@ -18,6 +18,8 @@
 | `CUTOFF_PASSED` | 409 | 已截止 |
 | `PRODUCT_UNAVAILABLE` | 409 | 有商品暂停或下架 |
 | `QTY_LIMIT` | 409 | 超过每单上限 |
+| `FLAVOR_REQUIRED` | 400 | 商品有在售口味但该行没有选择，附 productId |
+| `FLAVOR_UNAVAILABLE` | 400 | 口味不存在、已停用或不属于该商品，附 productId、flavorId |
 | `FULL` | 409 | 面团或独立限额已满（附 `suggestion` 或 null） |
 | `DELIVERY_FULL` | 409 | 配送已满，自提仍可 |
 | `WEEKDAY_UNAVAILABLE` | 409 | 购物车里有商品这天（星期几）不能取（D115），附 `productIds` |
@@ -407,3 +409,63 @@ IP 哈希规则与 M3 相同。主动暂停的时间不计入 endTick；有效�
   `RUN_PRIZE_FROM_WEEK` gates prize selection independently of configured bread tiers.
 
 See [RUN_CLIENT.md](RUN_CLIENT.md) for the deployment date placeholder and browser checks.
+
+## F1 — flavour API contract (D170; frontend handoff)
+
+`GET /api/menu` always adds `flavors: [{id, name, priceCents}]` and `priceFromCents` to each
+product. Flavours are active only, ordered by `sort ASC, id ASC`. The from-price is the minimum
+active flavour price, falling back to the product's `unitPriceCents` when there are none.
+A flavour line costs `qty * priceCents`; product bundle pricing does not apply to flavour lines.
+Products without active flavours retain their original pricing and bundles.
+
+`POST /api/availability` (the existing cart quote/date endpoint), `POST /api/orders`, admin
+create and admin PATCH accept `{productId, flavorId?: string | null, qty}` per item.
+Duplicates merge only by product + flavour. All flavours together count towards the product's
+per-order limit and daily capacity, including rounding the whole day's total for round products.
+Client prices, totals and names are ignored. Missing selection on a flavoured product returns
+400 `FLAVOR_REQUIRED`; unknown, inactive or wrong-product flavour returns 400 `FLAVOR_UNAVAILABLE`.
+Admin override cannot bypass flavour validation.
+
+Admin edits retain DB price/name snapshots for the same product + flavour (D45); a new flavour
+uses current DB pricing. Every explicitly submitted non-null flavour must be active.
+Omitting `items` preserves historical lines, including inactive flavours, for metadata-only edits.
+An existing null-flavour line can be retained by explicitly sending `flavorId: null` on that
+product; omission does not grant the legacy exemption. New orders have no legacy exemption.
+For products with no active flavours, omission/null retains the ordinary product pricing flow.
+
+`GET /api/o/{viewToken}` items add `flavorName: string | null` from the snapshot. Admin order
+detail items add `flavorId`, `flavorName`, and `flavorLabel`; the latter displays the Chinese
+legacy label from `copy.flavors.unspecified` for nulls. Admin list `itemsSummary` includes this label.
+Availability REDUCE/SPLIT `remove/here/rest` retain `flavorId`; apply changes by product + flavour,
+keeping original cart order. Assistant cart/tool items also accept flavorId, and get_menu exposes
+flavours; a proposal cannot omit a required flavour.
+
+### Admin flavour management
+
+All routes require the admin session; writes check Origin and invalidate the menu cache.
+Changes and AuditLog rows commit together. Actions: `product.flavor.create/update/reorder`,
+entityType `Product`, entityId the product ID, with before/after snapshots. No hard-delete API:
+use `active: false`; DB foreign keys prevent deleting a flavour referenced by an order.
+
+| Method | Path | Contract |
+|---|---|---|
+| GET | `/api/admin/products` | Each product includes all flavours, including inactive, with id/productId/name/priceCents/active/sort/createdAt/updatedAt |
+| POST | `/api/admin/products/{id}/flavors` | `{name, priceCents, active?, sort?}`; active defaults true, sort defaults to append; 201 `{product}` with complete flavours |
+| PATCH | `/api/admin/products/{id}/flavors/{flavorId}` | `{name?, priceCents?, active?, sort?}`; 200 `{product}`; unknown/wrong-product ID returns 404 |
+| PUT | `/api/admin/products/{id}/flavors/order` | `{ids: string[]}` must contain every flavour (including inactive), exactly once; mismatch 409 STALE; 200 `{product}`; unchanged order writes no audit |
+| GET | `/api/admin/order-form` | Products include flavours with id/name/priceCents/active/sort; picker permits active selections; historical names come from order snapshots |
+
+Name is trimmed, 1–12 Unicode code points. priceCents is an integer 0–1,000,000;
+sort is an integer -1,000,000 through 1,000,000. Invalid bodies return 422 VALIDATION.
+A flavour cannot change productId.
+
+### Production and nightly summaries
+
+Calendar `production.bread/independent`, dashboard bread/tonightBrulee, and daily-summary
+bread/tonight/tomorrowNight product lines add `flavors` when the product has flavour definitions
+or flavour history: `[{flavorId: string | null, flavorName: string | null, qty: number}]`.
+Names are snapshots; null gets the legacy display label. Product qty/rounds/batches/leftover
+remain based on the combined product total. Render each flavour's quantity followed by the
+product total; see the Chinese example and picker requirements in PAGES.md.
+No Product.unitLabel exists in this worktree. The text formatter accepts an optional unit string
+for the caller's unit context without introducing a new product field.

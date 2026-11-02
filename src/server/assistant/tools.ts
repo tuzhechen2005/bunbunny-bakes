@@ -3,6 +3,7 @@
 // customers (there is no tool that reads orders). Arguments come from the model, so they are
 // validated with Zod and treated as untrusted.
 
+import { mergeCartLines, productQuantities } from "@/domain/cart";
 import { z } from "zod";
 import { listAvailability, planCart, type AvailabilityInput, type DateHint, type DateState } from "@/domain/availability";
 import { cutoffAt, cutoffLabel, leadDaysOf } from "@/domain/cutoff";
@@ -60,8 +61,9 @@ export function publicProduct(menu: Menu, p: MenuProduct, ref: string) {
   return {
     id: ref,
     name: p.name,
-    price: `${formatCents(p.unitPriceCents)} / 个`,
-    ...(p.bundlePriceCents !== null && p.bundleSize > 1
+    price: `${formatCents(p.priceFromCents ?? p.unitPriceCents)} / 个`,
+    flavors: p.flavors ?? [],
+    ...(!p.flavors?.length && p.bundlePriceCents !== null && p.bundleSize > 1
       ? { bundle: `${p.bundleSize} 个 ${formatCents(p.bundlePriceCents)}` }
       : {}),
     status: p.status === "ACTIVE" ? "可以订" : "暂停供应",
@@ -76,6 +78,7 @@ export function publicProduct(menu: Menu, p: MenuProduct, ref: string) {
 
 const Item = z.object({
   product: z.string().min(1).max(80),
+  flavorId: z.uuid().nullable().optional(),
   qty: z.number().int().min(1).max(99),
 });
 const Items = z.array(Item).min(1).max(MAX_TOOL_ITEMS);
@@ -99,6 +102,7 @@ const itemsSchema = {
     type: "object",
     properties: {
       product: { type: "string", description: "商品 id，如 p1" },
+      flavorId: { type: "string", description: "get_menu 返回的口味 id；商品有口味时必填" },
       qty: { type: "integer", minimum: 1 },
     },
     required: ["product", "qty"],
@@ -174,18 +178,21 @@ type Resolved = { ok: true; lines: CartLine[] } | { ok: false; error: string };
 
 /** Resolves refs to product ids and merges duplicates (first-seen order). */
 function resolveItems(ctx: ToolContext, items: z.infer<typeof Items>): Resolved {
-  const totals = new Map<string, number>();
+  const lines: CartLine[] = [];
   for (const item of items) {
     const p = resolve(ctx.menu, item.product);
     if (!p) return { ok: false, error: `找不到商品「${plainText(item.product, 40)}」，请先用 get_menu 查 id` };
-    totals.set(p.id, (totals.get(p.id) ?? 0) + item.qty);
+    if (item.flavorId && !p.flavors?.some(f => f.id === item.flavorId)) return { ok: false, error: copy.errors.FLAVOR_UNAVAILABLE };
+    if (!item.flavorId && p.flavors?.length) return { ok: false, error: copy.errors.FLAVOR_REQUIRED };
+    lines.push({ productId: p.id, qty: item.qty, ...(item.flavorId ? { flavorId: item.flavorId } : {}) });
   }
-  return { ok: true, lines: [...totals].map(([productId, qty]) => ({ productId, qty })) };
+  return { ok: true, lines: mergeCartLines(lines) };
 }
 
 function namedLines(ctx: ToolContext, lines: CartLine[]) {
   return lines.map((l) => ({
     name: ctx.menu.products.find((p) => p.id === l.productId)?.name ?? "?",
+    ...(l.flavorId ? { flavorName: ctx.menu.products.find(p => p.id === l.productId)?.flavors.find(f => f.id === l.flavorId)?.name } : {}),
     qty: l.qty,
   }));
 }
@@ -210,7 +217,8 @@ function hintView(ctx: ToolContext, h: DateHint) {
 
 function problemsOf(ctx: ToolContext, lines: CartLine[]): string[] {
   const out: string[] = [];
-  for (const l of lines) {
+  for (const [productId, qty] of productQuantities(lines)) {
+    const l = { productId, qty };
     const p = ctx.menu.products.find((x) => x.id === l.productId);
     if (!p || p.status !== "ACTIVE") out.push(`${p?.name ?? "?"} 暂停供应，现在不能订`);
     if (l.qty > ctx.menu.maxQtyPerItem) out.push(`${p?.name ?? "?"} 每单最多 ${ctx.menu.maxQtyPerItem} 个`);
@@ -231,10 +239,12 @@ function cutoffText(ctx: ToolContext, lines: CartLine[], date: LocalDate): strin
 function priceFor(ctx: ToolContext, lines: CartLine[], fulfillment: Fulfillment) {
   const priced = lines.map((l) => {
     const p = ctx.menu.products.find((x) => x.id === l.productId)!;
+    const flavor = p.flavors?.find(f => f.id === l.flavorId);
     return {
       productId: l.productId,
+      flavorId: l.flavorId,
       qty: l.qty,
-      price: { unitPriceCents: p.unitPriceCents, bundleSize: p.bundleSize, bundlePriceCents: p.bundlePriceCents },
+      price: { unitPriceCents: flavor?.priceCents ?? p.unitPriceCents, bundleSize: p.bundleSize, bundlePriceCents: flavor ? null : p.bundlePriceCents },
     };
   });
   const pricing = priceCart(priced, fulfillment, ctx.menu);

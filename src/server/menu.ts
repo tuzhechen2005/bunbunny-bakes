@@ -14,6 +14,8 @@ export interface MenuProduct {
   images: string[];
   /** The product's home colours (D95); defaults filled in. */
   field: FieldColors;
+  flavors: { id: string; name: string; priceCents: number }[];
+  priceFromCents: number;
   unitPriceCents: number;
   bundleSize: number;
   bundlePriceCents: number | null;
@@ -47,6 +49,7 @@ export async function getMenu(db: DbClient): Promise<Menu> {
       imageUrl: true,
       fieldColor: true,
       images: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], select: { url: true } },
+      flavors: { where: { active: true }, orderBy: [{ sort: "asc" }, { id: "asc" }], select: { id: true, name: true, priceCents: true } },
       unitPriceCents: true,
       bundleSize: true,
       bundlePriceCents: true,
@@ -67,6 +70,8 @@ export async function getMenu(db: DbClient): Promise<Menu> {
         imageUrl: images[0] ?? null,
         images,
         field: fieldFor(p.fieldColor),
+        flavors: p.flavors,
+        priceFromCents: p.flavors.length ? Math.min(...p.flavors.map(f => f.priceCents)) : p.unitPriceCents,
         unitPriceCents: p.unitPriceCents,
         bundleSize: p.bundleSize,
         bundlePriceCents: p.bundlePriceCents,
