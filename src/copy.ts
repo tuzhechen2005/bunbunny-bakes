@@ -264,6 +264,8 @@ export const copy = {
       backLabel: "返回游戏大厅",
       entryPrize: "🎁 本周：{game}",
       prizeBadge: "🎁 本周有奖",
+      easy: "轻松一局",
+      more: "更多游戏",
       emptyBest: "本周还没人上榜",
       loading: "正在看本周成绩…",
       loadFailed: "暂时看不到成绩，稍后再试",
