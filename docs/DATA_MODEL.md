@@ -48,7 +48,7 @@
 
 用 Zod 校验"方式 ↔ 必填字段"的对应关系，数据库层加 CHECK 约束兜底。
 
-### ProductFlavor（F1 / D170）
+### ProductFlavor（F1 / D175）
 
 `id uuid` 主键、`productId uuid → Product`、`name text`（trim 后 1–12 Unicode 字符）、
 `priceCents int`（0–1,000,000）、`active bool`（默认 true）、`sort int`（默认 0）、

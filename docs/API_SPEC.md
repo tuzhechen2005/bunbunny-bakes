@@ -410,7 +410,7 @@ IP 哈希规则与 M3 相同。主动暂停的时间不计入 endTick；有效�
 
 See [RUN_CLIENT.md](RUN_CLIENT.md) for the deployment date placeholder and browser checks.
 
-## F1 — flavour API contract (D170; frontend handoff)
+## F1 — flavour API contract (D175; frontend handoff)
 
 `GET /api/menu` always adds `flavors: [{id, name, priceCents}]` and `priceFromCents` to each
 product. Flavours are active only, ordered by `sort ASC, id ASC`. The from-price is the minimum
