@@ -6,7 +6,7 @@ import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { databaseName, testDirectDatabaseUrl } from "./testDbUrl";
 
-const NEW_MIGRATION = "20261102120000_flavor_limits_bundles";
+const NEW_MIGRATION = "20261102180000_flavor_limits_bundles";
 const dir = "prisma/migrations";
 
 const baseUrl = new URL(testDirectDatabaseUrl());

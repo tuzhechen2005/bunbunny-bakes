@@ -295,7 +295,7 @@ NEW ──▶ CONTACTED ──▶ CONFIRMED ──▶ BAKING ──▶ READY ─
 `ProductFlavor.dailyLimit Int?` is a default per-pickup-date piece limit; null means
 unlimited. `ProductFlavor.bundlePriceCents Int?` is the flavour bundle price; null
 means no bundle. Bundle size remains `Product.bundleSize`. Migration
-`20261102120000_flavor_limits_bundles` adds nullable columns without a backfill.
+`20261102180000_flavor_limits_bundles` adds nullable columns without a backfill.
 Database checks enforce nonnegative limits and positive non-null bundle prices.
 
 `OpenDateFlavorLimit { date DateTime @db.Date, flavorId String @db.Uuid, limit Int }`
