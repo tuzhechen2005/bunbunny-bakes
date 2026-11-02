@@ -95,6 +95,7 @@ export function TuPage() {
   const [finalScore, setFinalScore] = useState(0);
   const [bonus, setBonus] = useState(0);
   const [capReached, setCapReached] = useState(false);
+  const [stopped, setStopped] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [boardVersion, setBoardVersion] = useState(0);
   const [boardFrom, setBoardFrom] = useState<"menu" | "over">("menu");
@@ -254,6 +255,7 @@ export function TuPage() {
       setFinalScore(p.score);
       setBonus(p.bonus ?? 0);
       setCapReached(p.taps.length >= MAX_TAPS);
+      setStopped(!!p.stopped);
       setPhase("over");
       if (!submitted.current.has(runId.current)) void submit(runId.current, p.taps);
       timers.current.push(setTimeout(() => setSheetOpen(true), reduced ? 0 : SHEET_DELAY_MS));
@@ -606,7 +608,7 @@ export function TuPage() {
             </svg>
           </button>
           <GameResultArt record={finish.state === "ok" && !!finish.result.newRecord} />
-          <h2 className="font-display m-0 text-center text-[28px] leading-none tracking-[-0.03em]">{g.overTitle}</h2>
+          <h2 className="font-display m-0 text-center text-[28px] leading-none tracking-[-0.03em]">{stopped ? t.stopped : g.overTitle}</h2>
           {capReached ? (
             <p className="m-0 mt-3 text-center text-sm text-c-grey" data-testid="tu-cap-reason">{t.capReached}</p>
           ) : null}

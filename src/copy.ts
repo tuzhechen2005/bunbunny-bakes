@@ -387,6 +387,10 @@ export const copy = {
       /** Playing. */
       score: "得分",
       next: "下一个",
+      /** D184: accessible names of the best-bread chip (the chip itself shows no text). */
+      bestNone: "还没合出面包",
+      bestNext: "最大合出 {best}，下一级 {next}",
+      bestTop: "已合出最大的面包 {best}",
       soundOn: "开启声音",
       soundOff: "关闭声音",
       boardLabel: "游戏棋盘，按住左右拖动瞄准，松开投放",
@@ -445,6 +449,11 @@ export const copy = {
       /** Result sheet: points for props left unused. */
       bonus: "没用的道具 +{n}",
       capReached: "点击次数已到上限，本局结束",
+      /** D184: after clearing an oven, end here (unused props are counted) or keep going. */
+      stop: "收工",
+      stopLabel: "收工或继续",
+      stopped: "收工啦",
+      continue: "继续挑战",
     },
 
     td: {
@@ -533,6 +542,11 @@ export const copy = {
       target: "目标",
       win: "过关！",
       fail: "差一点",
+      /** D184: a level that adds a bread kind (7, 19), shown once. */
+      newKindHint: "这关多一种面包，连 4 更重要",
+      /** D184: how far a failed level was from the target; orders are bonus, not a condition. */
+      gapPoints: "差 {n} 分",
+      gapOrders: "订单还差 {n} 个",
       next: "下一关",
       retry: "再来一次",
       specialHelp: {

@@ -1,12 +1,14 @@
 // L2 (D100-D105): the home entry card and the /game page. Every game API answer is mocked
 // (the contract of L1); the engine in the page is whatever src/components/game/engine.ts points at.
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { copy } from "../../src/copy";
 
 test.use({ browserName: "chromium" });
 
 import { hubFixture, mockGameHub } from "./support/gameHub";
+import { screensDir } from "./support/screensDir";
 
 const g = copy.customer.game;
 const PHOTO = readFileSync("tests/fixtures/bun.jpg");
@@ -553,4 +555,45 @@ test("320 px: menu with a save, exit sheet and the bottom bar fit without sidewa
   expect(Math.abs(board.height - boardBefore.height)).toBeLessThan(1);
   expect(bar.y).toBeLessThan(board.y + board.height);
   expect(bar.y + bar.height).toBeLessThanOrEqual(640);
+});
+
+test("D184: a save from the old engine (32-hex seed) is discarded, not offered", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript((k) => {
+    localStorage.setItem(
+      k,
+      JSON.stringify({ v: 1, runId: "old", seed: "0123456789abcdef0123456789abcdef", tiers: [{}, {}, {}], drops: [{ x: 0.5, at: 0 }], nickname: "n", expiresAt: "2099-01-01T00:00:00Z", score: 900 }),
+    );
+  }, SAVE);
+  await page.goto("/game");
+  await expect(page.getByTestId("game-menu-start")).toBeVisible();
+  await expect(page.getByTestId("game-resume")).toHaveCount(0);
+  await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), SAVE)).toBeNull();
+});
+
+test("D184: the best-bread chip starts empty, follows the highest tier and sits above the board", async ({ page }) => {
+  test.setTimeout(120_000);
+  await mockApi(page);
+  await page.goto("/game");
+  await startGame(page);
+  const chip = page.getByTestId("game-best-chip");
+  await expect(chip).toHaveAttribute("data-best", "");
+  await expect(chip).toHaveAttribute("aria-label", g.bestNone);
+  await expect(page.getByTestId("game-best-next")).toBeVisible();
+  const box = (await page.getByTestId("game-canvas").boundingBox())!;
+  const xs = [0.2, 0.5, 0.8, 0.35, 0.65];
+  let seen = -1;
+  for (let i = 0; i < 40; i++) {
+    if (await page.getByTestId("game-over-sheet").isVisible()) break;
+    await page.mouse.click(box.x + box.width * xs[i % xs.length], box.y + box.height * 0.3);
+    await page.waitForTimeout(280);
+    const best = Number((await chip.getAttribute("data-best")) || -1);
+    expect(best).toBeGreaterThanOrEqual(seen);
+    seen = best;
+    if (best >= 1 && i > 6) break;
+  }
+  expect(seen).toBeGreaterThanOrEqual(0);
+  const chipBox = (await chip.boundingBox())!;
+  expect(chipBox.y + chipBox.height).toBeLessThanOrEqual(box.y + 1);
+  await page.screenshot({ path: path.join(screensDir(), "ui-small-big-chip.png") });
 });

@@ -6,7 +6,7 @@ import { fill } from "@/components/customer/format";
 import { sound } from "@/components/game/sound";
 import type { TierView } from "@/components/game/types";
 import { copy } from "@/copy";
-import { createTuGame, MIN_TAP_GAP_MS, type TuEvent, type TuGame, type TuState } from "@/lib/tu";
+import { createTuGame, MIN_TAP_GAP_MS, PROP_BONUS_POINTS, STOP_TILE_ID, type TuEvent, type TuGame, type TuState } from "@/lib/tu";
 import { haptic } from "@/lib/motion/react";
 import { photoUrl } from "@/lib/photo";
 import type { TuTapLog } from "./tuApi";
@@ -93,6 +93,8 @@ export interface TuProgress {
   score: number;
   /** Points for the props left unused at the end (C8), 0 when none. */
   bonus?: number;
+  /** The run ended by 收工 (D184), not by a full bag. */
+  stopped?: boolean;
 }
 
 export interface TuPlayProps {
@@ -152,6 +154,9 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
   const [propInfo, setPropInfo] = useState<PropKind | null>(null);
   const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bonusRef = useRef(0);
+  const stoppedRef = useRef(false);
+  /** The oven whose 收工 offer was waved off with 继续挑战. */
+  const [declined, setDeclined] = useState(0);
   const view0 = useRef<View | null>(null);
   const [area, setArea] = useState({ w: 0, h: 0 });
   const areaRef = useRef<HTMLDivElement>(null);
@@ -179,9 +184,11 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
     const make = (globalThis as { __tuEngine?: typeof createTuGame }).__tuEngine ?? createTuGame;
     const g = make({ seed, tiers: tiers.map((x) => ({ id: x.id })) });
     bonusRef.current = 0;
+    stoppedRef.current = false;
     for (const tp of initialTaps ?? []) {
-      const events = isPropEntry(tp) ? g.use(tp.p) : g.tap(tp.id);
+      const events = isPropEntry(tp) ? g.use(tp.p) : tp.id === STOP_TILE_ID ? g.stop() : g.tap(tp.id);
       if (events) bonusRef.current += propEvents(events).bonus;
+      if (events && !isPropEntry(tp) && tp.id === STOP_TILE_ID) stoppedRef.current = true;
     }
     game.current = g;
     taps.current = [...(initialTaps ?? [])];
@@ -194,7 +201,7 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
     setView(fromState(st));
     /* eslint-enable react-hooks/set-state-in-effect */
     // A saved run that is already over goes straight to the result flow.
-    if (g.over) cb.current.onOver({ taps: taps.current, score: g.score, bonus: bonusRef.current });
+    if (g.over) cb.current.onOver({ taps: taps.current, score: g.score, bonus: bonusRef.current, stopped: stoppedRef.current });
     // The first game ever: the two order cards pulse once so the new player looks at them.
     try {
       if (!initialTaps?.length && !window.localStorage.getItem(SEEN_KEY)) {
@@ -327,7 +334,7 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
       if (hasBatch) lock.current = false;
       const st = game.current ? game.current.state() : after;
       setView((v) => (v ? { ...v, score: finalScore, arrive: null, props: st.props, bagSize: st.bagSize, rewards: st.orderPoints } : v));
-      if (events.some((e) => e.type === "over")) cb.current.onOver({ taps: taps.current, score: finalScore, bonus: bonusRef.current });
+      if (events.some((e) => e.type === "over")) cb.current.onOver({ taps: taps.current, score: finalScore, bonus: bonusRef.current, stopped: stoppedRef.current });
     },
     [sleep, later, setSnap],
   );
@@ -356,6 +363,24 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
         setPeeking(false);
       }, PEEK_MS);
     }
+    chain.current = chain.current.then(() => play(events, after, false, g.score));
+  };
+
+  /** 收工 (D184): ends the run at an oven boundary and pays the unused props once; logged as tile id 0. */
+  const cashOut = () => {
+    const g = game.current;
+    if (!g || g.over || lock.current || !g.state().canStop) return;
+    const c = clock.current;
+    const at = Math.round(c.base + (nowMs() - c.t0));
+    const prev = taps.current.at(-1)?.at ?? -Infinity;
+    if (at - prev < MIN_TAP_GAP_MS || at < 0) return;
+    const events = g.stop();
+    if (!events) return;
+    stoppedRef.current = true;
+    taps.current = [...taps.current, { id: STOP_TILE_ID, at }];
+    cb.current.onProgress({ taps: taps.current, score: g.score });
+    const after = g.state();
+    setSnap(after);
     chain.current = chain.current.then(() => play(events, after, false, g.score));
   };
 
@@ -423,6 +448,9 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
   if (!snap || !view) return <div className="flex-1" />;
   const full = view.bag.length >= view.bagSize;
   const propLabel = { peek: t.propPeek, bag: t.propBag, swap: t.propSwap };
+  // The bag is empty exactly when an oven was just cleared, so the offer sits on its empty slots.
+  const offer = snap.canStop && !snap.over && !view.banner && declined !== snap.batch && view.bag.length === 0;
+  const stopBonus = PROP_BONUS_POINTS * (snap.batch - 1) * (view.props.peek + view.props.bag + view.props.swap);
   const hiddenIds = peeking ? snap.tiles.filter((x) => !isVisible(x)).map((x) => x.id) : [];
 
   return (
@@ -565,6 +593,17 @@ export function TuPlay({ tiers, seed, initialTaps, soundOn, reduced, onProgress,
         >
           <div className="tu-bag-bg" style={{ clipPath: zigzag }} aria-hidden="true" />
           <div className="relative z-10 flex justify-center" style={{ gap: slotGap }}>
+            {offer ? (
+              <div className="tu-offer absolute inset-0 z-20 flex gap-2" role="group" aria-label={t.stopLabel} data-testid="tu-offer">
+                <button type="button" className="tu-offer-stop font-display" onClick={cashOut} data-testid="tu-stop">
+                  {t.stop}
+                  {stopBonus > 0 ? <span className="font-num" data-testid="tu-stop-bonus">+{stopBonus}</span> : null}
+                </button>
+                <button type="button" className="tu-offer-go font-display" onClick={() => setDeclined(snap.batch)} data-testid="tu-continue">
+                  {t.continue}
+                </button>
+              </div>
+            ) : null}
             {Array.from({ length: view.bagSize }, (_, i) => {
               const tier = view.bag[i];
               const isArrive = view.arrive?.slot === i;

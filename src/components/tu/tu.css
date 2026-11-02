@@ -279,3 +279,13 @@
 .tu-prop-use:disabled { opacity:.35; cursor:default; }
 @keyframes tu-prop-in { from { opacity:0; transform:translateY(8px); } }
 @media (prefers-reduced-motion:reduce) { .tu-prop-info { animation:none; } }
+
+/* D184: after clearing an oven the empty bag offers 收工 / 继续挑战; any tap on the board simply continues. */
+.tu-offer { animation: tu-offer-in 200ms ease-out both; }
+.tu-offer button { flex: 1; min-height: 44px; border: 0; border-radius: 999px; font-size: 16px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; -webkit-tap-highlight-color: transparent; }
+.tu-offer button:focus-visible { outline: 2px solid var(--c-ink); outline-offset: 2px; }
+.tu-offer-stop { background: var(--c-ink); color: var(--c-paper); }
+.tu-offer-stop span { font-size: 13px; opacity: .75; }
+.tu-offer-go { background: var(--c-paper); color: var(--c-ink); box-shadow: 0 0 0 1px var(--c-line); }
+@keyframes tu-offer-in { from { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) { .tu-offer { animation: none; } }

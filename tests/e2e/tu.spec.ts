@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { copy } from "../../src/copy";
+import { fill } from "../../src/components/customer/format";
 import { createTuGame, MAX_TAPS, PROP_BONUS_POINTS, replayTu, TU_ENGINE_VERSION } from "../../src/lib/tu";
 import { greedyTu, randomTu } from "../support/tuBot";
 import { screensDir } from "./support/screensDir";
@@ -355,4 +356,63 @@ test("the 20000th tap shows the cap reason; tapping the ended board reopens the 
   await expect(page.getByTestId("tu-cap-reason")).toHaveText(copy.customer.tu.capReached);
   await expect(page.getByTestId("tu-final-score")).toHaveText(String(bot.score));
   expect(api.finishes).toHaveLength(1);
+});
+
+async function clearFirstOven(page: Page) {
+  const bot = greedyTu(SEED, TIERS, { props: false });
+  // Exactly the taps that clear oven 1: a further tap would already belong to oven 2.
+  const sim = createTuGame({ seed: SEED, tiers: TIERS });
+  const ids: number[] = [];
+  for (const tp of bot.taps) {
+    ids.push(tp.id);
+    sim.tap(tp.id);
+    if (sim.state().batch === 2) break;
+  }
+  await page.goto("/game/tu");
+  await startGame(page);
+  await tapAll(page, ids);
+  await expect(page.getByTestId("tu-batch")).toHaveText("第 2 炉");
+  return bot;
+}
+
+test("D184: after an oven is cleared 收工 and 继续挑战 appear in the empty bag; 收工 ends and counts the unused props once", async ({ page }) => {
+  test.setTimeout(240_000);
+  const api = await mockApi(page);
+  await clearFirstOven(page);
+  const t = copy.customer.tu;
+  await expect(page.getByTestId("tu-offer")).toBeVisible();
+  await expect(page.getByTestId("tu-stop")).toContainText(t.stop);
+  await expect(page.getByTestId("tu-continue")).toHaveText(t.continue);
+  // 3 kinds x START_PROPS, 50 x cleared oven (1) each.
+  const bonus = Number((await page.getByTestId("tu-stop-bonus").innerText()).replace("+", ""));
+  expect(bonus).toBeGreaterThan(0);
+  const box = (await page.getByTestId("tu-offer").boundingBox())!;
+  const board = (await page.getByTestId("tu-board").boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(board.y + board.height - 1);
+  await page.screenshot({ path: path.join(screensDir(), "ui-small-tu-offer.png") });
+  // The Next dev indicator (not in production) sits over the bottom-left corner: dispatch the click.
+  await page.getByTestId("tu-stop").dispatchEvent("click");
+  await expect(page.getByTestId("tu-over-sheet")).toBeVisible();
+  await expect(page.getByTestId("tu-over-sheet")).toContainText(t.stopped);
+  await expect(page.getByTestId("tu-bonus")).toHaveText(fill(t.bonus, { n: String(bonus) }));
+  await expect.poll(() => api.finishes.length).toBe(1);
+  const taps = api.finishes[0].taps;
+  expect(taps.at(-1)!.id).toBe(0);
+  await expect(page.getByTestId("tu-final-score")).toHaveText(String(replayTu(SEED, TIERS, taps).score));
+  await page.screenshot({ path: path.join(screensDir(), "ui-small-tu-result.png") });
+});
+
+test("D184: 继续挑战 hides the offer and play goes on; a tile tap also closes the window", async ({ page }) => {
+  test.setTimeout(240_000);
+  const api = await mockApi(page);
+  const bot = await clearFirstOven(page);
+  await expect(page.getByTestId("tu-offer")).toBeVisible();
+  await page.getByTestId("tu-continue").dispatchEvent("click");
+  await expect(page.getByTestId("tu-offer")).toHaveCount(0);
+  await expect(page.getByTestId("tu-over-sheet")).toHaveCount(0);
+  const free = page.locator('[data-testid^="tu-tile-"][data-free="true"]').first();
+  await free.click();
+  await expect(page.getByTestId("tu-bag")).toHaveAttribute("aria-label", /装了 1 个/);
+  expect(api.finishes).toHaveLength(0);
+  expect(bot.taps.length).toBeGreaterThan(0);
 });

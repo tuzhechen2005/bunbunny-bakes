@@ -17,6 +17,9 @@ export interface HudState {
   score: number;
   /** Tier index of the piece after the one in hand. */
   next: number;
+  /** D184: highest tier reached this run (null before the first drop) and the one after it. */
+  best: number | null;
+  upcoming: number | null;
 }
 
 /** Android only (iOS ignores it); optional like every haptic. */
@@ -114,11 +117,11 @@ export function Board({
         if (L.soundOn) sound.over();
       }
     };
-    let lastHud = { score: -1, next: -1 };
+    let lastHud: HudState = { score: -1, next: -1, best: -2, upcoming: -2 };
     const hud = () => {
-      const h = { score: session.score, next: session.upcoming() };
+      const h: HudState = { score: session.score, next: session.upcoming(), best: session.highest, upcoming: session.nextTier };
       box.dataset.score = String(h.score);
-      if (h.score !== lastHud.score || h.next !== lastHud.next) {
+      if (h.score !== lastHud.score || h.next !== lastHud.next || h.best !== lastHud.best) {
         lastHud = h;
         live.current.onHud(h);
       }

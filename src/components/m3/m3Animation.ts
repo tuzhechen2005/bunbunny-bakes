@@ -54,3 +54,40 @@ export function animationQueue(initial: M3State, events: M3Event[]): AnimationFr
     return { index, event, before, after, ms: event.type === "order" && event.action === "complete" ? 320 : durations[event.type] };
   });
 }
+
+/** One move's whole animation aims for this (D184: roughly 2–3 s; points never depend on it). */
+export const CASCADE_BUDGET_MS = 2600;
+const MIN_FRAME_MS = 30;
+const MIN_ORDER_FRAME_MS = 120;
+const WAVE_DECAY = 0.78;
+/**
+ * Long cascades play the first wave (through the first special trigger) at full length, then each later
+ * wave faster than the one before, scaled down so the whole queue fits the budget. Short moves are
+ * returned unchanged. Only `ms` changes: every event, frame and score is kept.
+ */
+export function paceQueue(queue: AnimationFrame[], budget = CASCADE_BUDGET_MS): AnimationFrame[] {
+  if (queue.reduce((sum, f) => sum + f.ms, 0) <= budget) return queue;
+  // A wave starts at the first match/special after the previous wave's gravity and refill.
+  let wave = 0;
+  let fell = false;
+  const waves = queue.map(f => {
+    const type = f.event.type;
+    if (type === "match" || type === "special") {
+      if (fell) { wave++; fell = false; }
+    } else if (type === "fall" || type === "refill") fell = true;
+    return wave;
+  });
+  // Wave 0 (the swap and first match) and the wave of the first special trigger play in full.
+  const firstSpecial = queue.findIndex(f => f.event.type === "special");
+  const special = firstSpecial < 0 ? 0 : waves[firstSpecial];
+  const full = (i: number) => waves[i] === 0 || waves[i] === special;
+  const weight = (i: number) => full(i) ? 1 : WAVE_DECAY ** waves[i];
+  const keptMs = queue.reduce((sum, f, i) => sum + (full(i) ? f.ms : 0), 0);
+  const laterMs = queue.reduce((sum, f, i) => sum + (full(i) ? 0 : f.ms * weight(i)), 0);
+  const scale = laterMs > 0 ? Math.min(1, Math.max(0, budget - keptMs) / laterMs) : 1;
+  return queue.map((f, i) => {
+    if (full(i)) return f;
+    const floor = f.event.type === "order" && f.event.action === "complete" ? MIN_ORDER_FRAME_MS : MIN_FRAME_MS;
+    return { ...f, ms: Math.min(f.ms, Math.max(floor, Math.round(f.ms * weight(i) * scale))) };
+  });
+}

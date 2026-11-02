@@ -43,3 +43,26 @@ it("validates saves by replay: expiry, shape, timestamps, illegal moves, score a
   expect(parse({ moves: [], score: 0 })).not.toBeNull();
   expect(parseM3Save("{broken", 0)).toBeNull();
 });
+
+it("paces long cascades into the budget, keeping the first wave and every event", async () => {
+  const { paceQueue, CASCADE_BUDGET_MS } = await import("@/components/m3/m3Animation");
+  let longest = 0;
+  let paced = 0;
+  for (let n = 0; n < 40; n++) {
+    const game = createM3Game({ seed: `m3-pace-${n}`, tiers });
+    while (!game.over) {
+      const before = game.state();
+      const m = legalM3Moves(before)[0];
+      const events = game.swap(m.a, m.b)!;
+      const queue = animationQueue(before, events);
+      const out = paceQueue(queue);
+      expect(out.map(f => f.event)).toEqual(events);
+      expect(out.every((f, i) => f.ms <= queue[i].ms)).toBe(true);
+      const base = queue.reduce((s, f) => s + f.ms, 0);
+      const total = out.reduce((s, f) => s + f.ms, 0);
+      if (base <= CASCADE_BUDGET_MS) expect(out).toBe(queue);
+      else { paced++; longest = Math.max(longest, total); expect(out[0].ms).toBe(queue[0].ms); }
+    }
+  }
+  if (paced) expect(longest).toBeLessThanOrEqual(CASCADE_BUDGET_MS + 300);
+});

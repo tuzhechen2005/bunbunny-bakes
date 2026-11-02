@@ -97,6 +97,7 @@ export function M3Page() {
   const progress = useRef<M3Progress>({ moves: [], score: 0 });
   const [finish, setFinish] = useState<Finish>({ state: "submitting" });
   const [finalScore, setFinalScore] = useState(0);
+  const [gap, setGap] = useState<M3Progress["gap"]>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [boardVersion, setBoardVersion] = useState(0);
   const [boardFrom, setBoardFrom] = useState<"menu" | "over">("menu");
@@ -268,6 +269,7 @@ export function M3Page() {
       phaseRef.current = "over";
       progress.current = p;
       setFinalScore(p.score);
+      setGap(p.gap ?? null);
       setRun(r => r ? { ...r, initialMoves: p.moves } : r);
       setPhase("over");
       const id = runId.current;
@@ -523,6 +525,7 @@ export function M3Page() {
   const shownScore = finish.state === "ok" ? finish.result.score : finalScore;
   const passed = finish.state === "ok" ? finish.result.passed : finalScore >= m3LevelRules(run.level).target;
   const sameScore = finish.state === "ok" && finish.result.score === finalScore;
+  const orderGap = gap ? gap.orders.reduce((n, o) => n + o.itemsShort, 0) : 0;
   return (
     <Shell>
       {top}
@@ -653,6 +656,12 @@ export function M3Page() {
           <p className="font-num m-0 text-center text-[56px] leading-[1.1]" data-testid="m3-final-score">
             {shownScore}
           </p>
+          {!passed && gap ? (
+            <p className="m-0 mt-1 text-center text-sm font-bold" data-testid="m3-gap">
+              <span className="font-num">{fill(t.gapPoints, { n: String(gap.pointsShort) })}</span>
+              {orderGap > 0 ? <span className="font-num ml-3 font-normal text-c-grey" data-testid="m3-gap-orders">{fill(t.gapOrders, { n: String(orderGap) })}</span> : null}
+            </p>
+          ) : null}
           <div className="mt-2 min-h-[72px] text-center" aria-live="polite" data-testid="m3-finish">
             {finish.state === "submitting" ? (
               <p className="m-0 text-sm text-c-grey">{g.submitting}</p>

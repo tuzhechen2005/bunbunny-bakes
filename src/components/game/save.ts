@@ -1,4 +1,5 @@
 // The autosave of the run in progress (D111). Stored on this phone only; the server keeps the run record.
+import { BIG_ENGINE_VERSION, bigSeedVersion } from "@/lib/game";
 import type { DropLog, TierView } from "./types";
 
 export const SAVE_KEY = "bb_game_save_v1";
@@ -15,13 +16,16 @@ export interface GameSave {
   score: number;
 }
 
+/** D184: a run dealt under an older engine (32-hex production seed or another version prefix) cannot be replayed. */
+const isStaleSeed = (seed: string) => /^[0-9a-f]{32}$/.test(seed) || (/^v\d+\./.test(seed) && bigSeedVersion(seed) !== BIG_ENGINE_VERSION);
+
 /** Parses a stored save; null for anything unusable or already expired. */
 export function parseSave(raw: string | null, now = Date.now()): GameSave | null {
   if (!raw) return null;
   try {
     const s = JSON.parse(raw) as Partial<GameSave>;
     if (!s || s.v !== 1) return null;
-    if (typeof s.runId !== "string" || !s.runId || typeof s.seed !== "string") return null;
+    if (typeof s.runId !== "string" || !s.runId || typeof s.seed !== "string" || isStaleSeed(s.seed)) return null;
     if (!Array.isArray(s.tiers) || s.tiers.length < 3 || !Array.isArray(s.drops) || s.drops.length < 1) return null;
     if (typeof s.expiresAt !== "string" || !(Date.parse(s.expiresAt) > now)) return null;
     if (typeof s.score !== "number" || typeof s.nickname !== "string") return null;

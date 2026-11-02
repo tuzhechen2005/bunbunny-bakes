@@ -16,6 +16,7 @@ import { fetchMenu } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { Board, type HudState } from "./Board";
 import { LeaderboardView } from "./LeaderboardView";
+import { BestChip } from "./BestChip";
 import { PieceChip } from "./PieceChip";
 import { Session } from "./engine";
 import { finishRun, isRetryable, readRemembered, startRun, writeRemembered } from "./gameApi";
@@ -87,7 +88,15 @@ export function GamePage() {
   const runId = useRef("");
   const sessionRef = useRef<Session | null>(null);
   const [runKey, setRunKey] = useState("");
-  const [hud, setHud] = useState<HudState>({ score: 0, next: 0 });
+  const [hud, setHud] = useState<HudState>({ score: 0, next: 0, best: null, upcoming: 0 });
+  /** The best tier the HUD last showed: a higher one pops the chip once (D184). */
+  const prevBest = useRef<number | null>(null);
+  const [pop, setPop] = useState(0);
+  const onHud = useCallback((h: HudState) => {
+    if (prevBest.current !== null && h.best !== null && h.best > prevBest.current) setPop((n) => n + 1);
+    prevBest.current = h.best;
+    setHud(h);
+  }, []);
   const [finish, setFinish] = useState<Finish>({ state: "submitting" });
   const [sheetOpen, setSheetOpen] = useState(false);
   const [boardVersion, setBoardVersion] = useState(0);
@@ -189,7 +198,8 @@ export function GamePage() {
     sessionRef.current = s;
     setSession(s);
     setRunKey(sv.runId);
-    setHud({ score: s.score, next: s.upcoming() });
+    prevBest.current = null;
+    setHud({ score: s.score, next: s.upcoming(), best: s.highest, upcoming: s.nextTier });
     setSheetOpen(false);
     setPhase("playing");
   };
@@ -226,7 +236,8 @@ export function GamePage() {
     meta.current = { seed: r.data.seed, expiresAt: r.data.expiresAt, nickname: n };
     runId.current = r.data.runId;
     inflight.current = null;
-    setHud({ score: 0, next: 0 });
+    prevBest.current = null;
+    setHud({ score: 0, next: 0, best: null, upcoming: 0 });
     const next = new Session(r.data.tiers, r.data.seed);
     sessionRef.current = next;
     setSession(next);
@@ -511,6 +522,7 @@ export function GamePage() {
               <RollNumber value={String(hud.score)} testId="game-score" />
             </p>
           </div>
+          <BestChip tiers={session.tiers} best={hud.best} upcoming={hud.upcoming} pop={reduced ? 0 : pop} />
           <div className="flex items-center gap-2.5">
             <span className="text-xs font-bold text-c-grey">{t.next}</span>
             <PieceChip tier={next} size={44} />
@@ -523,7 +535,7 @@ export function GamePage() {
             session={session}
             soundOn={soundOn}
             reduced={reduced}
-            onHud={setHud}
+            onHud={onHud}
             onOver={onOver}
             onDrop={persist}
           />
