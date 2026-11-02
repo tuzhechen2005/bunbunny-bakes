@@ -605,7 +605,8 @@ export function CheckoutPage() {
               token: viewToken,
               items: split.rest.flatMap((r) => {
                 const p = byId.get(r.productId);
-                return p ? [{ productId: r.productId, flavorId: (r as { flavorId?: string | null }).flavorId ?? null, name: cartLineName(r as { flavorId?: string | null }, p), qty: r.qty }] : [];
+                const flavorId = (r as { flavorId?: string | null }).flavorId;
+                return p ? [{ productId: r.productId, ...(flavorId ? { flavorId } : {}), name: cartLineName(r as { flavorId?: string | null }, p), qty: r.qty }] : [];
               }),
             }),
           );

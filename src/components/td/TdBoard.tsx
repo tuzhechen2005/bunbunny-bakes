@@ -184,11 +184,11 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
         setAim(null);
       }}><p className="td-start-hint font-display">{aim === 'bomb' ? t.aimBomb : t.aimSlide}</p>
         <button type="button" className="td-ctl td-aim-cancel" onClick={e => { e.stopPropagation(); setAim(null); }}>{t.aimCancel}</button></div>}
-      {hud.newlyUnlocked.length > 0 && !unlockSeen && ready && <div className="td-unlock" role="dialog" aria-label={t.newTower} data-testid="td-unlock">
+      {hud.newlyUnlocked.length > 0 && !unlockSeen && ready && <div className="td-unlock-cover"><div className="td-unlock" role="dialog" aria-modal="true" aria-label={t.newTower} data-testid="td-unlock">
         <span className="td-unlock-badge font-display">{t.newTower}</span>
         {hud.newlyUnlocked.map(kind => <div key={kind} className="td-unlock-row"><img src={`/brand/td/${towerFile[kind]}-0.webp`} alt="" /><div><b className="font-display">{t.towers[kind]}</b><p>{t.info[kind].base}</p></div></div>)}
         <button className="td-ctl td-ctl-main" data-testid="td-unlock-ok" onClick={() => setUnlockSeen(true)}>{t.gotIt}</button>
-      </div>}
+      </div></div>}
       {boss && <p className="td-boss" role="status">{t.boss}</p>}
       {hud.awaitingStart && ready && selected === null && !hold && <p className="td-start-hint font-display" role="status">{t.startHint2}</p>}
       {selected !== null && !disabled && <div className={`td-tray${slots[selected].y > FIELD_HEIGHT * .57 ? " td-tray-top" : ""}`} role="group" aria-label={fill(t.slot, { n: selected + 1 })}>

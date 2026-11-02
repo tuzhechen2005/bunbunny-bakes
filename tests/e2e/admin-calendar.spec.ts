@@ -78,7 +78,7 @@ test("open a day, change the dough limit, hit a warning and confirm", async ({ p
   await cell.click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: t.productionTitle })).toBeVisible();
-  await expect(dialog.getByText(t.productionPieces.replace("{name}", "红豆包").replace("{n}", "10"))).toBeVisible();
+  await expect(dialog.getByText(t.productionPieces.replace("{name}", "红豆包").replace("{n}", "10").replace("{unit}", "个"))).toBeVisible();
   await expect(dialog.getByText(t.productionUnconfirmed.replace("{n}", "1"))).toBeVisible();
   await dialog.getByLabel(t.doughLimit).fill("1200");
   await dialog.getByRole("button", { name: t.save, exact: true }).click();

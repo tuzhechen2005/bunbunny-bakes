@@ -194,6 +194,7 @@
 .td-switch { position:absolute; z-index:2; width:7%; aspect-ratio:1; transform:translate(-50%,-50%); border:0; border-radius:50%; background:transparent; cursor:pointer; }
 .td-aim { position:absolute; inset:0; z-index:4; cursor:crosshair; background:rgba(255,248,236,.08); }
 .td-aim-cancel { position:absolute; right:10px; top:10px; min-height:36px !important; padding:0 14px !important; }
+.td-unlock-cover { position:absolute; inset:0; z-index:7; background:rgba(60,30,10,.28); }
 .td-unlock { position:absolute; left:50%; top:50%; z-index:7; width:min(380px,80%); padding:18px 18px 14px; border-radius:22px; background:#fff8ec; box-shadow:0 6px 0 #e2cfb1, 0 20px 40px -12px rgba(60,30,10,.5); transform:translate(-50%,-50%); text-align:center; animation:game-result-in 600ms cubic-bezier(.2,.9,.3,1.3) both; }
 .td-unlock-badge { display:inline-block; padding:4px 14px; border-radius:999px; background:#f2c14e; color:#5a3b2a; font-size:14px; }
 .td-unlock-row { display:flex; gap:12px; align-items:center; margin:12px 0; text-align:left; }
