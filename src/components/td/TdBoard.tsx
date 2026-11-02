@@ -17,13 +17,13 @@ const towerFile: Record<TowerKind, string> = { rollingPin: 'tower-pin', flourSif
 const ITEMS: TdItem[] = ['bomb', 'bell', 'slide'];
 const ITEM_LEVEL: Record<TdItem, number> = { bomb: 2, bell: 6, slide: 10 };
 const PESTS = ['ant', 'mouse', 'sparrow', 'beetle', 'boss'] as const;
-export interface TdProgress { inputs: TdInput[]; endTick: number; score: number; passed: boolean }
+export interface TdProgress { inputs: TdInput[]; endTick: number; score: number; passed: boolean; stars: number }
 /** Inventory handed out by the server at level start (E1); absent → no items this level. */
 const itemsOf = (save: TdSave): Partial<Record<TdItem, number>> => save.inventory ?? {};
-type Action = { type: 'place'; slot: number; tower: TowerKind } | { type: 'upgrade'; slot: number; branch?: TdBranch } | { type: 'sell'; slot: number } | { type: 'callWave'; slot: -1 } | { type: 'switch'; fork: number } | { type: 'item'; item: 'bomb'; x: number; y: number } | { type: 'item'; item: 'bell' } | { type: 'item'; item: 'slide'; position: number };
+type Action = { type: 'target-clutter'; clutter: number | null } | { type: 'place'; slot: number; tower: TowerKind } | { type: 'upgrade'; slot: number; branch?: TdBranch } | { type: 'sell'; slot: number } | { type: 'callWave'; slot: -1 } | { type: 'switch'; fork: number } | { type: 'item'; item: 'bomb'; x: number; y: number } | { type: 'item'; item: 'bell' } | { type: 'item'; item: 'slide'; position: number };
 interface Props { save: TdSave; paused: boolean; soundOn: boolean; reduced: boolean; onProgress: (p: TdProgress) => void; onOver: (p: TdProgress) => void }
 
-const hudKey = (s: TdState) => `${s.coins}|${s.wave}|${s.bread}|${s.towers.map(v => `${v.slot}${v.level}${v.branch ?? ''}`).join(',')}|${s.inputsAccepted}|${s.inputsRejected}|${s.nextWaveTick === null}|${s.over}|${s.nextWave?.index ?? -1}|${s.waveTargetTier}|${s.awaitingStart}`;
+const hudKey = (s: TdState) => `${s.coins}|${s.wave}|${s.bread}|${s.towers.map(v => `${v.slot}${v.level}${v.branch ?? ''}`).join(',')}|${s.inputsAccepted}|${s.inputsRejected}|${s.nextWaveTick === null}|${s.over}|${s.nextWave?.index ?? -1}|${s.waveTargetTier}|${s.awaitingStart}|${s.targetClutter}|${s.clutter.map(c => c.hp > 0 ? 1 : 0).join('')}`;
 
 function BranchCard({ kind, branch, coins, onPick }: { kind: TowerKind; branch: TdBranch; coins: number; onPick: (b: TdBranch) => void }) {
   const cost = towerStats(kind, 2, branch).cost;
@@ -42,7 +42,7 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
   const [ready, setReady] = useState(false), [hidden, setHidden] = useState(false);
   const [selected, setSelected] = useState<number | null>(null), [speed, setSpeed] = useState<1 | 2 | 3>(1);
   const [preview, setPreview] = useState<TowerKind | null>(null);
-  const [boss, setBoss] = useState(false);
+  const [banner, setBanner] = useState<string | null>(null);
   const [info, setInfo] = useState(false);
   const [hold, setHold] = useState(false);
   const [aim, setAim] = useState<'bomb' | 'slide' | null>(null);
@@ -57,7 +57,7 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
   const settings = useRef({ soundOn, reduced });
   useEffect(() => { settings.current = { soundOn, reduced }; }, [soundOn, reduced]);
   useEffect(() => {
-    let alive = true, active = false, raf: number | null = null, lastSave = -1, lastKey = '', lastHud = 0;
+    let alive = true, active = false, raf: number | null = null, lastSave = -1, lastKey = '', lastHud = 0, bannerTimer: ReturnType<typeof setTimeout> | undefined;
     const publish = (force = false) => {
       const s = game.state(); state.current = s;
       if (wrapper.current) { wrapper.current.dataset.tick = String(s.tick); wrapper.current.dataset.state = s.over ? (s.passed ? 'won' : 'lost') : 'playing'; }
@@ -69,7 +69,7 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
       }
       if (force || Math.floor(s.tick / 60) !== lastSave || s.over) {
         lastSave = Math.floor(s.tick / 60);
-        const progress = { inputs: inputs.current, endTick: s.tick, score: s.wave, passed: s.passed };
+        const progress = { inputs: inputs.current, endTick: s.tick, score: s.wave, passed: s.passed, stars: s.stars };
         onProgress(progress);
         if (s.over && !reported.current) { reported.current = true; if (settings.current.soundOn) sound.over(); onOver(progress); }
       }
@@ -80,7 +80,10 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
         view.current?.ingest(events, game.state());
         for (const e of events) {
           if (e.type === 'kill' && settings.current.soundOn) sound.merge(1);
-          if (e.type === 'bossSpawn') { setBoss(true); setTimeout(() => setBoss(false), 1800); if (!settings.current.reduced) haptic(30); }
+          if (e.type === 'bossSpawn' || e.type === 'bossPhase') {
+            setBanner(e.type === 'bossSpawn' ? t.boss : t.bossSpit); clearTimeout(bannerTimer); bannerTimer = setTimeout(() => setBanner(null), e.type === 'bossSpawn' ? 1800 : 1400);
+            if (!settings.current.reduced) haptic(e.type === 'bossSpawn' ? 30 : 18);
+          }
           if (e.type === 'lose' && !settings.current.reduced) haptic(16);
         }
       }
@@ -126,7 +129,7 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
       resize(); setReady(true); publish(true); start();
     });
     return () => {
-      alive = false; stop(); observer.disconnect(); action.current = () => {}; view.current = null;
+      alive = false; clearTimeout(bannerTimer); stop(); observer.disconnect(); action.current = () => {}; view.current = null;
       document.removeEventListener('visibilitychange', visibility, true); window.removeEventListener('pagehide', stop, true);
     };
   }, [clock, game, onProgress, onOver, paused, reduced, save.tiers]);
@@ -171,6 +174,10 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
         onClick={() => { if (selected === i) close(); else { setSelected(i); setPreview(null); } }} />)}
       {forks.map(f => { const at = f.geometry[0]; return at ? <button key={f.id} type="button" className="td-switch" data-testid={`td-switch-${f.id}`} aria-label={t.switchLabel} disabled={disabled}
         style={{ left: `${at.x / FIELD_WIDTH * 100}%`, top: `${(at.y - 70) / FIELD_HEIGHT * 100}%` }} onClick={() => action.current({ type: 'switch', fork: f.id })} /> : null; })}
+      {hud.clutter.map(c => c.hp > 0 && <button key={c.id} type="button" className={`td-clutter${hud.targetClutter === c.id ? ' td-clutter-on' : ''}`} data-testid={`td-clutter-${c.id}`} disabled={disabled}
+        aria-pressed={hud.targetClutter === c.id} aria-label={fill(t.clutterLabel, { name: t.clutter[c.kind], n: c.reward })}
+        style={{ left: `${c.x / FIELD_WIDTH * 100}%`, top: `${c.y / FIELD_HEIGHT * 100}%` }}
+        onClick={() => act({ type: 'target-clutter', clutter: state.current.targetClutter === c.id ? null : c.id })} />)}
       {aim && <div className="td-aim" data-testid="td-aim" onClick={e => {
         const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const x = Math.round((e.clientX - r.left) / r.width * FIELD_WIDTH), y = Math.round((e.clientY - r.top) / r.height * FIELD_HEIGHT);
@@ -189,7 +196,7 @@ export function TdBoard({ save, paused: pagePaused, soundOn, reduced, onProgress
         {hud.newlyUnlocked.map(kind => <div key={kind} className="td-unlock-row"><img src={`/brand/td/${towerFile[kind]}-0.webp`} alt="" /><div><b className="font-display">{t.towers[kind]}</b><p>{t.info[kind].base}</p></div></div>)}
         <div className="td-unlock-ok"><button className="td-ctl td-ctl-main" data-testid="td-unlock-ok" onClick={() => setUnlockSeen(true)}>{t.gotIt}</button></div>
       </div></div>}
-      {boss && <p className="td-boss" role="status">{t.boss}</p>}
+      {banner && <p className={`td-boss${banner === t.bossSpit ? ' td-boss-sm' : ''}`} role="status">{banner}</p>}
       {hud.awaitingStart && ready && selected === null && !hold && <p className="td-start-hint font-display" role="status">{t.startHint2}</p>}
       {selected !== null && !disabled && <div className={`td-tray${slots[selected].y > FIELD_HEIGHT * .57 ? " td-tray-top" : ""}`} role="group" aria-label={fill(t.slot, { n: selected + 1 })}>
         {tower ? <>

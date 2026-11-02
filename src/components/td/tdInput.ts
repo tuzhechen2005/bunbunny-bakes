@@ -4,6 +4,7 @@ export const TD_CLIENT_REJECT_LIMIT = 100;
 
 /** Check current state after settling the clock; ignored taps must not mutate the replay counters. */
 function affordableAction(state: TdState, input: TdInput): boolean {
+  if (input.type === 'target-clutter') return input.clutter === null || state.clutter.some(c => c.id === input.clutter && c.hp > 0);
   if (input.type === 'callWave') return state.nextWaveTick !== null || state.awaitingStart;
   if (input.type === 'switch') return true;
   if (input.type === 'item') return !state.itemsUsed[input.item];

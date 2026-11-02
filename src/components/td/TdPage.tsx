@@ -15,6 +15,7 @@ import { useLiveProgress } from '@/components/game/useLiveProgress';
 import { Sheet } from '@/components/ui/Sheet';
 import { useMotionPrefs } from '@/lib/motion/react';
 import { TdBoard, type TdProgress } from './TdBoard';
+import { BestStars, Stars } from './TdStars';
 import { fetchTdLeaderboard, finishTd, startTd, type TdFinish } from './tdApi';
 import { clearTdSave, readTdSave, writeTdSave, type TdSave } from './tdSave';
 import './td.css';
@@ -26,9 +27,9 @@ export function TdPage() {
   const [errors, setErrors] = useState<{wechat: string | null; nick: string | null}>({wechat: null, nick: null});
   const [nextLevel, setNextLevel] = useState(1), [starting, setStarting] = useState(false), [error, setError] = useState('');
   const [dialog, setDialog] = useState<'exit' | 'restart' | 'replay' | null>(null), [showResult, setShowResult] = useState(false);
-  const [localPassed, setLocalPassed] = useState(false);
+  const [localPassed, setLocalPassed] = useState(false), [localStars, setLocalStars] = useState(0), [best, setBest] = useState<Record<string, number>>({});
   const [result, setResult] = useState<TdFinish | null>(null), [submitting, setSubmitting] = useState(false), [retry, setRetry] = useState(false);
-  const active = useRef<TdSave | null>(null), progress = useRef<TdProgress>({inputs:[],endTick:0,score:0,passed:false});
+  const active = useRef<TdSave | null>(null), progress = useRef<TdProgress>({inputs:[],endTick:0,score:0,passed:false,stars:0});
   const inflight = useRef<string | null>(null), acknowledged = useRef<string | null>(null);
   const { reduced, degraded } = useMotionPrefs();
   const { data: hub } = useGameHub(); const hasPrize = hub?.prizeGame === 'TD';
@@ -40,7 +41,7 @@ export function TdPage() {
   }, []);
   useEffect(() => {
     if (phase !== 'menu' || !wechat.trim()) return;
-    let alive = true; void fetchTdLeaderboard(wechat.trim()).then(r => { if (alive && r.ok) setNextLevel(r.data.nextLevel); });
+    let alive = true; void fetchTdLeaderboard(wechat.trim()).then(r => { if (alive && r.ok) { setNextLevel(r.data.nextLevel); setBest(r.data.bestStars ?? {}); } });
     return () => { alive = false; };
   }, [phase, wechat]);
   const persist = useCallback((p: TdProgress) => {
@@ -62,14 +63,14 @@ export function TdPage() {
     if (r.ok) {
       acknowledged.current = id;
       if (readTdSave()?.runId === id) clearTdSave();
-      setResult(r.data); setNextLevel(r.data.level + Number(r.data.passed)); setSaved(null);
+      setResult(r.data); setNextLevel(r.data.level + Number(r.data.passed)); setSaved(null); if (r.data.bestStars) setBest(r.data.bestStars);
     } else { setError(r.error.message); setRetry(isRetryable(r.status)); }
   }, []);
   const over = useCallback((p: TdProgress) => {
-    persist(p); setLocalPassed(p.passed); setPhase('over'); setDialog(null); setShowResult(true); void submit(p);
+    persist(p); setLocalPassed(p.passed); setLocalStars(p.stars); setPhase('over'); setDialog(null); setShowResult(true); void submit(p);
   }, [persist, submit]);
   const activate = (s: TdSave) => {
-    active.current = s; progress.current = {inputs:s.inputs,endTick:s.endTick,score:s.score,passed:false};
+    active.current = s; progress.current = {inputs:s.inputs,endTick:s.endTick,score:s.score,passed:false,stars:0};
     acknowledged.current = null; setError(''); setResult(null); setSubmitting(false); setRetry(false); setShowResult(false);
     if (soundOn) unlockAudio(); setRun(s); setPhase('playing');
   };
@@ -85,7 +86,7 @@ export function TdPage() {
     const level = levelOverride ?? (result && run && Date.parse(run.expiresAt) > Date.now() ? result.level + Number(result.passed) : undefined);
     const r = await startTd(wechat.trim(), nickname.trim(), level); setStarting(false);
     if (!r.ok) { setError(r.error.message); setPhase('form'); return; }
-    writeRemembered({wechatId:wechat.trim(),nickname:nickname.trim()});
+    writeRemembered({wechatId:wechat.trim(),nickname:nickname.trim()}); if (r.data.bestStars) setBest(r.data.bestStars);
     const s: TdSave = {...r.data,v:1,nickname:nickname.trim(),inputs:[],endTick:0,score:0};
     writeTdSave(s); activate(s);
   };
@@ -118,7 +119,7 @@ export function TdPage() {
     {phase === 'menu' && <main className="td-menu">
       <GameMenuHero game="td" title={t.title} hint={t.startHint}>
         <p className="game-hero-badge font-display" data-testid="td-menu-level">{fill(t.level,{n:saved?.level ?? nextLevel})}</p>
-      </GameMenuHero><p className="td-muted">{t.rules}</p>
+      </GameMenuHero><p className="td-muted">{t.rules}</p><BestStars best={best} />
       <p className={`font-display mt-6 text-center text-[15px] leading-snug ${hasPrize ? "" : "invisible"}`} aria-hidden={!hasPrize} data-testid={hasPrize ? "td-prize-line" : undefined}>{g.prizeLine}</p>
       {saved ? <><button className={gamePrimary} data-testid="td-resume" onClick={() => { const s = readTdSave(); if (s) activate(s); else setSaved(null); }}>{g.resume}</button>
         <button className={gameSecondary} data-testid="td-restart" onClick={() => setDialog('restart')}>{g.restart}</button></>
@@ -132,7 +133,7 @@ export function TdPage() {
       {error && <p role="alert" className="m-0 text-sm text-c-red">{error}</p>}<button className={gamePrimary} data-testid="td-start" disabled={starting}>{starting ? g.starting : g.start}</button>
       <button className={gameSecondary} type="button" onClick={() => setPhase('menu')}>{g.closeBoard}</button>
     </form></main>}
-    {phase === 'board' && <main><button className={`${gameSecondary} td-board-close`} data-testid="td-board-close" onClick={() => setPhase('menu')}>{g.closeBoard}</button><LeaderboardView scoreLabel={t.levels} hasPrize={hasPrize} wechatId={wechat.trim()} version={nextLevel} fetcher={fetchTdLeaderboard} /></main>}
+    {phase === 'board' && <main><button className={`${gameSecondary} td-board-close`} data-testid="td-board-close" onClick={() => setPhase('menu')}>{g.closeBoard}</button><BestStars best={best} /><LeaderboardView scoreLabel={t.levels} hasPrize={hasPrize} wechatId={wechat.trim()} version={nextLevel} fetcher={fetchTdLeaderboard} /></main>}
     {playing && run && <><TdBoard key={run.runId} save={run} paused={dialog !== null} soundOn={soundOn} reduced={reduced || degraded} onProgress={persist} onOver={over} />
       {phase === 'over' && !showResult && <button className={gameSecondary} data-testid="td-show-result" onClick={() => setShowResult(true)}>{g.barScore}</button>}</>}
     {dialog === 'replay' && run && <Sheet label={g.replayTitle} onClosed={() => setDialog(null)} panelTestId="td-replay-sheet" className="td-sheet">
@@ -150,6 +151,7 @@ export function TdPage() {
     {phase === 'over' && showResult && <Sheet label={result?.passed ?? localPassed ? t.win : t.fail} onClosed={() => setShowResult(false)} panelTestId="td-over-sheet" className="td-sheet">
       <GameResultArt record={!!result?.newRecord} lose={!(result?.passed ?? localPassed)} />
       <h2>{(result?.passed ?? localPassed) ? t.win : t.fail}</h2>
+      {(result?.passed ?? localPassed) && <Stars n={result?.stars ?? localStars} size={40} pop />}
       {submitting ? <p role="status">{g.submitting}</p> : error ? <><p role="alert" className="m-0 text-sm text-c-red">{error}</p>{retry && <button className={gameSecondary} data-testid="td-retry" onClick={() => void submit(progress.current)}>{g.retry}</button>}</> : result && <>
         <p data-testid="td-confirmed">{g.confirmed}</p><p>{t.levels} <b>{result.best}</b></p>
         <p>{g.personalBest} <b data-testid="td-personal-best">{result.personalBest ?? result.best}</b></p>
