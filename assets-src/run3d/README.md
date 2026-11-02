@@ -1,4 +1,4 @@
-# R12 — sculpted clay-toy runner assets
+# R15 — sculpted clay-toy runner assets
 
 Original procedural Blender geometry, rebuilt against `public/brand/logo.webp`,
 `public/brand/art/menu-run.webp`, `card-run.webp`, and direction A in
@@ -13,7 +13,7 @@ folders.
   pocket and buttons, and a folded kraft backpack containing scored bread.
   The toast volumes, body, limbs, ears and apron forms use **applied level-2
   Catmull–Clark subdivision**; geometry has smooth shading and molded bevels.
-- `props.glb`: thirteen independent library roots. Rounded delivery vehicles have
+- `props.glb`: eighteen independent library roots. Rounded delivery vehicles have
   inset windows, wheel arches, tires and hubcaps, door seams, handles, bumpers,
   lamps and sculpted loaf signs. The ramp has individual wooden planks, stringers,
   battens and pegs. Other props have scored loaves, folded paper, turned cup/lamp
@@ -27,11 +27,15 @@ folders.
   camera: `(0, 4.6, -7.5)` looking at `(0, 1.2, 3)`, perspective 32 mm. The bunny
   faces forward, away from the camera, in a run pose.
 - `bunny-closeup.png`: **512 × 608**, front three-quarter review of the imported
-  bunny in its rest pose. Both PNGs use 256-colour palettes to fit the delivery
+  bunny in its rest pose. The review PNGs use 128-colour palettes to fit the delivery
   budget; this does not change the GLBs or their vertex colours.
 
+- `mechanics-preview.png`: **512 × 384**, the five R15 props imported from the
+  final packed `props.glb`, shown at their actual relative scales under the same
+  warm Cycles studio lighting. All review PNGs live in `assets-src/run3d/`.
+
 `validation.json` is the authoritative byte/count/bounds report. The budget is
-**3,500,000 bytes for all three GLBs and both review PNGs combined**.
+**3,800,000 bytes for all three GLBs and all three review PNGs combined**.
 
 ## Unchanged renderer contract
 
@@ -91,10 +95,26 @@ props at the origin. Every prop is within **2,000–8,000 triangles**.
 | `lamp` | Approximately 3.16 m high |
 | `tree` | Rounded foliage in a terracotta planter |
 | `bench` | 1.6 m wide, rounded wooden slats and curved supports |
+| `pothole` | 1.6 m round footprint, 0.062 m high; chipped cobble rim and opaque dark inset |
+| `breadwheel` | 1.2 m diameter, 0.48 m thick; crust and flour-filled scoring on both faces; axle X, travel +Z |
+| `shoes` | Pair of rose clay sneakers, cream flex soles, raised laces, ankle openings and heel loops; approximately 0.72 × 0.36 × 0.63 m |
+| `shield` | 0.92 m round opaque sage bubble token, cream rim and raised bunny emblem facing +Z |
+| `signal` | Small amber ribbed roof beacon, 0.34 m wide × 0.29 m high; base at Y=0 |
 
 The vehicles intentionally retain the elongated gameplay footprint and low flat
 roof. Their decorative wheels, arches, signs and lights stay inside the footprint.
-Place the ramp high end against the vehicle's rear roof edge.
+Place the ramp high end against the vehicle's rear roof edge. Place `signal` at
+Y=1.3 relative to a truck to mount its base on the roof. It is an independent
+library root; the existing truck mesh is unchanged. `pothole` is an opaque,
+shallow surface overlay, not a cutout: place its base at the road surface height.
+`breadwheel` remains grounded at rest; its geometric axle passes through
+(0, 0.6, 0), so rolling needs a pivot at that centre. No animation or game code is
+included. Shoes and shield are grounded pickup meshes, with no baked bobbing.
+
+R15 appends five roots without re-exporting the original library. The original
+26 nodes, 13 meshes, materials, accessors, buffer views and 1,025,728 binary bytes
+are preserved exactly. `append_mechanics.py` verifies this against the baseline;
+`validation.json` records its SHA-256. Bunny and town GLBs are untouched.
 
 ### Town roots
 
@@ -140,23 +160,18 @@ not modified.
 
 ```sh
 mkdir -p assets-src/run3d/.cache
-# Only needed when the existing renderer images are absent:
-BUILDX_CONFIG="$PWD/assets-src/run3d/.cache/buildx" \
-  docker build -t bunbunny-run-render -f assets-src/run/Dockerfile assets-src/run
-BUILDX_CONFIG="$PWD/assets-src/run3d/.cache/buildx" \
-  docker build -t bunbunny-run3d -f assets-src/run3d/Dockerfile assets-src/run3d
-
-# Generate, pack, then render the ACTUAL packed GLBs.
-docker run --rm --network none \
-  -v "$PWD:/work:ro" -v "$PWD/public/brand/run3d:/work/public/brand/run3d" \
-  bunbunny-run3d -- --models-only
-python3 assets-src/run3d/pack.py
-docker run --rm --network none \
-  -v "$PWD:/work:ro" -v "$PWD/public/brand/run3d:/work/public/brand/run3d" \
-  bunbunny-run3d -- --preview-only
+# Capture the pre-R15 baseline ONCE, before appending. For this change:
+git show HEAD:public/brand/run3d/props.glb > assets-src/run3d/.cache/props-original.glb
+# Keep this baseline when rerunning; do not use an already extended props.glb.
+docker run --rm --network none -e RUN3D_OUT=/work/assets-src/run3d/.cache \
+  -v "$PWD:/work" --entrypoint blender bunbunny-run3d \
+  -b --factory-startup --python-exit-code 1 --python assets-src/run3d/mechanics.py
+python3 assets-src/run3d/append_mechanics.py
+docker run --rm --network none -v "$PWD:/work" --entrypoint blender bunbunny-run3d \
+  -b --factory-startup --python-exit-code 1 \
+  --python assets-src/run3d/mechanics.py -- --preview
 python3 assets-src/run3d/optimize_previews.py
 
-# Validate the shipped rig, then structural contracts and the complete budget.
 docker run --rm --network none --entrypoint blender -v "$PWD:/work:ro" \
   bunbunny-run3d -b --factory-startup --python-exit-code 1 \
   --python assets-src/run3d/validate_poses.py > assets-src/run3d/.cache/poses.log
@@ -165,11 +180,20 @@ npm install --prefix assets-src/run3d/.cache/validator \
 node assets-src/run3d/validate.mjs
 ```
 
+`render.py` retains the original R12 authoring pipeline, including its original
+thirteen-prop export. For a full clean rebuild, generate those original GLBs
+first, pack them, and save that packed props file as the baseline before running
+the additive R15 workflow. Do not run the all-assets `pack.py` after appending:
+the append step already packs the new meshes and retains the original streams.
+The existing street and bunny review images were repacked to 128 colours; their
+composition is unchanged. Build logs and intermediate GLBs belong in `.cache/`.
+
+
 If Pillow is unavailable, install it in an isolated environment under `.cache`.
 `validate.mjs` checks GLB integrity, self-contained buffers, all root names and
 identity transforms, scale bounds, triangle budgets, vertex colours, one skin,
 seven exact action names, run key count, loop endpoints, matte materials, the
-pose-check hash, and all five output files against the 3.5 MB limit. Khronos
+pose-check hash, and all six output files against the 3.8 MB limit. Khronos
 validation rejects errors **and warnings**. Geometry and settings are reproducible;
 PNG noise and binary ordering can vary by Blender/platform version. Intermediate
 renders and logs stay in ignored `.cache/`. No `.blend` file is required.

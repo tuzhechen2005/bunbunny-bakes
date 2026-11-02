@@ -65,8 +65,8 @@
     }
   },
   "props": {
-    "bytes": 1038388,
-    "triangles": 54532,
+    "bytes": 1360780,
+    "triangles": 69360,
     "rootTriangles": {
       "cart": 7612,
       "flour": 3156,
@@ -80,7 +80,12 @@
       "coffee": 2132,
       "lamp": 2116,
       "tree": 2640,
-      "bench": 2844
+      "bench": 2844,
+      "pothole": 2268,
+      "breadwheel": 3112,
+      "shoes": 4160,
+      "shield": 2944,
+      "signal": 2344
     },
     "dimensions": {
       "cart": {
@@ -303,6 +308,91 @@
           0.9792,
           0.5783
         ]
+      },
+      "pothole": {
+        "min": [
+          -0.800000011920929,
+          0,
+          -0.800000011920929
+        ],
+        "max": [
+          0.800000011920929,
+          0.06199999898672104,
+          0.800000011920929
+        ],
+        "size": [
+          1.6,
+          0.062,
+          1.6
+        ]
+      },
+      "breadwheel": {
+        "min": [
+          -0.265999972820282,
+          0,
+          -0.6000000238418579
+        ],
+        "max": [
+          0.265999972820282,
+          1.2000000476837158,
+          0.6000000238418579
+        ],
+        "size": [
+          0.532,
+          1.2,
+          1.2
+        ]
+      },
+      "shoes": {
+        "min": [
+          -0.3580000102519989,
+          0,
+          -0.30000001192092896
+        ],
+        "max": [
+          0.3580000400543213,
+          0.36432963609695435,
+          0.32999998331069946
+        ],
+        "size": [
+          0.716,
+          0.3643,
+          0.63
+        ]
+      },
+      "shield": {
+        "min": [
+          -0.46000000834465027,
+          0,
+          -0.14000000059604645
+        ],
+        "max": [
+          0.46000000834465027,
+          0.9200000166893005,
+          0.18199999630451202
+        ],
+        "size": [
+          0.92,
+          0.92,
+          0.322
+        ]
+      },
+      "signal": {
+        "min": [
+          -0.17000000178813934,
+          0,
+          -0.17000000178813934
+        ],
+        "max": [
+          0.17000000178813934,
+          0.28999999165534973,
+          0.17000000178813934
+        ],
+        "size": [
+          0.34,
+          0.29,
+          0.34
+        ]
       }
     },
     "validation": {
@@ -474,10 +564,20 @@
       "truncated": false
     }
   },
-  "totalGlbBytes": 3142540,
-  "previewBytes": 157836,
-  "closeupBytes": 149266,
-  "totalDeliveryBytes": 3449642,
+  "totalGlbBytes": 3464932,
+  "reviewBytes": {
+    "preview.png": 128000,
+    "bunny-closeup.png": 120472,
+    "mechanics-preview.png": 84033
+  },
+  "totalDeliveryBytes": 3797437,
+  "budgetBytes": 3800000,
+  "originalPropsPreservation": {
+    "baselineSha256": "38bde8cc2f8c2d328d67ee303c40139207f5bdb48669bc14d1bb560fbca80188",
+    "preservedNodes": 26,
+    "preservedBinaryBytes": 1025728,
+    "unchangedOriginalEntries": true
+  },
   "compression": "None; plain glTF 2.0 with normalized RGBA8 vertex colours/weights and shared identical streams. Float32 positions/normals; no mesh quantization or decoder.",
   "poseValidation": {
     "assetSha256": "bdba3ca8f82202d561d7f3b86b8e2ff0694fe502bee6f2e57ab3f060c115514d",
