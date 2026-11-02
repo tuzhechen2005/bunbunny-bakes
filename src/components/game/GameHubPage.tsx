@@ -8,6 +8,9 @@ import { GAME_CATALOG } from "@/lib/gameCatalog";
 import { LiveBadge } from "./LiveBadge";
 import { GameIcon } from "./GameIcon";
 import { useGameHub } from "./useGameHub";
+import { useEffect, useState } from "react";
+import { readRemembered } from "./gameApi";
+import { fetchShop } from "./shopApi";
 import "./clay.css";
 
 const t = copy.customer.gameHub;
@@ -24,6 +27,19 @@ function HubArt({ kind }: { kind: string }) {
   </span>;
 }
 
+/** Top-right 小卖部 entry with the player's 面包币 (only once they've played with a wechat id). */
+function HubShopEntry() {
+  const [coins, setCoins] = useState<number | null>(null);
+  useEffect(() => {
+    const id = readRemembered().wechatId;
+    if (!id) return;
+    let alive = true;
+    void fetchShop(id).then(s => { if (alive) setCoins(s.balance); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  return <Link href="/game/shop" className={`hub-shop ${focusRing}`} data-testid="hub-shop"><i aria-hidden="true" />{copy.customer.shop.entry}{coins !== null ? <b>{coins}</b> : null}</Link>;
+}
+
 export function GameHubPage() {
   const { data, error, reload } = useGameHub(true, { refresh: true });
   // Links stay usable while scores load, or when the connection fails.
@@ -31,7 +47,7 @@ export function GameHubPage() {
   return (
     <div className="game-skin flex flex-1 flex-col text-c-ink">
       <div className="game-skin-inner mx-auto flex w-full max-w-[430px] flex-1 flex-col">
-        <TopBar backHref="/" backLabel={g.backLabel} title={t.title} titleAs="h1" />
+        <TopBar backHref="/" backLabel={g.backLabel} title={t.title} titleAs="h1" right={<HubShopEntry />} />
         <main className="px-5 pt-1 pb-[calc(24px+env(safe-area-inset-bottom))]" data-testid="game-hub">
           {/* eslint-disable-next-line @next/next/no-img-element -- static clay key art */}
           <img className="hub-hero" src="/brand/art/hub-hero.webp" alt="" draggable={false} onError={e => { e.currentTarget.style.display = "none"; }} />

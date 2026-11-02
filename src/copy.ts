@@ -264,6 +264,21 @@ export const copy = {
       loadFailed: "暂时看不到成绩，稍后再试",
       rules: "每周一 0:00 重新开始，每个微信号只计本周最高分。",
     },
+    /** 小卖部 + 面包币 (D-economy). */
+    shop: {
+      title: "小卖部", pageTitle: "小卖部", entry: "小卖部", coins: "面包币",
+      hint: "玩游戏、下单取货都能攒面包币",
+      who: "填上你玩游戏用的微信号", whoGo: "进店",
+      buy: "买", owned: "已有 {n}", notEnough: "面包币不够", bought: "买到啦",
+      fromOrders: "+{n} 来自订单", howTitle: "怎么攒面包币",
+      how: ["每玩完一局送 5–30 个（每天最多 300）", "订单取货后每 $1 送 10 个"],
+      items: {
+        bomb: { name: "面粉炸弹", text: "点哪里，炸开一片" },
+        bell: { name: "冰冻铃", text: "全场害虫定住 3 秒" },
+        slide: { name: "黄油滑道", text: "害虫踩到滑回去" },
+      },
+      perLevel: "每关每种最多用 1 次", loadFailed: "小卖部暂时打不开，稍后再试", retry: "重试",
+    },
     /** How-to-play intro shown once per game, skippable, replayable from the menu. */
     tutorial: {
       open: "玩法介绍", skip: "跳过", next: "下一步", go: "开始玩", step: "第 {n} / {total} 步",
