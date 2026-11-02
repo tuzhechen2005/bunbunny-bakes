@@ -7,7 +7,7 @@ import { Logo } from "@/components/brand/Logo";
 import { copy } from "@/copy";
 import { formatCents } from "@/domain/pricing";
 import type { Menu, MenuProduct } from "@/lib/api";
-import { cart, useCart } from "@/lib/cart";
+import { cart, lineKey, useCart } from "@/lib/cart";
 import { applyField, productField } from "@/lib/field";
 import { flyToBag } from "@/lib/flyToBag";
 import { pushOverlay } from "@/lib/overlayHistory";
@@ -15,7 +15,7 @@ import { useMotionPrefs } from "@/lib/motion/react";
 import { AssistantEntry } from "./assistant/AssistantEntry";
 import { BagBar } from "./bag/BagBar";
 import { FlyLayer } from "./bag/FlyLayer";
-import { fill, safeLineTotal } from "./format";
+import { cartLineTotal, fill, hasFlavors } from "./format";
 import { GameEntryCard } from "./GameEntryCard";
 import { ProductCard } from "./ProductCard";
 import { Detail, type DetailHandle } from "./rack/Detail";
@@ -90,8 +90,9 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
   const byId = new Map<string, MenuProduct>(products.map((p) => [p.id, p]));
   const known = items.filter((i) => byId.has(i.productId));
   const count = known.reduce((sum, i) => sum + i.qty, 0);
-  const subtotal = known.reduce((sum, i) => sum + safeLineTotal(i.qty, byId.get(i.productId)!), 0);
-  const qtyOf = (id: string) => items.find((i) => i.productId === id)?.qty ?? 0;
+  const subtotal = known.reduce((sum, i) => sum + cartLineTotal(i, byId.get(i.productId)!), 0);
+  /** Pieces of a product in the bag, all flavours together (limits are per product). */
+  const qtyOf = (id: string) => items.reduce((n, i) => (i.productId === id ? n + i.qty : n), 0);
 
   const productsRef = useRef<readonly MenuProduct[]>(products);
   useEffect(() => {
@@ -269,12 +270,14 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
   }, []);
 
   // ---- adding: only from the detail (D97) ----
-  const addFromDetail = (p: MenuProduct, qty: number, from: DOMRect) => {
+  const addFromDetail = (p: MenuProduct, qty: number, from: DOMRect, flavorId?: string | null) => {
     const have = qtyOf(p.id);
     const next = Math.min(maxQty, have + qty);
     const added = next - have;
-    if (p.status === "PAUSED" || added <= 0) return;
-    cart.setQty(p.id, next, maxQty);
+    if (p.status === "PAUSED" || added <= 0 || (hasFlavors(p) && !flavorId)) return;
+    const key = lineKey({ productId: p.id, flavorId });
+    const line = items.find((i) => lineKey(i) === key)?.qty ?? 0;
+    cart.setQty(key, line + added, maxQty);
     flyToBag({ from, imageUrl: p.imageUrl, productId: p.id, count: added });
   };
 

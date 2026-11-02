@@ -1,5 +1,7 @@
 // Email rendering for outbox notifications (docs/NOTIFICATIONS.md §2–§5).
 // Contract between the outbox (sends) and the templates (render).
+import { flavorQuantities } from "@/domain/summary";
+import { flavorSummaryText } from "./flavorText";
 import { copy } from "@/copy";
 import { dayLabel, monthDay } from "@/domain/dates";
 import { formatCents } from "@/domain/pricing";
@@ -60,8 +62,16 @@ async function loadOrder(db: DbClient, notification: NotificationToRender) {
   return order;
 }
 
-function itemLines(items: { nameSnapshot: string; qty: number }[]): string[] {
-  return items.map((i) => fill(t.newOrder.itemLine, { name: i.nameSnapshot, qty: i.qty }));
+function itemLines(items: { productId: string; nameSnapshot: string; flavorId?: string | null; flavorName?: string | null; qty: number }[]): string[] {
+  const groups = new Map<string, typeof items>();
+  for (const item of items) groups.set(item.productId, [...(groups.get(item.productId) ?? []), item]);
+  return [...groups.values()].map(group => {
+    const name = group[0].nameSnapshot;
+    const qty = group.reduce((n, i) => n + i.qty, 0);
+    return group.some(i => i.flavorId)
+      ? flavorSummaryText(name, flavorQuantities(group), qty)
+      : fill(t.newOrder.itemLine, { name, qty });
+  });
 }
 
 async function renderNewOrder(db: DbClient, n: NotificationToRender): Promise<RenderedEmail> {
@@ -127,13 +137,14 @@ function batchSection(
   const body = lines.map((l) => {
     let core: string;
     if (l.batches === null || l.leftover === null) {
-      core = fill(t.summary.batchLineNoYield, { qty: l.qty });
+      core = fill(t.summary.batchLineNoYield, { unit: l.unitLabel, qty: l.qty });
     } else if (l.leftover === 0) {
-      core = fill(t.summary.batchLineExact, { qty: l.qty, batches: l.batches });
+      core = fill(t.summary.batchLineExact, { unit: l.unitLabel, qty: l.qty, batches: l.batches });
     } else {
-      core = fill(t.summary.batchLine, { qty: l.qty, batches: l.batches, leftover: l.leftover });
+      core = fill(t.summary.batchLine, { unit: l.unitLabel, qty: l.qty, batches: l.batches, leftover: l.leftover });
     }
-    return lines.length > 1 ? fill(t.summary.batchNamePrefix, { name: l.name }) + core : core;
+    if (l.flavors?.length) return flavorSummaryText(l.name, l.flavors, l.qty, l.unitLabel) + "（" + core + "）";
+    return fill(t.summary.batchNamePrefix, { name: l.name }) + core;
   });
   return [header, ...body];
 }
@@ -145,7 +156,6 @@ function renderDailySummary(n: NotificationToRender): RenderedEmail {
 
   // Subject
   const breadQty = breadLines.reduce((sum, l) => sum + l.qty, 0);
-  const tonightCups = s.tonight.lines.reduce((sum, l) => sum + l.qty, 0);
   let subject: string;
   if (s.bread === null) {
     subject = fill(t.summary.subjectClosed, { tomorrowLabel });
@@ -155,8 +165,8 @@ function renderDailySummary(n: NotificationToRender): RenderedEmail {
       subject += fill(t.summary.subjectBread, { count: breadQty, doughG: s.bread.doughG });
     }
   }
-  if (tonightCups > 0) {
-    subject += t.summary.subjectSeparator + fill(t.summary.subjectTonight, { cups: tonightCups });
+  for (const line of s.tonight.lines) {
+    subject += t.summary.subjectSeparator + fill(t.summary.subjectTonight, { name: line.name, qty: line.qty, unit: line.unitLabel });
   }
 
   // Body: sections joined by a blank line; empty sections omitted.
@@ -168,7 +178,9 @@ function renderDailySummary(n: NotificationToRender): RenderedEmail {
     sections.push([
       breadHeader,
       ...breadLines.map((l) =>
-        l.rounds
+        l.flavors?.length
+          ? flavorSummaryText(l.name, l.flavors, l.qty, l.unitLabel) + (l.rounds ? "（" + fill(t.summary.breadLineRounds, { name: l.name, qty: l.qty, rounds: l.rounds.rounds, leftover: l.rounds.leftover }) + "）" : "")
+          : l.rounds
           ? fill(t.summary.breadLineRounds, {
               name: l.name,
               qty: l.qty,

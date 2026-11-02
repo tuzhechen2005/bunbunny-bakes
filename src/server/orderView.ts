@@ -17,7 +17,7 @@ export type StatusKind = "PENDING" | "CONFIRMED" | "BAKING" | "READY" | "COMPLET
 export interface CustomerOrderView {
   orderNo: string;
   /** `imageUrl`: the public product photo (null: none, or the product is gone). */
-  items: { name: string; qty: number; lineTotalCents: number; imageUrl: string | null }[];
+  items: { flavorName: string | null; name: string; qty: number; lineTotalCents: number; imageUrl: string | null }[];
   subtotalCents: number;
   deliveryFeeCents: number;
   totalCents: number;
@@ -75,7 +75,7 @@ export async function getCustomerOrderView(
       cutoffAt: true,
       items: {
         orderBy: { id: "asc" },
-        select: { productId: true, nameSnapshot: true, qty: true, lineTotalCents: true },
+        select: { productId: true, nameSnapshot: true, flavorName: true, qty: true, lineTotalCents: true },
       },
     },
   });
@@ -105,6 +105,7 @@ export async function getCustomerOrderView(
     orderNo: order.orderNo,
     items: sortedItems.map((i) => ({
       name: i.nameSnapshot,
+      flavorName: i.flavorName,
       qty: i.qty,
       lineTotalCents: i.lineTotalCents,
       imageUrl: imageOf.get(i.productId) ?? null,

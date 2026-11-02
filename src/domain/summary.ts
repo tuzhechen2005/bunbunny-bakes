@@ -6,6 +6,7 @@ import { addDays } from "./dates";
 import {
   OCCUPYING_STATUSES,
   type CapacityProduct,
+  type CartLine,
   type DayLimits,
   type DayOrder,
   type LocalDate,
@@ -13,8 +14,10 @@ import {
 
 export interface SummaryProduct extends CapacityProduct {
   name: string;
+  unitLabel: string;
   sortOrder: number;
   batchYield: number | null;
+  flavors?: readonly { id: string }[];
 }
 
 export interface SummaryOrder extends DayOrder {
@@ -38,16 +41,26 @@ export interface SummaryInput {
   products: Record<string, SummaryProduct>;
 }
 
+export interface FlavorQuantity {
+  flavorId: string | null;
+  flavorName: string | null;
+  qty: number;
+}
+
 export interface BreadLine {
+  flavors?: FlavorQuantity[];
   productId: string;
   name: string;
+  unitLabel: string;
   qty: number;
   rounds: { rounds: number; leftover: number } | null;
 }
 
 export interface BatchLine {
+  flavors?: FlavorQuantity[];
   productId: string;
   name: string;
+  unitLabel: string;
   qty: number;
   batches: number | null;
   leftover: number | null;
@@ -78,6 +91,17 @@ export interface DailySummary {
 }
 
 type ProductMap = Record<string, SummaryProduct>;
+type ProductionDay = Omit<SummaryDay, "orders"> & { orders: DayOrder[] };
+
+export interface DayProduction {
+  bread: BreadLine[];
+  independent: BatchLine[];
+  /** Ordered pieces, excluding extra pieces from rounding up rounds/batches. */
+  totalPieces: number;
+  orderCount: number;
+  /** D38: NEW + CONTACTED, consistent with the daily email reminder. */
+  unconfirmedCount: number;
+}
 
 function isPositiveInt(n: number | null): n is number {
   return n !== null && Number.isInteger(n) && n > 0;
@@ -99,12 +123,12 @@ function getDay(input: SummaryInput, date: LocalDate): SummaryDay | undefined {
   return d;
 }
 
-function occupyingOrders(day: SummaryDay | undefined): SummaryOrder[] {
+function occupyingOrders(day: ProductionDay | undefined): DayOrder[] {
   return day ? day.orders.filter((o) => OCCUPYING_STATUSES.includes(o.status)) : [];
 }
 
 /** Day totals per product over the given (already filtered) orders, qty > 0 only. */
-function totalsOf(orders: SummaryOrder[], products: ProductMap): Map<string, number> {
+function totalsOf(orders: DayOrder[], products: ProductMap): Map<string, number> {
   const totals = new Map<string, number>();
   for (const order of orders) {
     for (const line of order.items) {
@@ -114,6 +138,28 @@ function totalsOf(orders: SummaryOrder[], products: ProductMap): Map<string, num
   }
   for (const [id, qty] of totals) if (!(qty > 0)) totals.delete(id);
   return totals;
+}
+
+/** Snapshot names survive renames and deactivation; null remains explicit legacy data. */
+export function flavorQuantities(lines: readonly CartLine[]): FlavorQuantity[] {
+  const totals = new Map<string, FlavorQuantity>();
+  for (const line of lines) {
+    const key = JSON.stringify([line.flavorId ?? null, line.flavorName ?? null]);
+    const old = totals.get(key);
+    if (old) old.qty += line.qty;
+    else totals.set(key, { flavorId: line.flavorId ?? null, flavorName: line.flavorName ?? null, qty: line.qty });
+  }
+  return [...totals.values()].sort((a, b) => {
+    const left = a.flavorName ?? "";
+    const right = b.flavorName ?? "";
+    return (left < right ? -1 : left > right ? 1 : 0) || (a.flavorId ?? "").localeCompare(b.flavorId ?? "");
+  });
+}
+
+function flavorSection(orders: DayOrder[], product: SummaryProduct): { flavors?: FlavorQuantity[] } {
+  const lines = orders.flatMap(o => o.items).filter(l => l.productId === product.id);
+  return product.flavors?.length || lines.some(l => l.flavorId)
+    ? { flavors: flavorQuantities(lines) } : {};
 }
 
 function compareProducts(a: SummaryProduct, b: SummaryProduct): number {
@@ -137,7 +183,7 @@ const isDoughMode = (p: SummaryProduct) =>
   p.capacityMode === "DOUGH_PER_UNIT" || p.capacityMode === "DOUGH_PER_ROUND";
 const isIndependent = (p: SummaryProduct) => p.capacityMode === "INDEPENDENT";
 
-function breadSection(day: SummaryDay | undefined, products: ProductMap): DailySummary["bread"] {
+function breadSection(day: ProductionDay | undefined, products: ProductMap): DailySummary["bread"] {
   const orders = occupyingOrders(day);
   if (!day || (!day.isOpen && orders.length === 0)) return null;
 
@@ -152,7 +198,7 @@ function breadSection(day: SummaryDay | undefined, products: ProductMap): DailyS
         const n = Math.ceil(qty / per);
         rounds = { rounds: n, leftover: n * per - qty };
       }
-      return { productId: product.id, name: product.name, qty, rounds };
+      return { productId: product.id, name: product.name, unitLabel: product.unitLabel, ...flavorSection(orders, product), qty, rounds };
     },
   );
 
@@ -163,16 +209,31 @@ function breadSection(day: SummaryDay | undefined, products: ProductMap): DailyS
   };
 }
 
-function batchLines(day: SummaryDay | undefined, products: ProductMap): BatchLine[] {
-  const totals = totalsOf(occupyingOrders(day), products);
+function batchLines(day: ProductionDay | undefined, products: ProductMap): BatchLine[] {
+  const orders = occupyingOrders(day);
+  const totals = totalsOf(orders, products);
   return sortedEntries(totals, products, isIndependent).map(({ product, qty }) => {
     const y = product.batchYield;
     if (!isPositiveInt(y)) {
-      return { productId: product.id, name: product.name, qty, batches: null, leftover: null };
+      return { productId: product.id, name: product.name, unitLabel: product.unitLabel, ...flavorSection(orders, product), qty, batches: null, leftover: null };
     }
     const batches = Math.ceil(qty / y);
-    return { productId: product.id, name: product.name, qty, batches, leftover: batches * y - qty };
+    return { productId: product.id, name: product.name, unitLabel: product.unitLabel, ...flavorSection(orders, product), qty, batches, leftover: batches * y - qty };
   });
+}
+
+/** Calendar production uses exactly the same lines and rounding as the daily email. */
+export function buildDayProduction(day: ProductionDay | undefined, products: ProductMap): DayProduction {
+  const orders = occupyingOrders(day);
+  const bread = breadSection(day, products)?.lines ?? [];
+  const independent = batchLines(day, products);
+  return {
+    bread,
+    independent,
+    totalPieces: [...bread, ...independent].reduce((total, line) => total + line.qty, 0),
+    orderCount: orders.length,
+    unconfirmedCount: orders.filter((o) => o.status === "NEW" || o.status === "CONTACTED").length,
+  };
 }
 
 function unconfirmedOf(day: SummaryDay | undefined, date: LocalDate): UnconfirmedOrder[] {

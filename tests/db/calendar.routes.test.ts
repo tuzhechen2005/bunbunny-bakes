@@ -88,6 +88,10 @@ describe("calendar routes", () => {
     const json = await res.json();
     expect(json.days).toHaveLength(1);
     expect(json.days[0].usage.doughG).toBe(140);
+    expect(json.days[0].production).toMatchObject({
+      bread: [{ productId: P.redBean, qty: 2 }],
+      independent: [], totalPieces: 2, orderCount: 1, unconfirmedCount: 1,
+    });
 
     const conflict = await PUT(putReq({ ...okBody, isOpen: false }), ctx);
     expect(conflict.status).toBe(409);

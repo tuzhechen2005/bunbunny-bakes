@@ -135,7 +135,7 @@ export function CalendarView() {
           const status = !day ? t.loading : open ? (over ? t.statusOver : t.statusOpen) : t.closed;
           // Fixed cell height: every row of the month is the same height, whatever the text.
           const cls = [
-            "flex h-16 min-w-0 flex-col items-stretch overflow-hidden rounded-lg border p-1 text-left text-[10px] leading-tight sm:h-28",
+            "flex h-20 min-w-0 flex-col items-stretch overflow-hidden rounded-lg border p-1 text-left text-[10px] leading-tight sm:h-32",
             over ? "border-danger bg-danger/10 text-danger" : open ? "border-line bg-card" : "border-line bg-soft/50 text-muted",
             date === today ? "ring-2 ring-accent" : "",
           ].join(" ");
@@ -157,6 +157,11 @@ export function CalendarView() {
               </span>
               {day && open && (
                 <>
+                  {day.orderCount > 0 && (
+                    <span className="mt-0.5 truncate text-[10px]" title={fill(t.totalPieces, { n: day.production.totalPieces })}>
+                      {fill(t.totalPieces, { n: day.production.totalPieces })}
+                    </span>
+                  )}
                   {/* Phone: a dough bar and the order count; the numbers are in the day sheet. */}
                   <span className="mt-auto flex flex-col gap-0.5 sm:hidden">
                     <span className="block h-1.5 overflow-hidden rounded-full bg-line" aria-hidden="true">

@@ -6,6 +6,8 @@ import {
   clearPreferredDate,
   createCartStore,
   getPreferredDate,
+  lineKey,
+  parseLineKey,
   setPreferredDate,
   type StorageLike,
 } from "@/lib/cart";
@@ -250,5 +252,34 @@ describe("preferred date hand-off", () => {
     store.increment("a", 8);
     store.replace([{ productId: "b", qty: 2 }]);
     expect(store.getItems()).toEqual([{ productId: "b", qty: 2 }]);
+  });
+});
+
+describe("F1 flavour lines", () => {
+  const mem = () => { const m = new Map<string, string>(); return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) }; };
+  it("keeps one line per product + flavour and removes by line key", () => {
+    const store = createCartStore(() => mem());
+    store.setQty(lineKey({ productId: "puff", flavorId: "matcha" }), 2, 10);
+    store.setQty(lineKey({ productId: "puff", flavorId: "plain" }), 3, 10);
+    store.increment("bread", 10);
+    expect(store.getItems()).toEqual([
+      { productId: "puff", flavorId: "matcha", qty: 2 },
+      { productId: "puff", flavorId: "plain", qty: 3 },
+      { productId: "bread", qty: 1 },
+    ]);
+    store.decrement(lineKey({ productId: "puff", flavorId: "plain" }));
+    store.remove(lineKey({ productId: "puff", flavorId: "matcha" }));
+    expect(store.getItems()).toEqual([{ productId: "puff", flavorId: "plain", qty: 2 }, { productId: "bread", qty: 1 }]);
+    expect(store.count()).toBe(3);
+  });
+  it("sanitises stored flavour lines and merges duplicates by key", () => {
+    const s = mem();
+    s.setItem(CART_STORAGE_KEY, JSON.stringify([
+      { productId: "puff", flavorId: "matcha", qty: 1 }, { productId: "puff", flavorId: "matcha", qty: 2 },
+      { productId: "puff", qty: 1 }, { productId: "bad::id", qty: 1 },
+    ]));
+    const store = createCartStore(() => s);
+    expect(store.getItems()).toEqual([{ productId: "puff", flavorId: "matcha", qty: 3 }, { productId: "puff", qty: 1 }]);
+    expect(parseLineKey("puff::matcha")).toEqual({ productId: "puff", flavorId: "matcha" });
   });
 });

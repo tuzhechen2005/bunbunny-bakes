@@ -308,6 +308,7 @@ describe("CHECK constraints", () => {
     const p = await createDefaultProducts();
     await createOpenDate("2026-10-24");
     const o = await createOrder({ date: "2026-10-24", items: [{ productId: p.redBean, qty: 1 }] });
+    await db.orderItem.deleteMany({ where: { orderId: o.id } });
     const item = (data: Record<string, unknown>) =>
       db.orderItem.create({
         data: {
@@ -518,6 +519,7 @@ describe("loadSettings / loadProductMap / loadDayContext", () => {
     );
     expect(ctx.products[archivedBun.id]).toEqual({
       id: archivedBun.id,
+      flavors: [],
       capacityMode: "DOUGH_PER_UNIT",
       doughG: 100,
       roundG: null,
@@ -526,6 +528,7 @@ describe("loadSettings / loadProductMap / loadDayContext", () => {
       leadDays: 1,
       pickupWeekdays: [],
       name: "下架面包",
+      unitLabel: "个",
       status: "ARCHIVED",
       unitPriceCents: 300,
       bundleSize: 4,
@@ -673,7 +676,7 @@ describe("AppError", () => {
       [
         "VALIDATION", "ORDERING_DISABLED", "DATE_CLOSED", "CUTOFF_PASSED", "PRODUCT_UNAVAILABLE",
         "QTY_LIMIT", "FULL", "DELIVERY_FULL", "RATE_LIMITED", "NOT_CANCELLABLE", "OVER_LIMIT",
-        "STALE", "UNAUTHORIZED", "NOT_FOUND", "WEEKDAY_UNAVAILABLE",
+        "STALE", "UNAUTHORIZED", "NOT_FOUND", "WEEKDAY_UNAVAILABLE", "FLAVOR_REQUIRED", "FLAVOR_UNAVAILABLE",
       ].sort(),
     );
     const statuses = Object.fromEntries(ERROR_CODES.map((c) => [c, new AppError(c).httpStatus]));

@@ -1,5 +1,6 @@
 // Date availability for a cart (CAPACITY_RULES.md §7, §7.1). Pure: `now` is a parameter.
 
+import { mergeCartLines } from "./cart";
 import { checkDay } from "./capacity";
 import { cutoffAt as computeCutoffAt, cutoffLabel, isBeforeCutoff, leadDaysOf } from "./cutoff";
 import { addDays, compareLocalDate, localDateOf } from "./dates";
@@ -158,13 +159,9 @@ function visibleDays(input: AvailabilityInput): OpenDay[] {
     .sort((a, b) => compareLocalDate(a.date, b.date));
 }
 
-/** Merged known lines (one per product, first-seen order): what hints work on. */
+/** Merged known lines (one per product/flavour, first-seen order): what hints work on. */
 function hintCart(input: AvailabilityInput): CartLine[] {
-  const totals = new Map<string, number>();
-  for (const line of knownLines(input.cart, input.products)) {
-    totals.set(line.productId, (totals.get(line.productId) ?? 0) + line.qty);
-  }
-  return [...totals].map(([productId, qty]) => ({ productId, qty }));
+  return mergeCartLines(knownLines(input.cart, input.products));
 }
 
 function planDay(

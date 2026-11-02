@@ -2,6 +2,7 @@
 // detail view with its audit log (API_SPEC.md §3, PAGES.md /admin/orders). Business
 // writes live in orders.ts / orderAdmin.ts.
 
+import { copy } from "@/copy";
 import { z } from "zod";
 import { dayLabel, isLocalDate, localDateOf } from "@/domain/dates";
 import { adminTransition } from "@/domain/status";
@@ -44,7 +45,7 @@ const localDate = z.string().refine(isLocalDate, { message: "Invalid date (YYYY-
 const statusEnum = z.enum(ORDER_STATUSES);
 
 export const listOrdersQuerySchema = z.object({
-  date: localDate.optional(),
+  date: z.union([z.literal("all"), localDate]).optional(),
   from: localDate.optional(),
   to: localDate.optional(),
   status: z
@@ -113,8 +114,12 @@ export function escapeLike(q: string): string {
 export async function listOrders(db: DbClient, query: ListOrdersQuery, now: Date): Promise<OrderList> {
   const today = localDateOf(now);
   const and: Prisma.OrderWhereInput[] = [];
+  const allDates = query.date === "all";
+  const direction = allDates ? "desc" : "asc";
 
-  if (query.date) {
+  if (allDates) {
+    // Explicit all-history mode has no pickup-date bounds (D137).
+  } else if (query.date) {
     and.push({ pickupDate: toDbDate(query.date) });
   } else if (query.from || query.to) {
     and.push({
@@ -143,8 +148,8 @@ export async function listOrders(db: DbClient, query: ListOrdersQuery, now: Date
     const c = parseCursor(query.cursor);
     and.push({
       OR: [
-        { pickupDate: { gt: toDbDate(c.date) } },
-        { pickupDate: toDbDate(c.date), seq: { gt: c.seq } },
+        { pickupDate: { [allDates ? "lt" : "gt"]: toDbDate(c.date) } },
+        { pickupDate: toDbDate(c.date), seq: { [allDates ? "lt" : "gt"]: c.seq } },
       ],
     });
   }
@@ -152,7 +157,7 @@ export async function listOrders(db: DbClient, query: ListOrdersQuery, now: Date
   const [rows, products] = await Promise.all([
     db.order.findMany({
       where: { AND: and },
-      orderBy: [{ pickupDate: "asc" }, { seq: "asc" }],
+      orderBy: [{ pickupDate: direction }, { seq: direction }],
       take: ORDERS_PAGE_SIZE + 1,
       include: { items: { orderBy: itemOrder } },
     }),
@@ -193,14 +198,17 @@ export async function listOrders(db: DbClient, query: ListOrdersQuery, now: Date
 }
 
 /** 「红豆包×4、奶酪角×4」 from the snapshots. */
-export function itemsSummary(items: { nameSnapshot: string; qty: number }[]): string {
-  return items.map((i) => `${i.nameSnapshot}×${i.qty}`).join("、");
+export function itemsSummary(items: { nameSnapshot: string; flavorName?: string | null; qty: number }[]): string {
+  return items.map((i) => `${i.nameSnapshot}（${i.flavorName ?? copy.flavors.unspecified}）×${i.qty}`).join("、");
 }
 
 // ---------------------------------------------------------------------------------------
 // Detail
 
 export interface OrderDetailItem {
+  flavorId: string | null;
+  flavorName: string | null;
+  flavorLabel: string;
   id: string;
   productId: string;
   name: string;
@@ -281,6 +289,9 @@ export async function getOrderDetail(db: DbClient, id: string): Promise<OrderDet
       id: i.id,
       productId: i.productId,
       name: i.nameSnapshot,
+      flavorId: i.flavorId,
+      flavorName: i.flavorName,
+      flavorLabel: i.flavorName ?? copy.flavors.unspecified,
       qty: i.qty,
       unitPriceCents: i.unitPriceCents,
       bundleSize: i.bundleSize,

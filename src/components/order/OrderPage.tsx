@@ -267,7 +267,7 @@ export function OrderPage() {
               <ul className="m-0 list-none p-0">
                 {order.items.map((item, i) => (
                   <li key={i} className="flex items-baseline justify-between gap-3 text-[14.5px] leading-8">
-                    <span className="min-w-0 break-words text-c-grey">{fill(t.itemLine, { name: item.name, qty: item.qty })}</span>
+                    <span className="min-w-0 break-words text-c-grey">{fill(t.itemLine, { name: item.flavorName ? `${item.name}${copy.customer.home.flavorJoin}${item.flavorName}` : item.name, qty: item.qty })}</span>
                     <span className="shrink-0 font-num font-bold tabular-nums">{formatCents(item.lineTotalCents)}</span>
                   </li>
                 ))}

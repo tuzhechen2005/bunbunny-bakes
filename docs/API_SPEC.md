@@ -18,6 +18,8 @@
 | `CUTOFF_PASSED` | 409 | 已截止 |
 | `PRODUCT_UNAVAILABLE` | 409 | 有商品暂停或下架 |
 | `QTY_LIMIT` | 409 | 超过每单上限 |
+| `FLAVOR_REQUIRED` | 400 | 商品有在售口味但该行没有选择，附 productId |
+| `FLAVOR_UNAVAILABLE` | 400 | 口味不存在、已停用或不属于该商品，附 productId、flavorId |
 | `FULL` | 409 | 面团或独立限额已满（附 `suggestion` 或 null） |
 | `DELIVERY_FULL` | 409 | 配送已满，自提仍可 |
 | `WEEKDAY_UNAVAILABLE` | 409 | 购物车里有商品这天（星期几）不能取（D115），附 `productIds` |
@@ -240,14 +242,14 @@
 | POST | `/api/admin/password-reset/confirm` | `{ token, newPassword }`（至少 10 位）；成功后其他所有登录失效 |
 | GET | `/api/admin/dashboard` | 接单开关、今天和明天各状态的订单数、未确认提醒、未来 14 天的名额概况 |
 | POST | `/api/admin/ordering` | `{ enabled }` |
-| GET | `/api/admin/orders` | 筛选：`date`、`status`（可多选）、`fulfillment`、`paid`、`productId`、`q`（订单号或微信号） |
+| GET | `/api/admin/orders` | 筛选：`date`（日期或 `all`）、`from`、`to`、`status`（可多选）、`fulfillment`、`paid`、`productId`、`q`（订单号或微信号）；`cursor` 翻页，见下 |
 | GET | `/api/admin/orders/{id}` | 完整信息 + 专属链接 + 操作日志 |
 | POST | `/api/admin/orders` | 代客下单：`{ items, pickupDate, fulfillment, wechatId, note, override?, reason? }`，从 `CONFIRMED` 开始 |
 | PATCH | `/api/admin/orders/{id}` | 改单：上面任意字段 + `expectedUpdatedAt`；超限时返回 `OVER_LIMIT` |
 | POST | `/api/admin/orders/{id}/status` | `{ to, reason?, expectedUpdatedAt }`；只能往前走；`REJECTED`、`CANCELLED` 必须写原因 |
 | POST | `/api/admin/orders/{id}/correct-status` | `{ to, reason }`：点错时往回改，必须写原因 |
 | POST | `/api/admin/orders/{id}/payment` | `{ paid, method? }` |
-| GET | `/api/admin/calendar?from=&to=` | 每天：是否开放、各项上限、已用量、超限标记 |
+| GET | `/api/admin/calendar?from=&to=` | 每天：是否开放、各项上限、已用量、超限标记、订单数和生产汇总 `production`（D138，见下） |
 | PUT | `/api/admin/dates/{date}` | `{ isOpen, doughLimitG, deliveryEnabled, deliveryLimit, productLimits: { productId: n }, note }`；把上限调到低于已用量时返回警告，要店主确认 |
 | PATCH | `/api/admin/products/{id}` | 修改；改了名额相关字段时，返回因此超限的开放日期。`pickupWeekdays`（D115）：0–6 的整数数组、不能重复，存成从小到大，选满 7 天存成 `[]`（= 每天），格式不对 `VALIDATION`；改动写 `product.update` 日志 |
 | GET/POST | `/api/admin/products` | 列表 / 新增；每个商品带 `images: [{id, url, sortOrder}]`（封面在前）和 `fieldColor`（`#RRGGBB` 或 null，大小写不限、存成大写，格式不对 `VALIDATION`） |
@@ -263,6 +265,24 @@
 | POST | `/api/admin/ledger/manual` | 记一笔。`{ date, amountCents（整数 > 0）, note（1–100 字）, paidMethod（WECHAT/ZELLE/VENMO/CASH/OTHER）, items?: [{ productId 或 name（自由填写，≤ 60 字）, qty 1–999 }]（最多 30 行） }`；返回 201 `{ entry }`；写 `manual_income.create` 日志（entity `manual_income`） |
 | PATCH | `/api/admin/ledger/manual/{id}` | 修改（字段同上，整条替换，商品行整体替换）；返回 `{ entry }`；日志 `manual_income.update`，记录修改前后的值；找不到 `NOT_FOUND` |
 | DELETE | `/api/admin/ledger/manual/{id}` | 删除（连同商品行）；返回 `{ ok: true }`；日志 `manual_income.delete`，记录删除前的值；找不到 `NOT_FOUND` |
+
+**商品单位（D173）**：`GET/POST /api/admin/products` 和 `PATCH /api/admin/products/{id}` 返回的商品包含 `unitLabel`。POST 可省略，默认「个」；PATCH 省略保留当前值。输入必须是字符串，去除首尾空白后 1–4 个 Unicode 字符（支持 1–2 字中文单位或最长 4 字符的短单位），空白、null、非字符串或超长返回 422 `VALIDATION`。修改写入审计日志。仪表盘、日历生产汇总及每日邮件的每条商品记录均包含 `unitLabel`；展示数量和批次余量使用该单位，邮件标题按商品名称及单位分别列出，不将所有独立产能商品合计成布蕾。
+
+**订单列表日期与分页（D137）**：未指定 `date/from/to` 时仍只显示芝加哥当天及以后，按 `pickupDate ASC, seq ASC`。`date=YYYY-MM-DD` 只看该天；`from/to` 是含首尾的日期范围。`date=all` 不设日期上下界（优先于 `from/to`），按 `pickupDate DESC, seq DESC`，其他筛选仍有效。返回 `{ orders, nextCursor, today, products }`；每页最多 50 笔，`nextCursor` 为末笔的 `YYYY-MM-DD:seq`，无下一页时为 `null`。下一页须保留相同筛选；升序取游标之后的较大日期／同日较大序号，全部日期模式取较小日期／同日较小序号。
+
+**日历生产汇总（D138）**：仅店主会话可访问，未登录返回 401；不加到任何顾客接口。返回 `{ independentProducts, days }`，日期范围含首尾，最多 92 天。每个 day 保留 `date/isOpen/hasRow/note/limits/overrides/usage/orderCount/over`，新增：
+
+```ts
+production: {
+  bread: { productId, name, unitLabel, qty, rounds: { rounds, leftover } | null }[],
+  independent: { productId, name, unitLabel, qty, batches: number | null, leftover: number | null }[],
+  totalPieces: number,
+  orderCount: number,
+  unconfirmedCount: number
+}
+```
+
+`bread/independent` 复用每日汇总的商品排序、当前商品参数和整天合计后的大圆包／批次取整（包含已有订单引用的暂停、下架商品）。`totalPieces` 为订单件数之和，不含取整多出的余量；`orderCount` 与 day 原有订单数相同，排除 `CANCELLED/REJECTED`；`unconfirmedCount` 统计 `NEW + CONTACTED`（D38），与每日汇总邮件一致。关闭日期上已有订单照算；无有效订单返回空行数组、三个计数均为 0。`PUT /api/admin/dates/{date}` 成功也返回此 day 形状。
 
 **`expectedUpdatedAt`**：店主在两个页面里同时改同一笔订单时，后提交的那个返回 `STALE`，提示刷新，不会悄悄覆盖。
 
@@ -308,3 +328,63 @@
 | `ASSISTANT_MODEL` | 可选，默认 `deepseek-chat` |
 
 `.env.example` 进仓库（只有名称，没有值）；`.env` 不进仓库。
+
+## F1 — flavour API contract (D175; frontend handoff)
+
+`GET /api/menu` always adds `flavors: [{id, name, priceCents}]` and `priceFromCents` to each
+product. Flavours are active only, ordered by `sort ASC, id ASC`. The from-price is the minimum
+active flavour price, falling back to the product's `unitPriceCents` when there are none.
+A flavour line costs `qty * priceCents`; product bundle pricing does not apply to flavour lines.
+Products without active flavours retain their original pricing and bundles.
+
+`POST /api/availability` (the existing cart quote/date endpoint), `POST /api/orders`, admin
+create and admin PATCH accept `{productId, flavorId?: string | null, qty}` per item.
+Duplicates merge only by product + flavour. All flavours together count towards the product's
+per-order limit and daily capacity, including rounding the whole day's total for round products.
+Client prices, totals and names are ignored. Missing selection on a flavoured product returns
+400 `FLAVOR_REQUIRED`; unknown, inactive or wrong-product flavour returns 400 `FLAVOR_UNAVAILABLE`.
+Admin override cannot bypass flavour validation.
+
+Admin edits retain DB price/name snapshots for the same product + flavour (D45); a new flavour
+uses current DB pricing and must be active. An existing product + flavour line may retain an
+inactive flavour; ownership is still validated and its stored price/name snapshots are retained.
+Omitting `items` preserves historical lines, including inactive flavours, for metadata-only edits.
+An existing null-flavour line can be retained by explicitly sending `flavorId: null` on that
+product; omission does not grant the legacy exemption. New orders have no legacy exemption.
+For products with no active flavours, omission/null retains the ordinary product pricing flow.
+
+`GET /api/o/{viewToken}` items add `flavorName: string | null` from the snapshot. Admin order
+detail items add `flavorId`, `flavorName`, and `flavorLabel`; the latter displays the Chinese
+legacy label from `copy.flavors.unspecified` for nulls. Admin list `itemsSummary` includes this label.
+Availability REDUCE/SPLIT `remove/here/rest` retain `flavorId`; apply changes by product + flavour,
+keeping original cart order. Assistant cart/tool items also accept flavorId, and get_menu exposes
+flavours; a proposal cannot omit a required flavour.
+
+### Admin flavour management
+
+All routes require the admin session; writes check Origin and invalidate the menu cache.
+Changes and AuditLog rows commit together. Actions: `product.flavor.create/update/reorder`,
+entityType `Product`, entityId the product ID, with before/after snapshots. No hard-delete API:
+use `active: false`; DB foreign keys prevent deleting a flavour referenced by an order.
+
+| Method | Path | Contract |
+|---|---|---|
+| GET | `/api/admin/products` | Each product includes all flavours, including inactive, with id/productId/name/priceCents/active/sort/createdAt/updatedAt |
+| POST | `/api/admin/products/{id}/flavors` | `{name, priceCents, active?, sort?}`; active defaults true, sort defaults to append; 201 `{product}` with complete flavours |
+| PATCH | `/api/admin/products/{id}/flavors/{flavorId}` | `{name?, priceCents?, active?, sort?}`; 200 `{product}`; unknown/wrong-product ID returns 404 |
+| PUT | `/api/admin/products/{id}/flavors/order` | `{ids: string[]}` must contain every flavour (including inactive), exactly once; mismatch 409 STALE; 200 `{product}`; unchanged order writes no audit |
+| GET | `/api/admin/order-form` | Products include flavours with id/name/priceCents/active/sort; picker permits active selections; historical names come from order snapshots |
+
+Name is trimmed, 1–12 Unicode code points. priceCents is an integer 0–1,000,000;
+sort is an integer -1,000,000 through 1,000,000. Invalid bodies return 422 VALIDATION.
+A flavour cannot change productId.
+
+### Production and nightly summaries
+
+Calendar `production.bread/independent`, dashboard bread/tonightBrulee, and daily-summary
+bread/tonight/tomorrowNight product lines add `flavors` when the product has flavour definitions
+or flavour history: `[{flavorId: string | null, flavorName: string | null, qty: number}]`.
+Names are snapshots; null gets the legacy display label. Product qty/rounds/batches/leftover
+remain based on the combined product total. Render each flavour's quantity followed by the
+product total; see the Chinese example and picker requirements in PAGES.md.
+Summary quantities use Product.unitLabel (D173).

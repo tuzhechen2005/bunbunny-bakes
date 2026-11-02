@@ -23,6 +23,10 @@ export interface MenuProduct {
   leadDays: number;
   /** Chicago weekdays the product can be picked up (0 = Sunday ... 6 = Saturday); empty = every day (C1). */
   pickupWeekdays: number[];
+  /** Active flavours (F1); a product with flavours needs one chosen per cart line. */
+  flavors?: { id: string; name: string; priceCents: number }[];
+  /** Cheapest active flavour, or unitPriceCents. */
+  priceFromCents?: number;
 }
 
 export interface Menu {
@@ -147,7 +151,7 @@ export function fetchAvailability(
 ): Promise<ApiResult<Availability>> {
   return request<Availability>("/api/availability", {
     method: "POST",
-    body: { items: items.map(({ productId, qty }) => ({ productId, qty })), fulfillment },
+    body: { items: items.map(({ productId, qty, flavorId }) => (flavorId ? { productId, flavorId, qty } : { productId, qty })), fulfillment },
   });
 }
 

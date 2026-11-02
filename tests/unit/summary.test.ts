@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSummary,
+  buildDayProduction,
   type SummaryDay,
   type SummaryInput,
   type SummaryOrder,
@@ -13,6 +14,7 @@ const products: Record<string, SummaryProduct> = {
   redBean: {
     id: "redBean",
     name: "奶酥红豆包",
+    unitLabel: "个",
     sortOrder: 1,
     batchYield: null,
     capacityMode: "DOUGH_PER_UNIT",
@@ -25,6 +27,7 @@ const products: Record<string, SummaryProduct> = {
   cheeseBun: {
     id: "cheeseBun",
     name: "岩烧乳酪包",
+    unitLabel: "个",
     sortOrder: 2,
     batchYield: null,
     capacityMode: "DOUGH_PER_UNIT",
@@ -37,6 +40,7 @@ const products: Record<string, SummaryProduct> = {
   wedge: {
     id: "wedge",
     name: "奶酪角",
+    unitLabel: "个",
     sortOrder: 3,
     batchYield: null,
     capacityMode: "DOUGH_PER_ROUND",
@@ -49,6 +53,7 @@ const products: Record<string, SummaryProduct> = {
   brulee: {
     id: "brulee",
     name: "焦糖布蕾",
+    unitLabel: "杯",
     sortOrder: 4,
     batchYield: 3,
     capacityMode: "INDEPENDENT",
@@ -97,6 +102,32 @@ function input(days: SummaryDay[], p: Record<string, SummaryProduct> = products)
   return { today: X, days: Object.fromEntries(days.map((d) => [d.date, d])), products: p };
 }
 
+describe("buildDayProduction", () => {
+  it("returns empty totals for missing days or only cancelled/rejected orders", () => {
+    const empty = { bread: [], independent: [], totalPieces: 0, orderCount: 0, unconfirmedCount: 0 };
+    expect(buildDayProduction(undefined, products)).toEqual(empty);
+    expect(buildDayProduction(day(X1, [
+      order("1", { wedge: 9 }, { status: "CANCELLED" }),
+      order("2", { brulee: 9 }, { status: "REJECTED" }),
+    ]), products)).toEqual(empty);
+  });
+
+  it("shares summary lines and counts ordered pieces, not rounded production yield", () => {
+    const d = day(X1, [
+      order("1", { wedge: 3, brulee: 2 }, { status: "NEW" }),
+      order("2", { wedge: 2, brulee: 2 }, { status: "CONTACTED" }),
+    ], false);
+    const summary = buildSummary(input([d]));
+    expect(buildDayProduction(d, products)).toEqual({
+      bread: summary.bread!.lines,
+      independent: summary.tonight.lines,
+      totalPieces: 9,
+      orderCount: 2,
+      unconfirmedCount: 2,
+    });
+  });
+});
+
 describe("buildSummary", () => {
   it("CAPACITY_RULES §10 example", () => {
     const s = buildSummary(
@@ -112,16 +143,16 @@ describe("buildSummary", () => {
     expect(s.dayAfter).toBe(X2);
     expect(s.bread).toEqual({
       lines: [
-        { productId: "redBean", name: "奶酥红豆包", qty: 6, rounds: null },
-        { productId: "cheeseBun", name: "岩烧乳酪包", qty: 6, rounds: null },
-        { productId: "wedge", name: "奶酪角", qty: 6, rounds: { rounds: 2, leftover: 2 } },
+        { productId: "redBean", name: "奶酥红豆包", unitLabel: "个", qty: 6, rounds: null },
+        { productId: "cheeseBun", name: "岩烧乳酪包", unitLabel: "个", qty: 6, rounds: null },
+        { productId: "wedge", name: "奶酪角", unitLabel: "个", qty: 6, rounds: { rounds: 2, leftover: 2 } },
       ],
       doughG: 1520,
       doughLimitG: 1600,
     });
     expect(s.tonight).toEqual({
       date: X1,
-      lines: [{ productId: "brulee", name: "焦糖布蕾", qty: 20, batches: 7, leftover: 1 }],
+      lines: [{ productId: "brulee", name: "焦糖布蕾", unitLabel: "杯", qty: 20, batches: 7, leftover: 1 }],
     });
     expect(s.tomorrowNight).toEqual({ date: X2, lines: [] });
     expect(s.isEmpty).toBe(false);
@@ -136,7 +167,7 @@ describe("buildSummary", () => {
     );
     expect(s.tomorrowNight).toEqual({
       date: X2,
-      lines: [{ productId: "brulee", name: "焦糖布蕾", qty: 9, batches: 3, leftover: 0 }],
+      lines: [{ productId: "brulee", name: "焦糖布蕾", unitLabel: "杯", qty: 9, batches: 3, leftover: 0 }],
     });
   });
 
@@ -149,7 +180,7 @@ describe("buildSummary", () => {
       expect(s.bread).toBeNull();
       expect(s.tonight).toEqual({ date: X1, lines: [] });
       expect(s.tomorrowNight.lines).toEqual([
-        { productId: "brulee", name: "焦糖布蕾", qty: 9, batches: 3, leftover: 0 },
+        { productId: "brulee", name: "焦糖布蕾", unitLabel: "杯", qty: 9, batches: 3, leftover: 0 },
       ]);
       expect(s.deliveries).toEqual({ pickup: 0, delivery: 0 });
       expect(s.isEmpty).toBe(false);
@@ -169,14 +200,14 @@ describe("buildSummary", () => {
     );
     expect(s.bread).toEqual({
       lines: [
-        { productId: "redBean", name: "奶酥红豆包", qty: 2, rounds: null },
-        { productId: "wedge", name: "奶酪角", qty: 1, rounds: { rounds: 1, leftover: 3 } },
+        { productId: "redBean", name: "奶酥红豆包", unitLabel: "个", qty: 2, rounds: null },
+        { productId: "wedge", name: "奶酪角", unitLabel: "个", qty: 1, rounds: { rounds: 1, leftover: 3 } },
       ],
       doughG: 480,
       doughLimitG: 1200,
     });
     expect(s.tonight.lines).toEqual([
-      { productId: "brulee", name: "焦糖布蕾", qty: 3, batches: 1, leftover: 0 },
+      { productId: "brulee", name: "焦糖布蕾", unitLabel: "杯", qty: 3, batches: 1, leftover: 0 },
     ]);
     expect(s.deliveries).toEqual({ pickup: 2, delivery: 0 });
   });
@@ -205,13 +236,13 @@ describe("buildSummary", () => {
         ]),
       ]),
     );
-    expect(s.bread?.lines).toEqual([{ productId: "redBean", name: "奶酥红豆包", qty: 3, rounds: null }]);
+    expect(s.bread?.lines).toEqual([{ productId: "redBean", name: "奶酥红豆包", unitLabel: "个", qty: 3, rounds: null }]);
     expect(s.bread?.doughG).toBe(210);
     expect(s.tonight.lines).toEqual([
-      { productId: "brulee", name: "焦糖布蕾", qty: 3, batches: 1, leftover: 0 },
+      { productId: "brulee", name: "焦糖布蕾", unitLabel: "杯", qty: 3, batches: 1, leftover: 0 },
     ]);
     expect(s.tomorrowNight.lines).toEqual([
-      { productId: "brulee", name: "焦糖布蕾", qty: 9, batches: 3, leftover: 0 },
+      { productId: "brulee", name: "焦糖布蕾", unitLabel: "杯", qty: 9, batches: 3, leftover: 0 },
     ]);
     expect(s.deliveries).toEqual({ pickup: 1, delivery: 1 });
     expect(s.unconfirmed.map((u) => u.orderNo)).toEqual(["1030-004", "1031-001", "1031-004"]);
@@ -263,17 +294,17 @@ describe("buildSummary", () => {
       ...products,
       a: { ...products.redBean, id: "a", name: "B面包", sortOrder: 0 },
       b: { ...products.redBean, id: "b", name: "A面包", sortOrder: 0 },
-      pudding: { ...products.brulee, id: "pudding", name: "布丁", sortOrder: 0, batchYield: null },
-      jelly: { ...products.brulee, id: "jelly", name: "果冻", sortOrder: 9, batchYield: 0 },
+      pudding: { ...products.brulee, id: "pudding", name: "布丁", unitLabel: "杯", sortOrder: 0, batchYield: null },
+      jelly: { ...products.brulee, id: "jelly", name: "果冻", unitLabel: "杯", sortOrder: 9, batchYield: 0 },
     };
     const s = buildSummary(
       input([day(X1, [order("1030-001", { redBean: 1, a: 1, b: 1, brulee: 4, pudding: 5, jelly: 2 })])], p),
     );
     expect(s.bread?.lines.map((l) => l.productId)).toEqual(["b", "a", "redBean"]);
     expect(s.tonight.lines).toEqual([
-      { productId: "pudding", name: "布丁", qty: 5, batches: null, leftover: null },
-      { productId: "brulee", name: "焦糖布蕾", qty: 4, batches: 2, leftover: 2 },
-      { productId: "jelly", name: "果冻", qty: 2, batches: null, leftover: null },
+      { productId: "pudding", name: "布丁", unitLabel: "杯", qty: 5, batches: null, leftover: null },
+      { productId: "brulee", name: "焦糖布蕾", unitLabel: "杯", qty: 4, batches: 2, leftover: 2 },
+      { productId: "jelly", name: "果冻", unitLabel: "杯", qty: 2, batches: null, leftover: null },
     ]);
   });
 
@@ -282,7 +313,7 @@ describe("buildSummary", () => {
       input([day(X1, [order("1030-001", { wedge: 3 }), order("1030-002", { wedge: 2 })])]),
     );
     expect(s.bread?.lines).toEqual([
-      { productId: "wedge", name: "奶酪角", qty: 5, rounds: { rounds: 2, leftover: 3 } },
+      { productId: "wedge", name: "奶酪角", unitLabel: "个", qty: 5, rounds: { rounds: 2, leftover: 3 } },
     ]);
     expect(s.bread?.doughG).toBe(680);
   });
@@ -310,4 +341,12 @@ describe("buildSummary", () => {
     expect(s.tomorrow).toBe("2026-12-31");
     expect(s.dayAfter).toBe("2027-01-01");
   });
+});
+
+it("keeps puff and brulee units distinct in production and nightly summaries", () => {
+  const p = { ...products, puff: { ...products.brulee, id: "puff", name: "泡芙", unitLabel: "个", batchYield: null } };
+  const d = day(X1, [order("mixed", { puff: 5, brulee: 4 })]);
+  const lines = buildDayProduction(d, p).independent;
+  expect(lines).toContainEqual({ productId: "puff", name: "泡芙", unitLabel: "个", qty: 5, batches: null, leftover: null });
+  expect(buildSummary(input([d], p)).tonight.lines).toEqual(lines);
 });

@@ -11,8 +11,12 @@ export interface ProductImageDto {
 }
 
 /** The product as the admin API returns it (dates arrive as ISO strings). */
+export interface FlavorDto { id: string; productId: string; name: string; priceCents: number; active: boolean; sort: number }
+
 export interface ProductDto {
   id: string;
+  /** F1: all flavours incl. inactive, in sort order. */
+  flavors?: FlavorDto[];
   name: string;
   description: string;
   /** The cover (images[0]). */

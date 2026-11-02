@@ -55,6 +55,7 @@ export const DEFAULT_PRODUCTS = [
   },
   {
     name: "焦糖布蕾",
+    unitLabel: "杯",
     unitPriceCents: 249,
     bundleSize: 4,
     bundlePriceCents: 899,
