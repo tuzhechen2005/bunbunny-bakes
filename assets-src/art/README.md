@@ -349,3 +349,74 @@ Use case: stylized-concept. Production Bunbunny Bakes in-game sprite. Reference 
 ### ART-2 validation
 
 All 17 final WebPs decode at the explicitly requested dimensions and retain transparent and opaque pixels. Total game folder payload: **170,264 bytes (170.3 KB)**, below 800,000 bytes; each sprite is below 40,000 bytes. Sixteen sprites use lossy quality 82; the 98-byte arm uses `cwebp -lossless -q 82 -m 6` so decoded top and bottom pixel rows match exactly. Final contact sheet visually reviewed for style, silhouettes, no lettering, tongs direction and empty plate. Generated originals remain ignored under `sources/`; no code or commits changed.
+
+
+## ART-3 — shop and runner power-up art (2026-11-01)
+
+Generated with built-in `image_gen`, one call per asset, `transparent_background: true`. References: `public/brand/art/hub-hero.webp` (ART-1 clay material and mascot identity) and `public/brand/art/icon-coin.webp` (coin design); authoritative logo and `docs/GAME_ART.md` inspected. Sources below are git-ignored.
+
+Export: original generated alpha preserved; Pillow Lanczos contain for hero, alpha-bounds crop and centered 86% fit for icons; `cwebp -q 82 -m 6`. Outputs: `public/brand/art/shop/`.
+
+### ART-3 exact generation prompts
+
+#### shop-hero
+
+Source: `sources/shop-hero.png`; export: `shop-hero.webp`, 1080 × 640; transparent: true.
+
+Use case: stylized-concept. New production Bunbunny Bakes asset. Reference 1 locks soft matte molded clay material and mascot identity; reference 2 locks the existing gold bunny-face coin. Match warm dawn upper-left illumination, simple chunky rounded geometry, restrained cream #F6EEDC, paper #FFF8EC, dough #E7BF7F, gold #F2C14E, terracotta #C8866C, cocoa #745742, sage #A6B39A. Mascot/emblem when requested: cream TOAST-SLICE head, flat bottom, nearly vertical rounded sides, bread shoulders, two long ears with cocoa inner ears, dark dot eyes, tiny omega mouth, rosy cheeks; body wears cocoa apron. Actual alpha transparent background, no backdrop, no text, letters, numerals, watermark. Single asset, not a sheet. Landscape 27:16 transparent shop diorama: toast bunny behind a little terracotta clay shop counter, bread on counter, freestanding shelves of jars and breads on the RIGHT behind bunny, a small blank chalkboard-shaped sign on counter. Bunny placed right of center. Entire top-left quadrant is EMPTY transparent space reserved for UI title. Shelves confined to right half, counter extends across bottom. Complete isolated miniature without wall or floor, all edges inside canvas, warm inviting light, ears fully visible. No writing on sign.
+
+#### item-bomb
+
+Source: `sources/item-bomb.png`; export: `item-bomb.webp`, 256 × 256; transparent: true.
+
+Use case: stylized-concept. New production Bunbunny Bakes asset. Reference 1 locks soft matte molded clay material and mascot identity; reference 2 locks the existing gold bunny-face coin. Match warm dawn upper-left illumination, simple chunky rounded geometry, restrained cream #F6EEDC, paper #FFF8EC, dough #E7BF7F, gold #F2C14E, terracotta #C8866C, cocoa #745742, sage #A6B39A. Mascot/emblem when requested: cream TOAST-SLICE head, flat bottom, nearly vertical rounded sides, bread shoulders, two long ears with cocoa inner ears, dark dot eyes, tiny omega mouth, rosy cheeks; body wears cocoa apron. Actual alpha transparent background, no backdrop, no text, letters, numerals, watermark. Single asset, not a sheet. Square icon: one cute round cream flour sack tied with cocoa string, a chunky white puff of flour playfully bursting out above the tied neck, a few small flour motes. No explosive hardware. Object fills 82% canvas with transparent margin. Clearly readable at 32 pixels.
+
+#### item-bell
+
+Source: `sources/item-bell.png`; export: `item-bell.webp`, 256 × 256; transparent: true.
+
+Use case: stylized-concept. New production Bunbunny Bakes asset. Reference 1 locks soft matte molded clay material and mascot identity; reference 2 locks the existing gold bunny-face coin. Match warm dawn upper-left illumination, simple chunky rounded geometry, restrained cream #F6EEDC, paper #FFF8EC, dough #E7BF7F, gold #F2C14E, terracotta #C8866C, cocoa #745742, sage #A6B39A. Mascot/emblem when requested: cream TOAST-SLICE head, flat bottom, nearly vertical rounded sides, bread shoulders, two long ears with cocoa inner ears, dark dot eyes, tiny omega mouth, rosy cheeks; body wears cocoa apron. Actual alpha transparent background, no backdrop, no text, letters, numerals, watermark. Single asset, not a sheet. Square icon: small rounded ice-blue CLAY bell with loop and visible clapper, a few chunky frost sparkles. Ice-blue is a localized accent, matte clay body with softly frosted edges. Fills 82% canvas with transparent margin, readable at 32 pixels.
+
+#### item-slide
+
+Source: `sources/item-slide.png`; export: `item-slide.webp`, 256 × 256; transparent: true.
+
+Use case: stylized-concept. New production Bunbunny Bakes asset. Reference 1 locks soft matte molded clay material and mascot identity; reference 2 locks the existing gold bunny-face coin. Match warm dawn upper-left illumination, simple chunky rounded geometry, restrained cream #F6EEDC, paper #FFF8EC, dough #E7BF7F, gold #F2C14E, terracotta #C8866C, cocoa #745742, sage #A6B39A. Mascot/emblem when requested: cream TOAST-SLICE head, flat bottom, nearly vertical rounded sides, bread shoulders, two long ears with cocoa inner ears, dark dot eyes, tiny omega mouth, rosy cheeks; body wears cocoa apron. Actual alpha transparent background, no backdrop, no text, letters, numerals, watermark. Single asset, not a sheet. Square icon: golden butter block sliding down a little sage clay slide ramp, shiny creamy butter streak follows down the ramp. Three-quarter view makes ramp slope unmistakable. Compact simple composition fills 82% canvas with transparent margin, readable at 32 pixels.
+
+The initial source is retained as `sources/item-slide-draft.png`. Final source is an image_gen edit of that draft with this exact prompt:
+
+Use case: precise-object-edit. Remove the entire bunny character from this icon, including ears, head, body, apron and paws. Keep only the golden butter block on the little sage clay slide ramp with its shiny butter streak. Preserve the ramp, butter shape, palette, matte clay style and warm lighting. Recenter this compact ramp-and-butter asset in a square canvas with generous transparent margins. No characters, faces, emblems, coins or text. Actual transparent background.
+
+#### coin-stack
+
+Source: `sources/coin-stack.png`; export: `coin-stack.webp`, 256 × 256; transparent: true.
+
+Use case: stylized-concept. New production Bunbunny Bakes asset. Reference 1 locks soft matte molded clay material and mascot identity; reference 2 locks the existing gold bunny-face coin. Match warm dawn upper-left illumination, simple chunky rounded geometry, restrained cream #F6EEDC, paper #FFF8EC, dough #E7BF7F, gold #F2C14E, terracotta #C8866C, cocoa #745742, sage #A6B39A. Mascot/emblem when requested: cream TOAST-SLICE head, flat bottom, nearly vertical rounded sides, bread shoulders, two long ears with cocoa inner ears, dark dot eyes, tiny omega mouth, rosy cheeks; body wears cocoa apron. Actual alpha transparent background, no backdrop, no text, letters, numerals, watermark. Single asset, not a sheet. Square icon: a small stack of three thick gold bunny-face coins with one coin leaning upright in front so its face is fully visible. Copy reference 2 coin design exactly: raised rounded gold rim and embossed cream toast-bunny face with long ears, cocoa eyes, omega mouth and rosy cheeks. Fills 84% canvas, readable at 32 pixels.
+
+#### order-bag
+
+Source: `sources/order-bag.png`; export: `order-bag.webp`, 256 × 256; transparent: true.
+
+Use case: stylized-concept. New production Bunbunny Bakes asset. Reference 1 locks soft matte molded clay material and mascot identity; reference 2 locks the existing gold bunny-face coin. Match warm dawn upper-left illumination, simple chunky rounded geometry, restrained cream #F6EEDC, paper #FFF8EC, dough #E7BF7F, gold #F2C14E, terracotta #C8866C, cocoa #745742, sage #A6B39A. Mascot/emblem when requested: cream TOAST-SLICE head, flat bottom, nearly vertical rounded sides, bread shoulders, two long ears with cocoa inner ears, dark dot eyes, tiny omega mouth, rosy cheeks; body wears cocoa apron. Actual alpha transparent background, no backdrop, no text, letters, numerals, watermark. Single asset, not a sheet. Square icon: open kraft bakery paper bag sculpted in soft matte clay with one gold coin popping out over its mouth, coin uses reference 2 design with toast bunny face. Simple tidy bag folds, no lettering or printed branding. Fills 82% canvas with transparent margin, readable at 32 pixels.
+
+#### run-shoes
+
+Source: `sources/run-shoes.png`; export: `run-shoes.webp`, 192 × 192; transparent: true.
+
+Use case: stylized-concept. New production Bunbunny Bakes asset. Reference 1 locks soft matte molded clay material and mascot identity; reference 2 locks the existing gold bunny-face coin. Match warm dawn upper-left illumination, simple chunky rounded geometry, restrained cream #F6EEDC, paper #FFF8EC, dough #E7BF7F, gold #F2C14E, terracotta #C8866C, cocoa #745742, sage #A6B39A. Mascot/emblem when requested: cream TOAST-SLICE head, flat bottom, nearly vertical rounded sides, bread shoulders, two long ears with cocoa inner ears, dark dot eyes, tiny omega mouth, rosy cheeks; body wears cocoa apron. Actual alpha transparent background, no backdrop, no text, letters, numerals, watermark. Single asset, not a sheet. Square HUD power-up icon: pair of springy terracotta and cream clay sneakers, rounded bouncy thick soles with a compact visible coil spring under the nearer shoe, slightly airborne jaunty pose. Only a few thick lace segments, no logos. Fills 82% canvas, strong silhouette readable at 24 pixels.
+
+#### run-shield
+
+Source: `sources/run-shield.png`; export: `run-shield.webp`, 192 × 192; transparent: true.
+
+Use case: stylized-concept. New production Bunbunny Bakes asset. Reference 1 locks soft matte molded clay material and mascot identity; reference 2 locks the existing gold bunny-face coin. Match warm dawn upper-left illumination, simple chunky rounded geometry, restrained cream #F6EEDC, paper #FFF8EC, dough #E7BF7F, gold #F2C14E, terracotta #C8866C, cocoa #745742, sage #A6B39A. Mascot/emblem when requested: cream TOAST-SLICE head, flat bottom, nearly vertical rounded sides, bread shoulders, two long ears with cocoa inner ears, dark dot eyes, tiny omega mouth, rosy cheeks; body wears cocoa apron. Actual alpha transparent background, no backdrop, no text, letters, numerals, watermark. Single asset, not a sheet. Square HUD power-up icon: round pale sage-blue bubble shield with thick rounded softly glossy rim and translucent center, raised cream toast-bunny emblem in middle matching reference face and long ears. Preserve clay aesthetic with a simple bubble highlight. Fills 82% canvas, strong silhouette readable at 24 pixels.
+
+#### run-multiplier
+
+Source: `sources/run-multiplier.png`; export: `run-multiplier.webp`, 192 × 192; transparent: true.
+
+Use case: stylized-concept. New production Bunbunny Bakes asset. Reference 1 locks soft matte molded clay material and mascot identity; reference 2 locks the existing gold bunny-face coin. Match warm dawn upper-left illumination, simple chunky rounded geometry, restrained cream #F6EEDC, paper #FFF8EC, dough #E7BF7F, gold #F2C14E, terracotta #C8866C, cocoa #745742, sage #A6B39A. Mascot/emblem when requested: cream TOAST-SLICE head, flat bottom, nearly vertical rounded sides, bread shoulders, two long ears with cocoa inner ears, dark dot eyes, tiny omega mouth, rosy cheeks; body wears cocoa apron. Actual alpha transparent background, no backdrop, no text, letters, numerals, watermark. Single asset, not a sheet. Square HUD power-up icon: one small golden five-point star badge, plump rounded clay points, subtly raised inset star face, warm gold with cocoa-gold depth along lower edge. No digits, no lettering, no ribbons or extra objects. Fills 82% canvas, strong silhouette readable at 24 pixels.
+
+### ART-3 validation
+
+All nine WebPs decode at requested dimensions with transparent and opaque alpha pixels. Total payload: **147,640 bytes (147.6 KB)**, below 400,000 bytes. Hero below 160 KB; every icon below 40 KB. All exports use quality 82. No application code or commits changed.
