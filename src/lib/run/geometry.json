@@ -43,6 +43,16 @@
       "front": 6000,
       "back": 6000,
       "height": 2600
+    },
+    "pothole": {
+      "front": 2200,
+      "back": 2200,
+      "height": 1
+    },
+    "bread-wheel": {
+      "front": 900,
+      "back": 900,
+      "height": 1800
     }
   },
   "cameraHeight": 10000,
@@ -53,5 +63,6 @@
   "vanLengthStep": 2000,
   "roofBreadInset": 2000,
   "roofBreadSpacing": 3000,
-  "collectHeightTolerance": 1800
+  "collectHeightTolerance": 1800,
+  "breadWheelSpeed": 120
 }

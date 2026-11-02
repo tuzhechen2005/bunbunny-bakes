@@ -1,138 +1,159 @@
-# Run engine — R13 / engine v8
+# Run engine — R14 / engine v9
 
-Pure deterministic TypeScript shared by replay and the client. `RUN_ENGINE_VERSION = 8`;
-new seeds and saves use `v8.`. Unfinished v1–v7 runs/saves are rejected, with existing
-scores unchanged. Rendering is a separate frontend task: its object/art mapping must
-add `ramp`, `van`, and `truck` and use the new elevation/geometry fields.
+Pure deterministic TypeScript shared by server replay and the client.
+`RUN_ENGINE_VERSION = 9`; new seeds and the existing version-derived save key use
+v9. Unfinished v1–v8 runs and saves are rejected; finished scores are unchanged.
+The e2e SEED is v9. No components are changed and no browsers are run in this task.
+The frontend must add the four new kinds to its object/art mapping before rendering
+v9: `pothole`, `bread-wheel`, `double-jump-shoes`, and `shield`.
 
-## API and limits
+## API and snapshot contract
 
-`createRunGame({seed})` exposes `input(tick, dir)`, `step(toTick)`, and detached `state()`.
-`replayRun(seed, inputs, endTick)` verifies the same simulation. `frame(toTick)` returns
-a borrowed pooled snapshot; realtime mode pre-generates the finite track. Do not retain
-borrowed frames. Reads never advance simulation or RNG.
+`createRunGame({seed})` exposes `input(tick, dir)`, `step(toTick)`, and detached
+`state()`. `frame(toTick)` is a borrowed, pooled snapshot; never retain it across
+frames. Realtime pre-generation and lazy server replay produce identical results.
+All simulation is integer millimetres and 60 Hz ticks, without wall-clock reads.
+Input advances **through** its tick before applying a swipe: collision-tick input
+is too late. Log every valid swipe, including no-ops, at strictly increasing ticks.
+Caps remain 20,000 inputs and 54,000 ticks (15 minutes). Replay validates the full
+log before simulation and returns the actual end tick.
 
-Ticks are integers at 60 Hz. Input advances **through** its tick before applying the
-swipe: input on a collision tick is too late. Log all valid swipes, including no-ops,
-strictly increasing, at most one per tick. Caps remain 20,000 inputs and 54,000 ticks
-(15 minutes). Replay validates the entire log, exact entry shapes, bounds and ordering
-before simulation. Invalid logs throw `RunReplayError`; stepping an ended game is harmless.
-The returned endTick is the actual collision/current tick, not the requested tick.
-Server request-size and plausibility limits continue to derive from these caps.
+Every snapshot object exposes `id`, `kind`, `lane`, relative centre `z`, `front`,
+`back`, `height`, `speed` (mm/tick, zero for static objects), `signalUntil` (absolute
+tick, zero when no signal was scheduled; active while greater than the snapshot tick), and `targetLane` (current lane when no planned change).
+Front/back are nonnegative extents from the centre. Objects sort by current z then
+id. Collectibles also have `y`; golden bread has `value: 5`, ordinary bread defaults
+to 1. Truck bread has `carrierId` and shares its carrier's lane and displacement.
+All object and player fields are consistent between detached and pooled snapshots.
 
-Snapshots expose speed, distance (integer mm), bread, score, over, powers and events.
-Score remains `floor(distance / 1000) + bread * 10`, including roof bread.
-Every object exposes `id`, `kind`, `lane`, relative centre `z`, `front` and `back`
-(nonnegative extents from that centre), and `height`, all in mm. Trucks additionally
-expose `speed` in mm/tick; collectibles expose `y` for their road/roof placement.
-Objects sort by current z then id. Roof bread can extend up to 16m beyond a chunk's
-nominal end; the following chunk's first object remains farther ahead.
+Player snapshots expose `y`, `surface`, `lane`, `pose`, progress (0..1000),
+`laneChange`, `queuedLane`, and boolean `shield`. Lane changes take 12 ticks and
+switch occupancy at their midpoint; one horizontal swipe may queue. Jump/slide
+last 42/36 ticks and can overlap a lane change. Geometry remains in `geometry.json`.
 
-`player.y` is integer feet height above the road. `surface` is `ground | roof`;
-ramps count as elevated support. During an airborne roof exit surface becomes ground
-while y falls toward zero. `pose`, progress (0..1000), laneChange and queuedLane retain
-their existing meanings. Lane occupancy switches at the 12-tick change's midpoint;
-one horizontal swipe may queue. Jump/slide last 42/36 ticks, cannot interrupt each
-other, and can overlap lane changes. Slides work on roofs. Falling cannot start a
-second midair jump.
+## New obstacles and powers
 
-## Geometry and collision
+- **Lane-changing trucks:** move toward the player at 40 mm/tick. At activation
+  inside the 90m simulation window, a changing truck sets `signalUntil = tick + 60`
+  and exposes its adjacent `targetLane`. At that tick it occupies the target lane.
+  A truck changes only once. Its bread changes lanes simultaneously. Authored
+  targets stay within the two blocked lanes, preserving the reserved route;
+  when the open lane separates both blocked lanes, trucks keep their lane.
+- **Potholes:** 4.4m long, requiring airborne feet throughout the swept overlap.
+  Sliding or walking crashes. Jumping too early and landing in the hole, or starting
+  too late at its approaching edge, also crashes. No height grace applies.
+- **High-low combos:** an awning followed 26m later in the same lane by a pothole.
+  Slide, then jump promptly; changing lanes is also allowed. Flour gates retain
+  their 18m follow-up cart. The combo is tested at the maximum coffee speed.
+- **Rolling bread wheels:** 1.8m high and 1.8m long, moving independently toward
+  the player at 120 mm/tick. Jump or change lanes. Their movement uses the same
+  deterministic activation and swept collision rules as trucks. Wheels start
+  from 480m and only occupy middle rows, preserving recovery space.
+- **Double-jump shoes:** `kind: "double-jump-shoes"`, active for 480 ticks (8s).
+  `powerUps.shoesUntil` and `shoesTicks` expose expiry and remaining time. One
+  additional jump is allowed while airborne, starting a new arc at current feet
+  height. A third jump is ignored; landing resets eligibility. Recollection
+  refreshes expiry, but does not reset the current airborne jump allowance.
+- **Shield:** `kind: "shield"`, sets `player.shield = true`. One collision consumes
+  it and emits a collision event without ending the run. The absorbed object's
+  remaining depth is harmless; a different obstacle can crash immediately.
+  Recollecting does not stack shields. Coffee still bypasses collisions without
+  consuming a shield.
 
-`geometry.json` is the renderer/engine geometry contract. It contains all vehicle
-length bounds, roof/ramp heights, truck speed, gravity, existing obstacle dimensions,
-standing/sliding heights, jump apex (3600 mm), and projection constants.
+Each row has a seeded 1/96 chance of shoes and 1/96 chance of shield. Coffee and
+magnet remain restricted to the introductory rows, each at 1/96 per row. Coffee
+lasts 360 ticks and multiplies speed by 3/2; magnet lasts 480 ticks and attracts
+bread across lanes and elevations. Roof bread otherwise requires roof support and
+feet within 1800 mm of its elevation.
 
-- Ramps are 4000 mm long and rise linearly from ground to 2600 mm. Their far end
-  meets the approaching face of a van, including ticks straddling that seam.
-- Parked vans are 12000–18000 mm long, 2600 mm high. Their front or side crashes
-  a ground player. A correctly timed jump clears the face and lands on the roof.
-- Trucks are 12000 mm long and 2600 mm high. On entering the 90m simulation window,
-  they move toward the player by `TRUCK_SPEED = 40` mm each tick, in addition to
-  player motion. Their roof can also be landed on. Movement activation is identical
-  in lazy replay and realtime pre-generation and independent of input/step batching.
-- Roof exits fall by integer gravity, increasing downward speed by 32 mm/tick each
-  tick. Jumps use the shared integer parabola relative to takeoff elevation; descending
-  feet land on a supporting roof. Equal-height roof-to-roof contact is safe.
-- Ground obstacles do not hit feet above their height. Existing ground jump/slide
-  rules retain the 160 mm depth inset and up to 120 mm height grace. Vehicle roofs
-  require actual 2600 mm clearance. Cart height remains 4400 mm.
-- Collision sweeps the full per-tick relative interval, including truck motion.
-  Coffee ignores collisions for 360 ticks and applies 3/2 speed; magnet lasts 480
-  ticks and attracts bread in all lanes and elevations. Recollecting refreshes expiry.
-  Ground pickups retain the existing jump/slide collection behavior. Roof bread
-  requires roof support and feet within 1800 mm of its elevation unless magnetized.
-  Golden loaves remain `kind: "bread"` with `value: 5`; ordinary loaves default to 1.
-  Truck bread exposes `carrierId` and `speed` and shares its carrier's displacement.
+## Scoring
 
-## Patterns and tuning
+Snapshot `multiplier` is ×1 below 500m, ×2 from 500m, and ×3 from 1500m.
+The current multiplier applies to distance points; bread value is unchanged:
 
-Base speed is 480 mm/tick (28.8 m/s), rising to 680 (40.8 m/s) over
-2100 ticks (35 seconds); coffee caps at 1020. The independent seeded track stream
-is `${seed}:run:track:v1`; the enclosing v8 seed pins these rules. Three 60m rows
-form each 180m chunk, with a 30m initial offset. The first wall is at 90m, reached
-at about second 3.
+```
+score = floor(distance / 1000) * multiplier + bread * 10
+```
 
-Density ramps from 240m to 720m. Ordinary draws reach 45% van, 25% truck, 30%
-street, before authored phrase overrides. Trucks are eligible from 480m, in middle
-rows (first possible centre 510m, encountered around 16s). Other truck draws become
-ramped vans, preserving recovery space after gates. Routes may change every row,
-but move at most one lane after 240m.
+Thus 500m earns 1000 distance points, 1500m earns 4500, and 1501m earns 4503.
+Both live snapshots and authoritative replay use this same formula; save
+verification and server finishing use authoritative replay.
 
-From 360m, alternating phrases put an action gate in their middle or final row:
-two carts block the side lanes, flour or an awning fills the remaining lane, and a
-cart follows that lane 18m later. This requires a jump/slide and then a lane change.
-From 2340m (about 62s without coffee), every non-roof row has this combination,
-leaving no empty lane at its centre. At cap speed the follow-up arrives 0.44s later.
-This is the mechanical pressure target for experienced humans; no human playtest
-was performed for this backend task.
+## Difficulty and survivability
 
-From 1260m, every third phrase requires roofs: three rows each have two touching
-12m vans in the route lane, one approach ramp, and carts in both other lanes.
-There is no ground route through the wall. Each 24m train ends in a golden loaf
-worth five bread; ordinary ramped vans also retain roof lines and a final gold.
-Most mature bread remains on roofs. Vehicle/action rows have one ground guide loaf;
-action rows no longer award a free ground exit line. Some trucks carry three loaves.
-Coffee is now 1/96 per introductory row (formerly 1/24); only the first three rows
-can have powers. Magnet has the same 1/96 draw and still attracts both elevations.
+Speed remains 480→680 mm/tick over 35 seconds (coffee maximum 1020). Three 60m
+rows form a 180m chunk, with a 30m initial offset and first obstacles at 90m (~3s).
+The track RNG stream remains `${seed}:run:track:v1`, pinned by the enclosing v9 seed.
+Density ramps from 240m to 720m, with mature ordinary draws 45% van, 25% truck,
+30% street, overridden by action and roof phrases. New street obstacles start
+at 240m; trucks and wheels start at 480m. Routes move at most one lane after 240m.
+From 1260m, every third phrase requires two touching 12m van roofs with an approach
+ramp and carts in the other lanes. From 2340m (~62s), every non-roof row requires
+an action. Van roof heights, jump parabola, roof landing and gravity remain unchanged.
 
-The 60m spacing preserves the maximum-coffee-speed bound. Early rows leave at
-least 57.4m, exceeding 1020 × (30 reaction + 24 crossing + 1 margin) = 56.1m.
-Mature routes move at most one lane. A roof train ends 18m after its row; the
-conservative truck envelope begins 18m before the next, leaving at least 24m,
-exceeding 1020 × (10 + 12 + 1) = 23.46m. Following an action row, trucks are
-excluded; its 19.4m rear and the next ramp's 13m approach leave 27.6m.
-The gate-to-follow-up gap leaves over 15m for a 12-tick lane change even at 1020.
-Consecutive action centres are at least 58 ticks apart, longer than either action.
-The next route is visible before choosing which side to take around the follow-up.
-These bounds supplement executed paths; roofs/actions are now part of the proof.
+Spacing proof, supplemented by executed paths:
 
-Tests inspect 1,000 seeds × 16 chunks, execute early routes over 1,000 seeds, and run
-100 independent mature tracks for 18,001 ticks (>5 minutes). Another 100 paired
-tracks verify that ground-only control dies while roof-capable search survives.
-The former R10 requirement that ground-only play survive is intentionally replaced.
-`perfectRun` searches a 120-tick lane graph from public snapshots, treats contiguous
-ramped roofs as support, and schedules mandatory jump/slide gates from visible
-geometry. It never reads reserved-route metadata. Mature sections have no powers.
-`casualRun` is unchanged: 10 Hz samples, 15-tick motor delay, random choice among
-apparently open lanes, and visible jump/slide timing. `randomRun` swipes every 12–36 ticks.
+- Introductory two-lane crossings retain at least 57.4m, exceeding
+  `1020 * (30 reaction + 24 crossing + 1 margin) = 56.1m`.
+- Mature routes require at most one lane change. A roof train ends 18m after its
+  row; the next truck envelope starts at most 18m before the next row. The 24m
+  gap exceeds `1020 * (10 + 12 + 1) = 23.46m`.
+- Wheels occur only in middle ordinary rows. A conservative 25m displacement
+  envelope plus their 0.9m front and the preceding row's maximum 9m back leaves
+  25.1m, also exceeding 23.46m. They never follow a combo or roof train.
+- A combo's pothole ends 28.2m after its row. The next ramp starts at worst 13m
+  before the next row, leaving 18.8m, exceeding the 13.26m lane-change requirement.
+  The next route is already visible before the combo jump, so reaction/planning
+  overlaps the action rather than starting after landing. Jump and lane change
+  may run concurrently. Trucks and wheels are excluded from that next row.
+- Truck lane changes never enter the reserved lane. Action centres are at least
+  58 ticks apart at maximum speed, longer than either action. A 26m high-low gap
+  lets a centred slide finish before the jump at 1020 mm/tick.
 
-100 fixed `tuning0..tuning99` seeds, seconds (sorted index floor(N*p)):
+Tests inspect 1,000 seeds × 16 chunks, execute 1,000 early paths, and run 100 mature
+search paths for 18,001 ticks (>5 minutes), asserting **zero absorbed collisions**
+so shields cannot hide an unsolvable route. Paired roof/ground searches verify the
+roof requirement. Search uses only public snapshots, including truck signals,
+geometry and speeds, never generator route metadata.
+
+Casual control samples at 10 Hz, delays inputs 250ms and randomly selects apparently
+open lanes. Intermediate control also delays inputs 250ms, independently queues
+lane/action decisions, and plans 72 ticks ahead with sampling allowance. Search
+plans 120 ticks ahead and acts without motor delay. Calibration uses 100 fixed
+`tuning0..tuning99` seeds and median index 50: casual target 12–20s (~15s),
+intermediate 60–120s, search at least 3 minutes. Measured seconds (sorted indices 10/50/90):
 
 | Bot | p10 | Median | p90 |
 | --- | ---: | ---: | ---: |
-| Casual | 12.58 | 17.88 | 21.27 |
+| Casual | 12.55 | 17.88 | 26.15 |
+| Intermediate (250ms) | 38.23 | 73.53 | 101.48 |
+| Search (100 mature tracks, capped) | 300.02 | 300.02 | 300.02 |
 
-The calibration assertion is 12–20 seconds median. Full 15-minute search logs
-exercise bounded replay, input caps, and time-limit termination. Capped-input
-padding inserts busy action no-ops and quiet-interval jumps without masking gates.
-Replay retains the 100ms budget. Existing queue, collision, roof seam, moving truck,
-live/lazy equivalence, invalid-log, detached-state, seed/save/server checks remain.
-The e2e SEED is v8; browser execution is excluded from this task.
+The search result uses `survive0..survive99`; all finish the 18,001-tick horizon
+without a collision, including shield absorption. The full 15-minute replay and
+20,000-input replay tests also pass their 100ms budgets. The final broader unit run also passes both 1,000-seed tests (spacing 11.69s,
+executed early paths 14.82s), after earlier host-load timeouts.
 
-```sh
+## Verification
+
+```
 npx prisma generate
 npx tsc --noEmit --incremental false
 npx eslint
-npx vitest run --configLoader runner --project unit --maxWorkers 1
-TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_run8_test npx vitest run --configLoader runner --project db
+npx vitest run --configLoader runner --project unit --maxWorkers 1 --pool threads
+TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_r14_test npx vitest run --configLoader runner --project db
 ```
+
+Verification results: ESLint and `git diff --check` pass. All 1,217 unit cases are
+covered successfully: 1,207 in the 97-file run excluding TD calibration, six TD
+calibration cases in the original full run, and the remaining four on isolated
+retry after host-load timeouts. All 829 DB cases are covered successfully on
+`*_test` databases: the full thread-pool run passed 828, and the timezone-switching
+`dbDates` file passed all 12 when rerun with the normal fork pool. Threads cannot
+apply `process.env.TZ` changes to native Date behavior. The runner DB file also
+passes all nine tests with forks, including final multiplier scoring and v8 rejection.
+No browser/e2e execution was performed.
+
+TypeScript currently reports the frontend's exhaustive `runRenderer.ts` object
+map missing the four new kinds. It is intentionally left for the frontend task
+because R14 forbids edits to `src/components/**`; types are not weakened to hide it.

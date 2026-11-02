@@ -25,6 +25,8 @@ it("starts with no configured tiers, unique versioned seed and scratch replay",a
  const r=await start();expect(await db.gameTier.count()).toBe(0);
  expect(r.seed).toMatch(new RegExp(`^v${RUN_ENGINE_VERSION}\\.[a-f0-9]{32}$`));expect((await start("wx_other")).seed).not.toBe(r.seed);
  const log=play(r),expected=replayRun(r.seed,log.inputs,log.endTick);
+ const multiplier=expected.distance>=1500000?3:expected.distance>=500000?2:1;
+ expect(expected.score).toBe(Math.floor(expected.distance/1000)*multiplier+expected.bread*10);
  expect((await finishRun(db,log,IP,LATER)).score).toBe(expected.score);
  expect(await db.gameRun.findUniqueOrThrow({where:{id:r.runId}})).toMatchObject({game:"RUN",tiersSnapshot:[],drops:log.inputs,playMs:30000,dropCount:log.inputs.length});
 });
@@ -53,7 +55,7 @@ it("rejects malformed and excessive logs, impossible wall time, post-crash time 
 it("permits pauses until expiry and rejects engine version mismatch",async()=>{
  const r=await start();await expect(finishRun(db,play(r),IP,new Date(r.expiresAt))).rejects.toMatchObject({message:copy.gameApi.runExpired});
  await expect(progressRun(db,"RUN",{runId:r.runId,log:[],endTick:0},new Date(r.expiresAt))).rejects.toMatchObject({message:copy.gameApi.runExpired});
- for (const seed of ["v1.abcdef", "v2.abcdef", "v3.abcdef", "v4.abcdef", "v5.abcdef", "v6.abcdef", "v7.abcdef", "v999.abcdef"]) {
+ for (const seed of ["v1.abcdef", "v2.abcdef", "v3.abcdef", "v4.abcdef", "v5.abcdef", "v6.abcdef", "v7.abcdef", "v8.abcdef", "v999.abcdef"]) {
  await db.gameRun.update({where:{id:r.runId},data:{seed,progressAttemptAt:null}});
  await expect(finishRun(db,play(r),IP,LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
  await expect(progressRun(db,"RUN",{runId:r.runId,log:[],endTick:0},LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
