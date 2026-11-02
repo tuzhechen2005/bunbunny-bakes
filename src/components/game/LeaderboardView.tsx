@@ -26,9 +26,12 @@ export function LeaderboardView({
   hasPrize = false,
   fetcher = fetchLeaderboard,
   scoreLabel,
+  levelLabel,
 }: {
   wechatId: string;
   scoreLabel?: string;
+  /** Template with {n}: show each entry's level before its score (GRAB, D183). */
+  levelLabel?: string;
   version?: number;
   hasPrize?: boolean;
   /** Which game's board (the first game's by default). */
@@ -90,6 +93,7 @@ export function LeaderboardView({
     );
   }
   const { data } = state;
+  const lv = (n?: number) => (levelLabel && typeof n === "number" ? <span className="text-xs font-bold text-c-grey" data-testid="game-level">{fill(levelLabel, { n })}</span> : null);
   return (
     <div className="px-5 pb-8" data-testid="game-board-list">
       {data.allTime ? (
@@ -99,7 +103,7 @@ export function LeaderboardView({
             <span className="font-display min-w-0 truncate text-[15px] text-c-ink">
               {data.allTime.nickname} <span className="font-num text-xs text-c-grey">{data.allTime.wechatMasked}</span>
             </span>
-            <span className="font-num text-xl text-c-ink">{data.allTime.score}</span>
+            <span className="flex items-baseline gap-2">{lv(data.allTime.level)}<span className="font-num text-xl text-c-ink">{data.allTime.score}</span></span>
           </p>
         </div>
       ) : null}
@@ -107,7 +111,7 @@ export function LeaderboardView({
       {typeof data.myBest === "number" ? (
         <p className="mt-3 flex items-baseline justify-between rounded-2xl bg-c-wash px-4 py-3 text-sm font-bold text-c-ink" data-testid="game-my-best">
           <span>{scoreLabel ?? t.myBest}</span>
-          <span className="font-num text-xl">{data.myBest}</span>
+          <span className="flex items-baseline gap-2">{lv(data.myLevel)}<span className="font-num text-xl">{data.myBest}</span></span>
         </p>
       ) : null}
       {scoreLabel && <p className="mt-3 text-right text-xs text-c-grey">{scoreLabel}</p>}
@@ -130,6 +134,7 @@ export function LeaderboardView({
                   {t.prizeMark}
                 </span>
               ) : null}
+              {lv(row.level)}
               <span className="font-num text-xl text-c-ink">{row.score}</span>
             </li>
           ))}
@@ -142,7 +147,7 @@ export function LeaderboardView({
             <span className="font-display min-w-0 truncate text-[15px] text-c-ink">
               {data.lastWinner.nickname} <span className="font-num text-xs text-c-grey">{data.lastWinner.wechatMasked}</span>
             </span>
-            <span className="font-num text-xl text-c-ink">{data.lastWinner.score}</span>
+            <span className="flex items-baseline gap-2">{lv(data.lastWinner.level)}<span className="font-num text-xl text-c-ink">{data.lastWinner.score}</span></span>
           </p>
         </div>
       ) : null}

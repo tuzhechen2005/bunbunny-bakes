@@ -38,6 +38,11 @@ export function parseGrabSave(raw: string | null, now = Date.now()): GrabSave | 
   }
 }
 
+/** The level a saved run had reached (replayed, so it is never stored or trusted). */
+export function grabSaveLevel(s: GrabSave): number {
+  try { return replayGrab(s.seed, s.tiers, s.launches, elapsedTick(s.elapsedMs)).level; } catch { return 1; }
+}
+
 export function readGrabSave(now = Date.now()): GrabSave | null {
   try {
     const storage = window.localStorage;

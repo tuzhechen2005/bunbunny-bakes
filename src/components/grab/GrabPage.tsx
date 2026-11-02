@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useBgm } from "@/components/game/bgm";
 import { GameTutorial } from "@/components/game/GameTutorial";
 import { fill } from "@/components/customer/format";
@@ -21,7 +21,7 @@ import { useMotionPrefs } from "@/lib/motion/react";
 import { GrabBoard, type GrabBoardHandle, type GrabProgress } from "./GrabBoard";
 import { GrabRules } from "./GrabArt";
 import { fetchGrabLeaderboard, finishGrab, startGrab } from "./grabApi";
-import { clearGrabSave, readGrabSave, writeGrabSave, type GrabSave } from "./grabSave";
+import { clearGrabSave, grabSaveLevel, readGrabSave, writeGrabSave, type GrabSave } from "./grabSave";
 
 const g = copy.customer.game;
 const t = copy.customer.grab;
@@ -69,10 +69,13 @@ export function GrabPage() {
   const progress = useRef<GrabProgress>({ launches: [], score: 0, elapsedMs: 0, endTick: 0 });
   const [finish, setFinish] = useState<Finish>({ state: "submitting" });
   const [finalScore, setFinalScore] = useState(0);
+  const [finalStats, setFinalStats] = useState({ level: 1, levelScore: 0, levelTarget: 0, orders: 0 });
+  const [myLevel, setMyLevel] = useState<number | null>(null);
+  const [save, setSave] = useState<GrabSave | null>(null);
+  const saveLevel = useMemo(() => (save ? grabSaveLevel(save) : null), [save]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [boardVersion, setBoardVersion] = useState(0);
   const [boardFrom, setBoardFrom] = useState<"menu" | "over">("menu");
-  const [save, setSave] = useState<GrabSave | null>(null);
   const [dialog, setDialog] = useState<"restart" | "exit" | "replay" | null>(null);
   const dialogRef = useRef<SheetHandle>(null);
   const boardRef = useRef<GrabBoardHandle>(null);
@@ -107,6 +110,15 @@ export function GrabPage() {
       pending.forEach(clearTimeout);
     };
   }, []);
+
+  // The menu's level badge: the best level this player reached (from the board), unless a run is saved.
+  useEffect(() => {
+    const w = wechatId.trim();
+    if (!w) return;
+    let alive = true;
+    void fetchGrabLeaderboard(w).then(r => { if (alive && r.ok && typeof r.data.myLevel === "number") setMyLevel(r.data.myLevel); });
+    return () => { alive = false; };
+  }, [wechatId]);
 
   const toggleSound = () => {
     const next = !soundOn;
@@ -249,6 +261,7 @@ export function GrabPage() {
       persist();
       phaseRef.current = "over";
       setFinalScore(p.score);
+      setFinalStats({ level: p.level ?? 1, levelScore: p.levelScore ?? 0, levelTarget: p.levelTarget ?? 0, orders: p.completedOrders ?? 0 });
       setRun(r => r ? { ...r, initialLaunches: p.launches, initialElapsedMs: p.elapsedMs } : r);
       setPhase("over");
       const id = runId.current;
@@ -323,7 +336,7 @@ export function GrabPage() {
               {g.closeBoard}
             </button>
           </div>
-          <LeaderboardView hasPrize={hasPrize} wechatId={wechatId.trim()} version={boardVersion} fetcher={fetchGrabLeaderboard} />
+          <LeaderboardView levelLabel={t.level} hasPrize={hasPrize} wechatId={wechatId.trim()} version={boardVersion} fetcher={fetchGrabLeaderboard} />
         </main>
       </Shell>
     );
@@ -336,7 +349,9 @@ export function GrabPage() {
       <Shell>
         {top}
         <main className="flex flex-1 flex-col px-5 pb-[calc(24px+env(safe-area-inset-bottom))]">
-          <GameMenuHero game="grab" title={t.title} hint={t.startHint} />
+          <GameMenuHero game="grab" title={t.title} hint={t.startHint}>
+            {saveLevel || myLevel ? <p className="game-hero-badge font-display" data-testid="grab-menu-level">{saveLevel ? fill(t.level, { n: saveLevel }) : fill(t.menuBest, { n: myLevel ?? 1 })}</p> : null}
+          </GameMenuHero>
           <GrabRules />
           <p className="mt-2 text-xs leading-relaxed text-c-grey">{t.rules}</p>
           {/* Keep the full line's space, including wrapping, while the hub loads or fails. */}
@@ -459,6 +474,9 @@ export function GrabPage() {
 
   // ---------------- playing / over ----------------
   const shownScore = finish.state === "ok" ? finish.result.score : finalScore;
+  const shownLevel = finish.state === "ok" && typeof finish.result.level === "number" ? finish.result.level : finalStats.level;
+  const shownOrders = finish.state === "ok" && typeof finish.result.completedOrders === "number" ? finish.result.completedOrders : finalStats.orders;
+  const missing = Math.max(0, finalStats.levelTarget - finalStats.levelScore);
   const sameScore = finish.state === "ok" && finish.result.score === finalScore;
   return (
     <Shell>
@@ -579,12 +597,17 @@ export function GrabPage() {
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
-          <GameResultArt record={finish.state === "ok" && !!finish.result.newRecord} />
-          <h2 className="font-display m-0 text-center text-[28px] leading-none tracking-[-0.03em]">{g.overTitle}</h2>
+          <GameResultArt record={finish.state === "ok" && !!finish.result.newRecord} lose={!(finish.state === "ok" && finish.result.newRecord)} />
+          <h2 className="font-display m-0 text-center text-[28px] leading-none tracking-[-0.03em]" data-testid="grab-fail-title">{fill(t.failTitle, { n: shownLevel })}</h2>
+          {missing > 0 ? <p className="font-num m-0 mt-1.5 text-center text-sm text-c-grey" data-testid="grab-fail-short">{fill(t.short, { n: missing })}</p> : null}
           <p className="m-0 mt-5 text-center text-xs font-bold text-c-grey">{g.finalScore}</p>
           <p className="font-num m-0 text-center text-[56px] leading-[1.1]" data-testid="grab-final-score">
             {shownScore}
           </p>
+          <div className="mt-1 flex items-start justify-center gap-8 text-center text-sm font-bold">
+            <p className="m-0">{t.reached}<span className="font-num mt-0.5 block text-xl font-normal" data-testid="grab-reached">{shownLevel}</span></p>
+            <p className="m-0">{t.orders}<span className="font-num mt-0.5 block text-xl font-normal" data-testid="grab-orders-done">{shownOrders}</span></p>
+          </div>
           <div className="mt-2 min-h-[72px] text-center" aria-live="polite" data-testid="grab-finish">
             {finish.state === "submitting" ? (
               <p className="m-0 text-sm text-c-grey">{g.submitting}</p>
