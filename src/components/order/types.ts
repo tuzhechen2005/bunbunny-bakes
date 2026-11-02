@@ -4,7 +4,9 @@ export type StatusKind = "PENDING" | "CONFIRMED" | "BAKING" | "READY" | "COMPLET
 
 export type OrderViewData = {
   orderNo: string;
-  items: { name: string; qty: number; lineTotalCents: number; imageUrl: string | null }[];
+  items: { name: string; flavorName?: string | null; qty: number; lineTotalCents: number; imageUrl: string | null }[];
+  /** 面包币 the order earns once completed (0 when cancelled; E1). */
+  coinsOnPickup?: number;
   subtotalCents: number;
   deliveryFeeCents: number;
   totalCents: number;

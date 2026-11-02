@@ -267,7 +267,7 @@ export function OrderPage() {
               <ul className="m-0 list-none p-0">
                 {order.items.map((item, i) => (
                   <li key={i} className="flex items-baseline justify-between gap-3 text-[14.5px] leading-8">
-                    <span className="min-w-0 break-words text-c-grey">{fill(t.itemLine, { name: (item as { flavorName?: string | null }).flavorName ? `${item.name}${copy.customer.home.flavorJoin}${(item as { flavorName?: string | null }).flavorName}` : item.name, qty: item.qty })}</span>
+                    <span className="min-w-0 break-words text-c-grey">{fill(t.itemLine, { name: item.flavorName ? `${item.name}${copy.customer.home.flavorJoin}${item.flavorName}` : item.name, qty: item.qty })}</span>
                     <span className="shrink-0 font-num font-bold tabular-nums">{formatCents(item.lineTotalCents)}</span>
                   </li>
                 ))}
@@ -290,6 +290,11 @@ export function OrderPage() {
               )}
               {/* Nothing is left to pay for after the order is finished or cancelled (D93). */}
               {!finished && <p className="mt-2 text-[13px] leading-normal text-c-grey">{t.payOnReceipt}</p>}
+              {order.coinsOnPickup ? (
+                <Link href="/game/shop" data-testid="order-coins" className="mt-2 inline-block text-[13px] leading-normal font-bold text-c-ink underline-offset-2 hover:underline">
+                  {fill(order.statusKind === "COMPLETED" ? t.coinsEarned : t.coinsOnPickup, { n: order.coinsOnPickup })}
+                </Link>
+              ) : null}
             </section>
 
             {splitRest && (

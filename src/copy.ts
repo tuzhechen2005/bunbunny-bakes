@@ -201,6 +201,8 @@ export const copy = {
       delivery: "配送",
       itemsTitle: "订单明细",
       itemLine: "{name} × {qty}",
+      coinsOnPickup: "取货后得 {n} 面包币",
+      coinsEarned: "已得 {n} 面包币",
       subtotal: "小计",
       deliveryFee: "运费",
       total: "总额",
