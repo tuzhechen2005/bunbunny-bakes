@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { fill } from "@/components/customer/format";
 import { copy } from "@/copy";
 import { addDays } from "@/domain/dates";
 import type { OrderStatus } from "@/domain/types";
@@ -66,6 +67,17 @@ const chip = (on: boolean) =>
   }`;
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
+
+/** The list row as WeChat text: number, day and pickup/delivery, one line per item, total. */
+function listOrderText(o: { orderNo: string; pickupDateLabel: string; fulfillment: string; itemsSummary: string; totalCents: number }): string {
+  const c = t.copyText;
+  return [
+    fill(c.head, { orderNo: o.orderNo }),
+    fill(c.when, { date: o.pickupDateLabel, how: o.fulfillment === "DELIVERY" ? t.delivery : t.pickup }),
+    ...o.itemsSummary.split("、"),
+    fill(c.total, { total: money(o.totalCents) }),
+  ].join("\n");
+}
 
 export function OrdersListPage() {
   const router = useRouter();
@@ -345,16 +357,20 @@ export function OrdersListPage() {
               <p className="mt-1 text-sm text-muted">
                 {money(o.totalCents)} · {o.fulfillment === "DELIVERY" ? t.delivery : t.pickup}
               </p>
-              {next && (
-                <button
-                  type="button"
-                  disabled={busyRow === o.id}
-                  className={`${primaryBtn} mt-2 w-full`}
-                  onClick={() => void advance(o, next.to)}
-                >
-                  {busyRow === o.id ? t.working : moveToLabel(next.to as OrderStatus, o.fulfillment)}
-                </button>
-              )}
+              {/* Owner 11/02: copy the order for WeChat right here, then confirm. */}
+              <div className="mt-2 flex gap-2">
+                <CopyButton text={listOrderText(o)} label={t.copyOrder} className="flex-1" />
+                {next && (
+                  <button
+                    type="button"
+                    disabled={busyRow === o.id}
+                    className={`${primaryBtn} flex-1`}
+                    onClick={() => void advance(o, next.to)}
+                  >
+                    {busyRow === o.id ? t.working : moveToLabel(next.to as OrderStatus, o.fulfillment)}
+                  </button>
+                )}
+              </div>
               {rowError[o.id] && (
                 <p role="alert" className="mt-2 text-sm text-danger">
                   {rowError[o.id]}
