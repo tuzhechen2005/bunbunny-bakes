@@ -300,3 +300,60 @@ it("F2: moving a dated order respects destination flavour overrides", async () =
   await expect(adminEditOrder(db, { orderId: a.id, expectedUpdatedAt: a.updatedAt.toISOString(), pickupDate: other }, now)).rejects.toMatchObject({ code: "OVER_LIMIT" });
   expect((await stored(a.id)).pickupDate).toEqual(a.pickupDate);
 });
+
+it("requires a real bundle size for flavour creation, updates and product size changes", async () => {
+  const { createFlavor, updateFlavor } = await import("@/server/productFlavors");
+  const { updateProduct } = await import("@/server/products");
+  await updateProduct(db, productId, { bundleSize: 1, bundlePriceCents: null }, now);
+  const error = { code: "VALIDATION", httpStatus: 422, extra: { fields: { bundlePriceCents: expect.any(String) } } };
+  await expect(createFlavor(db, productId, { name: "new", priceCents: 450, bundlePriceCents: 1600 }, now)).rejects.toMatchObject(error);
+  await expect(updateFlavor(db, productId, original, { bundlePriceCents: 1600 }, now)).rejects.toMatchObject(error);
+  await updateFlavor(db, productId, original, { bundlePriceCents: null }, now);
+  await updateProduct(db, productId, { bundleSize: 2 }, now);
+  await createFlavor(db, productId, { name: "new", priceCents: 450, bundlePriceCents: 800, active: false }, now);
+  await expect(updateProduct(db, productId, { bundleSize: 1 }, now)).rejects.toMatchObject({
+    code: "VALIDATION", httpStatus: 422, extra: { fields: { bundleSize: expect.any(String) } },
+  });
+  expect((await db.product.findUniqueOrThrow({ where: { id: productId } })).bundleSize).toBe(2);
+});
+
+it("reports sorted open dates over a lowered flavour limit, excluding overrides and non-occupying usage", async () => {
+  const { updateFlavor } = await import("@/server/productFlavors");
+  const fixtures = [
+    ["2026-11-01", 3, "NEW", true],
+    [date, 4, "CONFIRMED", true],
+    ["2026-11-05", 4, "NEW", true],
+    ["2026-11-06", 4, "NEW", false],
+    ["2026-10-31", 4, "NEW", true],
+    ["2026-11-07", 4, "CANCELLED", true],
+    ["2026-11-08", 2, "NEW", true],
+  ] as const;
+  for (const [day, qty, status, isOpen] of fixtures) {
+    if (day !== date) await createOpenDate(day, { isOpen });
+    const order = await createOrder({ date: day, items: [{ productId, qty }], status });
+    await db.orderItem.updateMany({ where: { orderId: order.id }, data: { flavorId: original } });
+  }
+  await db.openDateFlavorLimit.create({ data: { date: new Date("2026-11-05"), flavorId: original, limit: 0 } });
+  const result = await updateFlavor(db, productId, original, { dailyLimit: 2 }, now);
+  expect(result.product.flavors.find(f => f.id === original)?.dailyLimit).toBe(2);
+  expect(result.overLimitDates).toEqual([
+    { date: "2026-11-01", kinds: ["FLAVOR"] }, { date, kinds: ["FLAVOR"] },
+  ]);
+  expect((await updateFlavor(db, productId, original, { dailyLimit: 1 }, now)).overLimitDates).toHaveLength(3);
+  for (const patch of [{ dailyLimit: 1 }, { dailyLimit: 5 }, { dailyLimit: null }, { name: "renamed" }]) {
+    expect((await updateFlavor(db, productId, original, patch, now)).overLimitDates).toEqual([]);
+  }
+});
+
+it("exposes readable flavour bundles to the assistant without raw bundle cents", async () => {
+  const { publicProduct } = await import("@/server/assistant/tools");
+  await db.productFlavor.update({ where: { id: original }, data: { bundlePriceCents: 1600 } });
+  const menu = await getMenu(db);
+  const product = menu.products.find(p => p.id === productId)!;
+  const view = publicProduct(menu, product, "p1");
+  expect(view.flavors[0]).toMatchObject({ id: original, bundle: "4 个 $16.00" });
+  expect(view.flavors[1]).not.toHaveProperty("bundle");
+  expect(JSON.stringify(view)).not.toContain("bundlePriceCents");
+  const fallback = publicProduct(menu, { ...product, flavors: [], bundlePriceCents: 1600 }, "p1");
+  expect(fallback.bundle).toBe(view.flavors[0].bundle);
+});

@@ -64,7 +64,12 @@ export function publicProduct(menu: Menu, p: MenuProduct, ref: string) {
     isNew: p.isNew,
     name: p.name,
     price: `${formatCents(p.priceFromCents ?? p.unitPriceCents)} / 个`,
-    flavors: p.flavors ?? [],
+    flavors: (p.flavors ?? []).map(({ bundlePriceCents, ...flavor }) => ({
+      ...flavor,
+      ...(bundlePriceCents !== null && p.bundleSize > 1
+        ? { bundle: `${p.bundleSize} 个 ${formatCents(bundlePriceCents)}` }
+        : {}),
+    })),
     ...(!p.flavors?.length && p.bundlePriceCents !== null && p.bundleSize > 1
       ? { bundle: `${p.bundleSize} 个 ${formatCents(p.bundlePriceCents)}` }
       : {}),

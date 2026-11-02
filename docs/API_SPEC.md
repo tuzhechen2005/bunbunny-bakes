@@ -373,7 +373,7 @@ use `active: false`; DB foreign keys prevent deleting a flavour referenced by an
 |---|---|---|
 | GET | `/api/admin/products` | Each product includes all flavours, including inactive, with id/productId/name/priceCents/active/sort/createdAt/updatedAt |
 | POST | `/api/admin/products/{id}/flavors` | `{name, priceCents, active?, sort?}`; active defaults true, sort defaults to append; 201 `{product}` with complete flavours |
-| PATCH | `/api/admin/products/{id}/flavors/{flavorId}` | `{name?, priceCents?, active?, sort?}`; 200 `{product}`; unknown/wrong-product ID returns 404 |
+| PATCH | `/api/admin/products/{id}/flavors/{flavorId}` | `{name?, priceCents?, active?, sort?}`; 200 `{product, overLimitDates}`; unknown/wrong-product ID returns 404 |
 | PUT | `/api/admin/products/{id}/flavors/order` | `{ids: string[]}` must contain every flavour (including inactive), exactly once; mismatch 409 STALE; 200 `{product}`; unchanged order writes no audit |
 | GET | `/api/admin/order-form` | Products include flavours with id/name/priceCents/active/sort; picker permits active selections; historical names come from order snapshots |
 
@@ -419,9 +419,19 @@ Only name and priceCents are required. Both new fields default to null.
 fields, including `{ "dailyLimit": null, "bundlePriceCents": null }` to clear.
 Omitted fields retain current values. Limit: integer 0–1,000,000 or null; bundle:
 integer 1–1,000,000 or null; invalid values return 422 VALIDATION.
+A non-null flavour bundle price requires the product's bundleSize >= 2
+(422 VALIDATION, fields.bundlePriceCents). Setting a product's bundleSize < 2
+while any flavour (including inactive) has a bundle price returns 422 VALIDATION,
+fields.bundleSize.
 
 POST returns 201 `{ "product": Product }`, PATCH returns 200
-`{ "product": Product }`. Every `Product.flavors[]` object now has exactly:
+`{ "product": Product, "overLimitDates": [{ "date": "2026-11-04", "kinds": ["FLAVOR"] }] }`.
+When dailyLimit is lowered (including null/unlimited to a finite limit), warnings
+list open dates from today in Chicago onward with occupying flavour usage > the
+new limit and no per-date override for that flavour, sorted by date. Existing
+over-limit dates are included if still over the lowered limit. Equal usage does
+not warn; unchanged, raised, or cleared limits return an empty array. The update
+still succeeds. Every `Product.flavors[]` object now has exactly:
 
 ```json
 {"id":"<flavorId>","productId":"<productId>","name":"抹茶","priceCents":450,"dailyLimit":12,"bundlePriceCents":1600,"active":true,"sort":0,"createdAt":"2026-11-02T18:00:00.000Z","updatedAt":"2026-11-02T18:00:00.000Z"}

@@ -38,7 +38,7 @@ export class AppError extends Error {
   readonly extra?: ErrorExtra;
 
   constructor(code: ErrorCode, options: { message?: string; extra?: ErrorExtra; cause?: unknown } = {}) {
-    super(options.message ?? copy.errors[code === "FLAVOR_FULL" ? "FULL" : code], { cause: options.cause });
+    super(options.message ?? copy.errors[code], { cause: options.cause });
     this.name = "AppError";
     this.code = code;
     this.httpStatus = ERROR_HTTP_STATUS[code];

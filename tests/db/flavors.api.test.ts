@@ -82,7 +82,9 @@ it("creates, renames, reprices, sorts and deactivates with atomic audit; no hard
   const second = await POST(request("POST", { name: "抹茶", priceCents: 400 }), ctx);
   const b = (await second.json()).product.flavors[1];
   const flavorCtx = { params: Promise.resolve({ id: P.redBean, flavorId: a.id }) };
-  expect((await PATCH(request("PATCH", { name: "香草", priceCents: 350, active: false }), flavorCtx)).status).toBe(200);
+  const patched = await PATCH(request("PATCH", { name: "香草", priceCents: 350, active: false }), flavorCtx);
+  expect(patched.status).toBe(200);
+  expect(await patched.json()).toMatchObject({ product: { id: P.redBean }, overLimitDates: [] });
   expect((await REORDER(request("PUT", { ids: [b.id, a.id] }), ctx)).status).toBe(200);
   expect((await REORDER(request("PUT", { ids: [a.id] }), ctx)).status).toBe(409);
   const list = (await (await GET(request("GET"))).json()).products.find((p: { id: string }) => p.id === P.redBean);

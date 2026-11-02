@@ -685,7 +685,7 @@ describe("AppError", () => {
     expect(statuses).toMatchObject({ VALIDATION: 422, RATE_LIMITED: 429, UNAUTHORIZED: 401, NOT_FOUND: 404, FULL: 409, STALE: 409 });
     for (const c of ERROR_CODES) {
       const e = new AppError(c);
-      expect(e.message).toBe(copy.errors[c === "FLAVOR_FULL" ? "FULL" : c]);
+      expect(e.message).toBe(copy.errors[c]);
       expect(e.message.length).toBeGreaterThan(0);
       expect(e).toBeInstanceOf(Error);
     }
