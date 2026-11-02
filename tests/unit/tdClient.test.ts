@@ -25,7 +25,7 @@ it('restores only canonical unexpired replayable saves, including completed retr
   expect(parseTdSave(JSON.stringify({...save,inputs,endTick:terminal.tick,score:terminal.wave}),now)?.endTick).toBe(terminal.tick);
 });
 it('has the full D3 + boss name contract and falls back when the manifest is absent', async () => {
-  expect(TD_ASSET_NAMES).toHaveLength(25);
+  expect(TD_ASSET_NAMES).toHaveLength(34);
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:false}));
   expect(await preloadTdArt()).toEqual({});
 });

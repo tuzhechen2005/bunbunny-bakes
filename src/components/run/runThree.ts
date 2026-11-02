@@ -163,7 +163,24 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
     templates.set("breadGold", gold);
   }
   const puddle = templates.get("puddle");
-  puddle?.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) m.material = new THREE.MeshStandardMaterial({ color: 0x3f8fd0, emissive: 0x2a6ea8, emissiveIntensity: .45, roughness: .1, metalness: .1 }); });
+  // Water: deep teal centre → light edge, sky streaks and a wet rim, glossy; ripples animate on top.
+  const waterTex = (() => {
+    const c = document.createElement("canvas"); c.width = c.height = 256; const x = c.getContext("2d")!;
+    const g = x.createRadialGradient(128, 128, 10, 128, 128, 128);
+    g.addColorStop(0, "#2f6f8c"); g.addColorStop(.6, "#4f93ae"); g.addColorStop(.86, "#8fbfcf"); g.addColorStop(1, "#6b5a4a");
+    x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+    x.strokeStyle = "rgba(255,255,255,.55)"; x.lineCap = "round";
+    for (const [x0, y0, x1, y1, w] of [[70, 90, 150, 76, 7], [96, 130, 170, 118, 4], [80, 164, 124, 158, 3]]) { x.lineWidth = w; x.beginPath(); x.moveTo(x0, y0); x.lineTo(x1, y1); x.stroke(); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
+  if (puddle) {
+    const model = puddle.children[0] as THREE.Mesh | undefined;
+    const hasOwnWater = !!model && (model.material as THREE.MeshStandardMaterial)?.roughness !== undefined && (model.material as THREE.MeshStandardMaterial).roughness < .12;
+    if (!hasOwnWater) puddle.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) m.material = new THREE.MeshStandardMaterial({ map: waterTex, roughness: .08, metalness: .2, emissive: 0x1d4a60, emissiveIntensity: .25 }); });
+    // Two soft expanding ripple rings, shared by every puddle instance.
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .5, depthWrite: false });
+    for (let i = 0; i < 2; i++) { const r = new THREE.Mesh(new THREE.RingGeometry(.28, .32, 40).rotateX(-Math.PI / 2), ringMat.clone()); r.position.y = .035; r.name = `ripple${i}`; puddle.add(r); }
+  }
   const free = new Map<string, THREE.Object3D[]>();
   const live = new Map<number, { node: string; o: THREE.Object3D; shadow: THREE.Mesh }>();
   const take = (node: string) => {
@@ -191,6 +208,11 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
       y = (o.y ?? 0) * MM + .45 + Math.sin((s.tick + o.id * 13) * .12) * .1; entry.o.rotation.y = s.tick * .04;
     }
     entry.o.position.set(x, y, z);
+    if (o.kind === "puddle") for (let i = 0; i < 2; i++) {
+      const r = entry.o.getObjectByName(`ripple${i}`) as THREE.Mesh | undefined; if (!r) continue;
+      const k = ((s.tick + o.id * 17) / 70 + i * .5) % 1;
+      r.scale.set(.6 + k * 2.2, 1, .45 + k * 1.5); (r.material as THREE.MeshBasicMaterial).opacity = .5 * (1 - k);
+    }
     // Vans/trucks/ramps stretch along Z to the engine footprint (models are 6 m / 2 m long).
     const kind0: string = o.kind;
     if (kind0 === "van" || kind0 === "truck" || kind0 === "ramp") {

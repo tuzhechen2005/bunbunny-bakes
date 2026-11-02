@@ -20,8 +20,8 @@ function scene() {
   vi.stubGlobal('document', { createElement: () => ({ width: 0, height: 0, getContext: () => mockContext().ctx }) });
   const canvas = { width: 720, height: 1080, getContext: () => main.ctx, getBoundingClientRect: () => ({ width: 360, height: 540 }) } as unknown as HTMLCanvasElement;
   const tiers = ['cheap', 'expensive'].map(id => ({ id, radius: .1, points: 1, imageUrl: null, color: { bg: 'white', ink: 'black' } }));
-  const view = createTdRenderer(canvas, 0, {}, tiers, [null, null], false);
   const state = createTdGame({ level: tdLevel('2026-10-26', 1), tierCount: 2 }).state();
+  const view = createTdRenderer(canvas, state.mapData, {}, tiers, [null, null], false);
   return { view, state, drawImage: main.drawImage };
 }
 

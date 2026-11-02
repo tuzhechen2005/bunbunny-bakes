@@ -4,7 +4,9 @@ export const TD_CLIENT_REJECT_LIMIT = 100;
 
 /** Check current state after settling the clock; ignored taps must not mutate the replay counters. */
 function affordableAction(state: TdState, input: TdInput): boolean {
-  if (input.type === 'callWave') return state.nextWaveTick !== null;
+  if (input.type === 'callWave') return state.nextWaveTick !== null || state.awaitingStart;
+  if (input.type === 'switch') return true;
+  if (input.type === 'item') return !state.itemsUsed[input.item];
   const tower = state.towers.find(t => t.slot === input.slot);
   if (input.type === 'place') return !tower && state.coins >= towerStats(input.tower).cost;
   if (input.type === 'sell') return !!tower;

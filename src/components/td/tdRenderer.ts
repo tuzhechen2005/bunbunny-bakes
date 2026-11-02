@@ -1,12 +1,12 @@
-import { FIELD_WIDTH as W, FIELD_HEIGHT as H, TD_MAPS, TD_SLOT_RADIUS, towerStats, type TdEvent, type TdState, type TowerKind, type PestKind } from '@/lib/td';
+import { FIELD_WIDTH as W, FIELD_HEIGHT as H, TD_SLOT_RADIUS, type TdMap, type TdPoint, towerStats, type TdEvent, type TdState, type TowerKind, type PestKind } from '@/lib/td';
 import type { TierView } from '@/components/game/types';
 import type { TdArt, TdSprite } from './tdAssets';
 
 // Canvas 2D in field units (FIELD_WIDTH×FIELD_HEIGHT). Static map + slots are cached; the frame loop
 // reuses a fixed effect pool and never allocates. Game art colours live here, like SVG art.
-const towerNames: Record<TowerKind, string> = { rollingPin: 'tower-pin', flourSifter: 'tower-sifter', whisk: 'tower-whisk', oven: 'tower-oven' };
+const towerNames: Record<TowerKind, string> = { rollingPin: 'tower-pin', flourSifter: 'tower-sifter', whisk: 'tower-whisk', oven: 'tower-oven', freezer: 'tower-freezer', pipingBag: 'tower-piping', caramelTorch: 'tower-torch' };
 const pestNames: Record<PestKind, string> = { ant: 'pest-ant', mouse: 'pest-mouse', sparrow: 'pest-sparrow', beetle: 'pest-beetle' };
-const shotNames: Record<TowerKind, string> = { rollingPin: 'proj-pin', flourSifter: '', whisk: 'proj-whisk', oven: 'proj-oven' };
+const shotNames: Record<TowerKind, string> = { rollingPin: 'proj-pin', flourSifter: '', whisk: 'proj-whisk', oven: 'proj-oven', freezer: '', pipingBag: '', caramelTorch: '' };
 const TOWER_W = 205, PEST_W = 150, BOSS_SCALE = 1.6, PHOTO = 32;
 const FX = 64;
 type FxKind = 0 | 1 | 2 | 3 | 4; // none, puff, coin, ring, dust
@@ -28,26 +28,68 @@ export async function loadTdDeco(): Promise<TdDeco> {
   return { slot, plate };
 }
 
-export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, art: TdArt, tiers: TierView[], photos: (HTMLImageElement | null)[], reduced: boolean, deco: TdDeco = {}): TdView {
+export function createTdRenderer(canvas: HTMLCanvasElement, map: TdMap, art: TdArt, tiers: TierView[], photos: (HTMLImageElement | null)[], reduced: boolean, deco: TdDeco = {}): TdView {
   const ctx = canvas.getContext('2d')!;
-  const map = TD_MAPS[mapIndex], last = map.path[map.path.length - 1];
-  // The path exits the board; the plate sits just inside so the whole pile stays visible.
+  const last = map.path[map.path.length - 1];
   const inside = (v: number, max: number) => Math.max(110, Math.min(max - 110, v));
-  // Portrait maps exit at the bottom, landscape maps on the right: step back inside along the last segment.
+  // The path exits the board; the plate sits just inside along the last segment.
   const prev = map.path[map.path.length - 2] ?? last, len = Math.hypot(last.x - prev.x, last.y - prev.y) || 1;
   const end = { x: inside(last.x - (last.x - prev.x) / len * 40, W), y: inside(last.y - (last.y - prev.y) / len * 40, H) };
   const layer = document.createElement('canvas'); layer.width = W; layer.height = H;
   const bg = layer.getContext('2d')!;
-  bg.fillStyle = '#e9dcc6'; bg.fillRect(0, 0, W, H);
-  const background = art[`map-${mapIndex + 1}`];
-  if (background) { const r = background.asset.frames[0].rect; bg.drawImage(background.image, r[0], r[1], r[2], r[3], 0, 0, W, H); }
-  else {
-    bg.strokeStyle = '#d6c3a5'; bg.lineWidth = 56; bg.lineJoin = 'round'; bg.lineCap = 'round'; bg.beginPath();
-    bg.moveTo(map.path[0].x, map.path[0].y); for (let i = 1; i < map.path.length; i++) bg.lineTo(map.path[i].x, map.path[i].y); bg.stroke();
+  // Maps are data now (one per level): a warm wooden counter, then the dough road and its features.
+  const wood = bg.createLinearGradient(0, 0, 0, H); wood.addColorStop(0, '#e9c79c'); wood.addColorStop(1, '#d8a873');
+  bg.fillStyle = wood; bg.fillRect(0, 0, W, H);
+  bg.strokeStyle = 'rgba(110,62,26,.16)'; bg.lineWidth = 3;
+  for (let y = 90; y < H; y += 90) { bg.beginPath(); bg.moveTo(0, y); bg.lineTo(W, y); bg.stroke(); }
+  bg.fillStyle = 'rgba(255,240,214,.18)'; for (let y = 92; y < H; y += 90) bg.fillRect(0, y, W, 3);
+  const line = (pts: readonly TdPoint[]) => { bg.beginPath(); bg.moveTo(pts[0].x, pts[0].y); for (let i = 1; i < pts.length; i++) bg.lineTo(pts[i].x, pts[i].y); };
+  const road = (pts: readonly TdPoint[]) => {
+    if (pts.length < 2) return;
+    bg.lineJoin = 'round'; bg.lineCap = 'round';
+    bg.strokeStyle = 'rgba(80,45,20,.28)'; bg.lineWidth = 92; bg.save(); bg.translate(0, 8); line(pts); bg.stroke(); bg.restore();
+    bg.strokeStyle = '#a8764a'; bg.lineWidth = 88; line(pts); bg.stroke();
+    bg.strokeStyle = '#f3e3c8'; bg.lineWidth = 74; line(pts); bg.stroke();
+    bg.strokeStyle = 'rgba(255,255,255,.45)'; bg.lineWidth = 2; bg.setLineDash([14, 18]); line(pts); bg.stroke(); bg.setLineDash([]);
+  };
+  const features = map.features ?? [];
+  road(map.path);
+  for (const f of features) if (f.type === 'fork') for (const b of f.branches ?? f.geometries ?? []) road(b);
+  for (const f of features) {
+    const g = f.geometry;
+    if (!g || g.length < 1) continue;
+    if (f.type === 'strip') {
+      // Conveyor: terracotta belt with cream chevrons pointing along the route.
+      bg.strokeStyle = '#c27a5f'; bg.lineWidth = 64; bg.lineCap = 'butt'; line(g); bg.stroke();
+      bg.fillStyle = 'rgba(255,248,236,.85)';
+      for (let i = 1; i < g.length; i++) {
+        const a = g[i - 1], b = g[i], d = Math.hypot(b.x - a.x, b.y - a.y), ang = Math.atan2(b.y - a.y, b.x - a.x);
+        for (let t = 20; t < d; t += 46) { bg.save(); bg.translate(a.x + (b.x - a.x) * t / d, a.y + (b.y - a.y) * t / d); bg.rotate(ang); bg.beginPath(); bg.moveTo(10, 0); bg.lineTo(-8, -16); bg.lineTo(-2, 0); bg.lineTo(-8, 16); bg.closePath(); bg.fill(); bg.restore(); }
+      }
+    } else if (f.type === 'jam') {
+      bg.strokeStyle = 'rgba(176,58,82,.55)'; bg.lineWidth = 66; bg.lineCap = 'round'; line(g); bg.stroke();
+      bg.fillStyle = 'rgba(255,220,230,.5)';
+      for (const p of g) { bg.beginPath(); bg.ellipse(p.x - 10, p.y - 8, 10, 6, -.4, 0, 7); bg.fill(); }
+    } else if (f.type === 'tunnel') {
+      // Brick oven tunnel: a dark band with arches at both mouths.
+      bg.strokeStyle = 'rgba(60,32,18,.55)'; bg.lineWidth = 80; bg.lineCap = 'butt'; line(g); bg.stroke();
+      for (const p of [g[0], g[g.length - 1]]) {
+        bg.fillStyle = '#b55e3e'; bg.beginPath(); bg.arc(p.x, p.y, 54, Math.PI, 0); bg.lineTo(p.x + 54, p.y + 20); bg.lineTo(p.x - 54, p.y + 20); bg.closePath(); bg.fill();
+        bg.fillStyle = '#2f1a10'; bg.beginPath(); bg.arc(p.x, p.y + 6, 36, Math.PI, 0); bg.lineTo(p.x + 36, p.y + 20); bg.lineTo(p.x - 36, p.y + 20); bg.closePath(); bg.fill();
+      }
+    } else if (f.type === 'portal') {
+      const ends = [g[0], g[g.length - 1]], colors = ['#6fb3d9', '#d98fb7'];
+      ends.forEach((p, i) => {
+        const r = bg.createRadialGradient(p.x, p.y, 6, p.x, p.y, 58);
+        r.addColorStop(0, '#fff'); r.addColorStop(.45, colors[i]); r.addColorStop(1, 'rgba(255,255,255,0)');
+        bg.fillStyle = r; bg.beginPath(); bg.arc(p.x, p.y, 58, 0, 7); bg.fill();
+        bg.strokeStyle = colors[i]; bg.lineWidth = 6; bg.beginPath(); bg.arc(p.x, p.y, 40, 0, 7); bg.stroke();
+      });
+    }
   }
   // Soft vignette makes the board read as a lit tabletop.
   const vig = bg.createRadialGradient(W / 2, H * .44, Math.min(W, H) * .36, W / 2, H / 2, Math.max(W, H) * .67);
-  vig.addColorStop(0, 'rgba(60,30,10,0)'); vig.addColorStop(1, 'rgba(60,30,10,.28)');
+  vig.addColorStop(0, 'rgba(60,30,10,0)'); vig.addColorStop(1, 'rgba(60,30,10,.24)');
   bg.fillStyle = vig; bg.fillRect(0, 0, W, H);
   // Slot pads: stone discs with a dashed rim, drawn by the frontend (no baked pads).
   for (const slot of map.slots) {
@@ -161,6 +203,28 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
       ctx.drawImage(token(d.tier), -PHOTO, -PHOTO, PHOTO * 2, PHOTO * 2); ctx.restore();
     }
 
+    // Piping-bag cream lines: glossy white ribbons on the road.
+    for (let i = 0; i < s.creamLines.length; i++) {
+      const c = s.creamLines[i];
+      for (const g of c.geometries.length ? c.geometries : [c.geometry]) {
+        if (g.length < 2) continue;
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(255,253,246,.92)'; ctx.lineWidth = 22; ctx.beginPath(); ctx.moveTo(g[0].x, g[0].y); for (let k = 1; k < g.length; k++) ctx.lineTo(g[k].x, g[k].y); ctx.stroke();
+        ctx.strokeStyle = 'rgba(240,200,190,.8)'; ctx.lineWidth = 4; ctx.stroke();
+      }
+    }
+    // Switchable forks: an arrow sign showing which branch new pests take.
+    const feats = map.features ?? [];
+    for (let i = 0; i < feats.length; i++) {
+      const f = feats[i]; if (f.type !== 'fork' || !f.switchable) continue;
+      const branches = f.branches ?? f.geometries ?? []; const choice = s.switches[f.id] ?? 0, b = branches[choice];
+      const at = f.geometry[0]; if (!at || !b || b.length < 2) continue;
+      const ang = Math.atan2(b[1].y - b[0].y, b[1].x - b[0].x);
+      ctx.save(); ctx.translate(at.x, at.y - 70);
+      ctx.fillStyle = '#fff8ec'; ctx.strokeStyle = '#c27a5f'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(0, 0, 34, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.rotate(ang); ctx.fillStyle = '#c27a5f'; ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(-6, -16); ctx.lineTo(-6, -6); ctx.lineTo(-18, -6); ctx.lineTo(-18, 6); ctx.lineTo(-6, 6); ctx.lineTo(-6, 16); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
     // Whisk batter: sticky yellow puddles on the path.
     for (let i = 0; i < s.batterPuddles.length; i++) {
       const b = s.batterPuddles[i], left = Math.max(0, Math.min(1, (b.until - tick) / 30));
@@ -190,6 +254,7 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
     // Pests: y-sorted would cost an allocation; path order is close enough at this scale.
     for (let i = 0; i < s.pests.length; i++) {
       const p = s.pests[i];
+      if (p.inTunnel) continue; // hidden (and untargetable) inside an oven tunnel
       const boss = !!p.boss, w = PEST_W * (boss ? BOSS_SCALE : 1);
       const flying = p.kind === 'sparrow';
       const h = ((p.heading % 360) + 360) % 360;
@@ -204,6 +269,9 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
       if (hit !== undefined && tick - hit < 6 && !reduced) {
         ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .55 * (1 - (tick - hit) / 6);
         sprite(s0, frame, p.x, p.y - lift, w, flip, tilt); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+      }
+      if (tick < p.frozenUntil) {
+        ctx.globalAlpha = .55; ctx.fillStyle = '#bfe3f5'; ctx.beginPath(); ctx.ellipse(p.x, p.y - lift - w * .12, w * .34, w * .24, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
       }
       if (p.floured) {
         // Flour dust: pale motes circling the pest (it takes extra damage).
