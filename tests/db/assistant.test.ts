@@ -302,6 +302,15 @@ describe("POST /api/assistant: model loop", () => {
     expect(results.c4).toMatchObject({ ok: true, 小计: `$${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, "0")}` });
   });
 
+  it("get_menu returns the computed new flag without the internal expiry", async () => {
+    await db.product.update({ where: { id: ids.redBean }, data: { newUntil: new Date(NOW.getTime() + 1) } });
+    script.push({ tool_calls: [{ id: "m", name: "get_menu", args: {} }] }, { content: "好的" });
+    expect((await call(user("有什么新品"))).status).toBe(200);
+    const menu = toolResults().m as { products: { isNew: boolean }[] };
+    expect(menu.products.map(p => p.isNew)).toEqual([true, false, false, false]);
+    expect(JSON.stringify(menu)).not.toContain("newUntil");
+  });
+
   it("tool outputs never carry grams, limits, used amounts, orders or customers", async () => {
     await createOpenDate("2026-10-22", { doughLimitG: 140 });
     await createOrder({ date: "2026-10-22", items: [{ productId: ids.redBean, qty: 1 }], wechatId: "cust_secret_1" });

@@ -362,3 +362,56 @@ describe("product units", () => {
     expect((await PATCH(request("PATCH", { unitLabel }), patchCtx(P.brulee))).status).toBe(422);
   });
 });
+
+describe("new product flag", () => {
+  it("creates, preserves, restarts and clears expiry with audited before/after values", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const now = new Date();
+    vi.setSystemTime(now);
+    const week = 7 * 24 * 60 * 60 * 1000;
+    const until = new Date(now.getTime() + week).toISOString();
+    try {
+      const res = await POST(request("POST", { ...unitBody, isNew: true }));
+      expect(res.status).toBe(201);
+      const { product } = await res.json();
+      expect(product.newUntil).toBe(until);
+      const created = await db.auditLog.findFirstOrThrow({ where: { entityId: product.id } });
+      expect(created.after).toMatchObject({ newUntil: until });
+      const patch = async (body: unknown) => {
+        const response = await PATCH(request("PATCH", body), patchCtx(product.id));
+        expect(response.status).toBe(200);
+        return response.json();
+      };
+      expect((await patch({ description: "updated" })).product.newUntil).toBe(until);
+      vi.setSystemTime(new Date(now.getTime() + 1000));
+      const restarted = new Date(now.getTime() + 1000 + week).toISOString();
+      expect((await patch({ isNew: true })).product.newUntil).toBe(restarted);
+      const audit = await db.auditLog.findFirstOrThrow({ where: { entityId: product.id, action: "product.update" }, orderBy: { at: "desc" } });
+      expect(audit.before).toMatchObject({ newUntil: until });
+      expect(audit.after).toMatchObject({ newUntil: restarted });
+      const listed = await (await GET(request("GET"))).json();
+      expect(listed.products.find((p: { id: string }) => p.id === product.id).newUntil).toBe(restarted);
+      vi.setSystemTime(new Date(now.getTime() + 2000));
+      expect((await patch({ isNew: false })).product.newUntil).toBeNull();
+      const cleared = await db.auditLog.findFirstOrThrow({ where: { entityId: product.id, action: "product.update" }, orderBy: { at: "desc" } });
+      expect(cleared.before).toMatchObject({ newUntil: restarted });
+      expect(cleared.after).toMatchObject({ newUntil: null });
+      expect((await patch({ isNew: true })).product.newUntil).toBe(new Date(now.getTime() + 2000 + week).toISOString());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it.each([false, undefined])("creates with null expiry when isNew=%s", async (isNew) => {
+    const res = await POST(request("POST", { ...unitBody, isNew }));
+    expect(res.status).toBe(201);
+    expect((await res.json()).product.newUntil).toBeNull();
+  });
+  it.each([null, "true", 1])("rejects invalid flag %s", async (isNew) => {
+    expect((await POST(request("POST", { ...unitBody, isNew }))).status).toBe(422);
+    expect((await PATCH(request("PATCH", { isNew }), patchCtx(P.redBean))).status).toBe(422);
+  });
+  it("rejects caller-supplied expiry", async () => {
+    expect((await POST(request("POST", { ...unitBody, newUntil: new Date().toISOString() }))).status).toBe(422);
+    expect((await PATCH(request("PATCH", { newUntil: new Date().toISOString() }), patchCtx(P.redBean))).status).toBe(422);
+  });
+});

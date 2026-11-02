@@ -11,6 +11,7 @@ import { flyToBag } from "@/lib/flyToBag";
 import { haptic } from "@/lib/motion/react";
 
 const product = (over: Partial<MenuProduct> = {}): MenuProduct => ({
+  isNew: false,
   id: "p1",
   name: "奶酥红豆包",
   description: null,

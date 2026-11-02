@@ -27,6 +27,7 @@ const PRODUCT_KEYS = [
   "id",
   "imageUrl",
   "images",
+  "isNew",
   "leadDays",
   "name",
   "pickupWeekdays",
@@ -67,7 +68,7 @@ describe("GET /api/menu", () => {
     );
     for (const p of body.products) expect(Object.keys(p).sort()).toEqual(PRODUCT_KEYS);
     const text = JSON.stringify(body);
-    for (const leak of ["doughG", "roundG", "piecesPerRound", "dailyLimit", "batchYield", "capacityMode"]) {
+    for (const leak of ["newUntil", "doughG", "roundG", "piecesPerRound", "dailyLimit", "batchYield", "capacityMode"]) {
       expect(text).not.toContain(leak);
     }
   });

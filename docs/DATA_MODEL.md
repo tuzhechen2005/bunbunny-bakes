@@ -45,6 +45,7 @@
 | leadDays | int | 面团类默认 1，布蕾 2 |
 | pickupWeekdays | int[] | 可取货的星期几（D115），0 = 周日 … 6 = 周六，按芝加哥取货日期算；`[]` = 每天都可以（默认，现有商品不变）。存成从小到大、不重复；选满 7 天存成 `[]`。CHECK：只能是 0–6、没有 NULL、不能 7 个都有。迁移 `20261027120000_product_pickup_weekdays` |
 | status | enum | `ACTIVE` / `PAUSED` / `ARCHIVED`（下架，前台不显示） |
+| newUntil | timestamptz? | 新品截止时间（N1 / D179），null = 非新品；服务器 now 严格小于此值才是新品。开启 / 再次开启设为 now + 168 小时，关闭置 null，省略保持原值；与商品审计同事务。迁移 `20261102120000_product_new_until` 仅加可空列，无回填，已有商品均为 null。仅后台返回原值，客户只看到计算后的 `isNew` |
 | sortOrder | int | |
 
 用 Zod 校验"方式 ↔ 必填字段"的对应关系，数据库层加 CHECK 约束兜底。
@@ -337,3 +338,4 @@ resolve RUN through the selected historical `GamePrizeWeek`. No tier configurati
 - Real Postgres coverage: `economy.test.ts` (concurrency, completion/correction, cap/DST, moderation, atomic inventory), `migration.economy.test.ts` (additive migration, immutable ledger, uniqueness and count/identity checks). Use only validated `*_test` databases.
 
 - Shop identity is self-reported (D170/Q11=A), with no viewToken or ownership check. Purchases append CUSTOMER `shop.purchase` AuditLog in the wallet transaction, including normalized identity, item, qty and cost. No raw IP is stored; hourly game rate-limit buckets enforce both IP-hash and normalized identity limits.
+
