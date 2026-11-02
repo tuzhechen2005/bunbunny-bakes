@@ -1,10 +1,47 @@
-# Deterministic bakery TD — D9 / engine v9
+# Deterministic bakery TD — D10 / engine v10
 
-Canonical seed: `v9.td.<Gregorian Monday>.<level>`. Old v1–v8 unfinished runs
+Canonical seed: `v10.td.<Gregorian Monday>.<level>`. Old v1–v9 unfinished runs
 and saves are rejected; stored results remain intact. The save key derives from
-`TD_ENGINE_VERSION`, so it changes to `bb_td_save_v9` without frontend edits.
+`TD_ENGINE_VERSION`, so it changes to `bb_td_save_v10` without frontend edits.
 60 integer ticks/s; travel uses 16 subunits per drawing unit. Board: 1440×810.
 No clocks, global random state, account progression, or cross-week unlocks.
+
+## Fewer, stronger pests
+
+Ordinary counts are `round(D9 count × 0.6)` at every level, including L1.
+The original draws are consumed before thinning, retaining the species curriculum
+and weekly variation. Each wave scales HP and bounty by its original/reduced
+count ratio (approximately 1.67), with integer rounding. Bosses retain their
+speed, armor and bread capacity, and receive the same count-ratio HP/bounty boost.
+Ordinary HP additionally uses a smooth density correction: 100% at L1, 98% at
+L2–L5, 86% at L10, and 115% at L20+, interpolating between checkpoints. This
+compensates for changed splash value and firing windows while retaining D9's
+win-rate curve. Speeds, armor, tower stats and opening coins are unchanged.
+
+Across the first 20 sampled weeks, total pest counts (including bosses) are
+60% of v9 at L1/L5/L10/L20. Total HP is respectively 107%/103%/91%/117% of v9;
+total available bounty is 109%/104%/104%/103%. Thus lower density preserves the
+aggregate economy and approximate threat, despite the seed-version change.
+
+Spawn intervals grow to `ceil(D9 interval / 0.6)` (L1: 100 → 167 ticks).
+Canonical waves set `maxLivePests`: 8 below L20, 12 from L20 onward, including
+bosses and returning thieves across overlapping waves. When full, the next
+arrival waits without consuming its index. It spawns after a space opens; the
+following arrival waits the full interval. Prep time starts only after the final
+actual arrival. This prevents slows, freezes and early wave calls from crowding
+the road and remains deterministic in replay. Custom test fixtures may omit the
+optional cap. The 18,000-tick combat deadline still applies.
+
+Snapshot week: `2026-10-26`; each version uses its own canonical seed. Counts
+exclude the single finale boss. HP entries are first-wave ordinary pests; boss
+HP is from the finale. Other weeks/waves vary.
+
+| Level | Ordinary pests W1/W2/W3/W4/W5, v9 → v10 | Ant HP | Mouse HP | Sparrow HP | Beetle HP | Boss HP |
+|---|---|---:|---:|---:|---:|---:|
+| 1 | 6/9/10/7/16 → 4/5/7/5/8 | 16 → 28 | — | — | — | 90 → 158 |
+| 5 | 10/13/15/13/18 → 6/8/10/7/11 | 210 → 325 | 489 → 755 | 316 → 487 | 218 → 336 | 1320 → 2280 |
+| 10 | 24/26/28/24/35 → 13/16/17/14/21 | 133 → 199 | 308 → 463 | 199 → 298 | 137 → 207 | 2220 → 3700 |
+| 20 | 37/41/43/40/49 → 23/25/27/24/30 | 295 → 640 | 685 → 1486 | 442 → 960 | 305 → 663 | 4020 → 6700 |
 
 ## Backend and renderer contract
 
@@ -93,7 +130,7 @@ successfully verified replay log: replay rejects unauthorized, locked, duplicate
 or out-of-path item actions. `state.itemsUsed` and `verifyTdRun(..., complete,
 itemsAllowed).itemsUsed` also expose verified counts. E1 must supply inventory
 from trusted server state, bind it to the run, and deduct atomically at finish;
-never accept inventory from the finish payload. D9 does not deduct inventory.
+never accept inventory from the finish payload. The TD engine does not deduct inventory.
 
 Build phase remains unlimited and inert. The first `callWave` starts combat with
 no bonus; five waves, later early-call bonuses, 18,000 combat-tick limit, return
@@ -347,44 +384,37 @@ geometry; use actual coordinates for drawing and hit testing.
 
 ## Regression evidence
 
-D9 uses two disjoint 20-week samples (`tdBotWeeks(20, 0)` and offset 100).
-The greedy baseline has no purchased inventory; the bot accepts explicit
-`itemsAllowed`, spends only on unlocked towers, switches toward better coverage,
-places bombs at dense clusters, rings the bell against returning carriers, and
-lays butter ahead of approaching pests. A separate inventory-enabled bot/replay
-test verifies accepted uses and `countItemUses` accounting.
+The unchanged D9 targets use two disjoint 20-week samples (`tdBotWeeks(20, 0)`
+and offset 100), without purchased inventory:
 
-| Check | First sample | Held-out sample |
-|---|---:|---:|
-| L5 greedy | 85% | 95% |
-| L10 greedy | 55% | 55% |
-| L20 greedy | 25% | 25% |
+| Check | Target ±10 | First sample | Held-out sample |
+|---|---:|---:|---:|
+| L5 greedy | 85% | 75% | 75% |
+| L10 greedy | 55% | 45% | 60% |
+| L20 greedy | 20% | 30% | 25% |
 
-L1: 100/100 weeks pass with one unupgraded rolling pin, rotating through all three
-slots. Small samples are regression guardrails, not estimates of human win rates.
-Opening coins are 340 through L5, taper to 210 at L10, then grow to 720 at L20.
+L1 passes across 100 weeks with one unupgraded rolling pin, rotating through all
+three slots. The density regression observes every tick across 20 weeks at each
+of L1–L25, L50, L100 and L1000. A separate queue/replay regression checks that
+blocked arrivals are neither skipped nor allowed to start the prep timer early.
+Client, engine and DB regressions explicitly reject v9 saves/run seeds.
+Small samples are regression guardrails, not estimates of human win rates.
 
-Validation commands use `--configLoader runner` because this worktree's shared
-`node_modules` link does not allow Vite's bundled-config temporary writes:
+Validation commands use `--configLoader runner` because the shared `node_modules`
+link does not allow Vite's bundled-config temporary writes. Generate the local
+Prisma client with `npx prisma generate` first when absent.
 
 ```sh
 npx tsc --noEmit
-npx eslint
-npx vitest run --configLoader runner --no-cache --project unit --maxWorkers 1 --testTimeout 60000
-TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_d9_test TEST_DIRECT_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_d9_test npx vitest run --configLoader runner --no-cache --project db
+npx eslint src tests --quiet
+npx vitest run --configLoader runner --project unit tests/unit/td*.test.ts
+TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_d10_test TEST_DIRECT_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_d10_test npx vitest run --configLoader runner --project db
 ```
 
-Backend TypeScript passes. Full TypeScript still reports four frontend integration
-errors in the deliberately untouched `TdBoard.tsx`, `tdRenderer.ts` and `tdInput.ts`:
-three old four-tower exhaustive tables need the new tower keys, and input handling
-must narrow to a build action before reading `slot`. The frontend must also draw
-`state.mapData`, respect unlocks/slot count, and forward switch/item inputs.
-No browser was launched and no commit was made.
+Final D10 checks: TypeScript and ESLint pass; all 11 TD unit files / 104 tests
+pass, including all 560 density runs and all six unchanged D9 checkpoints.
+The full DB suite passes 79 files / 890 tests on `bunbunny_d10_test`; the final
+TD/migration rerun passes 2 files / 13 tests, including v8/v9 expiry coverage.
+The tightened maximum-wave-size regression also passes its focused rerun.
 
-Final D9 checks: the full non-tuning unit run passed 98 files / 1,209 tests;
-subsequent focused regressions covered the final portal/freeze changes (27 tests),
-and every difficulty checkpoint passed after the L10 coin adjustment. The full
-DB run passed 72 files / 830 tests on `bunbunny_d9_test`, including trusted inventory
-replay and old-v8 rejection. ESLint, isolated backend TypeScript and
-`git diff --check` pass. The four full-TypeScript frontend errors above remain;
-no type suppression or weakening was added to hide them.
+No frontend component changes or commits are part of D10.

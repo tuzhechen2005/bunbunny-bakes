@@ -1,4 +1,4 @@
-export const TD_ENGINE_VERSION = 9;
+export const TD_ENGINE_VERSION = 10;
 export const TICKS_PER_SECOND = 60;
 export const FIELD_WIDTH = 1440;
 export const FIELD_HEIGHT = 810;
@@ -27,7 +27,7 @@ export interface TdMap { features?: readonly TdFeature[]; name: string; path: re
 export type PestKind = "ant" | "mouse" | "sparrow" | "beetle";
 export type TowerKind = "rollingPin" | "flourSifter" | "whisk" | "oven" | "freezer" | "pipingBag" | "caramelTorch";
 export interface TdPestSpec { kind: PestKind; hp: number; speed: number; bounty: number; armor: number; boss?: boolean }
-export interface TdWave { pests: TdPestSpec[]; interval: number }
+export interface TdWave { pests: TdPestSpec[]; interval: number; maxLivePests?: number }
 export interface TdLevel { mapData: TdMap; unlockedTowers: TowerKind[]; newlyUnlocked: TowerKind[]; seed: string; weekKey: string; number: number; map: number; startCoins: number; waves: TdWave[] }
 export type TdOptions = ({ seed: string; level?: never } | { level: TdLevel; seed?: never }) & {
   /** Owner's tiers ordered cheapest first. Only their count/indices enter simulation. */

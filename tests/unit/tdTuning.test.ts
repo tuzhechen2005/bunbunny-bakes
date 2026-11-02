@@ -17,3 +17,19 @@ it('L1 needs only one unupgraded rolling pin across 100 weeks',()=>{
     expect(game.passed).toBe(true);
   }
 },60000);
+
+// Cover each onboarding level, the late-game count ceiling and saturated tuning.
+it.each([...Array.from({ length: 25 }, (_, i) => i + 1), 50, 100, 1000])(
+  'L%i stays within the live-pest cap across 20 weeks', (level) => {
+    const cap = level < 20 ? 8 : 12;
+    for (const week of tdBotWeeks(20)) {
+      let peak = 0;
+      const run = greedyTd(tdLevel(week, level), {}, state => {
+        peak = Math.max(peak, state.pests.length);
+      });
+      expect(peak, `${week} L${level}`).toBeLessThanOrEqual(cap);
+      expect(peak).toBeGreaterThan(0);
+      expect(run.state.inputsRejected).toBe(0);
+    }
+  }, 300000,
+);

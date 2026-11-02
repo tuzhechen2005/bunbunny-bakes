@@ -1,11 +1,11 @@
 import { createRng } from "../../src/lib/game/rng";
 import {
   createTdGame, TOWER_KINDS, towerStats, pathLength, pathPosition, distanceSquared,
-  MAX_LEVEL_TICKS, SUBUNITS, type TdInput, type TdLevel, type TowerKind, type TdBranch, type TdOptions,
+  MAX_LEVEL_TICKS, SUBUNITS, type TdInput, type TdLevel, type TowerKind, type TdBranch, type TdOptions, type TdState,
 } from "../../src/lib/td";
 
 /** Public geometry/stats only; no future waves, RNG state, or private engine injection. */
-function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind, itemsAllowed: TdOptions["itemsAllowed"] = {}) {
+function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind, itemsAllowed: TdOptions["itemsAllowed"] = {}, observe?: (state: TdState) => void) {
   const game = createTdGame({ level, itemsAllowed });
   const rng = createRng(`${level.seed}:td-bot`);
   const map = level.mapData;
@@ -91,14 +91,23 @@ function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind, it
     if (state.awaitingStart || state.nextWaveTick !== null && state.pests.length === 0 && !state.spawning) {
       apply({ tick: state.tick, type: "callWave", slot: -1 });
     }
-    game.step(Math.min(MAX_LEVEL_TICKS, state.tick + 30));
+    const until = Math.min(MAX_LEVEL_TICKS, state.tick + 30);
+    if (observe) {
+      // Preserve the bot's purchase cadence while checking every simulation tick.
+      for (let tick = state.tick + 1; tick <= until && !game.over; tick++) {
+        const events = game.step(tick);
+        // The live count can increase only on a spawn tick. Inspect its exact
+        // snapshot rather than copying the whole state on every empty tick.
+        if (events.some(event => event.type === "spawn")) observe(game.state());
+      }
+    } else game.step(until);
   }
   // Clear operation-local events so consumers compare simulation fields separately.
   game.step(MAX_LEVEL_TICKS);
   return { inputs, state: game.state() };
 }
 
-export const greedyTd = (level: TdLevel, itemsAllowed?: TdOptions["itemsAllowed"]) => run(level, "greedy", undefined, itemsAllowed);
+export const greedyTd = (level: TdLevel, itemsAllowed?: TdOptions["itemsAllowed"], observe?: (state: TdState) => void) => run(level, "greedy", undefined, itemsAllowed, observe);
 export const singleTowerTd = (level: TdLevel, kind: TowerKind) => run(level, "greedy", kind);
 export const randomTd = (level: TdLevel) => run(level, "random");
 
