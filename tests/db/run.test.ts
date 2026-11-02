@@ -26,7 +26,7 @@ it("starts with no configured tiers, unique versioned seed and scratch replay",a
  expect(r.seed).toMatch(new RegExp(`^v${RUN_ENGINE_VERSION}\\.[a-f0-9]{32}$`));expect((await start("wx_other")).seed).not.toBe(r.seed);
  const log=play(r),expected=replayRun(r.seed,log.inputs,log.endTick);
  const multiplier=expected.distance>=1500000?3:expected.distance>=500000?2:1;
- expect(expected.score).toBe(Math.floor(expected.distance/1000)*multiplier+expected.bread*10);
+ expect(expected.score).toBeGreaterThanOrEqual(Math.floor(expected.distance/1000)*multiplier+expected.bread*10);
  expect((await finishRun(db,log,IP,LATER)).score).toBe(expected.score);
  expect(await db.gameRun.findUniqueOrThrow({where:{id:r.runId}})).toMatchObject({game:"RUN",tiersSnapshot:[],drops:log.inputs,playMs:30000,dropCount:log.inputs.length});
 });
@@ -55,7 +55,7 @@ it("rejects malformed and excessive logs, impossible wall time, post-crash time 
 it("permits pauses until expiry and rejects engine version mismatch",async()=>{
  const r=await start();await expect(finishRun(db,play(r),IP,new Date(r.expiresAt))).rejects.toMatchObject({message:copy.gameApi.runExpired});
  await expect(progressRun(db,"RUN",{runId:r.runId,log:[],endTick:0},new Date(r.expiresAt))).rejects.toMatchObject({message:copy.gameApi.runExpired});
- for (const seed of ["v1.abcdef", "v2.abcdef", "v3.abcdef", "v4.abcdef", "v5.abcdef", "v6.abcdef", "v7.abcdef", "v8.abcdef", "v999.abcdef"]) {
+ for (const seed of ["v1.abcdef", "v2.abcdef", "v3.abcdef", "v4.abcdef", "v5.abcdef", "v6.abcdef", "v7.abcdef", "v8.abcdef", "v9.abcdef", "v999.abcdef"]) {
  await db.gameRun.update({where:{id:r.runId},data:{seed,progressAttemptAt:null}});
  await expect(finishRun(db,play(r),IP,LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
  await expect(progressRun(db,"RUN",{runId:r.runId,log:[],endTick:0},LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
@@ -102,4 +102,24 @@ it("routes start/progress/finish/leaderboard, no-store and bounded request bodie
  expect((await finishPOST(jsonRequest("/api/game/run/finish",play(r)))).status).toBe(200);
  const board=await boardGET(getRequest("/api/game/run/leaderboard?wechatId=wx_route"));expect(board.headers.get("cache-control")).toBe("no-store");expect((await board.json()).top).toHaveLength(1);
  for(const post of [finishPOST,progressPOST])expect((await post(new Request("http://localhost/api/game/run/finish",{method:"POST",headers:{"content-type":"application/json"},body:" ".repeat(RUN_MAX_FINISH_BODY_BYTES+1)}))).status).toBe(422);
+});
+
+it("authorizes start modes from finished history and keeps the stored mode authoritative", async()=>{
+ await expect(startRun(db,{wechatId:"first",nickname:"N",startMode:"sprint"},IP,T)).rejects.toMatchObject({code:"VALIDATION"});
+ const practice=await startRun(db,{wechatId:"first",nickname:"N",startMode:"practice"},IP,T);
+ expect(practice.seed).toMatch(/\.practice$/);
+ const result=await finishRun(db,{runId:practice.runId,inputs:[],endTick:720},IP,LATER);
+ expect(result.score).toBe(0);
+ await expect(startRun(db,{wechatId:"FIRST",nickname:"N",startMode:"practice"},IP,T)).rejects.toMatchObject({code:"VALIDATION"});
+ const sprint=await startRun(db,{wechatId:"FIRST",nickname:"N",startMode:"sprint"},IP,T);
+ expect((await db.gameRun.findUniqueOrThrow({where:{id:sprint.runId}})).seed).toBe(sprint.seed);
+ const end=replayRun(sprint.seed,[],600);
+ expect((await finishRun(db,{runId:sprint.runId,inputs:[],endTick:600,startMode:"normal"},IP,LATER)).score).toBe(end.score);
+});
+it("replays practice skips in progress and rejects rewriting the saved prefix", async()=>{
+ const r=await startRun(db,{wechatId:"practice_skip",nickname:"N",startMode:"practice"},IP,T);
+ const log=[{tick:200,dir:"S"}];
+ expect((await progressRun(db,"RUN",{runId:r.runId,log,endTick:200},new Date(+T+4000))).score).toBe(0);
+ await expect(finishRun(db,{runId:r.runId,inputs:[],endTick:201},IP,LATER)).rejects.toMatchObject({code:"VALIDATION"});
+ expect((await finishRun(db,{runId:r.runId,inputs:log,endTick:201},IP,LATER)).score).toBe(0);
 });

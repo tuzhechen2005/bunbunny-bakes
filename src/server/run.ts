@@ -8,7 +8,7 @@ import { z } from "zod";
 import { copy } from "@/copy";
 import type { Prisma } from "@/generated/prisma/client";
 import { MAX_INPUTS, MAX_RUN_TICKS, replayRun, RUN_ENGINE_VERSION,
-  RunReplayError, runSeed, runSeedVersion, UNITS_PER_METRE } from "@/lib/run";
+  RunReplayError, runSeed, runSeedVersion, type RunStartMode, UNITS_PER_METRE } from "@/lib/run";
 import { isRunSuspicious, inputTime } from "./runRules";
 export { isRunSuspicious, RUN_SUSPICIOUS_MEDIAN_GAP_MS } from "./runRules";
 import type { DbClient } from "./db";
@@ -30,20 +30,24 @@ import { runExpiresAt, weekKeyOf } from "./gameWeek";
 
 /** Worst-case compact input object plus comma, 25% whitespace headroom and a 4 KiB envelope. */
 export const RUN_MAX_FINISH_BODY_BYTES = Math.ceil(MAX_INPUTS * (JSON.stringify({ tick: MAX_RUN_TICKS, dir: "L" }).length + 1) * 1.25) + 4 * 1024;
-export const runStartSchema = startSchema;
+export const runStartSchema = startSchema.extend({ startMode: z.enum(["normal", "sprint", "practice"]).default("normal") });
 export const runFinishSchema = z.object({
   runId: z.uuid(),
-  inputs: z.array(z.object({ tick: z.number().int().min(0).max(MAX_RUN_TICKS), dir: z.enum(["L", "R", "U", "D"]) }).strict()).max(MAX_INPUTS),
+  inputs: z.array(z.object({ tick: z.number().int().min(0).max(MAX_RUN_TICKS), dir: z.enum(["L", "R", "U", "D", "S"]) }).strict()).max(MAX_INPUTS),
   endTick: z.number().int().min(0).max(MAX_RUN_TICKS),
 });
 
-export async function startRun(db: DbClient, input: unknown, ipHash: string, now: Date): Promise<{ runId: string; seed: string; expiresAt: string }> {
+export async function startRun(db: DbClient, input: unknown, ipHash: string, now: Date): Promise<{ runId: string; seed: string; expiresAt: string; startMode: RunStartMode }> {
   const data = parseGameInput(runStartSchema, input);
   if (await isBanned(db, data.wechatId)) {
     throw new AppError("VALIDATION", { message: copy.gameApi.banned, extra: { fields: { wechatId: copy.gameApi.banned } } });
   }
   await rateLimit(db, `run_start_ip:${ipHash}`, START_LIMIT_PER_HOUR, now);
-  const seed = runSeed(randomBytes(16).toString("hex"));
+  const finished = await db.gameRun.findFirst({ where: { game: "RUN", wechatId: { equals: data.wechatId, mode: "insensitive" }, finishedAt: { not: null } }, select: { id: true } });
+  if ((data.startMode === "sprint" && !finished) || (data.startMode === "practice" && finished)) {
+    throw new AppError("VALIDATION", { message: copy.gameApi.badRun });
+  }
+  const seed = runSeed(randomBytes(16).toString("hex"), data.startMode);
   const run = await db.gameRun.create({
     data: {
       game: "RUN",
@@ -55,7 +59,7 @@ export async function startRun(db: DbClient, input: unknown, ipHash: string, now
       ipHash,
     },
   });
-  return { runId: run.id, seed, expiresAt: runExpiresAt(now).toISOString() };
+  return { runId: run.id, seed, startMode: data.startMode, expiresAt: runExpiresAt(now).toISOString() };
 }
 
 export async function finishRun(db: DbClient, input: unknown, ipHash: string, now: Date): Promise<FinishResult> {
