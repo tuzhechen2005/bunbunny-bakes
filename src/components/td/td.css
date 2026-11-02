@@ -209,3 +209,8 @@
 .td-item img { width:100%; height:100%; object-fit:contain; }
 .td-item[aria-pressed=true] { background:#f2c14e; box-shadow:0 3px 0 #b88a2a; }
 .td-item:disabled { opacity:.35; }
+/* Four top buttons (back, 退出, replay, sound) sit in a 2×2 grid so the right strip stays short enough
+   that sound never lands on the pause button (owner 11/02, landscape in WeChat). */
+.td-shell-playing [data-testid=top-bar] { display:grid !important; grid-template-columns:36px 36px; justify-content:center; gap:4px; }
+.td-shell-playing [data-testid=top-bar] > div { display:contents; }
+.td-shell-playing [data-testid=top-bar] a, .td-shell-playing [data-testid=top-bar] button { width:36px; min-width:0; height:38px; padding:0; font-size:13px; }

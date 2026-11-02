@@ -59,13 +59,10 @@ export function createTdRenderer(canvas: HTMLCanvasElement, map: TdMap, art: TdA
     const g = f.geometry;
     if (!g || g.length < 1) continue;
     if (f.type === 'strip') {
-      // Conveyor: terracotta belt with cream chevrons pointing along the route.
-      bg.strokeStyle = '#c27a5f'; bg.lineWidth = 64; bg.lineCap = 'butt'; line(g); bg.stroke();
-      bg.fillStyle = 'rgba(255,248,236,.85)';
-      for (let i = 1; i < g.length; i++) {
-        const a = g[i - 1], b = g[i], d = Math.hypot(b.x - a.x, b.y - a.y), ang = Math.atan2(b.y - a.y, b.x - a.x);
-        for (let t = 20; t < d; t += 46) { bg.save(); bg.translate(a.x + (b.x - a.x) * t / d, a.y + (b.y - a.y) * t / d); bg.rotate(ang); bg.beginPath(); bg.moveTo(10, 0); bg.lineTo(-8, -16); bg.lineTo(-2, 0); bg.lineTo(-8, 16); bg.closePath(); bg.fill(); bg.restore(); }
-      }
+      // Conveyor: a grey rubber belt between steel rails; the arrows that run along it are drawn per frame.
+      bg.lineCap = 'butt'; bg.lineJoin = 'round';
+      bg.strokeStyle = '#8a8f96'; bg.lineWidth = 70; line(g); bg.stroke();
+      bg.strokeStyle = '#4c4f55'; bg.lineWidth = 58; line(g); bg.stroke();
     } else if (f.type === 'jam') {
       bg.strokeStyle = 'rgba(176,58,82,.55)'; bg.lineWidth = 66; bg.lineCap = 'round'; line(g); bg.stroke();
       bg.fillStyle = 'rgba(255,220,230,.5)';
@@ -133,6 +130,7 @@ export function createTdRenderer(canvas: HTMLCanvasElement, map: TdMap, art: TdA
   const hitAt = new Map<number, number>();
   const placedAt = new Float64Array(map.slots.length).fill(-1000);
   let shakeUntil = -1, bossAt = -1000;
+  const strips = (map.features ?? []).filter(f => f.type === 'strip' && f.geometry && f.geometry.length > 1).map(f => f.geometry!);
 
   function sprite(s: TdSprite | undefined, frameIndex: number, x: number, y: number, width: number, flip = false, rot = 0, sy = 1) {
     if (!s) return false;
@@ -162,6 +160,16 @@ export function createTdRenderer(canvas: HTMLCanvasElement, map: TdMap, art: TdA
     ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
     if (tick < shakeUntil) { const m = (shakeUntil - tick) / 24 * 7; ctx.translate(Math.sin(tick * 1.9) * m, Math.cos(tick * 2.3) * m); }
     ctx.drawImage(layer, 0, 0);
+
+    // Conveyor arrows run along the belt (static when reduced) so the speed-up reads at a glance.
+    if (strips.length) {
+      const phase = reduced ? 0 : (tick * 1.6) % 46;
+      ctx.fillStyle = 'rgba(255,214,102,.95)';
+      for (const g of strips) for (let i = 1; i < g.length; i++) {
+        const a = g[i - 1], b = g[i], d = Math.hypot(b.x - a.x, b.y - a.y), ang = Math.atan2(b.y - a.y, b.x - a.x);
+        for (let t = 12 + phase; t < d - 8; t += 46) { ctx.save(); ctx.translate(a.x + (b.x - a.x) * t / d, a.y + (b.y - a.y) * t / d); ctx.rotate(ang); ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(-6, -18); ctx.lineTo(1, 0); ctx.lineTo(-6, 18); ctx.closePath(); ctx.fill(); ctx.restore(); }
+      }
+    }
 
     // Empty-slot affordance: a breathing "+" when anything is affordable.
     const afford = s.coins >= 60 && !s.over;
