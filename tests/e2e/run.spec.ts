@@ -47,20 +47,21 @@ async function swipeLeft(page:Page) {
 }
 for(const width of [320,390])test.describe(`RUN ${width}px`,()=>{
  test.use({viewport:{width,height:800},hasTouch:true});
- test("six-game hub with compact runner card, menu, prize line and leaderboard",async({page})=>{
-  await mockApi(page);await page.goto("/game/hub");
+ test("six-game hub with featured runner card, menu, prize line and leaderboard",async({page})=>{
+  await mockApi(page);await page.goto("/game/hub");await expect(page.getByTestId("hub-featured").getByTestId("hub-game-run")).toBeVisible();
   const runner=page.getByTestId("hub-game-run");
   await expect(runner.getByTestId("hub-prize")).toBeVisible();
   await page.evaluate(()=>document.fonts.ready);
   const boxes=await Promise.all(["big","tu","m3","grab","run","td"].map(k=>page.getByTestId(`hub-game-${k}`).boundingBox()));
-  expect(boxes[0]!.y).toBe(boxes[1]!.y);expect(boxes[2]!.y).toBe(boxes[3]!.y);expect(boxes[4]!.y).toBeGreaterThan(boxes[3]!.y);expect(boxes[4]!.width).toBe(boxes[0]!.width);expect(boxes[4]!.y).toBe(boxes[5]!.y);
-  expect(boxes[4]!.height).toBeGreaterThanOrEqual(boxes[0]!.height*.9);
+  // Owner 11/02: prize (run) and easy (big) are full-width cards, prize first; the rest pair up below.
+  expect(boxes[4]!.y).toBeLessThan(boxes[0]!.y);expect(boxes[4]!.width).toBe(boxes[0]!.width);
+  expect(boxes[1]!.y).toBe(boxes[2]!.y);expect(boxes[3]!.y).toBe(boxes[5]!.y);expect(boxes[3]!.y).toBeGreaterThan(boxes[1]!.y);expect(boxes[1]!.y).toBeGreaterThan(boxes[0]!.y);
   // D167: hub cards show the clay card art (the flat icon stays only as a fallback).
   const icon=runner.locator("img").first();
   await expect(icon).toHaveAttribute("src","/brand/art/card-run.webp");
   await expect(icon).toHaveJSProperty("naturalWidth",600);
   const iconBox=(await icon.boundingBox())!,titleBox=(await runner.getByRole("heading").boundingBox())!,bestBox=(await runner.getByTestId("hub-best").boundingBox())!;
-  expect(titleBox.y).toBeGreaterThanOrEqual(iconBox.y+iconBox.height);
+  expect(titleBox.x).toBeGreaterThanOrEqual(iconBox.x+iconBox.width);
   expect(bestBox.x).toBe(titleBox.x);expect(bestBox.y).toBeGreaterThanOrEqual(titleBox.y+titleBox.height);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   await runner.click();await expect(page.getByRole("heading",{level:1})).toHaveText(t.title);

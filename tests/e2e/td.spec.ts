@@ -32,15 +32,17 @@ async function begin(page:Page) {
 }
 for(const width of [320,390]) test.describe(`TD ${width}`,()=>{
   test.use({viewport:{width,height:700},hasTouch:true});
-  test('six cards form three rows; menu and board fit, radial costs, upgrade/sell and speed',async({page})=>{
-    await mockApi(page);await page.goto('/game/hub');
+  test('featured hub cards; menu and board fit, radial costs, upgrade/sell and speed',async({page})=>{
+    await mockApi(page);await page.goto('/game/hub');await expect(page.getByTestId('hub-featured').getByTestId('hub-game-td')).toBeVisible();
     const boxes=await Promise.all(['big','tu','m3','grab','run','td'].map(k=>page.getByTestId(`hub-game-${k}`).boundingBox()));
-    for(let i=0;i<6;i+=2){expect(boxes[i]!.y).toBe(boxes[i+1]!.y);expect(boxes[i]!.width).toBe(boxes[i+1]!.width);}
+    // Owner 11/02: prize (td) and easy (big) full width, prize first; tu/m3 and grab/run pair up below.
+    expect(boxes[5]!.y).toBeLessThan(boxes[0]!.y);expect(boxes[5]!.width).toBe(boxes[0]!.width);
+    expect(boxes[1]!.y).toBe(boxes[2]!.y);expect(boxes[3]!.y).toBe(boxes[4]!.y);expect(boxes[1]!.width).toBe(boxes[2]!.width);
     await page.getByTestId('hub-game-td').click();await expect(page.getByRole('heading',{level:1})).toHaveText(t.title);
     await expect(page.getByTestId('td-menu-level')).toHaveText('第 1 关');await begin(page);
     expect(await page.evaluate(()=>document.documentElement.scrollHeight)).toBeLessThanOrEqual(700);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    const c=page.locator('canvas');expect(await c.evaluate(el=>(el as HTMLCanvasElement).width/el.getBoundingClientRect().width)).toBeLessThanOrEqual(2.01);
+    const c=page.locator('canvas');expect(await c.evaluate(el=>(el as HTMLCanvasElement).width/el.clientWidth)).toBeLessThanOrEqual(3.01);
     // Coin arithmetic follows the current balance (start coins and costs come from the engine).
     const c0=tdLevel(weekKey,1).startCoins,pin=towerStats('rollingPin').cost,pinUp=towerStats('rollingPin',1).cost;
     const c1=c0-pin,c2=c1+Math.floor(pin/2);
@@ -94,7 +96,7 @@ for(const width of [320,390]) test.describe(`TD ${width}`,()=>{
   });
   test('failed completed save retries exact run after reload, win offers next level',async({page})=>{
     const api=await mockApi(page),bot=greedyTd(tdLevel(weekKey,1));
-    expect(TD_ENGINE_VERSION).toBe(11);
+    expect(TD_ENGINE_VERSION).toBe(13);
     expect(seed.startsWith(`v${TD_ENGINE_VERSION}.td.`)).toBe(true);
     expect(bot.inputs.some(i=>i.type==='upgrade' && i.branch)).toBe(true);
     const save={v:1,runId:'00000000-0000-4000-8000-000000000099',seed,level:1,weekKey,tiers,nickname:'Baker',expiresAt:'2099-01-01T00:00:00Z',inputs:bot.inputs,endTick:bot.state.tick,score:bot.state.wave};

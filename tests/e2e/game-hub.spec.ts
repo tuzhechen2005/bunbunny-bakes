@@ -8,7 +8,7 @@ const g = copy.customer.game;
 test.use({ browserName: "chromium" });
 
 for (const width of [320, 390]) {
-  test(`hub at ${width}px: two columns, scores, one prize badge, working links`, async ({ page }) => {
+  test(`hub at ${width}px: prize + easy game featured, scores, one prize badge, working links`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.route("**/api/game/hub", (r) => r.fulfill({ json: hubFixture("TU", 0, 640) }));
@@ -24,8 +24,10 @@ for (const width of [320, 390]) {
     await expect(tu).toHaveAttribute("href", "/game/tu");
     const a = (await big.boundingBox())!;
     const b = (await tu.boundingBox())!;
-    expect(a.y).toBe(b.y);
-    expect(b.x).toBeGreaterThan(a.x);
+    // Owner 11/02: the prize game and the easy game are full-width cards, prize first.
+    expect(b.y).toBeLessThan(a.y);
+    expect(b.x).toBe(a.x);
+    expect(b.width).toBe(a.width);
     for (const box of [a, b]) { expect(box.width).toBeGreaterThanOrEqual(44); expect(box.height).toBeGreaterThanOrEqual(44); }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await tu.focus();
