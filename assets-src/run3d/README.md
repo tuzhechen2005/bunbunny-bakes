@@ -1,4 +1,4 @@
-# R16 — refined clay runner library
+# R17 — sculpted trees, planting, water and canvas
 
 Original procedural Blender geometry, following the warm matte clay palette in
 `docs/GAME_ART.md` and the toast bunny identity in `public/brand/logo.webp`.
@@ -7,36 +7,41 @@ No application code, fonts, image textures, external geometry or commits.
 
 ## Delivery
 
-- `bunny.glb`: **27,000 triangles**, one skinned `BunnyClay` mesh, the existing
-  eight-joint `BunnyRig`, and all seven existing actions. Adds pocket/bib/hem
-  stitching, cheek dimples, tiny eye highlights, brow contours, inner ear folds,
-  paw creases and mitten thumb folds. Preserves the toast silhouette, long ears,
-  cocoa apron, folded backpack and scored bread.
-- `props.glb`: **23 independent named roots**, including all eighteen R15 props
-  and `planter`, `bicycle`, `crate_stack`, `menu_board`, `bunting`. Each remains
-  within **2,000–8,000 triangles**. Wood has incised pigment grooves, crates and
-  carts have pegs, sacks and shoes have stitching, loaves have crust blisters,
-  vehicles have grille/wiper/hub details, cups have sleeve ribs, lanterns have
-  framed tinted glass, and the newer mechanic props have additional relief.
-- `town.glb`: **ten facades**, plus `sidewalk` and `road`. Every facade has
-  softened architectural edges, relief brick piers and exposed plaster patches,
-  recessed glazing with mullions, open louvered shutters, flower petals/stems,
-  six complete tile courses between the eaves, door molding/knobs/keyholes and a
-  wall lantern. New storefronts have cakes, cheese wheels and teapots; the corner
-  house has a cylindrical bay turret with a conical roof and tile courses.
-  The solid facade shell now fills the already documented 4 m depth envelope.
-- Road stones have rounded bevels and deterministic **8–12 mm** height variation.
-  Sidewalks have individually modeled curb blocks, inset wear and softened caps.
+R17 replaces the five solid canopy balls with **five porous clusters of individual
+thick clay leaves**. `tree` retains its original **1.64 × 2.66 × 1.31 m** envelope;
+`tree_round2` adds five pale pink, five-petal blossoms within the same envelope.
+`tree_tall` is a slender, layered cypress variation. All have exposed branch forks,
+fluted trunks, raised bark grain, and five buttress roots meeting the planter soil.
+Leaf pigment varies between olive, sage and pale highlights; gaps remain between
+leaves and between clusters. No hidden sphere fills the canopy.
 
-Every mesh has `COLOR_0`. The bake combines per-piece pigment variation, quieter
-spatial mottling, darker undersides, lighter tops, and **five short-range BVH
-occlusion rays per vertex** for contact/crevice shading. Clay roughness is **0.75**;
-opaque puddle pigment remains **0.22**. Lamp glass is opaque sage-tinted clay, so
-the assets require no transparency sorting. No textures or external resources.
+`puddle` retains its centered **1.7 × 1.1 m** footprint and **24 mm** maximum
+height, including seven flattened edge pebbles. Its irregular perimeter has a dark
+wet stone stain, and the water is a continuous concave mesh with **three gentle
+concentric ripple ridges**. Vertex colour transitions from deep teal-blue in the
+centre to lighter blue-green near the edge. The water is opaque, with
+**roughness 0.05 / metalness 0.15**; surrounding stone remains matte clay.
 
-The authoritative sizes, triangle counts, world bounds, hashes and validation
-results are in **`validation.json`**. The limit is **4,000,000 bytes for the entire
-`public/brand/run3d/` directory**; source previews are outside that budget.
+The standalone `planter`, every facade flower box and sidewalk planting now use
+separate curved leaves, branching stems, five-petal flowers and soil granules.
+Awning panels on the cart, standalone obstacle and all ten facades have modeled
+sag and folds, raised panel seams, hem stitches and scalloped valances.
+
+- `bunny.glb` is byte-for-byte unchanged from R16: one 27,000-triangle skinned mesh,
+  eight joints and seven actions.
+- `props.glb` has **25 independent named roots**. Existing names and anchors are
+  retained; only `tree`, `puddle`, `planter`, `awning`, `cart` are rebuilt, and
+  `tree_round2`, `tree_tall` are added. Every prop stays in the 2,000–8,000 triangle band.
+- `town.glb` has the same ten facades, `sidewalk` and `road`, with their existing
+  scale and placement contract. Architecture retains the R16 detailing.
+
+Every mesh has normalized RGBA8 `COLOR_0`. Clay has baked pigment and contact
+shading with roughness **0.75**. Water uses its explicit radial colour gradient.
+No textures, transparency sorting, external geometry or application changes.
+The authoritative sizes, bounds, hashes and validation results are in
+**`validation.json`**. The entire **`public/brand/run3d/`** directory must stay
+within **4,200,000 bytes**; this delivery is **4,095,232 bytes**. Source renders
+are outside that delivery budget.
 
 ## Preserved coordinate and animation contract
 
@@ -70,8 +75,8 @@ Load/transform the **whole bunny glTF scene**, which contains `BunnyClay` and
 | `idle` | 49 | 2 s | Loop; breathing and small head/ear sway |
 
 Actions remain in place: the engine supplies world travel and jump height.
-Loop endpoints match. Validation compares every action channel/sample with the
-pre-R16 baseline, then reimports the **decoded shipped bytes** in Blender and
+Loop endpoints match. Validation checks exact R16 bunny bytes and every action channel/sample against
+the captured baseline, then reimports the **decoded shipped bytes** in Blender and
 evaluates every key and half-key: **335 poses**, finite skinning, no ground
 penetration. With a camera behind a +Z-facing bunny, screen-left is +X. Keep the
 existing lane mapping; use `idle` or rest for reduced motion.
@@ -93,7 +98,9 @@ at the origin by design; select/clone individual roots for scattering.
 | `bag` | Folded kraft bag with bread and bakery seal |
 | `coffee` | Cream cup, ribbed kraft sleeve and cocoa lid |
 | `lamp` | Approximately 3.16 m high, opaque tinted glass |
-| `tree` | Rounded foliage, individual leaves, terracotta planter |
+| `tree` | Five porous clay leaf clusters, bark, forks and rooted terracotta planter |
+| `tree_round2` | Same envelope as `tree`, pale pink blossom accents |
+| `tree_tall` | Slender cypress-like crown, same ground anchor and metre units |
 | `bench` | 1.6 m wide, grain grooves and curved supports |
 | `pothole` | 1.6 m round footprint, below 0.08 m high, dark opaque overlay |
 | `breadwheel` | 1.2 m diameter × 0.48 m thick; axle X, travel +Z; rolling pivot (0,0.6,0) |
@@ -136,8 +143,11 @@ Y=0.012, and lane marks at **X=±1.3333, Y=0.024**. Both tiles repeat in 6 m ste
   game camera in `src/components/run/runThree.ts`: position **(0,4.6,-7.2)**,
   target **(0,1.1,7)**, **55° vertical FOV**. Road X scale is .78; sidewalks and
   facades use the game's offsets. New props/facades are staged for review.
+- `trees-closeup.png`, **1400 × 900**: `tree`, `tree_round2`, `tree_tall`, equal scale.
+- `puddle-closeup.png`, **1100 × 850**: water on actual road cobbles.
+- `planting-closeup.png`, **1200 × 800**: stitched awning and leaf/petal planter.
 - `bunny-closeup.png`, **760 × 900**: front three-quarter rest-pose portrait.
-- `props-review.png`, **1400 × 1150**: all 23 props; van/truck/bunting are shown
+- `props-review.png`, **1400 × 1150**: all 25 props; van/truck/bunting are shown
   at .48 scale to fit the review grid; all remaining props use their actual scale.
 - `facades-review.png`, **1600 × 1000**: all ten variants at equal scale.
 - `mechanics-preview.png`: the five mechanic props at actual relative scale.
@@ -149,21 +159,22 @@ ordering are recorded in `validation.json`. PNGs retain full colour.
 
 ## Reproduce and validate
 
-Blender **4.3.2** in the existing `bunbunny-run3d` Docker image; Cycles CPU,
-96 samples, seed 12, AgX, warm area lighting. Build dependencies and intermediate
-files stay in ignored `.cache/`; application dependencies are untouched.
+Blender **4.3.2**, image `bunbunny-run3d`; Cycles CPU, 96 samples, seed 12, AgX.
+All dependencies and intermediate files are isolated in ignored `.cache/`.
+Use `nature.py` for R17; the prior `refine.py` remains the R16 base authoring layer.
+These scripts are asset sources, not application code.
 
 ```sh
 mkdir -p assets-src/run3d/.cache/baseline
-# Capture once before overwriting delivery; used to compare the seven actions.
-git show HEAD:public/brand/run3d/bunny.glb > assets-src/run3d/.cache/baseline/bunny.glb
+# Capture the three starting GLBs once, before replacing delivery files.
+cp public/brand/run3d/*.glb assets-src/run3d/.cache/baseline/
 npm install --prefix assets-src/run3d/.cache/tools \
   --cache assets-src/run3d/.cache/npm --no-package-lock \
   @gltf-transform/core@4.2.1 @gltf-transform/extensions@4.2.1 \
   @gltf-transform/functions@4.2.1 meshoptimizer@0.24.0 gltf-validator@2.0.0-dev.3.10
 docker run --rm --network none -v "$PWD:/work" --entrypoint blender bunbunny-run3d \
-  -b --factory-startup --python-exit-code 1 --python assets-src/run3d/refine.py
-node assets-src/run3d/compress.mjs
+  -b --factory-startup --python-exit-code 1 --python assets-src/run3d/nature.py
+node assets-src/run3d/nature-pack.mjs
 docker run --rm --network none -v "$PWD:/work:ro" \
   -e RUN3D_OUT=/work/assets-src/run3d/.cache/decoded \
   -e RUN3D_COMPRESSED_SOURCE=/work/public/brand/run3d/bunny.glb \
@@ -171,40 +182,29 @@ docker run --rm --network none -v "$PWD:/work:ro" \
   --python assets-src/run3d/validate_poses.py > assets-src/run3d/.cache/poses.log
 docker run --rm --network none -v "$PWD:/work" --entrypoint blender bunbunny-run3d \
   -b --factory-startup --python-exit-code 1 --python assets-src/run3d/review.py
-docker run --rm --network none -v "$PWD:/work" \
-  -e RUN3D_OUT=/work/assets-src/run3d/.cache/decoded \
-  --entrypoint blender bunbunny-run3d -b --factory-startup --python-exit-code 1 \
-  --python assets-src/run3d/mechanics.py -- --preview
 node assets-src/run3d/check-loader.mjs
 node assets-src/run3d/validate.mjs
 ```
 
-Run `node assets-src/run3d/check-loader.mjs` before `validate.mjs` to also test
-Three's actual GLTFLoader/MeshoptDecoder and 175 runtime animation poses. It uses
-the application's `node_modules/three`; set `RUN3D_THREE_ROOT` to an existing
-Three installation when this asset worktree has no application dependencies.
+Set `RUN3D_THREE_ROOT` to an existing Three installation when the worktree has no
+application dependencies. `nature-pack.mjs props` / `town` can compress individual
+libraries; `--decode` only decodes the current delivery for review.
 
-`compress.mjs` merges the original/refined mechanic/scatter libraries while
-preserving named roots. Bunny uses **16-bit positions / 12-bit normals** to retain
-action precision. Static props use **16-bit positions / 8-bit octahedral normals**;
-town uses **14-bit positions / 8-bit octahedral normals**. Colours and weights
-remain normalized RGBA8. There is no animation resampling. Town quantization
-introduces at most sub-millimetre rounding at the original metre coordinates.
-`validate.mjs` checks compressed and decoded GLBs with Khronos validation, rejects
-errors/warnings, checks root names/transforms, mesh names, actual world/skin bounds,
-triangle bands, material properties, colours, rig/actions, baseline action
-samples, pose-test hashes, preview provenance and the entire public byte budget.
-Khronos's unsupported-extension informational notice is retained in the report;
-the separately decoded validation covers the complete vertex/index buffers.
+Every preview imports `.cache/decoded/*.glb`, decoded from the **actual shipped
+meshopt-compressed files**. Source hashes, camera, contact sheet ordering and image
+hashes are recorded in `validation.json`. The bunny portrait remains from R16 because the bunny file is byte-for-byte
+unchanged. The mechanics preview is refreshed from the final decoded prop file.
 
-For a single facade iteration, run `refine.py -- --facade-only patisserie` (or any
-other facade root) followed by `compress.mjs town`; the compressed town incorporates
-the replacement from `.cache/raw/facades/`. A full `refine.py` build clears these
-overrides. `--bunny-only` and `--scatter-only` are also available for iteration.
-Use `--town-root road` or `--town-root sidewalk` to rebuild just an infrastructure
-tile through the same replacement path.
+Compression uses 16-bit positions / 8-bit octahedral normals for props and 14-bit
+positions / 8-bit normals for town. The unchanged bunny retains 16-bit positions /
+12-bit normals. Facades alone receive a 94% triangle target with meshoptimizer
+error bounded to 0.00008 of mesh extent (under 1 mm), and locked borders. Road,
+sidewalk and all props bypass this reduction. No pigment bits are discarded.
+All named library roots remain identity transforms, with exactly
+one `<root>Mesh` child. **MeshoptDecoder remains required.**
 
-`render.py` and `mechanics.py` provide the base authoring helpers. R16's supported
-entry point is **`refine.py`**. `pack.py`, `append_mechanics.py` and
-`optimize_previews.py` are historical R12/R15 tools and are not part of this build;
-do not run them on the compressed delivery. No `.blend` file is required.
+Validation checks Khronos compressed and decoded GLBs, names/transforms, triangle
+bands, actual world/skin bounds, vertex colours, water roughness/metalness,
+concavity and centre-to-edge colour progression, tree variants, ground anchors,
+byte budget, baseline action samples, **335 Blender poses** and **175 Three runtime
+poses**, plus preview provenance. No application build or code change is needed.
