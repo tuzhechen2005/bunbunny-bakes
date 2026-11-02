@@ -172,10 +172,24 @@ async function summaryNote(now = NOW) {
 }
 
 describe("DAILY_SUMMARY", () => {
+  it("renders mixed independent products with their own names and units", async () => {
+    await seedSection10Example();
+    const puff = await db.product.create({ data: { name: "泡芙", unitPriceCents: 200, capacityMode: "INDEPENDENT", dailyLimit: 30, batchYield: 4 } });
+    await createOrder({ date: "2026-10-30", items: [{ productId: puff.id, qty: 5 }], status: "CONFIRMED" });
+    const r = await renderNotification(db, await summaryNote(), NOW);
+    expect(r.subject).toContain("今晚泡芙 5 个");
+    expect(r.subject).toContain("今晚焦糖布蕾 20 杯");
+    expect(r.text).toContain("泡芙 5 个 → 2 批，多出 3 个");
+    expect(r.text).toContain("焦糖布蕾 20 杯 → 7 批，多出 1 杯");
+    await db.product.update({ where: { id: puff.id }, data: { batchYield: null, unitLabel: "盒" } });
+    const noBatch = await renderNotification(db, await summaryNote(), NOW);
+    expect(noBatch.text).toContain("泡芙 5 盒");
+    expect(noBatch.subject).toContain("今晚泡芙 5 盒");
+  });
   it("renders the §10 example exactly", async () => {
     await seedSection10Example();
     const r = await renderNotification(db, await summaryNote(), NOW);
-    expect(r.subject).toBe("🐰 明天 10/30 周五：面包 18 个 · 1520 g｜今晚布蕾 20 杯");
+    expect(r.subject).toBe("🐰 明天 10/30 周五：面包 18 个 · 1520 g｜今晚焦糖布蕾 20 杯");
     expect(r.text).toBe(
       [
         "【明天 10/30 周五 的面包】",
@@ -184,11 +198,11 @@ describe("DAILY_SUMMARY", () => {
         "奶酪角 6（做 2 个大圆包，多出 2 角）",
         "面团 1520 / 1600 g",
         "",
-        "【今晚要做的布蕾】（10/30 取货）",
-        "20 杯 → 7 批，多出 1 杯",
+        "【今晚要做的商品】（10/30 取货）",
+        "焦糖布蕾 20 杯 → 7 批，多出 1 杯",
         "",
-        "【明晚要做的布蕾】（10/31 取货，刚截止）",
-        "9 杯 → 3 批",
+        "【明晚要做的商品】（10/31 取货，刚截止）",
+        "焦糖布蕾 9 杯 → 3 批",
         "",
         "【明天的交付】",
         "自提 7 单　配送 5 单",
@@ -216,8 +230,8 @@ describe("DAILY_SUMMARY", () => {
         "【明天 10/30 周五 的面包】",
         "明天没有开放",
         "",
-        "【明晚要做的布蕾】（10/31 取货，刚截止）",
-        "9 杯 → 3 批",
+        "【明晚要做的商品】（10/31 取货，刚截止）",
+        "焦糖布蕾 9 杯 → 3 批",
         "",
         "[打开后台] → https://bunbunnybakes.shop/admin",
       ].join("\n"),

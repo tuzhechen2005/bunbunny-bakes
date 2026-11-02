@@ -75,6 +75,7 @@ export async function loadSettings(tx: Tx): Promise<Setting> {
 
 export interface ProductInfo extends CapacityProduct {
   name: string;
+  unitLabel: string;
   status: ProductStatus;
   unitPriceCents: Cents;
   bundleSize: number;
@@ -109,6 +110,7 @@ export async function loadProductMap(tx: Tx): Promise<ProductInfoMap> {
       bundlePriceCents: p.bundlePriceCents,
       sortOrder: p.sortOrder,
       batchYield: p.batchYield,
+      unitLabel: p.unitLabel,
     };
   }
   return map;

@@ -99,6 +99,7 @@ model Setting {
 model Product {
   id               String        @id @default(uuid()) @db.Uuid
   name             String
+  unitLabel        String       @default("个")
   description      String        @default("")
   imageUrl         String?
   /// Home background colour `#RRGGBB` (D95); null = default 奶白. ink/ink2 are derived (src/lib/fieldColor.ts).

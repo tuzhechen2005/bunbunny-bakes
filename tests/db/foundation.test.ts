@@ -526,6 +526,7 @@ describe("loadSettings / loadProductMap / loadDayContext", () => {
       leadDays: 1,
       pickupWeekdays: [],
       name: "下架面包",
+      unitLabel: "个",
       status: "ARCHIVED",
       unitPriceCents: 300,
       bundleSize: 4,

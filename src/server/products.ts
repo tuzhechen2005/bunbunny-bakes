@@ -61,6 +61,10 @@ export type ProductWithImages = Prisma.ProductGetPayload<{ include: typeof PRODU
 
 const shape = {
   name,
+  unitLabel: z.string().trim().refine(
+    (s) => codePoints(s) >= 1 && codePoints(s) <= 4,
+    { message: "Use 1–4 characters" },
+  ),
   description,
   unitPriceCents: intIn(0, MAX_CENTS),
   bundleSize: intIn(1, 1000),
@@ -108,6 +112,7 @@ const fullSchema = z
 const createSchema = z
   .object(shape)
   .partial({
+    unitLabel: true,
     description: true,
     bundleSize: true,
     bundlePriceCents: true,
@@ -142,6 +147,7 @@ export interface OverLimitDate {
 function pickFields(p: Product): Fields {
   return {
     name: p.name,
+    unitLabel: p.unitLabel,
     description: p.description,
     unitPriceCents: p.unitPriceCents,
     bundleSize: p.bundleSize,
@@ -185,6 +191,7 @@ export async function createProduct(db: DbClient, input: unknown, now: Date): Pr
   // Validate before opening a transaction; sortOrder is filled in inside it.
   const fields = parseOrThrow(fullSchema, {
     ...data,
+    unitLabel: data.unitLabel ?? "个",
     description: data.description ?? "",
     bundleSize: data.bundleSize ?? 4,
     bundlePriceCents: data.bundlePriceCents ?? null,

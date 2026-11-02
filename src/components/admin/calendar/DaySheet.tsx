@@ -137,14 +137,14 @@ export function DaySheet({
               <ul className="mt-2 space-y-2 text-base">
                 {day.production.bread.map((line) => (
                   <li key={line.productId}>
-                    {fill(t.productionPieces, { name: line.name, n: line.qty })}
+                    {fill(t.productionPieces, { name: line.name, n: line.qty, unit: line.unitLabel })}
                     {line.rounds && (
                       <span className="block text-sm text-muted">{fill(t.productionRounds, { n: line.rounds.rounds })}</span>
                     )}
                   </li>
                 ))}
                 {day.production.independent.map((line) => (
-                  <li key={line.productId}>{fill(t.productionCups, { name: line.name, n: line.qty })}</li>
+                  <li key={line.productId}>{fill(t.productionCups, { name: line.name, n: line.qty, unit: line.unitLabel })}</li>
                 ))}
               </ul>
               <p className="mt-3 text-sm">{fill(t.productionOrders, { n: day.production.orderCount })}</p>

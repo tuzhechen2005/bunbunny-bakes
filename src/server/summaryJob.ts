@@ -60,6 +60,7 @@ export async function loadDailySummary(client: DbClient, now: Date): Promise<Dai
       name: p.name,
       sortOrder: p.sortOrder,
       batchYield: p.batchYield,
+      unitLabel: p.unitLabel,
     };
   }
 
