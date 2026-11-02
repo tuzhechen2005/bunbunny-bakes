@@ -18,6 +18,7 @@ export function formatDollars(cents: number): string {
 
 /** "$2.49 / 个　4 个 $8.99" (no bundle part when the product has no bundle). */
 export function priceText(p: MenuProduct): string {
+  if (hasFlavors(p)) return fill(copy.customer.home.priceFrom, { price: formatCents(p.priceFromCents ?? p.unitPriceCents) });
   const unit = fill(copy.customer.home.unitPrice, { price: formatCents(p.unitPriceCents) });
   if (p.bundlePriceCents === null) return unit;
   const bundle = fill(copy.customer.home.bundlePrice, {
@@ -58,4 +59,22 @@ export function weekdayList(days: readonly number[]): string {
 export function weekdayTag(p: Pick<MenuProduct, "pickupWeekdays">): string | null {
   const days = p.pickupWeekdays;
   return days && days.length > 0 ? fill(copy.customer.home.weekdayOnly, { days: weekdayList(days) }) : null;
+}
+
+/** F1: does this product need a flavour per line? */
+export function hasFlavors(p: Pick<MenuProduct, "flavors">): boolean {
+  return (p.flavors?.length ?? 0) > 0;
+}
+/** Display-only total of one cart line (flavour price × qty, or the product's own pricing). */
+export function cartLineTotal(item: { qty: number; flavorId?: string | null }, p: MenuProduct): number {
+  if (item.flavorId) {
+    const f = p.flavors?.find((x) => x.id === item.flavorId);
+    return f ? f.priceCents * item.qty : 0;
+  }
+  return safeLineTotal(item.qty, p);
+}
+/** "泡芙 · 抹茶" for a flavoured line, the product name otherwise. */
+export function cartLineName(item: { flavorId?: string | null }, p: MenuProduct): string {
+  const f = item.flavorId ? p.flavors?.find((x) => x.id === item.flavorId) : undefined;
+  return f ? `${p.name}${copy.customer.home.flavorJoin}${f.name}` : p.name;
 }

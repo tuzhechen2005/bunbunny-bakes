@@ -24,6 +24,9 @@ export interface EditableOrder {
     unitPriceCents: number;
     bundleSize: number;
     bundlePriceCents: number | null;
+    /** F1 snapshot (null = legacy line without a flavour). */
+    flavorId?: string | null;
+    flavorName?: string | null;
   }[];
   /** ISO 8601; sent back as `expectedUpdatedAt`. */
   updatedAt: string;
@@ -32,6 +35,13 @@ export interface EditableOrder {
 export interface FormLine {
   productId: string;
   qty: number;
+  /** F1: chosen flavour; `null` = explicitly keep a legacy no-flavour line; absent = product has no flavours. */
+  flavorId?: string | null;
+}
+
+/** Line identity: product + flavour ("pid", "pid::fid" or "pid::-" for an explicit legacy null). */
+export function formLineKey(l: Pick<FormLine, "productId" | "flavorId">): string {
+  return l.flavorId === undefined ? l.productId : `${l.productId}::${l.flavorId ?? "-"}`;
 }
 
 export interface PriceSource {
@@ -48,14 +58,15 @@ export interface FormValues {
   note: string;
 }
 
-/** Drops zero / invalid quantities and merges duplicate products. */
+/** Drops zero / invalid quantities and merges duplicate product + flavour lines. */
 export function cleanLines(lines: FormLine[]): FormLine[] {
-  const totals = new Map<string, number>();
+  const totals = new Map<string, FormLine>();
   for (const l of lines) {
     if (!Number.isInteger(l.qty) || l.qty < 1) continue;
-    totals.set(l.productId, (totals.get(l.productId) ?? 0) + l.qty);
+    const k = formLineKey(l), prev = totals.get(k);
+    totals.set(k, prev ? { ...prev, qty: prev.qty + l.qty } : { ...l });
   }
-  return [...totals].map(([productId, qty]) => ({ productId, qty }));
+  return [...totals.values()];
 }
 
 export interface Estimate {
@@ -71,9 +82,11 @@ export function estimate(
   fulfillment: Fulfillment,
   fees: { deliveryFeeCents: number; freeDeliveryMinCents: number },
 ): Estimate {
-  const priced = cleanLines(lines).flatMap((l) =>
-    prices[l.productId] ? [{ productId: l.productId, qty: l.qty, price: prices[l.productId] }] : [],
-  );
+  // Prices are keyed by formLineKey (flavour lines carry their own price), falling back to the product.
+  const priced = cleanLines(lines).flatMap((l) => {
+    const price = prices[formLineKey(l)] ?? prices[l.productId];
+    return price ? [{ productId: formLineKey(l), qty: l.qty, price }] : [];
+  });
   const r = priceCart(priced, fulfillment, fees);
   return { subtotalCents: r.subtotalCents, deliveryFeeCents: r.deliveryFeeCents, totalCents: r.totalCents };
 }
@@ -119,7 +132,7 @@ export interface EditPayload {
 function sameLines(a: FormLine[], b: FormLine[]): boolean {
   const key = (l: FormLine[]) =>
     cleanLines(l)
-      .map((x) => `${x.productId}:${x.qty}`)
+      .map((x) => `${formLineKey(x)}:${x.qty}`)
       .sort()
       .join(",");
   return key(a) === key(b);

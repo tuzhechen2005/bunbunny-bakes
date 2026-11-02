@@ -1,4 +1,5 @@
-// Customer cart: `{ productId, qty }[]` persisted in localStorage under `bb_cart_v1`.
+// Customer cart: `{ productId, flavorId?, qty }[]` persisted in localStorage under `bb_cart_v1`.
+// A line is identified by its key: the product id, or `productId::flavorId` for a flavour (F1).
 // Every storage access is wrapped in try/catch (WeChat / private modes can throw);
 // the module always keeps an in-memory copy, so a failing storage only loses persistence.
 
@@ -9,7 +10,23 @@ export const CART_STORAGE_KEY = "bb_cart_v1";
 export interface CartItem {
   productId: string;
   qty: number;
+  /** Chosen flavour (F1); absent for products without flavours. */
+  flavorId?: string | null;
 }
+
+const SEP = "::";
+/** The line key used by every store method: productId, or productId::flavorId. */
+export function lineKey(i: { productId: string; flavorId?: string | null }): string {
+  return i.flavorId ? `${i.productId}${SEP}${i.flavorId}` : i.productId;
+}
+export function parseLineKey(key: string): { productId: string; flavorId: string | null } {
+  const at = key.indexOf(SEP);
+  return at < 0 ? { productId: key, flavorId: null } : { productId: key.slice(0, at), flavorId: key.slice(at + SEP.length) || null };
+}
+const lineOf = (key: string, qty: number): CartItem => {
+  const { productId, flavorId } = parseLineKey(key);
+  return flavorId ? { productId, flavorId, qty } : { productId, qty };
+};
 
 /** The subset of the Web Storage API the cart uses. */
 export interface StorageLike {
@@ -48,12 +65,14 @@ function sanitize(raw: unknown): CartItem[] {
   const merged = new Map<string, number>();
   for (const entry of raw) {
     if (!entry || typeof entry !== "object") continue;
-    const { productId, qty } = entry as { productId?: unknown; qty?: unknown };
-    if (typeof productId !== "string" || !productId) continue;
+    const { productId, qty, flavorId } = entry as { productId?: unknown; qty?: unknown; flavorId?: unknown };
+    if (typeof productId !== "string" || !productId || productId.includes(SEP)) continue;
     if (typeof qty !== "number" || !Number.isInteger(qty) || qty < 1) continue;
-    merged.set(productId, (merged.get(productId) ?? 0) + qty);
+    const flavor = typeof flavorId === "string" && flavorId ? flavorId : null;
+    const key = lineKey({ productId, flavorId: flavor });
+    merged.set(key, (merged.get(key) ?? 0) + qty);
   }
-  return [...merged].map(([productId, qty]) => ({ productId, qty }));
+  return [...merged].map(([key, qty]) => lineOf(key, qty));
 }
 
 /**
@@ -100,31 +119,32 @@ export function createCartStore(getStorage: () => StorageLike | null | undefined
       return;
     }
     const current = load();
-    if (current.length === next.length && current.every((c, i) => c.productId === next[i].productId && c.qty === next[i].qty)) {
+    if (current.length === next.length && current.every((c, i) => lineKey(c) === lineKey(next[i]) && c.qty === next[i].qty)) {
       return;
     }
     items = next.length ? next : EMPTY;
     for (const listener of [...listeners]) listener();
   }
 
-  function qtyOf(productId: string): number {
-    return load().find((i) => i.productId === productId)?.qty ?? 0;
+  function qtyOf(key: string): number {
+    return load().find((i) => lineKey(i) === key)?.qty ?? 0;
   }
 
-  function setQty(productId: string, qty: number, max: number): void {
+  /** `key` is a line key (see lineKey); a bare product id addresses the unflavoured line. */
+  function setQty(key: string, qty: number, max: number): void {
     const limit = Math.max(0, Math.floor(max));
     const clamped = Math.max(0, Math.min(Math.floor(qty), limit));
     const current = load();
-    const exists = current.some((i) => i.productId === productId);
+    const exists = current.some((i) => lineKey(i) === key);
     let next: CartItem[];
     if (clamped === 0) {
       if (!exists) return;
-      next = current.filter((i) => i.productId !== productId);
+      next = current.filter((i) => lineKey(i) !== key);
     } else if (exists) {
-      if (qtyOf(productId) === clamped) return;
-      next = current.map((i) => (i.productId === productId ? { productId, qty: clamped } : i));
+      if (qtyOf(key) === clamped) return;
+      next = current.map((i) => (lineKey(i) === key ? lineOf(key, clamped) : i));
     } else {
-      next = [...current, { productId, qty: clamped }];
+      next = [...current, lineOf(key, clamped)];
     }
     commit(next);
   }
@@ -149,10 +169,10 @@ export function createCartStore(getStorage: () => StorageLike | null | undefined
       // Decrementing never needs the max; use the current qty as the ceiling.
       setQty(productId, current - 1, current);
     },
-    remove(productId) {
+    remove(key) {
       const current = load();
-      if (!current.some((i) => i.productId === productId)) return;
-      commit(current.filter((i) => i.productId !== productId));
+      if (!current.some((i) => lineKey(i) === key)) return;
+      commit(current.filter((i) => lineKey(i) !== key));
     },
     clear() {
       if (load().length === 0) return;

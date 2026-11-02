@@ -17,8 +17,10 @@ import {
   buildEditPayload,
   describeViolation,
   estimate,
+  formLineKey,
   parseViolations,
   type EditableOrder,
+  type FormLine,
   type FormValues,
   type PriceSource,
 } from "@/lib/orderForm";
@@ -90,20 +92,30 @@ function datesWithCurrent(open: FormDate[], current: string | undefined): FormDa
   return [...open, own].sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
+/** An existing order line as a form line (flavoured products always carry flavorId, null = legacy). */
+function lineFromOrder(i: EditableOrder["items"][number], flavored: Set<string>): FormLine {
+  return flavored.has(i.productId) ? { productId: i.productId, flavorId: i.flavorId ?? null, qty: i.qty } : { productId: i.productId, qty: i.qty };
+}
+
 export function OrderForm({ data, order }: OrderFormProps) {
   const dates = useMemo(() => datesWithCurrent(data.dates, order?.pickupDate), [data.dates, order]);
   const router = useRouter();
   const editing = order !== undefined;
 
+  // F1: products that have (or had, on this order) flavours use one line per flavour.
+  const flavoredIds = useMemo(() => new Set([
+    ...data.products.filter((p) => (p.flavors?.length ?? 0) > 0).map((p) => p.id),
+    ...(order?.items ?? []).filter((i) => i.flavorId !== undefined && i.flavorId !== null).map((i) => i.productId),
+  ]), [data.products, order]);
   const initial: FormValues = useMemo(
     () => ({
-      items: order ? order.items.map((i) => ({ productId: i.productId, qty: i.qty })) : [],
+      items: order ? order.items.map((i) => lineFromOrder(i, flavoredIds)) : [],
       pickupDate: order ? order.pickupDate : "",
       fulfillment: order ? order.fulfillment : "PICKUP",
       wechatId: order ? order.wechatId : "",
       note: order ? (order.note ?? "") : "",
     }),
-    [order],
+    [order, flavoredIds],
   );
 
   // Products on offer: the live ones, plus products already on the order (even archived).
@@ -127,16 +139,32 @@ export function OrderForm({ data, order }: OrderFormProps) {
   // Existing lines keep their snapshot price (D45); new ones use the current price.
   const prices = useMemo(() => {
     const map: Record<string, PriceSource> = {};
-    for (const p of products) map[p.id] = p;
-    for (const i of order?.items ?? []) map[i.productId] = i;
+    for (const p of products) {
+      map[p.id] = p;
+      for (const f of (p as FormProduct).flavors ?? []) map[formLineKey({ productId: p.id, flavorId: f.id })] = { unitPriceCents: f.priceCents, bundleSize: 0, bundlePriceCents: null };
+    }
+    for (const i of order?.items ?? []) map[formLineKey(lineFromOrder(i, flavoredIds))] = i;
     return map;
-  }, [products, order]);
+  }, [products, order, flavoredIds]);
+  /** One row per product, or per flavour (active ones plus any already on this order). */
+  const rows = useMemo(() => products.flatMap((p) => {
+    if (!flavoredIds.has(p.id)) return [{ key: p.id, line: { productId: p.id } as Omit<FormLine, "qty">, name: p.name, product: p }];
+    const onOrder = (order?.items ?? []).filter((i) => i.productId === p.id);
+    const active = ((p as FormProduct).flavors ?? []).filter((f) => f.active).sort((a, b) => a.sort - b.sort);
+    const list: { key: string; line: Omit<FormLine, "qty">; name: string; product: typeof p }[] =
+      active.map((f) => ({ key: formLineKey({ productId: p.id, flavorId: f.id }), line: { productId: p.id, flavorId: f.id }, name: `${p.name} · ${f.name}`, product: p }));
+    for (const i of onOrder) {
+      const line = lineFromOrder(i, flavoredIds), key = formLineKey(line);
+      if (!list.some((r) => r.key === key)) list.push({ key, line, name: `${p.name} · ${i.flavorName ?? copy.flavors.unspecified}`, product: p });
+    }
+    return list;
+  }), [products, order, flavoredIds]);
   const names = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p.name])), [products]);
 
   const baseline = initial;
   const stamp = order?.updatedAt ?? "";
   const [qty, setQty] = useState<Record<string, number>>(() =>
-    Object.fromEntries(initial.items.map((l) => [l.productId, l.qty])),
+    Object.fromEntries(initial.items.map((l) => [formLineKey(l), l.qty])),
   );
   const [pickupDate, setPickupDate] = useState<string>(initial.pickupDate);
   const [fulfillment, setFulfillment] = useState<Fulfillment>(initial.fulfillment);
@@ -155,7 +183,7 @@ export function OrderForm({ data, order }: OrderFormProps) {
   const submittingRef = useRef(false);
 
   const values: FormValues = {
-    items: Object.entries(qty).map(([productId, q]) => ({ productId, qty: q })),
+    items: rows.filter((r) => qty[r.key] !== undefined).map((r) => ({ ...r.line, qty: qty[r.key] })),
     pickupDate: pickupDate as FormValues["pickupDate"],
     fulfillment,
     wechatId,
@@ -325,27 +353,27 @@ export function OrderForm({ data, order }: OrderFormProps) {
     <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate data-testid="order-form">
       <AdminCard title={t.itemsTitle}>
         <ul className="flex flex-col divide-y divide-line">
-          {products.map((p) => {
-            const q = qty[p.id] ?? 0;
+          {rows.map(({ key, name, product: p }) => {
+            const q = qty[key] ?? 0;
             return (
-              <li key={p.id} className="flex items-center justify-between gap-3 py-2" data-product-id={p.id}>
+              <li key={key} className="flex items-center justify-between gap-3 py-2" data-product-id={p.id}>
                 <div className="min-w-0">
                   <p className="font-medium break-words">
-                    {p.name}
+                    {name}
                     {p.status === "PAUSED" ? <span className="text-sm text-muted">{t.paused}</span> : null}
                   </p>
                   <p className="text-sm text-muted tabular-nums">
-                    {formatCents(prices[p.id].unitPriceCents)}
-                    {order?.items.some((i) => i.productId === p.id) ? ` ${t.snapshotNote}` : ""}
+                    {formatCents((prices[key] ?? prices[p.id]).unitPriceCents)}
+                    {order?.items.some((i) => formLineKey(lineFromOrder(i, flavoredIds)) === key) ? ` ${t.snapshotNote}` : ""}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
-                    aria-label={`${fill(t.qtyLabel, { name: p.name })} ${t.decrease}`}
+                    aria-label={`${fill(t.qtyLabel, { name })} ${t.decrease}`}
                     className="flex h-11 w-11 items-center justify-center rounded-full border border-line text-xl disabled:opacity-40"
                     disabled={q <= 0}
-                    onClick={() => setLineQty(p.id, q - 1)}
+                    onClick={() => setLineQty(key, q - 1)}
                   >
                     −
                   </button>
@@ -354,18 +382,18 @@ export function OrderForm({ data, order }: OrderFormProps) {
                     inputMode="numeric"
                     min={0}
                     max={QTY_MAX}
-                    aria-label={fill(t.qtyLabel, { name: p.name })}
+                    aria-label={fill(t.qtyLabel, { name })}
                     className="h-11 w-14 rounded-lg border border-line bg-background text-center text-base tabular-nums"
                     value={q}
                     data-testid="qty"
-                    onChange={(e) => setLineQty(p.id, Number.parseInt(e.target.value, 10) || 0)}
+                    onChange={(e) => setLineQty(key, Number.parseInt(e.target.value, 10) || 0)}
                   />
                   <button
                     type="button"
-                    aria-label={`${fill(t.qtyLabel, { name: p.name })} ${t.increase}`}
+                    aria-label={`${fill(t.qtyLabel, { name })} ${t.increase}`}
                     className="flex h-11 w-11 items-center justify-center rounded-full border border-line text-xl disabled:opacity-40"
                     disabled={q >= QTY_MAX}
-                    onClick={() => setLineQty(p.id, q + 1)}
+                    onClick={() => setLineQty(key, q + 1)}
                   >
                     +
                   </button>
