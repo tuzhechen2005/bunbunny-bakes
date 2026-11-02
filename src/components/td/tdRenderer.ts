@@ -7,7 +7,7 @@ import type { TdArt, TdSprite } from './tdAssets';
 const towerNames: Record<TowerKind, string> = { rollingPin: 'tower-pin', flourSifter: 'tower-sifter', whisk: 'tower-whisk', oven: 'tower-oven' };
 const pestNames: Record<PestKind, string> = { ant: 'pest-ant', mouse: 'pest-mouse', sparrow: 'pest-sparrow', beetle: 'pest-beetle' };
 const shotNames: Record<TowerKind, string> = { rollingPin: 'proj-pin', flourSifter: '', whisk: 'proj-whisk', oven: 'proj-oven' };
-const TOWER_W = 150, PEST_W = 110, BOSS_SCALE = 1.75, PHOTO = 28;
+const TOWER_W = 205, PEST_W = 150, BOSS_SCALE = 1.6, PHOTO = 32;
 const FX = 64;
 type FxKind = 0 | 1 | 2 | 3 | 4; // none, puff, coin, ring, dust
 const GOLD = '#f2c14e', INK = '#3b2a1f', CREAM = '#fff8ec';
@@ -176,12 +176,12 @@ export function createTdRenderer(canvas: HTMLCanvasElement, mapIndex: number, ar
       let sx = 1, sy = 1;
       if (!reduced && age >= 0 && age < 18) { const k = age / 18; sy = 1 + Math.sin(k * Math.PI) * .25 * (1 - k); sx = 2 - sy; }
       if (!reduced && t.lastAttackTick !== null && tick - t.lastAttackTick < 8) { const k = (tick - t.lastAttackTick) / 8; sy *= 1 - .1 * (1 - k); sx *= 1 + .06 * (1 - k); }
-      shadow(t.x, t.y + 8, 46, 18);
+      shadow(t.x, t.y + 10, 62, 24);
       const name = `${towerNames[t.kind]}-${t.level}`;
       if (sprite(art[name], 0, t.x, t.y + 6, TOWER_W * sx, false, 0, sy / sx)) { /* drawn */ }
       else { ctx.fillStyle = CREAM; ctx.beginPath(); ctx.arc(t.x, t.y - 10, 30, 0, 7); ctx.fill(); }
       for (let p = 0; p <= t.level; p++) {
-        const px = t.x - t.level * 9 + p * 18, py = t.y + 34;
+        const px = t.x - t.level * 10 + p * 20, py = t.y + 44;
         ctx.fillStyle = p === 2 && t.branch ? (t.branch === 'a' ? '#e07a3f' : '#4f8fc0') : GOLD;
         ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, 6, 0, 7); ctx.fill(); ctx.stroke();
       }
