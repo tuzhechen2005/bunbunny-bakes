@@ -73,7 +73,7 @@ export async function progressRun(db: DbClient, game: GameKind, input: unknown, 
   const updatedAt = run.updatedAt === null || run.score === null || verified.score > run.score ? now : run.updatedAt;
   const saved = await db.gameRun.updateMany({
     where: { id: run.id, finishedAt: null, progressAttemptAt: now },
-    data: { score: verified.score, playMs: "playMs" in verified ? verified.playMs : undefined, simSteps: "simSteps" in verified ? verified.simSteps : undefined, suspicious: "suspicious" in verified ? verified.suspicious : undefined, updatedAt, weekKey: weekKeyOf(run.startedAt),
+    data: { score: verified.score, level: game === "GRAB" && "level" in verified && typeof verified.level === "number" ? verified.level : undefined, playMs: "playMs" in verified ? verified.playMs : undefined, simSteps: "simSteps" in verified ? verified.simSteps : undefined, suspicious: "suspicious" in verified ? verified.suspicious : undefined, updatedAt, weekKey: weekKeyOf(run.startedAt),
       drops: log, dropCount: log.length },
   });
   return { score: verified.score, live: saved.count > 0, ...(game === "TD" ? { bestStars: await bestTdStars(db, weekKeyOf(now), run.wechatId) } : {}) };

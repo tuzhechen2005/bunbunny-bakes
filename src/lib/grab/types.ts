@@ -1,10 +1,10 @@
-export const GRAB_ENGINE_VERSION = 5;
+export const GRAB_ENGINE_VERSION = 6;
 export const MIN_TIERS = 3;
 export const TICKS_PER_SECOND = 60;
 export const RUN_TICKS = 60 * TICKS_PER_SECOND;
 export const CLOCK_BONUS_TICKS = 5 * TICKS_PER_SECOND;
-/** A conservative natural duration bound, not a gameplay cutoff; see README. */
-export const MAX_RUN_TICKS = 6000;
+/** Hard ten-minute active-time safety ceiling, including every level and clock. */
+export const MAX_RUN_TICKS = 36000;
 export const MAX_LAUNCHES = MAX_RUN_TICKS;
 export const MAX_IGNORED_LAUNCHES = 120;
 export const FIELD_WIDTH = 720;
@@ -24,7 +24,7 @@ export const BREAD_REFRESH_AGE = 601;
 export const GRAB_MARGIN = 22;
 export const SWING_PERIOD_TICKS = 300;
 export const EXTEND_SPEED = 14;
-export const EMPTY_REEL_SPEED = 14;
+export const EMPTY_REEL_SPEED = 18;
 
 export interface GrabTierInput { id: string }
 export type GrabKind = "bread" | "flour" | "butter" | "clock" | "bomb";
@@ -43,6 +43,10 @@ export interface GrabItem {
   /** Ticks since spawning; frozen at contact for a held item. */
   age: number;
   stage: GrabStage;
+  mouse?: boolean;
+  golden?: boolean;
+  /** Signed integer units per tick; zero for stationary bread. */
+  velocityX?: number;
 }
 export interface GrabClaw {
   phase: "idle" | "extending" | "reeling";
@@ -53,7 +57,12 @@ export interface GrabClaw {
   y: number;
   held: GrabItem | null;
 }
+export interface GrabOrder { id: number; required: number[]; remaining: number[]; reward: number }
+export interface GrabContactResult { item: number; stage: GrabStage; points: number; chain: number; multiplierPercent: number }
 export type GrabEvent =
+  | ({ type: "contact"; tick: number } & GrabContactResult)
+  | { type: "order"; tick: number; completed: number; reward: number; order: GrabOrder }
+  | { type: "level"; tick: number; level: number; target: number; duration: number }
   | { type: "explode"; tick: number; item: GrabItem; destroyed: GrabItem[]; penaltyTicks: number }
   | { type: "pop"; tick: number; item: GrabItem }
   | { type: "score"; tick: number; item: number; points: number; bonusTicks: number }
@@ -61,6 +70,14 @@ export type GrabEvent =
   | { type: "over"; tick: number };
 export interface GrabState {
   tick: number;
+  level: number;
+  levelScore: number;
+  levelTarget: number;
+  completedOrders: number;
+  perfectChain: number;
+  nextPerfectBonusPercent: number;
+  order: GrabOrder;
+  pendingResult: GrabContactResult | null;
   claw: GrabClaw;
   items: GrabItem[];
   /** Integer ticks remaining (not milliseconds). */

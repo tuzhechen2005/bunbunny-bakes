@@ -4,6 +4,7 @@ import type { DbClient } from "./db";
 
 export const isLevelGame = (game: GameKind) => game === "M3" || game === "TD";
 export const boardScore = (game: GameKind) => isLevelGame(game) ? Prisma.sql`r.level` : Prisma.sql`r.score`;
+export const boardLevel = (game: GameKind) => game === "GRAB" ? Prisma.sql`COALESCE(r.level, 1)` : Prisma.sql`(0::int)`;
 export const boardTime = (game: GameKind) => isLevelGame(game) ? Prisma.sql`r."passedAt"` : Prisma.sql`COALESCE(r."finishedAt", r."updatedAt")`;
 export const levelEligibility = (game: GameKind) => isLevelGame(game) ? Prisma.sql`r."passedAt" IS NOT NULL AND r.level IS NOT NULL` : Prisma.sql`TRUE`;
 

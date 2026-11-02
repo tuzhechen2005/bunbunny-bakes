@@ -11,7 +11,7 @@ it("counts only active milliseconds across pauses and resumptions",()=>{
 });
 it("versions, validates and expires saves",()=>{
  expect(GRAB_SAVE_KEY).toContain(`v${GRAB_ENGINE_VERSION}`);expect(parseGrabSave(JSON.stringify(save),0)).toEqual(save);
- for(const change of [{v:2},{seed:"v999.abc"},{seed:"v1.abcdef"},{seed:"v2.abcdef"},{seed:"v3.abcdef"},{seed:"v4.abcdef"},{elapsedMs:-1},{elapsedMs:100001},{tiers:tiers.slice(0,2)},{tiers:[tiers[0],tiers[0],tiers[1]]},{launches:[100]},{launches:[1,1]},{score:10},{expiresAt:"invalid"}]) expect(parseGrabSave(JSON.stringify({...save,...change}),0)).toBeNull();
+ for(const change of [{v:2},{seed:"v999.abc"},{seed:"v1.abcdef"},{seed:"v2.abcdef"},{seed:"v3.abcdef"},{seed:"v4.abcdef"},{seed:"v5.abcdef"},{elapsedMs:-1},{elapsedMs:600001},{tiers:tiers.slice(0,2)},{tiers:[tiers[0],tiers[0],tiers[1]]},{launches:[100]},{launches:[1,1]},{score:10},{expiresAt:"invalid"}]) expect(parseGrabSave(JSON.stringify({...save,...change}),0)).toBeNull();
  expect(parseGrabSave(JSON.stringify(save),Date.parse(save.expiresAt))).toBeNull();expect(parseGrabSave("{",0)).toBeNull();
 });
 it("restores a delivery and a completed log for finish retry",()=>{
@@ -57,6 +57,6 @@ it("bounds presentation updates and event batches through a clock-extended run",
   if (key !== previous) changes++;
   previous = key;
  }
- expect(changes).toBeLessThan(300);
+ expect(changes / (run!.ticks / 60)).toBeLessThan(5);
  expect(game.score).toBe(run!.score);
 });

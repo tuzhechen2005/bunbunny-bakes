@@ -1,5 +1,5 @@
 import { claimCoinFinish } from "./economy";
-import { boardScore, boardTime, levelEligibility, isLevelGame, levelPlayerActive } from "./gameLevels";
+import { boardLevel, boardScore, boardTime, levelEligibility, isLevelGame, levelPlayerActive } from "./gameLevels";
 // 消除大面包 server side (D100-D105): start a run, verify and store a finished one, leaderboard.
 // The client score is never trusted: finish replays the drop log with the run's own seed and the
 // tier snapshot taken at start (src/lib/game/replay.ts).
@@ -142,6 +142,7 @@ export interface BoardRow {
   updatedAt: Date | null;
   progressAttemptAt: Date | null;
   rank: number;
+  level?: number;
 }
 
 /** Verified scores (including unfinished reports), excluding hidden runs and banned ids. */
@@ -152,13 +153,13 @@ const eligible = () => Prisma.sql`(r."finishedAt" IS NOT NULL OR (${liveScoresEn
 function rankedSql(weekKey: string, game: GameKind) {
   return Prisma.sql`
     WITH best AS (
-      SELECT DISTINCT ON (lower(r."wechatId")) r.id, r."wechatId", r.nickname, ${boardScore(game)} AS score, r."finishedAt", r."updatedAt", r."progressAttemptAt", ${boardTime(game)} AS "rankedAt"
+      SELECT DISTINCT ON (lower(r."wechatId")) r.id, r."wechatId", r.nickname, ${boardScore(game)} AS score, ${boardLevel(game)} AS level, r."finishedAt", r."updatedAt", r."progressAttemptAt", ${boardTime(game)} AS "rankedAt"
       FROM "GameRun" r
       WHERE r.game = ${game}::"GameKind" AND r."weekKey" = ${weekKey} AND ${eligible()} AND ${levelEligibility(game)}
-      ORDER BY lower(r."wechatId"), ${boardScore(game)} DESC, ${boardTime(game)} ASC, r.id ASC
+      ORDER BY lower(r."wechatId"), ${boardLevel(game)} DESC, ${boardScore(game)} DESC, ${boardTime(game)} ASC, r.id ASC
     ), ranked AS (
-      SELECT id, "wechatId", nickname, score, "finishedAt", "updatedAt", "progressAttemptAt",
-             (ROW_NUMBER() OVER (ORDER BY score DESC, "rankedAt" ASC, id ASC))::int AS rank
+      SELECT id, "wechatId", nickname, score, level, "finishedAt", "updatedAt", "progressAttemptAt",
+             (ROW_NUMBER() OVER (ORDER BY level DESC, score DESC, "rankedAt" ASC, id ASC))::int AS rank
       FROM best
     )`;
 }
@@ -178,6 +179,7 @@ export async function rankedWeek(db: DbClient, weekKey: string, game: GameKind =
 }
 
 interface AllTimeRow {
+  level?: number;
   id: string;
   wechatId: string;
   nickname: string;
@@ -187,9 +189,9 @@ interface AllTimeRow {
 /** The all-time record (D113): highest eligible score ever, ties → earliest finish. */
 async function allTimeRecord(db: DbClient, game: GameKind): Promise<AllTimeRow | null> {
   const rows = await db.$queryRaw<AllTimeRow[]>`
-    SELECT r.id::text AS id, r."wechatId", r.nickname, ${boardScore(game)} AS score FROM "GameRun" r
+    SELECT r.id::text AS id, r."wechatId", r.nickname, ${boardScore(game)} AS score, ${boardLevel(game)} AS level FROM "GameRun" r
     WHERE r.game = ${game}::"GameKind" AND ${eligible()} AND ${levelEligibility(game)}
-    ORDER BY ${boardScore(game)} DESC, ${boardTime(game)} ASC, r.id ASC LIMIT 1`;
+    ORDER BY ${boardLevel(game)} DESC, ${boardScore(game)} DESC, ${boardTime(game)} ASC, r.id ASC LIMIT 1`;
   return rows[0] ?? null;
 }
 
@@ -283,6 +285,7 @@ export async function finishRun(db: DbClient, input: unknown, ipHash: string, no
 }
 
 export interface LeaderboardEntry {
+  level?: number;
   live: boolean;
   rank: number;
   nickname: string;
@@ -294,10 +297,11 @@ export interface Leaderboard {
   liveScores: boolean;
   week: { start: LocalDate; end: LocalDate };
   top: LeaderboardEntry[];
-  lastWinner: { nickname: string; wechatMasked: string; score: number } | null;
+  lastWinner: { nickname: string; wechatMasked: string; score: number; level?: number } | null;
   /** 👑 all-time record (D113); null before the first eligible run. */
-  allTime: { nickname: string; wechatMasked: string; score: number } | null;
+  allTime: { nickname: string; wechatMasked: string; score: number; level?: number } | null;
   myBest?: number;
+  myLevel?: number;
 }
 
 export async function getLeaderboard(
@@ -313,24 +317,24 @@ export async function getLeaderboard(
   const award = await db.gameAward.findUnique({ where: { game_weekKey: { game, weekKey: last } }, include: { run: true } });
   let lastWinner: Leaderboard["lastWinner"] = null;
   if (award?.run && award.run.score !== null && (!isLevelGame(game) || award.run.passedAt) && (award.run.finishedAt || liveScoresEnabled())) {
-    lastWinner = { nickname: award.run.nickname, wechatMasked: maskWechat(award.run.wechatId), score: isLevelGame(game) ? award.run.level! : award.run.score };
+    lastWinner = { ...(game === "GRAB" ? { level: award.run.level ?? 1 } : {}), nickname: award.run.nickname, wechatMasked: maskWechat(award.run.wechatId), score: isLevelGame(game) ? award.run.level! : award.run.score };
   } else {
     const [w] = await topOfWeek(db, last, 1, game);
-    if (w) lastWinner = { nickname: w.nickname, wechatMasked: maskWechat(w.wechatId), score: w.score };
+    if (w) lastWinner = { ...(game === "GRAB" ? { level: w.level } : {}), nickname: w.nickname, wechatMasked: maskWechat(w.wechatId), score: w.score };
   }
   const active = isLevelGame(game) && liveScoresEnabled()
     ? await Promise.all(rows.map(r => levelPlayerActive(db, game, weekKey, r.wechatId, now, LIVE_WINDOW_MS))) : [];
   const out: Leaderboard = {
     liveScores: liveScoresEnabled(),
     week: weekRange(weekKey),
-    top: rows.map((r, i) => ({ rank: r.rank, nickname: r.nickname, wechatMasked: maskWechat(r.wechatId), score: r.score, live: active[i] ?? isLiveRow(r, now) })),
+    top: rows.map((r, i) => ({ ...(game === "GRAB" ? { level: r.level } : {}), rank: r.rank, nickname: r.nickname, wechatMasked: maskWechat(r.wechatId), score: r.score, live: active[i] ?? isLiveRow(r, now) })),
     lastWinner,
-    allTime: record ? { nickname: record.nickname, wechatMasked: maskWechat(record.wechatId), score: record.score } : null,
+    allTime: record ? { ...(game === "GRAB" ? { level: record.level } : {}), nickname: record.nickname, wechatMasked: maskWechat(record.wechatId), score: record.score } : null,
   };
   const id = myWechatId?.trim();
   if (id && codePoints(id) <= WECHAT_MAX) {
     const mine = await rowOfPlayer(db, weekKey, id, game);
-    if (mine) out.myBest = mine.score;
+    if (mine) { out.myBest = mine.score; if (game === "GRAB") out.myLevel = mine.level; }
   }
   return out;
 }

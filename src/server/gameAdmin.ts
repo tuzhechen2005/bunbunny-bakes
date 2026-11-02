@@ -1,5 +1,5 @@
 import { lockWallet } from "./economy";
-import { boardScore, boardTime, levelEligibility } from "./gameLevels";
+import { boardLevel, boardScore, boardTime, levelEligibility } from "./gameLevels";
 // Admin side of the 消除大面包 game (L3): tier configuration, leaderboard moderation, weekly award.
 //
 // Raw SQL is used for the game tables so every comparison is lower()/text based (no ILIKE: wechat
@@ -376,6 +376,7 @@ export async function deleteTierImage(db: DbClient, store: ImageStore, id: strin
 // ---- leaderboard --------------------------------------------------------------------------
 
 export interface RunRowDto {
+  level?: number;
   id: string;
   /** Full WeChat id (admin only). */
   wechatId: string;
@@ -430,6 +431,7 @@ export interface BoardView {
 }
 
 interface RawRun {
+  level?: number;
   id: string;
   wechatId: string;
   nickname: string;
@@ -479,7 +481,7 @@ export function gameOfRequest(request: Request): GameKind {
   return r.data;
 }
 
-const runColumns = (game: GameKind) => Prisma.sql`"id"::text AS id, "wechatId", "nickname", ${boardScore(game)} AS score, "finishedAt", "updatedAt", "hidden", "dropCount", "simSteps", "playMs", "suspicious"`;
+const runColumns = (game: GameKind) => Prisma.sql`"id"::text AS id, "wechatId", "nickname", ${boardScore(game)} AS score, ${boardLevel(game)} AS level, "finishedAt", "updatedAt", "hidden", "dropCount", "simSteps", "playMs", "suspicious"`;
 
 export async function getBoard(
   db: DbClient,
@@ -495,7 +497,7 @@ export async function getBoard(
       SELECT ${runColumns(game)}
       FROM "GameRun" r
       WHERE "game" = ${g} AND "weekKey" = ${wk} AND ("finishedAt" IS NOT NULL OR (${liveScoresEnabled()} AND "updatedAt" IS NOT NULL)) AND "score" IS NOT NULL AND ${levelEligibility(game)}
-      ORDER BY ${boardScore(game)} DESC, ${boardTime(game)} ASC, "id" ASC LIMIT 300`,
+      ORDER BY ${boardLevel(game)} DESC, ${boardScore(game)} DESC, ${boardTime(game)} ASC, "id" ASC LIMIT 300`,
     db.$queryRaw<{ weekKey: string }[]>`
       SELECT DISTINCT "weekKey" FROM "GameRun" WHERE "game" = ${g} AND "weekKey" IS NOT NULL ORDER BY "weekKey" DESC LIMIT 26`,
     db.$queryRaw<{ wechatId: string; reason: string | null; createdAt: Date }[]>`
@@ -530,6 +532,7 @@ export async function getBoard(
       wechatId: r.wechatId,
       nickname: r.nickname,
       score: r.score ?? 0,
+      ...(game === "GRAB" ? { level: r.level } : {}),
       finishedAt: r.finishedAt?.toISOString() ?? null,
       updatedAt: r.updatedAt?.toISOString() ?? null,
       verified: true,

@@ -1,214 +1,157 @@
-# src/lib/grab — 兔兔夹面包 (G5 / D177)
+# GRAB v6 — 兔兔夹面包 (D183)
 
-Original grab-and-reel rules, shared by client and server. Pure TypeScript: integer field
-coordinates, fixed integer ticks, integer scores, and the shared seeded RNG in `../game/rng.ts`.
-No runtime clock, random global, DOM, framework, or server dependency. Geometry uses a baked
-integer sine table and circle–segment tests on the swept claw tip; there is no runtime trig
-or square root. All geometry intermediates stay within JavaScript's safe integer range.
+Pure, seeded TypeScript shared by client and server. Owner 11/02 decisions supersede the
+review's recommendations to defer levels, mice and golden bread. No component/page changes
+are included: Claude owns their presentation.
 
-## Public API
+## API and replay
 
-```ts
-import {
-  createGrabGame, replayGrab, GrabReplayError, GRAB_ENGINE_VERSION,
-  TICKS_PER_SECOND, MAX_RUN_TICKS,
-} from "@/lib/grab";
+`createGrabGame({ seed, tiers })` requires at least three `{ id: string }` tiers; every tier
+participates. `step(toTick)` advances a nondecreasing safe integer tick and returns detached
+`GrabEvent[]`. `launch(tick)` advances then accepts only when idle; attempted launch ticks
+must strictly increase. `state()` returns a fully detached snapshot. Read-only getters:
+`score`, `over`, `grabs`, `launchesAccepted`, `launchesRejected`.
 
-const tiers = [{ id: "a" }, { id: "b" }, { id: "c" }];
-const game = createGrabGame({ seed: "server-issued-seed", tiers });
-game.step(60);           // Simulate through tick 60; returns GrabEvent[].
-game.launch(60);         // Advance, then launch. Boolean: accepted vs busy/over.
-const snapshot = game.state();
-game.score; game.over; game.grabs;
-game.launchesAccepted; game.launchesRejected; // Read-only getters.
+One tick = 1/60 second of active play. Busy inputs do not change aim or consume RNG.
+A launch locks the current angle; extension begins next tick. Events belong to the latest
+action; state reads don't consume them. Consume each action's batch once, including a
+rejected launch that advanced time. Single-step and batched stepping produce identical
+state and concatenated events.
 
-replayGrab("server-issued-seed", tiers, [60]);
-// Full run: { score, over: true, grabs, launchesAccepted }.
-replayGrab("server-issued-seed", tiers, [60], 90);
-// Progress through tick 90 only; no credit for an item still being reeled.
-```
+`replayGrab(seed, tiers, launches, toTick = MAX_RUN_TICKS)` returns
+`{ score, over, grabs, launchesAccepted, level, completedOrders }`. It checks array size,
+strict safe integer launch ticks, observation bounds, no launch at/after expiry and at most
+120 ignored busy inputs. Invalid logs throw `GrabReplayError`; invalid config throws
+`RangeError`. Partial replay needs an explicit observation tick.
 
-`tiers` is readonly `{ id: string }[]`, at least 3 (`RangeError` otherwise). All supplied tiers
-participate; there is no maximum or special reserved id. Item `tier` is a zero-based photo index,
-independent of bread size; non-breads have `tier: null`. Only the count affects physics/RNG.
+`GRAB_ENGINE_VERSION = 6`. Server seeds encode `v6`; unfinished v1–v5 runs and local saves
+are rejected by existing version guards. Server reconstructs from issued seed, stored tier
+snapshot, input log and end tick, never client points/level/order counts. Progress preserves
+the input prefix and checks active time against elapsed wall time. Existing completed scores
+remain historical; legacy GRAB rows without a level rank as level 1.
 
-One tick is 1/60 second. The caller converts its elapsed time to an integer tick index; the
-engine never reads time. `step(toTick)` accepts nondecreasing, nonnegative safe integers.
-`launch(tick)` additionally requires strictly increasing attempted launch ticks. Invalid live
-times throw `RangeError` without changing the game. Calling `step(t)` then `launch(t)` is valid.
-The launch locks the angle at tick `t`; the first extension movement occurs at `t + 1`.
-Busy inputs advance time but cannot cancel or redirect a grab; they increment the rejected count.
-After expiry, time/physics freeze at the expiry tick; further launches return false.
+`MAX_RUN_TICKS = MAX_LAUNCHES = 36000`: a hard ten-minute active-time safety ceiling across
+all levels and clocks, replacing v5's single-round natural bound. At either the level deadline
+or safety ceiling, expiry precedes scoring/refills/movement. Held items earn nothing at expiry.
+`step(Number.MAX_SAFE_INTEGER)` still finishes within the ceiling.
 
-`state()` is a detached snapshot (including nested held items/events). It contains:
+## Rules
 
-- `tick`, `timeLeft` (both ticks), `score`, `over`, `grabs` (completed deliveries of any kind),
-  `launchesAccepted`, and `launchesRejected`.
-- `claw`: `phase` (`idle`, `extending`, `reeling`), integer `angle` in degrees from downward
-  vertical (right positive), `length`, tip `x/y`, and `held` item or null.
-- `items`: unique run-wide `id`, `kind`, `tier`, `size` (`S/M/L`), centre `x/y`, `radius`,
-  `weight`, `age` in ticks, and `stage` (`raw/perfect/burnt`, or `none` for non-breads).
-  Held-item position follows the tip; its age/stage remain frozen at contact.
-- `events`: all events from the latest `step` or `launch`, in tick order. `state()` does not
-  consume events; the next action replaces the batch (even when it advances zero ticks).
+- 720 × 1080 field; pivot `(360,0)`, oven `(680,80)`. Idle swing is a 300-tick triangle
+  between −70° and +70°. Extension: 14 units/tick, empty return: 18.
+- Integer swept-tip collision with photo radius +22, baked sine table, no runtime trig/sqrt.
+  First contact wins; simultaneous contacts choose nearest centre to the ray, then array order.
+- Bread S/M/L: radius 41/57/73, weight 1/2/3, base value 100/180/300. Contact ages <240
+  are raw ×0.5, 240–540 perfect ×1.5, >540 burnt ×0.3. Field bread renews at age 601,
+  retaining position, tier, size and special properties, with a new id; held bread stays frozen.
+- Normal reel speed `ceil((17 - 4*weight)/0.8)`, floored at 5. Butter/clock: 22;
+  S/M/L: 17/12/7; flour: 5. Integer rounding makes normal returns about 20–29% shorter
+  than v5. Flour return is at most 228 ticks (3.8s) even using a conservative 1140-unit ray.
+  Flour/butter pay 20. Clocks pay 0 and add 300 ticks on delivery, capped by the safety ceiling.
+- Perfect chain: first/second/third+ perfect contact pays 100%/110%/120%, floor to integer.
+  Chain state caps at 3. Raw/burnt/nonbread contact, bomb contact or an empty edge miss clears
+  only the chain; it never deducts banked points. Existing bomb time penalties still apply.
+- One two-item order: either duplicate tiers or two tiers (zero-based photo indexes).
+  Each returned bread of any bake stage/special type fills one matching entry. Reward is
+  300 = twice a standard small perfect grab, unaffected by chain. Delivery of the second
+  ingredient banks the reward and immediately creates the next order. Orders and chain
+  persist across level transitions.
+- Required ingredients are reserved on the visible field immediately on new orders and
+  rechecked each tick after removal/blasts/refills. Missing kinds reassign an unreserved bread
+  (new id and raw age); if necessary convert an unreserved nonbomb item to small bread.
+  This never draws extra deck cards or creates clocks. Duplicate requests reserve two items.
+  If the field momentarily lacks enough nonbomb items, delayed refills supply them within
+  30 ticks. This guarantees availability, not a free delivery or an unobstructed aim ray.
+- A level passes immediately after delivery plus any order reward reaches its target.
+  Next level begins on that tick, with the same field/order/chain, level score reset to zero
+  and a fresh deadline. Surplus doesn't carry toward the next target. Total score is retained.
 
-`step()` returns detached events as well. `launch()` can produce events while advancing even
-if its new launch is rejected. Rendering must consume each action's batch once. Incremental
-stepping and a single large step produce the same world and concatenated event sequence.
+| Level | Target (this level) | Base seconds | Bomb population | Motion |
+| --- | ---: | ---: | ---: | --- |
+| 1 | 900 | 60 | 1 | stationary |
+| 2 | 2000 | 54 | 1 | bread tray motion |
+| 3 | 3100 | 48 | 2 | tray + mice |
+| 4 | 4200 | 42 | 2 | tray + mice |
+| 5 | 5300 | 36 | 3 | tray + mice |
 
-| Event | Fields | Meaning |
+Later levels add 1100 target points each; time falls 6s per level to a 20s floor; bombs cap
+at 3. `grabLevelRules(level)` exports these rules. `level` means highest entered level,
+including the current failed level, not completed level count.
+
+Eight regular field items draw from shuffled 32-card batches (23 bread, 7 butter, 1 flour,
+1 clock). Sizes/tiers/slots/jitter and specials use the seeded RNG. Slots are a 4×4 lattice,
+centres x=90/270/450/630 and y=420/610/800/990, jitter ±14/±16. Initial items don't overlap.
+Normal catches and blast victims refill after 30 ticks. The full future three-bomb population reserves enough outer
+slots from level 1; bombs never use regular deck cards. Maximum population is eleven.
+
+Bombs have radius 57, weight 0, no bread tier/stage. Contact emits `explode`, removes all
+field items within centre distance ≤170, costs 300 ticks (floored at zero), clears the chain
+and reels empty. Victims emit `pop`; bombs destroyed in a blast also respawn as bombs after
+300 ticks. The triggering bomb has no `pop`. Held bread is not a blast victim.
+
+From L2, regular bread drifts horizontally one unit every six ticks, reversing every 90 ticks
+and clamped to bounds. From L3, each newly drawn nongolden bread has 1/5 chance to be carried
+by a mouse: small bread, normal small weight, twice its bake value, moving ±1 unit/tick and
+bouncing at field edges. A full-width crossing takes about 10.6s (about 15–30 screen px/s at
+common phone board widths). Direction is exposed. Moving items may overlap; deterministic
+first-contact rules still apply. Phone readability still needs Claude's rendering and a real
+phone review; headless simulation does not establish it.
+
+Golden bread: from L2, 1/64 chance per drawn bread, always medium, weight 12, reel speed 2,
+three times its normal bake value (perfect 810 before chain). It cannot also be a mouse.
+At equal distance and stage its value per travel tick is 0.8125× ordinary medium bread:
+`3 * (1/14 + 1/12) / (1/14 + 1/2)`. It is an optional heavy choice, not a high-EV jackpot.
+This comparison excludes waiting/aiming and order bonuses; it doesn't claim zero seed luck.
+
+## UI contract
+
+All item fields remain: `id, kind, tier, size, x, y, radius, weight, age, stage`. Specials keep
+`kind: "bread"`; use optional `mouse`, `golden`, and `velocityX` to render the carrier,
+gold treatment and facing. Don't infer these from tier or size. Poll logical positions for
+motion; held position follows the claw, while stage/age stay frozen.
+
+New state fields (available initially and on every snapshot):
+
+| Field | Meaning |
+| --- | --- |
+| `pendingResult` | Null or `{ item, stage, points, chain, multiplierPercent }`, locked at contact until return; still visible if time expires while held. Points exclude the separate order reward. Show as pending, not banked. |
+| `perfectChain` | 0–3 capped chain; `nextPerfectBonusPercent` is 0/10/20 for the next perfect contact. |
+| `order` | `{ id, required: number[2], remaining: number[], reward }`; arrays preserve duplicate kinds. Tier indexes refer to the run's configured photos. |
+| `completedOrders` | Total completed orders, including in the frozen result. |
+| `level`, `levelScore`, `levelTarget` | Entered level, points earned toward its target, target. |
+| `timeLeft` | Integer ticks left in the current level including clock bonuses. |
+
+Existing fields: `tick, score, over, grabs, launchesAccepted, launchesRejected`, `items`,
+`claw { phase, angle, length, x, y, held }`, and the latest `events` batch.
+
+| Event | Fields | When emitted |
 | --- | --- | --- |
-| `explode` | `tick, item, destroyed: GrabItem[], penaltyTicks` | Bomb contact; detached bomb and victim snapshots, before victim pops. `destroyed` excludes the bomb; nominal penalty is 300 even when remaining time is lower. |
-| `pop` | `tick, item` | Item leaves the field; item snapshot records contact age/stage/position. |
-| `refill` | `tick, item, from: { x, y }` | Newly spawned item at its settled position, animation origin at the top-right oven. |
-| `score` | `tick, item` (id), `points, bonusTicks` | Delivery at the pivot; clocks score zero and grant 300 ticks. |
-| `over` | `tick` | Countdown reached zero; no held-item credit. |
+| `contact` (new) | `tick, item` (id), `stage, points, chain, multiplierPercent` | On nonbomb contact, before `pop`; points are final but not banked. |
+| `pop` | `tick, item` (snapshot) | Caught item or blast victim leaves the field. |
+| `score` | `tick, item` (id), `points, bonusTicks` | At pivot; points exactly match contact result; only now banked. |
+| `order` (new) | `tick, completed, reward, order` (new detached order) | On second ingredient delivery, after `score` and any ingredient-supply `refill` events. Reward is banked separately. |
+| `level` (new) | `tick, level, target, duration` (ticks) | Immediately after a passing delivery/order and extra bomb refills. |
+| `refill` | `tick, item` (snapshot), `from: {x,y}` | Scheduled spawn, bread refresh, order ingredient replacement or added level bomb. Render current `items` as authoritative; replacement can retire an id without `pop`. |
+| `explode` | `tick, item` (bomb), `destroyed` (snapshots), `penaltyTicks` | At bomb contact, before victim pops. |
+| `over` | `tick` | Expiry; no more scoring. |
 
-The engine supplies logical positions and animation events, not artwork or UI layout.
+Rendering should display contact stage/points immediately, refresh the order/level HUD on
+state changes, and show `completedOrders`/`level` in the result. Extend any presentation-key
+memoization for these fields. Preserve ids as render keys, and process motion from snapshots.
+No UI assets or UI integration are delivered by this worktree.
 
-## Rules and tuning constants
+Server finish response adds `level` and `completedOrders`; duplicate finishes reconstruct
+orders from the first stored log, not the new request body. Progress saves the verified level.
+Public leaderboard entries and `allTime`/`lastWinner` expose optional `level`; a personal row
+also supplies `myLevel`. `score` stays the actual score. Admin rows expose `level` too.
+Ranking, best-run deduplication, all-time leader, admin board and weekly prize selection use
+level DESC, score DESC, then the existing timestamp/id tie-break. M3/TD ranking is unchanged.
+No schema migration: GRAB uses the existing nullable `GameRun.level` column.
 
-- Field 720 × 1080 (2:3), pivot `(360, 0)`, oven animation origin `(680, 80)`.
-- Idle angle follows a 300-tick triangular swing from −70° to +70° and back. Its phase is
-  tied to the run's tick, including time spent reeling. A launch freezes the current angle.
-- Extension is 14 units/tick. The entire swept tip uses `item.radius + 22` field units,
-  including the coarse candidate test and one-unit contact scan. First contact wins; among
-  simultaneous contacts, choose the centre nearest the tip line, then array order for exact
-  ties. At a field edge an empty claw returns.
-- Empty return is 14 units/tick; held return is `max(2, 17 − 4 × weight)` units/tick.
-  Even the shortest edge miss takes 28 ticks outward and 28 inward (about 0.93 seconds total).
-  Board input launches on primary pointer-down for touch/pen and left mouse presses, with a
-  click fallback independent of touch capability. A 500 ms window after pointer events
-  (including release) suppresses compatibility clicks; keyboard activation remains available.
+## Headless tuning
 
-| Item | Radius | Weight | Return speed | Base points |
-| --- | ---: | ---: | ---: | ---: |
-| Bread S | 41 | 1 | 13 | 100 |
-| Bread M | 57 | 2 | 9 | 180 |
-| Bread L | 73 | 3 | 5 | 300 |
-| Flour | 44 | 8 | 2 | 20 |
-| Butter | 25 | 0 | 17 | 20 |
-| Clock | 25 | 0 | 17 | 0 (+300 ticks) |
-| Bomb (M) | 57 | 0 | 14 (empty claw) | 0 (−300 ticks) |
-
-Bread points are based on age **at contact**: ages 0–239 ticks are raw ×0.5; 240–540 inclusive
-are perfect ×1.5; 541+ are burnt ×0.3. Thus exactly 4 seconds is perfect, exactly 9 seconds
-is still perfect, and strictly after 9 seconds is burnt. Base points are multiples of 10,
-so all awards are exact integers. `breadStage`, `breadPoints`, and `reelSpeed` are exported
-pure helpers. Non-breads are unaffected by age.
-
-At age 601 (`BREAD_REFRESH_AGE`), after 60 burnt ticks, the oven replaces field bread with
-fresh raw bread of the same tier, size and position and a new run-wide id. It emits `refill`
-without a `pop` or score; it consumes no RNG or item-deck draw and cannot create extra clocks.
-Held bread never refreshes. This repeats throughout bonus time, so unattended bread cannot
-stay burnt for the rest of the run. Its visual is a small crust border, never a dark photo filter.
-
-Eight regular items plus exactly one bomb start at age zero. Each ordinary contact schedules one replacement 30 ticks later,
-even if the caught item is still returning. Slots are chosen from a seeded 4 × 4 lower-field
-lattice with independent seeded x/y jitter (±14/±16 units). The spacing guarantees non-overlap
-without retry loops, including at the largest radius. Column centres are 90/270/450/630;
-row centres are 420/610/800/990. Item bounds span y=331…1079 (the lower 70%).
-Bread radii remain 41/57/73, about 1.58× v1; shortening the height-fitted board makes the photos
-larger on the same phone viewport. Visual diameters remain unchanged in field units; forgiving
-hitboxes extend 22 units beyond the photo radius. A refill may reuse the vacated slot;
-the held item is no longer a field obstacle. Item ids never repeat.
-
-The oven draws shuffled 32-item batches: 23 breads, 7 butter, 1 flour, 1 clock. Bread size and
-photo tier are independently seeded. This gives rare clocks without an arbitrary bonus cap.
-The same RNG stream controls batches, sizes, tiers, slots and jitter; busy inputs consume no RNG.
-
-Bombs have `tier: null`, `stage: "none"`, size M and weight 0. They use the same seeded
-slot/jitter placement, restricted to the outer columns: centre distance from the pivot's
-straight-down line is at least 140 units (actual minimum 256). During the 300-tick bomb absence,
-regular refills keep one outer slot free. Bombs never overlap field items and never draw from
-the regular item deck; total field population is at most nine.
-
-The first swept contact with a bomb removes it immediately and emits `explode`, followed by
-one `pop` for each other field item whose centre is at distance **≤170** from the bomb centre.
-Victims include clocks and all other kinds; they grant no points, grabs or time bonus and each
-refills 30 ticks later from the usual oven origin. Held items are outside the field array and
-cannot be blast victims. The bomb itself has no `pop`; render its removal/blast from `explode`.
-The countdown loses 300 ticks, floored at zero. If that expires the run, `over` follows the
-victim pops on that same tick, and no subsequent refill happens. Otherwise the claw reels
-empty at 14 units/tick from its exact contact length, and a new bomb emits `refill` exactly
-300 ticks after the explosion. No bomb is held or scored. All event snapshots are detached.
-
-The initial deadline is 3600 ticks (60 seconds). A fully returned clock adds 300 ticks (5 seconds).
-At the deadline, expiry runs **before** movement/refill/scoring: even a clock that would have
-arrived on that exact tick cannot save the run. A held item remains visible in the frozen final
-snapshot but earns nothing. There is no end bonus.
-
-### Finite replay bound
-
-`MAX_RUN_TICKS = 6000` is a conservative natural bound, not a gameplay timer cap. Every item
-contact is at least 309 units below the pivot (331 minimum photo edge minus 22 tolerance).
-Each completed grab takes more than 32 ticks (at least 23 outward and 19 inward with the
-fastest held return). At time `T`, at most `9 + floor(T/32)` items can have been drawn from
-the deck, including the initial eight and a pending grab. Automatic bread renewal draws
-nothing from that deck and therefore does not affect the clock bound. With E explosions,
-blast replacements add at most 8E deck draws, but penalties subtract 300E ticks. Since
-`ceil(a + 8E/32) ≤ ceil(a) + E`, those extra potential clocks cannot increase the bound below.
-Bomb spawning itself draws no deck card.
-With one clock per 32-item batch, a run's duration `T` satisfies
-`T ≤ 3600 + 300 × ceil((9 + T/32)/32)`, which implies `T < 5636`. Thus stepping to 6000 always
-finishes naturally. Even `step(Number.MAX_SAFE_INTEGER)` stops at the natural deadline.
-
-## Replay validation and versioning
-
-`replayGrab(seed, tiers, launches, toTick?)` accepts a readonly array of integer launch ticks.
-Default `toTick = MAX_RUN_TICKS` finishes the run. Supply an explicit observation tick for
-unfinished progress; launch ticks alone cannot encode elapsed time after the last input.
-The result is exactly `{ score, over, grabs, launchesAccepted }`.
-
-`GrabReplayError` (a named `Error`, following TU/M3) rejects:
-
-- A non-array or more than `MAX_LAUNCHES` (6000) entries, checked before simulation.
-- Negative, fractional, nonnumeric, unsafe, or non-increasing launch ticks.
-- An observation tick outside `[0, MAX_RUN_TICKS]`, or a launch beyond that observation tick.
-- A launch at/after the actual deadline, including after a previous launch already ended the run.
-- More than `MAX_IGNORED_LAUNCHES` (120) busy launches. Exactly 120 are tolerated.
-
-Configuration errors (fewer than 3 tiers) remain `RangeError`. Wall-clock plausibility and
-suspicious-rate checks live in `src/server/grab.ts` and `grabRules.ts`; this engine does not trust or read wall time.
-`GRAB_ENGINE_VERSION = 5` is exported. Version 5 adds seeded bombs, blasts and time penalties;
-v1/v2/v3/v4 saves and server runs are rejected by the existing
-version guards. `grabSeed(randomHex)` embeds it in server-issued seeds;
-`grabSeedVersion(seed)` returns the encoded version or null for malformed/unversioned seeds. Bump it for any
-future rules/RNG/geometry change that changes the score of an existing seed and input log.
-
-## Bot measurements
-
-`tests/support/grabBot.ts` contains both bots. Random launches after a seeded uniform 0–17 tick
-delay each time the claw becomes idle, without inspecting targets. Greedy inspects only the
-current public items, uses the shared swept-contact geometry over the next half-swing in two-tick increments,
-and chooses points per travel-plus-wait time. It predicts contact age modulo the 601-tick bread renewal, avoids flour and bomb targets, and values
-a clock's time bonus; it never sees future refills or clones the engine RNG. Both log actual
-launches and simulate the same engine. Bot prediction may use floating point; engine/replay do not.
-
-Reproduce with `npx tsx scripts/grab-tune.mts [seeds=200] [tiers=6] [seedPrefix=grab-tune]`.
-
-| Corpus | Random mean score | Greedy mean score | Ratio | Greedy mean grabs |
-| --- | ---: | ---: | ---: | ---: |
-| G4 `grab-tune0…199`, 6 tiers | 2391.97 | 4446.86 | 53.79% | 21.105 |
-| G5 `grab-tune0…199`, 6 tiers | 1949.09 | 4338.96 | 44.92% | 21.225 |
-| G4 `grab-check0…999`, 3 tiers | 2378.296 | 4451.822 | 53.42% | 21.146 |
-
-G4 intentionally supersedes the old 25–35% ratio / 15–20 grab target: the owner asked for
-clearly more forgiving play. The G4 200-seed regression allowed a 45–65% random/greedy score ratio and
-18–26 mean completed greedy grabs. G5 retains the grab band and pins greedy mean score to
-4002.174–4891.546 (±10% of G4's 4446.86); measured change is −2.43%. Only the ratio floor
-moves from 45% to 44% (upper bound stays 65%): random bomb penalties put the measured ratio
-at 44.92%. No gameplay scoring, speeds or deck weights were retuned. The random bot must
-hit a bomb in more than half of the 200 runs (measured 163/200, 81.5%).
-The table records measurements, not a reason to tune away the requested forgiveness.
-Other tests cover deterministic events and snapshots, chunked stepping, replay/live equality,
-bad logs, exact doneness/contact/delivery boundaries, clocks, timeout ties, refill separation,
-snapshot isolation and maximum-input replay cost. The performance check requests the full 6000-tick
-bound on a clock-extended real run with all 120 tolerated ignored inputs and requires every warmed
-replay below 50 ms; a maximal 6000-entry hostile log must also reject within 50 ms.
-
-```sh
-npx tsc --noEmit
-npx eslint .
-npx vitest run --configLoader runner --project unit
-```
+`npx tsx scripts/grab-tune.mts 100 8 review-1102-` runs random and aimed bots against identical
+100 seeds. Bots inspect public state only; neither reads future spawns. Aimed play estimates
+visible points per wait+travel time, including special multipliers, but does not optimize
+orders or predict moving targets perfectly. These are strategy proxies, not human playtests.
+See `docs/GRAB_V6_VALIDATION.md` for final numbers and checks.

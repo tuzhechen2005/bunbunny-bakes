@@ -1,22 +1,15 @@
 import { expect, it } from "vitest";
 import { greedyGrab, randomGrab } from "../support/grabBot";
 
-it("bomb v5 keeps a strategy advantage and 18–26 greedy grabs over 200 seeds", () => {
-  const tiers = Array.from({ length: 6 }, (_, i) => ({ id: `t${i}` }));
-  const random = Array.from({ length: 200 }, (_, i) => randomGrab(`grab-tune${i}`, tiers));
-  const greedy = Array.from({ length: 200 }, (_, i) => greedyGrab(`grab-tune${i}`, tiers));
+it("v6 makes L1 accessible and aimed play typically ends at L3–5", () => {
+  const tiers = Array.from({ length: 8 }, (_, i) => ({ id: `t${i}` }));
+  const random = Array.from({ length: 100 }, (_, i) => randomGrab(`review-1102-${i}`, tiers));
+  const greedy = Array.from({ length: 100 }, (_, i) => greedyGrab(`review-1102-${i}`, tiers));
   const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length;
-  const ratio = mean(random.map((r) => r.score)) / mean(greedy.map((r) => r.score));
-  expect([...random, ...greedy].every((r) => r.over)).toBe(true);
-  // Bomb penalties lower random scores; greedy must stay within 10% of the G4 baseline.
-  const greedyScore = mean(greedy.map(r => r.score));
-  expect(greedyScore).toBeGreaterThanOrEqual(4446.86 * 0.9);
-  expect(greedyScore).toBeLessThanOrEqual(4446.86 * 1.1);
-  expect(random.filter(r => r.explosions > 0).length).toBeGreaterThan(100);
-  process.stdout.write(`G5 tuning: greedy=${greedyScore}, random=${mean(random.map(r => r.score))}, bomb runs=${random.filter(r => r.explosions > 0).length}/200\n`);
-  expect(ratio).toBeGreaterThanOrEqual(0.44);
-  expect(ratio).toBeLessThanOrEqual(0.65);
-  const grabs = mean(greedy.map((r) => r.grabs));
-  expect(grabs).toBeGreaterThanOrEqual(18);
-  expect(grabs).toBeLessThanOrEqual(26);
-}, 30_000);
+  expect([...random, ...greedy].every(r => r.over)).toBe(true);
+  expect(random.filter(r => r.level >= 2).length).toBeGreaterThanOrEqual(90);
+  expect(greedy.filter(r => r.level >= 3 && r.level <= 5).length).toBeGreaterThanOrEqual(90);
+  expect(mean(greedy.map(r => r.score))).toBeGreaterThan(mean(random.map(r => r.score)) * 1.8);
+  expect(mean(greedy.map(r => r.busyTicks / r.ticks))).toBeLessThan(.674);
+  expect(mean(greedy.map(r => r.completedOrders))).toBeGreaterThan(3);
+}, 60_000);

@@ -30,7 +30,7 @@ import {
 import { loadTierConfigs, type GameTierConfig } from "./gameTiers";
 import { runExpiresAt, weekKeyOf } from "./gameWeek";
 
-/** At most 6000 four-digit ticks plus commas, 25% headroom and a 4 KiB envelope. */
+/** Maximum launch log plus commas, 25% headroom and a 4 KiB envelope. */
 export const GRAB_MAX_FINISH_BODY_BYTES = Math.ceil(MAX_LAUNCHES * (String(MAX_RUN_TICKS).length + 1) * 1.25) + 4 * 1024;
 export const grabStartSchema = startSchema;
 export const grabFinishSchema = z.object({
@@ -71,14 +71,14 @@ export async function startGrabRun(db: DbClient, input: unknown, ipHash: string,
   return { runId: run.id, seed, tiers, expiresAt: runExpiresAt(now).toISOString() };
 }
 
-export async function finishGrabRun(db: DbClient, input: unknown, ipHash: string, now: Date): Promise<FinishResult> {
+export async function finishGrabRun(db: DbClient, input: unknown, ipHash: string, now: Date): Promise<FinishResult & { level: number; completedOrders: number }> {
   const data = parseGameInput(grabFinishSchema, input);
   await rateLimit(db, `grab_finish_ip:${ipHash}`, FINISH_LIMIT_PER_HOUR, now);
   const run = await db.gameRun.findUnique({ where: { id: data.runId } });
   // Run ids from other games are not runs of this game.
   if (!run || run.game !== "GRAB") throw new AppError("NOT_FOUND", { message: copy.gameApi.runNotFound });
   // Repeating a finish returns the stored result (the first launch log wins).
-  if (run.finishedAt) return resultFor(db, run, "GRAB");
+  if (run.finishedAt) return grabResult(db, run);
   // A run dealt under another engine version (e.g. started before a rules change was deployed)
   // would replay under different rules: it can no longer be finished, like an expired run. Such
   // runs expire with the week anyway and are cleaned up as unfinished runs.
@@ -96,6 +96,7 @@ export async function finishGrabRun(db: DbClient, input: unknown, ipHash: string
       finishedAt: now,
       updatedAt: null,
       score: verified.score,
+      level: verified.level,
       weekKey,
       drops: data.launches as unknown as Prisma.InputJsonValue,
       dropCount: data.launches.length,
@@ -105,9 +106,16 @@ export async function finishGrabRun(db: DbClient, input: unknown, ipHash: string
   }, now);
   if (claimed.count === 0) {
     const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
-    return resultFor(db, stored, "GRAB");
+    return grabResult(db, stored);
   }
-  return resultFor(db, { id: run.id, wechatId: run.wechatId, score: verified.score, weekKey }, "GRAB");
+  return { ...await resultFor(db, { id: run.id, wechatId: run.wechatId, score: verified.score, weekKey }, "GRAB"), level: verified.level, completedOrders: verified.completedOrders };
+}
+
+async function grabResult(db: DbClient, run: GameRun) {
+  // Reconstruct summary from the winning stored log, never a duplicate request's body.
+  const summary = grabSeedVersion(run.seed) === GRAB_ENGINE_VERSION
+    ? replayGrab(run.seed, grabTiersFromSnapshot(run.tiersSnapshot), run.drops as number[], Math.round((run.playMs ?? 0) * 60 / 1000)) : null;
+  return { ...await resultFor(db, run, "GRAB"), level: run.level ?? 1, completedOrders: summary?.completedOrders ?? 0 };
 }
 
 export function getGrabLeaderboard(db: DbClient, now: Date, myWechatId?: string | null): Promise<Leaderboard> {
@@ -137,5 +145,5 @@ export function verifyGrabRun(run: GameRun, data: z.output<typeof grabFinishSche
     || playMs > launchTime(deadline) + PLAUSIBILITY_SLACK_MS
     || (run.playMs !== null && playMs < run.playMs)
     || (Array.isArray(run.drops) && !run.drops.every((tick, i) => tick === data.launches[i]))) throw badRun();
-  return { score: outcome.score, playMs, suspicious: isGrabSuspicious(data.launches) };
+  return { score: outcome.score, level: outcome.level, completedOrders: outcome.completedOrders, playMs, suspicious: isGrabSuspicious(data.launches) };
 }
