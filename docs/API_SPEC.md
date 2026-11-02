@@ -290,14 +290,16 @@
 | PATCH | `/api/admin/ledger/manual/{id}` | 修改（字段同上，整条替换，商品行整体替换）；返回 `{ entry }`；日志 `manual_income.update`，记录修改前后的值；找不到 `NOT_FOUND` |
 | DELETE | `/api/admin/ledger/manual/{id}` | 删除（连同商品行）；返回 `{ ok: true }`；日志 `manual_income.delete`，记录删除前的值；找不到 `NOT_FOUND` |
 
+**商品单位（D170）**：`GET/POST /api/admin/products` 和 `PATCH /api/admin/products/{id}` 返回的商品包含 `unitLabel`。POST 可省略，默认「个」；PATCH 省略保留当前值。输入必须是字符串，去除首尾空白后 1–4 个 Unicode 字符（支持 1–2 字中文单位或最长 4 字符的短单位），空白、null、非字符串或超长返回 422 `VALIDATION`。修改写入审计日志。仪表盘、日历生产汇总及每日邮件的每条商品记录均包含 `unitLabel`；展示数量和批次余量使用该单位，邮件标题按商品名称及单位分别列出，不将所有独立产能商品合计成布蕾。
+
 **订单列表日期与分页（D137）**：未指定 `date/from/to` 时仍只显示芝加哥当天及以后，按 `pickupDate ASC, seq ASC`。`date=YYYY-MM-DD` 只看该天；`from/to` 是含首尾的日期范围。`date=all` 不设日期上下界（优先于 `from/to`），按 `pickupDate DESC, seq DESC`，其他筛选仍有效。返回 `{ orders, nextCursor, today, products }`；每页最多 50 笔，`nextCursor` 为末笔的 `YYYY-MM-DD:seq`，无下一页时为 `null`。下一页须保留相同筛选；升序取游标之后的较大日期／同日较大序号，全部日期模式取较小日期／同日较小序号。
 
 **日历生产汇总（D138）**：仅店主会话可访问，未登录返回 401；不加到任何顾客接口。返回 `{ independentProducts, days }`，日期范围含首尾，最多 92 天。每个 day 保留 `date/isOpen/hasRow/note/limits/overrides/usage/orderCount/over`，新增：
 
 ```ts
 production: {
-  bread: { productId, name, qty, rounds: { rounds, leftover } | null }[],
-  independent: { productId, name, qty, batches: number | null, leftover: number | null }[],
+  bread: { productId, name, unitLabel, qty, rounds: { rounds, leftover } | null }[],
+  independent: { productId, name, unitLabel, qty, batches: number | null, leftover: number | null }[],
   totalPieces: number,
   orderCount: number,
   unconfirmedCount: number

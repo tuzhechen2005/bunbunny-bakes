@@ -87,9 +87,10 @@ export function Dashboard() {
             {data.tonightBrulee.map((l) => (
               <li key={l.productId}>
                 {l.batches === null
-                  ? fill(t.tonightLineNoBatch, { name: l.name, qty: l.qty })
+                  ? fill(t.tonightLineNoBatch, { name: l.name, qty: l.qty, unit: l.unitLabel })
                   : fill(t.tonightLine, {
                       name: l.name,
+                      unit: l.unitLabel,
                       qty: l.qty,
                       batches: l.batches,
                       leftover: l.leftover ?? 0,

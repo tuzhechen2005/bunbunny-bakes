@@ -29,6 +29,7 @@
 |---|---|---|
 | id | uuid | |
 | name | text | 例如"奶酥红豆包" |
+| unitLabel | text | 商品计量单位，非空，默认「个」（D170）。API 去首尾空白后 1–4 个 Unicode 字符，如「个」「杯」「小盒」「pack」。迁移 `20261101120000_product_unit_label`：已有名称含「布蕾」的商品回填「杯」，其余「个」；与产能模式无关 |
 | description | text | |
 | imageUrl | text? | 封面照片的冗余副本（= 第一张 ProductImage，每次改照片同步）；空时显示兔子占位图 |
 | fieldColor | text? | 首页背景色 `#RRGGBB`（大写，CHECK 约束），空 = 默认奶白 `#EFE7DA`（D95）；字色由 `src/lib/fieldColor.ts` 按对比度算出 |

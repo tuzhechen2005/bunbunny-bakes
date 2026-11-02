@@ -93,7 +93,7 @@ describe("enqueueDailySummary", () => {
     expect(payload.isEmpty).toBe(false);
 
     const email = await renderNotification(db, rows[0], NOW);
-    expect(email.subject).toBe("🐰 明天 10/30 周五：面包 18 个 · 1520 g｜今晚布蕾 20 杯");
+    expect(email.subject).toBe("🐰 明天 10/30 周五：面包 18 个 · 1520 g｜今晚焦糖布蕾 20 杯");
   });
 
   it("calling twice the same evening gives one notification", async () => {
@@ -152,9 +152,7 @@ describe("enqueueDailySummary", () => {
     const d = await loadDashboard(db, NOW);
     const card = d.days["2026-10-30"];
 
-    expect(s.bread?.lines.map((l) => ({ productId: l.productId, name: l.name, qty: l.qty, rounds: l.rounds }))).toEqual(
-      card.products,
-    );
+    expect(s.bread?.lines).toEqual(card.products);
     expect(s.bread?.doughG).toBe(card.doughG);
     expect(s.bread?.doughLimitG).toBe(card.doughLimitG);
     expect(s.tonight.lines).toEqual(d.tonightBrulee);

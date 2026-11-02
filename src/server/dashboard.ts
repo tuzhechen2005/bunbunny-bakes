@@ -32,12 +32,13 @@ export interface DayCard {
   products: {
     productId: string;
     name: string;
+    unitLabel: string;
     qty: number;
     rounds: { rounds: number; leftover: number } | null;
   }[];
   doughG: number;
   doughLimitG: number;
-  independent: { productId: string; name: string; qty: number; limit: number }[];
+  independent: { productId: string; name: string; unitLabel: string; qty: number; limit: number }[];
   deliveries: number;
   deliveryLimit: number;
   deliveryEnabled: boolean;
@@ -116,6 +117,7 @@ export async function loadDashboard(client: DbClient, now: Date): Promise<Dashbo
       name: p.name,
       sortOrder: p.sortOrder,
       batchYield: p.batchYield,
+      unitLabel: p.unitLabel,
     };
   }
 
@@ -191,6 +193,7 @@ export async function loadDashboard(client: DbClient, now: Date): Promise<Dashbo
       .map((p) => ({
         productId: p.id,
         name: p.name,
+        unitLabel: p.unitLabel,
         qty: u.products[p.id] ?? 0,
         limit: day.limits.productLimits[p.id],
       }))
@@ -200,6 +203,7 @@ export async function loadDashboard(client: DbClient, now: Date): Promise<Dashbo
       products: (bread?.lines ?? []).map((l) => ({
         productId: l.productId,
         name: l.name,
+        unitLabel: l.unitLabel,
         qty: l.qty,
         rounds: l.rounds,
       })),

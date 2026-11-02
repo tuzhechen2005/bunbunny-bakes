@@ -45,8 +45,8 @@ async function seed(): Promise<string> {
        VALUES (gen_random_uuid(), '奶酪角', 299, 'DOUGH_PER_ROUND', 340, 4, 1, now()) RETURNING id`,
     );
     const { rows: brulee } = await client.query<{ id: string }>(
-      `INSERT INTO "Product" (id, name, "unitPriceCents", "capacityMode", "dailyLimit", "batchYield", "leadDays", "sortOrder", "updatedAt")
-       VALUES (gen_random_uuid(), '焦糖布蕾', 249, 'INDEPENDENT', 24, 3, 2, 2, now()) RETURNING id`,
+      `INSERT INTO "Product" (id, name, "unitPriceCents", "capacityMode", "dailyLimit", "batchYield", "leadDays", "sortOrder", "updatedAt", "unitLabel")
+       VALUES (gen_random_uuid(), '焦糖布蕾', 249, 'INDEPENDENT', 24, 3, 2, 2, now(), '杯') RETURNING id`,
     );
     await client.query(`INSERT INTO "OpenDate" (date, "updatedAt") VALUES ($1, now())`, [tomorrow]);
     const orders: [string, number, number][] = [

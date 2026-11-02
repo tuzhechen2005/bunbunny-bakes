@@ -13,6 +13,7 @@ import {
 
 export interface SummaryProduct extends CapacityProduct {
   name: string;
+  unitLabel: string;
   sortOrder: number;
   batchYield: number | null;
 }
@@ -41,6 +42,7 @@ export interface SummaryInput {
 export interface BreadLine {
   productId: string;
   name: string;
+  unitLabel: string;
   qty: number;
   rounds: { rounds: number; leftover: number } | null;
 }
@@ -48,6 +50,7 @@ export interface BreadLine {
 export interface BatchLine {
   productId: string;
   name: string;
+  unitLabel: string;
   qty: number;
   batches: number | null;
   leftover: number | null;
@@ -163,7 +166,7 @@ function breadSection(day: ProductionDay | undefined, products: ProductMap): Dai
         const n = Math.ceil(qty / per);
         rounds = { rounds: n, leftover: n * per - qty };
       }
-      return { productId: product.id, name: product.name, qty, rounds };
+      return { productId: product.id, name: product.name, unitLabel: product.unitLabel, qty, rounds };
     },
   );
 
@@ -179,10 +182,10 @@ function batchLines(day: ProductionDay | undefined, products: ProductMap): Batch
   return sortedEntries(totals, products, isIndependent).map(({ product, qty }) => {
     const y = product.batchYield;
     if (!isPositiveInt(y)) {
-      return { productId: product.id, name: product.name, qty, batches: null, leftover: null };
+      return { productId: product.id, name: product.name, unitLabel: product.unitLabel, qty, batches: null, leftover: null };
     }
     const batches = Math.ceil(qty / y);
-    return { productId: product.id, name: product.name, qty, batches, leftover: batches * y - qty };
+    return { productId: product.id, name: product.name, unitLabel: product.unitLabel, qty, batches, leftover: batches * y - qty };
   });
 }
 

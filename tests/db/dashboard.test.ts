@@ -100,7 +100,7 @@ describe("loadDashboard", () => {
       ["奶酪角", 6, { rounds: 2, leftover: 2 }],
     ]);
     expect(card.independent).toEqual([
-      { productId: ids.brulee, name: "焦糖布蕾", qty: 20, limit: 24 },
+      { productId: ids.brulee, name: "焦糖布蕾", unitLabel: "杯", qty: 20, limit: 24 },
     ]);
     expect(card.deliveries).toBe(1);
     expect(card.deliveryLimit).toBe(8);
@@ -109,7 +109,7 @@ describe("loadDashboard", () => {
     expect(card.byStatus.CONFIRMED).toBe(1);
 
     expect(d.tonightBrulee).toEqual([
-      { productId: ids.brulee, name: "焦糖布蕾", qty: 20, batches: 7, leftover: 1 },
+      { productId: ids.brulee, name: "焦糖布蕾", unitLabel: "杯", qty: 20, batches: 7, leftover: 1 },
     ]);
 
     // Same numbers as buildSummary on the same facts.
@@ -127,6 +127,7 @@ describe("loadDashboard", () => {
           name: p.name,
           sortOrder: p.sortOrder,
           batchYield: p.batchYield,
+          unitLabel: p.unitLabel,
         },
       ]),
     );

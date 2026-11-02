@@ -335,3 +335,30 @@ describe("POST /reorder", () => {
     expect(await db.auditLog.count()).toBe(0);
   });
 });
+
+describe("product units", () => {
+  it("defaults, trims, returns and preserves units with audit history", async () => {
+    const created = await POST(request("POST", unitBody));
+    const body = await created.json();
+    expect(body.product.unitLabel).toBe("个");
+    const id = body.product.id;
+    const updated = await PATCH(request("PATCH", { unitLabel: "  小盒  " }), patchCtx(id));
+    expect((await updated.json()).product.unitLabel).toBe("小盒");
+    await PATCH(request("PATCH", { name: "泡芙" }), patchCtx(id));
+    expect((await db.product.findUniqueOrThrow({ where: { id } })).unitLabel).toBe("小盒");
+    const listed = await GET(request("GET"));
+    expect((await listed.json()).products.find((p: { id: string }) => p.id === id).unitLabel).toBe("小盒");
+    const audit = await db.auditLog.findFirstOrThrow({ where: { entityId: id, action: "product.update" }, orderBy: { at: "asc" } });
+    expect(audit.before).toMatchObject({ unitLabel: "个" });
+    expect(audit.after).toMatchObject({ unitLabel: "小盒" });
+  });
+  it.each(["杯", "小盒", "pack"])("accepts %s on create", async (unitLabel) => {
+    const r = await POST(request("POST", { ...unitBody, unitLabel }));
+    expect(r.status).toBe(201);
+    expect((await r.json()).product.unitLabel).toBe(unitLabel);
+  });
+  it.each(["", "   ", "packs", null, 2])("rejects invalid unit %s on create and update", async (unitLabel) => {
+    expect((await POST(request("POST", { ...unitBody, unitLabel }))).status).toBe(422);
+    expect((await PATCH(request("PATCH", { unitLabel }), patchCtx(P.brulee))).status).toBe(422);
+  });
+});
