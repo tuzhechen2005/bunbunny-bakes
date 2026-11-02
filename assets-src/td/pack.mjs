@@ -4,26 +4,20 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir, readdir, stat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import sharp from 'sharp';
+import { createRequire } from 'node:module';
+const sharp = createRequire(import.meta.url)('sharp');
 
 const root = dirname(fileURLToPath(import.meta.url));
 const out = resolve(root, '../../public/brand/td');
 const cache = resolve(root, '.cache');
 const expected = Object.fromEntries([
-  ...[1, 2, 3].map(n => [`map-${n}`, 1]),
-  ...['pin', 'sifter', 'whisk', 'oven'].flatMap(k => [0, 1, 2].map(t => [`tower-${k}-${t}`, 1])),
-  ...['ant', 'mouse', 'sparrow', 'beetle', 'boss'].map(k => [`pest-${k}`, 4]),
+  ...['pin', 'sifter', 'whisk', 'oven', 'freezer', 'piping', 'torch'].flatMap(k => [0, 1, 2].map(t => [`tower-${k}-${t}`, 1])),
+  ...['ant', 'mouse', 'sparrow', 'beetle', 'boss'].map(k => [`pest-${k}`, 6]),
   ...['pin', 'whisk', 'oven'].map(k => [`proj-${k}`, 1]),
-  ['fx-hit', 4], ['slot', 1],
+  ...['hit', 'bomb', 'freeze', 'slide'].map(k => [`fx-${k}`, 4]), ['slot', 1],
 ]);
 const specs = JSON.parse(await readFile(resolve(cache, 'renders.json'), 'utf8'));
 assert.deepEqual(specs.map(s => s.id).sort(), Object.keys(expected).sort(), 'Render the complete asset set');
-const source = await readFile(resolve(root, '../../src/lib/td/maps.ts'), 'utf8');
-const slotRadius = Number((await readFile(resolve(root, '../../src/lib/td/types.ts'), 'utf8')).match(/TD_SLOT_RADIUS = (\d+)/)[1]);
-const sourceHash = createHash('sha256').update(source).digest('hex');
-const maps = [...source.matchAll(/map\("([^"]+)",\s*(\[\[.*?\]\]),\s*(\[\[.*?\]\])\)/gs)]
-  .map(([, name, path, slots]) => ({ name, path: JSON.parse(path), slots: JSON.parse(slots) }));
-assert.equal(maps.length, 3);
 await mkdir(out, { recursive: true });
 const manifest = {
   version: 3, baseUrl: '/brand/td/', pixelRatio: 2, colorSpace: 'srgb',
@@ -31,37 +25,31 @@ const manifest = {
   camera: { projection: 'orthographic', azimuthDegrees: 0, elevationDegrees: 55,
     forwardAxis: '+X', screenRightAxis: '+X' },
   coordinates: { origin: 'top-left', units: 'source pixels',
-    anchor: 'projected ground origin; maps use top-left [0, 0]',
+    anchor: 'projected ground origin; fixed throughout each animation',
     draw: 'drawImage(sheet, ...rect, x-anchor[0]*scale, y-anchor[1]*scale, frameWidth*scale, frameHeight*scale)',
-    scale: '0.5 gives nominal CSS size at 2x; maps are 1440x810 logical pixels; use the same board scale for all art' },
+    scale: 'Source frames are twice the original TD resolution. Use half the previous draw scale for equal display size, or 0.7 times the previous scale for 40% larger actors; slot is unchanged.' },
   assets: {},
 };
 const thumbs = new Map();
 const results = [];
+const motionChecks = {};
+const solidAreas = {};
 for (const [id, count] of Object.entries(expected)) {
   const spec = specs.find(s => s.id === id);
-  const isMap = id.startsWith('map-');
   assert.equal(spec.frameCount, count);
   assert.equal(spec.frames.length, count);
   assert.equal(spec.supersample, 2);
   assert.deepEqual(spec.renderer, manifest.renderer, 'Use consistent renderer/samples for every asset');
   const [width, height] = spec.frameSize;
-  if (isMap) {
-    assert.deepEqual([width, height], [1440, 810]);
-    const data = maps[Number(id.slice(4))-1];
-    assert.equal(spec.map.slotRadius, slotRadius);
-    assert.equal(spec.map.sha256, sourceHash, `Stale map data: rerender ${id}`);
-    for (const key of ['name', 'path', 'slots']) assert.deepEqual(spec.map[key], data[key]);
-    for (const [key, points] of [['Path', data.path], ['Slots', data.slots]]) {
-      assert.equal(spec.map[`projected${key}`].length, points.length);
-      points.forEach(([x, y], i) => {
-        const [px, py] = spec.map[`projected${key}`][i];
-        assert.ok(Math.hypot(x-px, y-py) < .01, `${id} ${key}[${i}] projection mismatch`);
-      });
-    }
-  }
+  assert.equal(spec.artRevision, 'D-ART2-clay-1', `Stale art: ${id}`);
+  const expectedSize = id.startsWith('tower-') ? [256, 288] : id.startsWith('pest-') ? [224, 224]
+    : id.startsWith('proj-') ? [128, 128] : id.startsWith('fx-') ? [160, 160] : [80, 80];
+  assert.deepEqual(spec.frameSize, expectedSize, `${id} frame dimensions`);
+  assert.equal(spec.fps, id.startsWith('pest-') ? (id === 'pest-sparrow' ? 12 : 10) : id.startsWith('fx-') ? 16 : 0);
+  assert.equal(spec.loop, id.startsWith('pest-'));
+  assert.equal(spec.pixelsPerMetre, id === 'slot' ? 56 : 112);
   const layers = [], frames = [], hashes = new Set();
-  const columns = Math.min(count, Math.floor(2048/width));
+  const columns = count;
   const rows = Math.ceil(count/columns);
   for (let i = 0; i < count; i++) {
     const frame = spec.frames[i];
@@ -71,21 +59,20 @@ for (const [id, count] of Object.entries(expected)) {
     const { data, info } = await sharp(file).ensureAlpha()
       .resize(width, height, { kernel: sharp.kernel.lanczos3 }).raw().toBuffer({ resolveWithObject: true });
     let minX = width, minY = height, maxX = -1, maxY = -1;
-    let solid = 0;
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const a = data[(y*width+x)*4+3];
       if (a > 8) {
         minX = Math.min(minX, x); minY = Math.min(minY, y);
         maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
       }
-      if (a === 255) solid++;
     }
     assert.ok(maxX >= minX && maxY >= minY, `Empty frame: ${frame.file}`);
-    if (isMap) assert.equal(solid, width*height, 'Map must be fully opaque');
-    else assert.ok(minX > 1 && minY > 1 && maxX < width-2 && maxY < height-2,
+    assert.ok(minX > 1 && minY > 1 && maxX < width-2 && maxY < height-2,
       `Clipped sprite/shadow: ${frame.file} ${[minX, minY, maxX, maxY]}`);
+    assert.equal(frame.anchor.length, 2);
     assert.ok(frame.anchor.every(Number.isFinite));
     assert.ok(frame.anchor[0] >= 0 && frame.anchor[0] <= width && frame.anchor[1] >= 0 && frame.anchor[1] <= height);
+    assert.deepEqual(frame.anchor, spec.frames[0].anchor, `${id} anchor must not wobble`);
     hashes.add(createHash('sha256').update(data).digest('hex'));
     const input = await sharp(data, { raw: info }).png().toBuffer();
     const x = i % columns*width, y = Math.floor(i/columns)*height;
@@ -101,23 +88,55 @@ for (const [id, count] of Object.entries(expected)) {
   const decoded = await sharp(resolve(out, file)).metadata();
   assert.deepEqual([decoded.width, decoded.height], [columns*width, rows*height]);
   assert.equal(decoded.format, 'webp');
+  // Inspect the actual decoded atlas, not only the pristine render inputs.
+  const decodedFrames = [];
   // Preview the shipped WebP, including the effects of lossy compression.
   for (let i = 0; i < count; i++) {
     const [left, top, w, h] = frames[i].rect;
-    thumbs.set(`${id}:${i}`, await sharp(resolve(out, file)).extract({ left, top, width: w, height: h }).png().toBuffer());
+    const crop = await sharp(resolve(out, file)).extract({ left, top, width: w, height: h }).png().toBuffer();
+    thumbs.set(`${id}:${i}`, crop);
+    const raw = await sharp(crop).ensureAlpha().raw().toBuffer();
+    decodedFrames.push(raw);
+    let solidArea = 0;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const alpha = raw[(y*w+x)*4+3];
+      if (alpha > 200) solidArea++;
+      if (x < 2 || y < 2 || x >= w-2 || y >= h-2) assert.ok(alpha <= 8, `${id}:${i} decoded edge clipping`);
+    }
+    if (i === 0) solidAreas[id] = solidArea;
+  }
+  assert.equal(new Set(decodedFrames.map(raw => createHash('sha256').update(raw).digest('hex'))).size, count, `${id} decoded poses must be unique`);
+  if (count > 1) {
+    // A visible silhouette or colour change is required, not just a different PNG hash.
+    const changes = [];
+    for (let i = 0; i < count-(spec.loop ? 0 : 1); i++) {
+      const a = decodedFrames[i], b = decodedFrames[(i+1)%count];
+      let changed = 0;
+      for (let p = 0; p < a.length; p += 4) {
+        const silhouette = (a[p+3] > 96) !== (b[p+3] > 96);
+        const colour = Math.min(a[p+3], b[p+3]) > 128 &&
+          Math.abs(a[p]-b[p])+Math.abs(a[p+1]-b[p+1])+Math.abs(a[p+2]-b[p+2]) > 75;
+        if (silhouette || colour) changed++;
+      }
+      const fraction = changed/(width*height);
+      assert.ok(fraction > .0025, `${id} poses ${i} and ${(i+1)%count} lack visible motion: ${fraction}`);
+      changes.push(Number(fraction.toFixed(4)));
+    }
+    motionChecks[id] = changes;
   }
   const bytes = (await stat(resolve(out, file))).size;
   manifest.assets[id] = { file, frameSize: spec.frameSize, frameCount: count, columns, rows,
     pixelsPerMetre: spec.pixelsPerMetre, fps: spec.fps, loop: spec.loop,
     anchor: frames[0].anchor, frames, bytes,
-    ...(spec.map ? { map: spec.map } : {}), ...(spec.facing ? { facing: spec.facing } : {}) };
+    ...(spec.facing ? { facing: spec.facing } : {}) };
   results.push(`${id}: ${count} frames, ${bytes} bytes`);
 }
+assert.ok(solidAreas['pest-boss'] > solidAreas['pest-mouse']*1.3, 'Boss must be visibly larger than mouse');
 await writeFile(resolve(out, 'manifest.json'), JSON.stringify(manifest, null, 2)+'\n');
 const files = await readdir(out);
 assert.deepEqual(files.sort(), ['manifest.json', ...Object.keys(expected).map(id => `${id}.webp`)].sort());
 const total = (await Promise.all(files.map(async file => (await stat(resolve(out, file))).size))).reduce((a, b) => a+b, 0);
-assert.ok(total <= 1_500_000, `Public budget exceeded: ${total} bytes`);
+assert.ok(total <= 1_600_000, `Public budget exceeded: ${total} bytes`);
 // Required runner fields retain their names, types and frame rectangle semantics.
 const runner = JSON.parse(await readFile(resolve(root, '../../public/brand/run/manifest.json'), 'utf8'));
 for (const key of ['version', 'baseUrl', 'pixelRatio', 'colorSpace', 'renderer', 'camera', 'coordinates', 'assets']) {
@@ -129,58 +148,69 @@ for (const asset of Object.values(manifest.assets)) {
   for (const frame of asset.frames) assert.deepEqual(Object.keys(frame).sort(), Object.keys(runnerAsset.frames[0]).sort());
 }
 
-// Offline contact sheet: all poses, tower tiers at 56px, clean maps and alignment inset.
-const W = 1500, H = 1580, review = [];
-function label(text, x, y, size=19, color='#66523f') {
-  if (y >= 800) y -= 180;
+// Review only decoded shipped WebPs: all tiers, all poses, plus 60px phone samples.
+const W = 1560, H = 2400, review = [];
+function label(text, x, y, size=18, color='#66523f') {
   review.push({ input: Buffer.from(`<svg width="${W}" height="${H}"><text x="${x}" y="${y}" fill="${color}" font-family="sans-serif" font-size="${size}">${text}</text></svg>`), left: 0, top: 0 });
 }
 async function thumb(id, frame, x, y, width, height) {
-  if (y >= 800) y -= 180;
   review.push({ input: await sharp(thumbs.get(`${id}:${frame}`)).resize(width, height,
     { fit: 'contain', background: '#00000000' }).png().toBuffer(), left: x, top: y });
 }
-label('BUNBUNNY / BAKERY DEFENSE', 32, 46, 30);
-label('L2 vertical S · Blender clay · 55° camera · 2x render + Lanczos · decoded WebP review', 32, 80, 18);
-for (let i = 0; i < 3; i++) {
-  const x = 32+i*490;
-  label(['01 / MAPLE KITCHEN COUNTER', '02 / TILED BAKERY SHOP', '03 / BACK HERB GARDEN'][i], x, 116, 18);
-  await thumb(`map-${i+1}`, 0, x, 134, 456, 257);
-  // A small exact overlay verifies route centerlines and all eleven slot positions.
-  const data = maps[i];
-  const sx = 284/1440, sy = 160/810;
-  const end = data.path.at(-1), prev = data.path.at(-2);
-  const plate = end.map((v, axis) => v - Math.sign(v - prev[axis]) * 40);
-  const overview = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 810" role="img" aria-label="${data.name}: ${i+3} vertical runs and numbered tower slots"><rect width="1440" height="810" fill="#faf2e6"/>${[86,74].map((width,j) => `<polyline points="${data.path.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${j ? '#e4d4be' : '#bda38c'}" stroke-width="${width}" stroke-linejoin="round"/>`).join('')}<circle cx="${plate[0]}" cy="${plate[1]}" r="75" fill="#fff" stroke="#ac7c63" stroke-width="4"/><text x="${plate[0]}" y="${plate[1]+10}" text-anchor="middle" font-family="sans-serif" font-size="26">Plate</text>${data.slots.map(([px,py],slot)=>`<circle cx="${px}" cy="${py}" r="${slotRadius}" fill="#d3e5da" stroke="#376657" stroke-width="3"/><text x="${px}" y="${py+11}" text-anchor="middle" font-family="sans-serif" font-size="30">${slot+1}</text>`).join('')}</svg>`;
-  await writeFile(resolve(root, `map-${i+1}-overview.svg`), overview+'\n');
-  const overlay = `<svg width="284" height="160"><polyline points="${data.path.map(([px, py]) => `${px*sx},${py*sy}`).join(' ')}" fill="none" stroke="#d13c52" stroke-width="1.4"/><circle cx="${plate[0]*sx}" cy="${plate[1]*sy}" r="15" fill="#fff8" stroke="#a36b43"/>${data.slots.map(([px, py], slot) => `<circle cx="${px*sx}" cy="${py*sy}" r="${slotRadius*sx}" fill="#e8f0e9" stroke="#26636b" stroke-width="1"/><text x="${px*sx}" y="${py*sy+3}" text-anchor="middle" font-family="sans-serif" font-size="8" fill="#17453e">${slot+1}</text>`).join('')}</svg>`;
-  const small = await sharp(thumbs.get(`map-${i+1}:0`)).resize(284, 160).composite([{ input: Buffer.from(overlay) }]).png().toBuffer();
-  review.push({ input: small, left: x+85, top: 430 });
-  label('Exact route + slots', x+85, 620, 14);
-}
-label('TOWERS / TIERS 0 · 1 · 2', 32, 858, 21);
-for (const [row, kind] of ['pin', 'sifter', 'whisk', 'oven'].entries()) {
-  const x = 32+(row % 3)*490, y = row < 3 ? 888 : 1106;
-  label(kind.toUpperCase(), x, y+13, 16);
+label('BUNBUNNY / CLAY BAKERY DEFENSE', 32, 48, 32);
+label('D-ART2 · 2× source frames · rounded clay geometry · warm key + cool rim · decoded WebP review', 32, 82, 18);
+label('TOWERS / all 21 tiers · large inspection + 60 px phone-size frames', 32, 126, 22);
+for (const [i, kind] of ['pin', 'sifter', 'whisk', 'oven', 'freezer', 'piping', 'torch'].entries()) {
+  const x = 32+(i%3)*510, y = 155+Math.floor(i/3)*262;
+  label(kind.toUpperCase(), x, y+18, 18);
   for (let tier = 0; tier < 3; tier++) {
-    await thumb(`tower-${kind}-${tier}`, 0, x+tier*96, y+26, 88, 99);
-    await thumb(`tower-${kind}-${tier}`, 0, x+tier*96+16, y+133, 56, 63);
+    const tx = x+tier*155;
+    await thumb(`tower-${kind}-${tier}`, 0, tx, y+27, 128, 144);
+    await thumb(`tower-${kind}-${tier}`, 0, tx+35, y+176, 60, 68);
+    label(`${tier}`, tx+136, y+130, 14);
   }
 }
-label('PESTS / FOUR FRAMES / FACE RIGHT; ROTATE ABOUT ANCHOR', 522, 1119, 18);
-for (const [row, kind] of ['ant', 'mouse', 'sparrow', 'beetle', 'boss'].entries()) {
-  const y = 1142+row*99;
-  label(kind, 524, y+42, 16);
-  for (let frame = 0; frame < 4; frame++) await thumb(`pest-${kind}`, frame, 625+frame*114, y, 95, 95);
+label('PROJECTILES / 128 × 128', 550, 700, 18);
+for (const [i, kind] of ['pin', 'whisk', 'oven'].entries()) {
+  await thumb(`proj-${kind}`, 0, 550+i*142, 725, 120, 120);
+  label(kind, 580+i*142, 875, 16);
 }
-label('PROJECTILES / PIN · WHISK · OVEN', 32, 1362, 18);
-for (const [i, kind] of ['pin', 'whisk', 'oven'].entries()) await thumb(`proj-${kind}`, 0, 32+i*90, 1374, 80, 80);
-label('HIT PUFF / 16 FPS / ONCE', 32, 1486, 17);
-for (let frame = 0; frame < 4; frame++) await thumb('fx-hit', frame, 32+frame*74, 1498, 68, 68);
-await thumb('slot', 0, 1140, 1210, 100, 100);
-label('Slot / quiet pad', 1110, 1332, 16);
-label(`${Object.keys(expected).length} atlases · ${Object.values(expected).reduce((a, b) => a+b, 0)} frames · ${total.toLocaleString('en-US')} / 1,500,000 bytes`, 32, 1722, 22);
+await thumb('slot', 0, 1100, 730, 120, 120);
+label('Placement pad / retained', 1060, 875, 16);
+label('Board contrast / 60 px', 1280, 700, 17);
+for (const [i, background] of ['#e4cfb0', '#a6b39a', '#745742'].entries()) {
+  const y = 710+i*75;
+  review.push({ input: await sharp({ create: { width: 180, height: 70, channels: 4, background } }).png().toBuffer(), left: 1280, top: y });
+  await thumb('tower-freezer-2', 0, 1280, y+1, 60, 68);
+  await thumb('tower-oven-2', 0, 1340, y+1, 60, 68);
+  await thumb('pest-boss', 0, 1400, y+5, 60, 60);
+}
+label('PESTS / six unique poses · right-facing · fixed ground anchor · large + 60 px frames', 32, 970, 22);
+for (const [row, kind] of ['ant', 'mouse', 'sparrow', 'beetle', 'boss'].entries()) {
+  const y = 990+row*192;
+  label(kind.toUpperCase(), 32, y+72, 18);
+  for (let frame = 0; frame < 6; frame++) {
+    const x = 200+frame*211;
+    await thumb(`pest-${kind}`, frame, x, y, 128, 128);
+    await thumb(`pest-${kind}`, frame, x+34, y+127, 60, 60);
+  }
+}
+label('ITEM FX / four frames each · 160 × 160 · 16 fps · play once', 32, 1994, 22);
+for (const [row, kind] of ['hit', 'bomb', 'freeze', 'slide'].entries()) {
+  const x = 32+(row%2)*770, y = 2020+Math.floor(row/2)*150;
+  label(kind.toUpperCase(), x, y+56, 18);
+  for (let frame = 0; frame < 4; frame++) await thumb(`fx-${kind}`, frame, x+120+frame*146, y, 128, 128);
+}
+label(`${Object.keys(expected).length} atlases · ${Object.values(expected).reduce((a, b) => a+b, 0)} frames · ${total.toLocaleString('en-US')} / 1,600,000 bytes · maps drawn by frontend`, 32, 2368, 22);
 await sharp({ create: { width: W, height: H, channels: 4, background: '#f4ebdd' } })
   .composite(review).png().toFile(resolve(root, 'preview.png'));
+await writeFile(resolve(root, 'validation.json'), JSON.stringify({
+  motionChangedPixelFractions: motionChecks, bossToMouseSolidArea: Number((solidAreas['pest-boss']/solidAreas['pest-mouse']).toFixed(3)),
+  revision: 'D-ART2', atlases: Object.keys(expected).length,
+  frames: Object.values(expected).reduce((a, b) => a+b, 0), publicBytes: total, budgetBytes: 1_600_000,
+  checks: ['version-3 runner schema', 'complete ID set', 'requested frame sizes', '2x render inputs',
+    'consistent renderer', 'animation timing', 'fixed anchors', 'nonempty unclipped alpha',
+    'unique animation poses', 'visible adjacent-frame motion including loop seam', 'boss larger than mouse', 'WebP decode and atlas rectangles', 'no unexpected public files', 'directory size budget'],
+}, null, 2)+'\n');
 console.log(results.join('\n'));
-console.log(`PASS: runner schema, all frames, alpha margins, unique poses, exact map projection, fresh map source, WebP decode, budget ${total}/1500000 bytes.`);
+console.log(`PASS: schema, frame sizes, alpha margins, unique poses, fixed anchors, WebP decode, budget ${total}/1600000 bytes.`);

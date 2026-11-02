@@ -1,14 +1,7 @@
-"""D6: original procedural bakery clay models. Run inside Blender, not Python.
-
-Map surfaces are inverse-projected from the authoritative TD points, including
-their elevation, so the 55-degree camera cannot skew path/slot coordinates.
-"""
+"""D-ART2: original, reproducible clay sprite geometry. Docker Blender / Cycles CPU."""
 import argparse
-import hashlib
 import json
 import math
-import random
-import re
 import sys
 from pathlib import Path
 
@@ -19,14 +12,6 @@ from bpy_extras.object_utils import world_to_camera_view
 ROOT = Path(__file__).resolve().parent
 CACHE = ROOT / ".cache"
 CACHE.mkdir(exist_ok=True)
-MAP_SOURCE = ROOT.parents[1] / "src/lib/td/maps.ts"
-source = MAP_SOURCE.read_text()
-MAPS = [{"name": name, "path": json.loads(path), "slots": json.loads(slots)}
-        for name, path, slots in re.findall(
-            r'map\("([^"]+)",\s*(\[\[.*?\]\]),\s*(\[\[.*?\]\])\)', source, re.S)]
-assert len(MAPS) == 3 and all(len(m["slots"]) == 11 for m in MAPS)
-SLOT_RADIUS = int(re.search(r"TD_SLOT_RADIUS = (\d+)", (ROOT.parents[1] / "src/lib/td/types.ts").read_text()).group(1))
-MAP_HASH = hashlib.sha256(MAP_SOURCE.read_bytes()).hexdigest()
 parser = argparse.ArgumentParser()
 parser.add_argument("--only", default="")
 parser.add_argument("--samples", type=int, default=128)
@@ -34,7 +19,8 @@ args = parser.parse_args(sys.argv[sys.argv.index("--")+1:] if "--" in sys.argv e
 SELECTED = set(filter(None, args.only.split(",")))
 ELEVATION = math.radians(55)
 SIN, COS = math.sin(ELEVATION), math.cos(ELEVATION)
-PPM = 56
+PPM = 112
+ART_REVISION = "D-ART2-clay-1"
 PALETTE = {
     "cream": "F8EEDB", "flour": "FFF9ED", "pink": "E8B3A0", "butter": "E5B95F",
     "crust": "B86E32", "bread": "E5AA56", "score": "FADE9D", "kraft": "BD8A53",
@@ -42,7 +28,10 @@ PALETTE = {
     "stone": "C1B6A6", "grout": "9D9388", "rose": "CF9580", "glass": "AFC8C3",
     "rim": "CCDAD0", "roof": "BD8062", "plaster": "E6D5B9", "leaf": "6E8760",
     "soil": "9C8066", "tile": "E2CFB1", "mouse": "B4A598", "ant": "784D36",
-    "shell": "586C58", "iron": "6C7772", "fire": "F4B85C",
+    "shell": "426A55", "iron": "6C7772", "fire": "F4B85C",
+    "ice": "75BBCD", "ice_dark": "397B96", "ice_light": "D0F0ED",
+    "piping": "C57FA0", "piping_dark": "874C6D", "torch": "D69339",
+    "copper": "AF563C", "berry": "D9604A", "mint": "6F9D82",
 }
 MATS = {}
 
@@ -57,7 +46,7 @@ def material(key):
         m.use_nodes = True
         bsdf = m.node_tree.nodes.get("Principled BSDF")
         bsdf.inputs["Base Color"].default_value = (*rgb, 1)
-        bsdf.inputs["Roughness"].default_value = .72
+        bsdf.inputs["Roughness"].default_value = .82
         MATS[key] = m
     return MATS[key]
 
@@ -149,7 +138,7 @@ def setup(width, height, span, transparent=True, target=(0, 0, .25)):
     scene.view_settings.exposure = .6
     scene.world.use_nodes = True
     scene.world.node_tree.nodes["Background"].inputs[0].default_value = (.78, .83, 1, 1)
-    scene.world.node_tree.nodes["Background"].inputs[1].default_value = .55
+    scene.world.node_tree.nodes["Background"].inputs[1].default_value = .35
     bpy.ops.object.camera_add()
     camera = bpy.context.object
     target = Vector(target)
@@ -160,8 +149,16 @@ def setup(width, height, span, transparent=True, target=(0, 0, .25)):
     bpy.ops.object.light_add(type="SUN", location=(-3, -4, 8))
     sun = bpy.context.object
     sun.rotation_euler = (.4, -.5, -.4)
-    sun.data.energy, sun.data.angle = 2.4, .3
+    sun.data.energy, sun.data.angle = 2.2, .3
     sun.data.color = (1, .86, .68)
+    # Two broad grazing lights trace the silhouette without a painted black stroke.
+    for loc, energy, color, size in [((2, 3, 3.5), 220, (.72, .86, 1), 2.0),
+                                    ((-3, 1, 2.8), 150, (1, .82, .59), 1.7)]:
+        bpy.ops.object.light_add(type="AREA", location=loc)
+        rim = bpy.context.object
+        rim.name = "Clay silhouette rim"
+        rim.data.energy, rim.data.color, rim.data.shape, rim.data.size = energy, color, "DISK", size
+        rim.rotation_euler = (Vector((0, 0, .5))-rim.location).to_track_quat("-Z", "Y").to_euler()
     return scene
 
 
@@ -170,150 +167,6 @@ def projected(scene, point):
     uv = world_to_camera_view(scene, scene.camera, Vector(point))
     return [round(uv.x*scene.render.resolution_x/2, 4),
             round((1-uv.y)*scene.render.resolution_y/2, 4)]
-
-
-def pixel_world(x, y, z=0):
-    # Map camera has 100 px/metre. Elevation compensation keeps raised surfaces exact.
-    return ((x-720)/100, ((405-y)/100-z*COS)/SIN, z)
-
-
-def polygon_pixels(name, points, z, mat):
-    # Screen Y points down; normalize winding to an upward-facing world surface.
-    signed_area = sum(a[0]*b[1]-b[0]*a[1] for a, b in zip(points, points[1:]+points[:1]))
-    if signed_area > 0:
-        points = list(reversed(points))
-    mesh = bpy.data.meshes.new(name)
-    mesh.from_pydata([pixel_world(x, y, z) for x, y in points], [], [tuple(range(len(points)))])
-    mesh.update()
-    obj = bpy.data.objects.new(name, mesh)
-    bpy.context.collection.objects.link(obj)
-    return finish(obj, name, mat)
-
-
-def disk_pixels(name, x, y, radius, z, mat):
-    return polygon_pixels(name, [(x+radius*math.cos(a*math.tau/64),
-                                  y+radius*math.sin(a*math.tau/64)) for a in range(64)], z, mat)
-
-
-def stroke_pixels(name, path, width, z, mat):
-    # One non-overlapping surface: round OUTER joins, miter inner joins. The exact
-    # engine polyline already samples rounded turns; retain those exact vertices.
-    normals = []
-    for a, b in zip(path, path[1:]):
-        dx, dy = b[0]-a[0], b[1]-a[1]
-        length = math.hypot(dx, dy)
-        normals.append((-dy/length, dx/length))
-    sides = []
-    for side in (1, -1):
-        edge = [(path[0][0]+side*normals[0][0]*width/2,
-                 path[0][1]+side*normals[0][1]*width/2)]
-        for i in range(1, len(path)-1):
-            x, y = path[i]
-            a, b = normals[i-1], normals[i]
-            cross = a[0]*b[1]-a[1]*b[0]
-            if abs(cross) < .001 or cross*side > 0:
-                denom = 1+a[0]*b[0]+a[1]*b[1]
-                edge.append((x+side*(a[0]+b[0])*width/2/denom,
-                             y+side*(a[1]+b[1])*width/2/denom))
-            else:
-                angle = math.atan2(side*a[1], side*a[0])
-                turn = math.atan2(cross, a[0]*b[0]+a[1]*b[1])
-                for j in range(13):
-                    theta = angle+turn*j/12
-                    edge.append((x+math.cos(theta)*width/2, y+math.sin(theta)*width/2))
-        edge.append((path[-1][0]+side*normals[-1][0]*width/2,
-                     path[-1][1]+side*normals[-1][1]*width/2))
-        sides.append(edge)
-    polygon_pixels(name, sides[0]+list(reversed(sides[1])), z, mat)
-
-
-def clearance(x, y, data):
-    distances = [math.hypot(x-sx, y-sy)-(SLOT_RADIUS+15) for sx, sy in data["slots"]]
-    for a, b in zip(data["path"], data["path"][1:]):
-        dx, dy = b[0]-a[0], b[1]-a[1]
-        t = max(0, min(1, ((x-a[0])*dx+(y-a[1])*dy)/(dx*dx+dy*dy)))
-        distances.append(math.hypot(x-a[0]-t*dx, y-a[1]-t*dy)-48)
-    # Empty end apron: no props, bread or marks here; runtime draws owner bread photos.
-    ex, ey = data["path"][-1]
-    distances.append(math.hypot(x-ex, y-ey)-115)
-    return min(distances)
-
-
-def prop(kind, x, y, scale=.55):
-    before = set(bpy.context.scene.objects)
-    if kind == "plant":
-        cylinder("Terracotta herb pot", (0, 0, .22), .27, .4, "roof", top=.34)
-        cylinder("Pot soil", (0, 0, .43), .28, .02, "soil")
-        ring("Pot rim", (0, 0, .42), .32, .045, "roof")
-        for i in range(7):
-            a = i*2.4
-            tube("Herb stem", [(0, 0, .4), (.16*math.cos(a), .16*math.sin(a), .7+i*.025)], .018, "leaf")
-            leaf = ball("Sage leaf", (.23*math.cos(a), .23*math.sin(a), .7+i*.025), (.22, .10, .055), "sage")
-            leaf.rotation_euler.z = a
-    elif kind == "bowl":
-        cylinder("Glazed mixing bowl", (0, 0, .22), .25, .4, "glass", top=.43)
-        cylinder("Flour in bowl", (0, 0, .43), .37, .02, "flour")
-        ring("Ceramic rim", (0, 0, .44), .4, .045, "rim")
-        tube("Wood spoon", [(.05, 0, .45), (.24, .2, .66), (.38, .35, .85)], .047, "wood")
-    elif kind == "sack":
-        ball("Soft flour sack", (0, 0, .3), (.36, .26, .4), "cream")
-        tube("Folded sack seam", [(-.28, 0, .61), (0, .01, .65), (.28, 0, .61)], .035, "kraft")
-        for i in range(3):
-            ball("Embossed wheat", ((i-1)*.09, -.24, .35), (.04, .022, .1), "butter")
-    else:
-        box("Wooden cooling tray", (0, 0, .06), (.9, .65, .1), "wood")
-        box("Tray paper", (0, 0, .12), (.79, .54, .02), "cream", .02)
-        for i in range(5):
-            tube("Cooling rack bar", [(-.36, (i-2)*.10, .16), (.36, (i-2)*.10, .16)], .015, "iron", False)
-    loc = Vector(pixel_world(x, y, .025))
-    root = bpy.data.objects.new("Map dressing", None)
-    bpy.context.collection.objects.link(root)
-    for obj in set(bpy.context.scene.objects)-before-{root}:
-        obj.parent = root
-    root.location, root.scale = loc, (scale,)*3
-
-
-def map_scene(index):
-    data = MAPS[index]
-    polygon_pixels("Full background", [(-10, -10), (1450, -10), (1450, 820), (-10, 820)], -.025,
-                   ["kraft", "grout", "sage"][index])
-    if index == 0:
-        # Broad maple planks, discreet joints and inset grain; kitchen countertop.
-        for row in range(9):
-            y = row*100-20
-            polygon_pixels("Maple counter board", [(0, y), (1440, y), (1440, y+98), (0, y+98)], -.02,
-                           "plaster" if row % 3 else "tile")
-            for x in range(30+(row % 2)*90, 1440, 180):
-                stroke_pixels("Short wood grain", [[x, y+30], [x+66, y+30]], .7, -.018, "tile")
-    elif index == 1:
-        for row in range(10):
-            for col in range(17):
-                x, y = col*90-45, row*90-35
-                polygon_pixels("Shop ceramic tile", [(x+2, y+2), (x+88, y+2), (x+88, y+88), (x+2, y+88)], -.02,
-                               "cream" if (row+col) % 2 else "tile")
-                if (row+col) % 2 == 0:
-                    disk_pixels("Tile corner inlay", x+5, y+5, 3, -.018, "rose")
-    else:
-        rng = random.Random(152)
-        for _ in range(350):
-            x, y = rng.uniform(0, 1440), rng.uniform(0, 810)
-            if clearance(x, y, data) > 12:
-                disk_pixels("Garden clay pebble", x, y, rng.uniform(1.2, 3), -.019, "stone")
-        for y in (45, 300, 570, 760):
-            for x in (29, 1405):
-                if clearance(x, y, data) > 25:
-                    prop("plant", x, y, .5)
-    stroke_pixels("Path edge", data["path"], 86, .006, ["wood", "roof", "soil"][index])
-    stroke_pixels("Continuous walkable path", data["path"], 74, .012, ["cream", "plaster", "tile"][index])
-    # Deterministic sparse props, rejected near every route segment and slot.
-    chosen = []
-    kinds = ["bowl", "sack", "tray"] if index == 0 else ["plant", "sack", "tray"] if index == 1 else ["plant"]
-    for j, (x, y) in enumerate([(55, 55), (350, 60), (655, 65), (955, 60), (1350, 60), (55, 730),
-                                (355, 740), (660, 740), (960, 740), (1370, 740)]):
-        if clearance(x, y, data) > 42:
-            prop(kinds[j % len(kinds)], x, y, .9)
-            chosen.append([x, y])
-    return chosen
 
 
 def tower_base(tier, color):
@@ -340,11 +193,13 @@ def whisk(x, y, z, size=1, mat="rim"):
         t = math.pi*a/4
         dx, dy = .28*size*math.cos(t), .28*size*math.sin(t)
         tube("Thick clay wire loop", [(x, y, z+.32*size), (x-dx, y-dy, z+.65*size),
-             (x, y, z+1.02*size), (x+dx, y+dy, z+.65*size), (x, y, z+.32*size)], .027*size, mat)
+             (x, y, z+1.02*size), (x+dx, y+dy, z+.65*size), (x, y, z+.32*size)], .042*size, mat)
 
 
 def tower(kind, tier):
-    tower_base(tier, {"pin": "roof", "sifter": "glass", "whisk": "sage", "oven": "rose"}[kind])
+    color = {"pin": "bread", "sifter": "glass", "whisk": "mint", "oven": "berry",
+             "freezer": "ice", "piping": "piping", "torch": "torch"}[kind]
+    tower_base(tier, color)
     if kind == "pin":
         for s in (-1, 1):
             box("Pin fork support", (s*.44, 0, .44), (.13, .28, .43), "wood")
@@ -385,8 +240,8 @@ def tower(kind, tier):
             box("Stand mixer arm", (0, .28, 1.19), (.91, .28, .19), "sage")
             box("Mixer upright", (.5, .28, .77), (.16, .22, .95), "sage")
             ball("Mixer brass dial", (.49, .12, .94), (.065, .03, .065), "butter")
-    else:
-        box("Rounded enamel oven", (0, .03, .69), (1.05, .82, .88), "roof" if tier == 0 else "rose", .13)
+    elif kind == "oven":
+        box("Rounded enamel oven", (0, .03, .69), (1.05, .82, .88), "berry", .16)
         box("Dark oven door", (0, -.396, .61), (.77, .045, .53), "dark", .08)
         box("Warm fire window", (0, -.425, .60), (.59, .025, .34), "crust", .07)
         for i in (-1, 0, 1):
@@ -405,93 +260,275 @@ def tower(kind, tier):
                 box("Reinforced side panel", (s*.54, .02, .68), (.11, .72, .72), "butter", .04)
 
 
+    elif kind == "freezer":
+        box("Rounded icebox", (0, .02, .79), (1.02, .79, 1.05), "ice_dark", .16)
+        box("Puffy freezer door", (0, -.405, .79), (.91, .13, .92), "ice", .13)
+        box("Ivory top cap", (0, .02, 1.31), (1.05, .82, .13), "ice_light", .065)
+        tube("Freezer pull", [(.30, -.51, .64), (.30, -.55, .84), (.30, -.51, 1.04)], .045, "cream")
+        snowflake((-.12, -.49, .85), .23, .027)
+        for x in (-.29, -.12, .05):
+            box("Freezer vent", (x, -.49, .42), (.075, .025, .035), "ice_dark", .017)
+        if tier > 0:
+            for side in (-1, 1):
+                box("Insulated side trim", (side*.50, .02, .80), (.12, .72, 1.02), "ice_light", .05)
+            cylinder("Cold reservoir", (0, .05, 1.49), .29, .25, "ice")
+            ring("Reservoir collar", (0, .05, 1.59), .29, .035, "cream")
+        if tier == 2:
+            for x in (-.36, .36):
+                crystal = box("Crown ice block", (x, .03, 1.58), (.24, .27, .40), "ice_light", .055)
+                crystal.rotation_euler.y = x*.6
+            ball("Frozen reservoir pearl", (0, .05, 1.68), (.18, .18, .19), "ice_light")
+    elif kind == "piping":
+        cylinder("Bag holder", (0, 0, .36), .40, .23, "piping_dark", top=.47)
+        ring("Holder rim", (0, 0, .48), .45, .045, "butter")
+        # A plump tapered fabric bag, with raised folded seams and a star nozzle.
+        cylinder("Piping bag taper", (0, 0, .85), .19, .68, "piping", top=.39)
+        ball("Soft bag shoulder", (0, 0, 1.15), (.39, .31, .24), "piping")
+        for x in (-.20, 0, .20):
+            tube("Bag folded seam", [(x*.45, -.15, .58), (x*.9, -.27, .94), (x, -.25, 1.20)], .018, "pink")
+        cylinder("Twisted bag neck", (0, 0, 1.39), .12, .21, "cream", top=.19)
+        ring("Gold bag tie", (0, 0, 1.32), .12, .035, "butter")
+        tube("Bag tie bow", [(0, -.12, 1.33), (-.19, -.14, 1.40), (-.14, -.15, 1.25),
+                             (0, -.12, 1.33), (.19, -.14, 1.40), (.14, -.15, 1.25)], .035, "butter")
+        cylinder("Front star piping nozzle", (0, -.43, .50), .16, .34, "rim", (math.pi/2, 0, 0), top=.08)
+        for a in range(6):
+            t = a*math.tau/6
+            ball("Nozzle tooth", (.08*math.cos(t), -.61, .50+.08*math.sin(t)), (.025, .03, .025), "cream")
+        if tier > 0:
+            for x in (-.40, .40):
+                tube("Bag pressure arm", [(x, 0, .40), (x, 0, .90), (x*.55, 0, 1.15)], .055, "butter")
+            cream_swirl((.38, -.26, .32), .15)
+        if tier == 2:
+            ring("Bag crown band", (0, 0, 1.12), .36, .04, "butter")
+            for x in (-.43, .43):
+                cylinder("Extra precision nozzle", (x, -.25, .61), .09, .24, "butter", (math.pi/2, 0, 0), top=.045)
+            cream_swirl((-.38, -.25, .32), .15)
+    elif kind == "torch":
+        cylinder("Caramel fuel tank", (0, .04, .69), .32, .77, "torch")
+        ball("Rounded fuel shoulder", (0, .04, 1.04), (.32, .32, .20), "torch")
+        ring("Fuel tank lower collar", (0, .04, .39), .33, .035, "copper")
+        cylinder("Tank neck", (0, .04, 1.19), .12, .20, "iron")
+        box("Torch trigger grip", (.02, .04, 1.34), (.22, .26, .26), "copper", .065)
+        cylinder("Torch barrel", (.25, .04, 1.38), .13, .52, "iron", (0, math.pi/2, 0))
+        cylinder("Brass burner lip", (.53, .04, 1.38), .17, .10, "butter", (0, math.pi/2, 0))
+        ball("Caramel flame", (.71, .04, 1.39), (.20, .11, .13), "fire")
+        ball("Cream flame heart", (.61, -.015, 1.39), (.11, .075, .085), "flour")
+        cylinder("Gauge frame", (0, -.30, .85), .16, .06, "copper", (math.pi/2, 0, 0))
+        cylinder("Gauge face", (0, -.34, .85), .125, .025, "cream", (math.pi/2, 0, 0))
+        tube("Gauge needle", [(0, -.36, .85), (.06, -.36, .92)], .014, "dark", False)
+        tube("Torch hose", [(-.14, .04, 1.30), (-.46, .04, 1.12), (-.46, -.05, .57), (-.25, -.15, .47)], .048, "copper")
+        if tier > 0:
+            for z in (.53, .98):
+                ring("Reinforced tank band", (0, .04, z), .325, .035, "cream")
+            cylinder("Pilot regulator", (-.20, .04, 1.35), .10, .15, "butter")
+        if tier == 2:
+            cylinder("Reserve caramel capsule", (-.44, .12, .73), .14, .66, "copper")
+            ball("Reserve rounded top", (-.44, .12, 1.06), (.14, .14, .12), "butter")
+            cylinder("Second burner", (.25, .31, 1.49), .10, .48, "butter", (0, math.pi/2, 0))
+            ball("Second caramel flame", (.61, .31, 1.50), (.19, .09, .10), "fire")
+
+    # Broad readable detailing: tier studs, joints, and hand-moulded seams.
+    if kind == "pin":
+        for x in (-.30, -.10, .10, .30):
+            tube("Barrel wood grain", [(x, -.13, .83), (x+.025, 0, .895), (x, .13, .83)], .012, "score")
+        for side in (-1, 1):
+            ball("Axle cap", (side*.47, -.16, .58), (.06, .03, .06), "butter")
+        if tier > 0:
+            for x in (-.28, 0, .28):
+                ball("Reinforced barrel stud", (x, -.20, .69), (.035, .018, .035), "butter")
+    elif kind == "sifter":
+        for x in (-.22, 0, .22):
+            ball("Flour resting in sieve", (x, 0, .87+tier*.10), (.13, .21, .065), "flour")
+        for z in (.46, .63):
+            tube("Sifter raised seam", [(-.27, -.34, z), (0, -.435, z), (.27, -.34, z)], .018, "rim")
+    elif kind == "whisk":
+        cream_swirl((0, 0, .56), .26)
+        for side in (-1, 1):
+            tube("Bowl side handle", [(side*.37, 0, .44), (side*.54, 0, .47), (side*.48, 0, .32)], .04, "cream")
+    elif kind == "oven":
+        for i in range(7):
+            a = math.pi*i/6
+            brick = box("Cream oven arch brick", (.38*math.cos(a), -.43, .68+.32*math.sin(a)), (.15, .09, .15), "cream", .035)
+            brick.rotation_euler.y = -a+math.pi/2
+        for x in (-.29, 0, .29):
+            box("Roof vent", (x, .04, 1.14), (.12, .27, .025), "copper", .012)
+
+
+def snowflake(center, radius, thickness):
+    x, y, z = center
+    for i in range(3):
+        a = i*math.pi/3
+        dx, dz = radius*math.cos(a), radius*math.sin(a)
+        tube("Raised snowflake arm", [(x-dx, y, z-dz), (x+dx, y, z+dz)], thickness, "ice_light", False)
+    for i in range(6):
+        a = i*math.pi/3
+        px, pz = x+radius*.64*math.cos(a), z+radius*.64*math.sin(a)
+        for side in (-1, 1):
+            t = a+side*.85
+            tube("Snowflake fork", [(px, y, pz), (px+radius*.34*math.cos(t), y, pz+radius*.34*math.sin(t))], thickness*.75, "ice_light", False)
+
+
+def cream_swirl(center, size):
+    x, y, z = center
+    tube("Piped cream swirl", [(x+size*(1-t/42)*math.cos(t*.42),
+          y+size*(1-t/42)*math.sin(t*.42), z+t*size/44) for t in range(42)], size*.14, "flour")
+
+
 def pest(kind, frame):
-    phase = .3 + frame*math.tau/4
-    bob = .015*math.cos(2*phase)
+    phase = .25+frame*math.tau/6
+    bob = .035*math.cos(2*phase)
     if kind in ("ant", "beetle"):
         for side in (-1, 1):
             for j in range(3):
-                x = (j-1)*.23
-                swing = .11*math.sin(phase+j*math.pi+side*.5)
-                tube("Stepping insect leg", [(x, side*.12, .23), (x-.10, side*.32, .16),
-                     (x+swing, side*.47, .035+.035*max(0, math.cos(phase+j+side)))], .026, "ant" if kind == "ant" else "dark", False)
+                x = (j-1)*.25
+                p = phase+j*math.pi+(0 if side == -1 else math.pi)
+                swing, lift = .17*math.sin(p), .10*max(0, math.cos(p))
+                tube("Chunky stepping insect leg", [(x, side*.16, .29), (x-.07, side*.34, .20+lift*.4),
+                     (x+swing, side*.48, .055+lift)], .044, "ant" if kind == "ant" else "shell")
+                ball("Round insect foot", (x+swing, side*.48, .055+lift), (.070, .055, .047), "crust" if kind == "ant" else "butter")
         if kind == "ant":
-            ball("Ant abdomen", (-.31, 0, .29+bob), (.29, .22, .22), "ant")
-            ball("Ant waist", (.01, 0, .27+bob), (.14, .12, .14), "crust")
-            ball("Ant head", (.28, 0, .30+bob), (.21, .19, .18), "ant")
+            ball("Plump ant abdomen", (-.34, 0, .34+bob), (.34, .28, .28), "ant")
+            ball("Ant waist", (0, 0, .32+bob), (.19, .18, .18), "crust")
+            ball("Big curious ant head", (.33, 0, .40+bob), (.31, .28, .27), "ant")
+            for x in (-.46, -.29):
+                tube("Abdomen moulded band", [(x, -.23, .43+bob), (x, 0, .62+bob), (x, .23, .43+bob)], .022, "crust")
         else:
-            ball("Armored beetle body", (-.12, 0, .29+bob), (.40, .30, .27), "shell")
+            ball("Armored beetle body", (-.17, 0, .33+bob), (.43, .34, .30), "shell")
             for side in (-1, 1):
-                ball("Hard wing case", (-.13, side*.13, .39+bob), (.36, .16, .20), "sage")
+                ball("Puffy jade wing case", (-.18, side*.16, .44+bob), (.39, .19, .23), "mint")
                 for j in range(3):
-                    ball("Armor rivet", (-.32+j*.19, side*.235, .43+bob), (.025, .025, .025), "butter")
-            tube("Wing armor seam", [(-.46, 0, .44), (-.10, 0, .59+bob), (.20, 0, .45)], .018, "shell")
-            ball("Beetle helmet", (.28, 0, .30+bob), (.21, .23, .18), "shell")
+                    ball("Golden shell spot", (-.40+j*.20, side*.25, .56+bob), (.047, .035, .025), "butter")
+            tube("Wing case seam", [(-.55, 0, .46+bob), (-.15, 0, .67+bob), (.20, 0, .47+bob)], .025, "shell")
+            ball("Big beetle head", (.33, 0, .39+bob), (.28, .28, .25), "shell")
         for side in (-1, 1):
-            tube("Inquisitive antenna", [(.34, side*.10, .40), (.48, side*.20, .51),
-                 (.57, side*(.24+.02*math.sin(phase)), .48)], .019, "dark")
-            ball("Insect eye", (.42, side*.13, .35+bob), (.04, .025, .045), "dark")
-            ball("Eye glint", (.44, side*.14, .37+bob), (.013, .01, .014), "cream")
-    elif kind == "boss":
-        before = set(bpy.data.objects)
-        pest("mouse", frame)
-        for obj in set(bpy.data.objects) - before:
-            obj.location.x *= 1.3
-            obj.location.y *= 1.65
-            obj.location.z *= 1.35
-            obj.scale.x *= 1.3
-            obj.scale.y *= 1.65
-            obj.scale.z *= 1.35
-        ball("Big round boss belly", (-.13, 0, .38), (.49, .39, .35), "mouse")
-    elif kind == "mouse":
-        tube("Curled pink tail", [(-.35, 0, .20), (-.59, .03, .13), (-.67, .26, .09),
-             (-.52, .38+.04*math.sin(phase), .08)], .028, "pink")
+            tube("Inquisitive antenna", [(.40, side*.13, .59+bob), (.54, side*.22, .77+bob),
+                 (.65, side*(.25+.025*math.sin(phase)), .72+bob)], .027, "dark")
+            ball("Antenna clay tip", (.65, side*(.25+.025*math.sin(phase)), .72+bob), (.045, .045, .045), "crust" if kind == "ant" else "butter")
+            ball("Cream insect eye surround", (.51, side*.205, .48+bob), (.095, .065, .11), "cream")
+            ball("Big cocoa insect eye", (.55, side*.235, .49+bob), (.052, .04, .065), "dark")
+            ball("Eye glint", (.57, side*.25, .52+bob), (.018, .013, .020), "flour")
+            ball("Rosy insect cheek", (.54, side*.20, .37+bob), (.065, .035, .035), "pink")
+        tube("Insect smile", [(.595, -.11, .36+bob), (.63, 0, .33+bob), (.595, .11, .36+bob)], .018, "dark")
+    elif kind in ("mouse", "boss"):
+        boss = kind == "boss"
+        size = 1.22 if boss else 1
+        start = set(bpy.data.objects)
+        tube("Curled pink tail", [(-.38, 0, .23), (-.67, .06, .17), (-.74, .28, .12),
+             (-.58, .40+.06*math.sin(phase), .13)], .038, "pink")
         for side in (-1, 1):
             for j in (-1, 1):
-                swing = math.sin(phase+j+side)*.09
-                ball("Scampering paw", (j*.22+swing, side*.20, .055), (.11, .07, .047), "pink")
-        ball("Mouse pear body", (-.10, 0, .28+bob), (.38, .25, .25), "mouse")
-        ball("Mouse snout", (.27, 0, .25+bob), (.28, .17, .16), "mouse")
-        ball("Pink nose", (.52, 0, .26+bob), (.047, .056, .047), "pink")
+                p = phase+(0 if j*side == 1 else math.pi)
+                swing, lift = math.sin(p)*.16, max(0, math.cos(p))*.095
+                ball("Scampering leg", (j*.23+swing*.4, side*.24, .16+lift*.4), (.095, .085, .12), "mouse")
+                ball("Big scampering paw", (j*.23+swing, side*.27, .065+lift), (.13, .095, .060), "pink")
+                for toe in (-1, 1):
+                    ball("Paw toe", (j*.23+swing+.08, side*.27+toe*.035, .07+lift), (.045, .023, .026), "cream")
+        ball("Round mouse body", (-.16, 0, .36+bob), (.42, .31 if boss else .28, .31), "mouse")
+        ball("Big mouse head", (.27, 0, .43+bob), (.32, .27, .28), "mouse")
+        ball("Cream mouse muzzle", (.49, 0, .33+bob), (.20, .17, .15), "cream")
+        ball("Pink button nose", (.665, 0, .36+bob), (.065, .072, .059), "pink")
         for side in (-1, 1):
-            ball("Round mouse ear", (.14, side*.17, .48+bob), (.13, .085, .15), "mouse")
-            ball("Velvet ear inside", (.19, side*.174, .50+bob), (.082, .06, .10), "pink")
-            ball("Mouse eye", (.34, side*.13, .35+bob), (.038, .026, .047), "dark")
-            ball("Eye highlight", (.355, side*.145, .37+bob), (.012, .01, .014), "flour")
+            ball("Huge round mouse ear", (.14, side*.22, .66+bob), (.18, .115, .20), "mouse")
+            ball("Velvet ear inside", (.20, side*.23, .69+bob), (.12, .080, .14), "pink")
+            ball("Cocoa mouse eye", (.42, side*.208, .50+bob), (.063, .042, .073), "dark")
+            ball("Mouse eye highlight", (.44, side*.235, .53+bob), (.022, .015, .022), "flour")
+            ball("Mouse rosy cheek", (.46, side*.22, .39+bob), (.075, .026, .042), "pink")
             for j in (-1, 1):
-                tube("Mouse whisker", [(.41, side*.09, .25), (.44+j*.09, side*.28, .27+j*.035)], .009, "cream", False)
+                tube("Soft mouse whisker", [(.51, side*.13, .33+bob), (.53+j*.09, side*.35, .34+bob+j*.045)], .013, "cream", False)
+        if boss:
+            # Bespoke chef regalia grows with the body; the hat remains on the head.
+            ball("Chef cocoa apron", (-.12, -.268, .35+bob), (.32, .075, .23), "copper")
+            tube("Chef apron cream trim", [(-.39, -.29, .26+bob), (-.12, -.35, .20+bob), (.11, -.29, .26+bob)], .023, "cream")
+            for x in (-.20, -.04):
+                ball("Apron brass button", (x, -.34, .43+bob), (.032, .018, .032), "butter")
+            cylinder("Little chef hat band", (.18, 0, .84+bob), .19, .14, "cream")
+            for x, y, z in ((.04, 0, .97), (.18, -.10, 1.00), (.31, 0, .98), (.18, .10, 1.02), (.17, 0, 1.11)):
+                ball("Puffy chef hat crown", (x, y, z+bob), (.15, .14, .13), "flour")
+            tube("Chef neckerchief", [(.18, -.26, .43+bob), (.08, -.32, .49+bob), (-.01, -.27, .56+bob)], .055, "berry")
+        for obj in set(bpy.data.objects)-start:
+            obj.location *= size
+            obj.scale *= size
     else:
-        z = .47 + .035*math.sin(phase)
-        ball("Flying sparrow body", (-.04, 0, z), (.30, .18, .22), "kraft")
-        ball("Cream sparrow breast", (.10, -.055, z-.07), (.22, .155, .16), "cream")
-        ball("Chestnut crown", (.24, 0, z+.12), (.20, .16, .19), "wood")
-        ball("Sparrow cheek", (.29, -.12, z+.06), (.12, .045, .10), "cream")
-        beak = ball("Pointed golden beak", (.43, 0, z+.08), (.13, .07, .06), "butter")
+        z = .53+.065*math.sin(phase)
+        ball("Plump flying sparrow", (-.10, 0, z), (.34, .23, .26), "kraft")
+        ball("Cream sparrow breast", (.08, -.06, z-.08), (.27, .20, .20), "cream")
+        ball("Big chestnut head", (.27, 0, z+.17), (.27, .23, .25), "wood")
+        ball("Golden rounded beak", (.53, 0, z+.11), (.16, .095, .085), "butter")
         for side in (-1, 1):
-            wing = ball("Flapping wing", (-.14, side*.28, z+.04+.16*math.sin(phase)), (.26, .34, .065), "wood")
-            wing.rotation_euler.x = side*.48*math.sin(phase)
+            ball("Sparrow cheek", (.34, side*.19, z+.10), (.15, .06, .13), "cream")
+            wing_z = z+.08+.25*math.sin(phase)
+            wing_y = side*(.28+.09*math.cos(phase))
+            wing = ball("Broad flapping wing", (-.18, wing_y, wing_z), (.30, .34, .095), "wood")
+            wing.rotation_euler.x = side*.65*math.sin(phase)
             for j in range(3):
-                feather = ball("Cream wing feather edge", (-.31+j*.1, side*.42, z+.01+.16*math.sin(phase)), (.055, .15, .035), "kraft")
+                feather = ball("Layered wing feather", (-.37+j*.13, wing_y+side*.17, wing_z-.02), (.080, .20, .055), "kraft")
                 feather.rotation_euler.x = wing.rotation_euler.x
-            ball("Sparrow eye", (.33, side*.125, z+.15), (.033, .022, .038), "dark")
-            ball("Sparrow eye glint", (.34, side*.14, z+.165), (.011, .009, .012), "flour")
-            tube("Tucked bird foot", [(-.02, side*.08, z-.15), (.09, side*.10, z-.24)], .021, "roof", False)
+            ball("Large sparrow eye", (.40, side*.19, z+.23), (.055, .035, .063), "dark")
+            ball("Sparrow eye glint", (.42, side*.215, z+.25), (.020, .013, .020), "flour")
+            tube("Tucked bird foot", [(-.02, side*.10, z-.18), (.12, side*.14, z-.31)], .029, "roof")
         for side in (-1, 0, 1):
-            tail = ball("Tail feather", (-.40, side*.065, z+.06), (.20, .05, .035), "wood")
-            tail.rotation_euler.y = -.18
+            tail = ball("Tail feather", (-.50, side*.075, z+.06), (.22, .07, .045), "wood")
+            tail.rotation_euler.y = -.23
+
+
+def item_fx(kind, frame):
+    p = frame/3
+    if kind == "bomb":
+        radius = (.22, .40, .49, .50)[frame]
+        for i in range(8):
+            a = i*math.tau/8
+            r = (.13, .17, .14, .075)[frame]
+            ball("Caramel bomb burst", (radius*math.cos(a), radius*math.sin(a), .18+.05*math.sin(i)), (r, r, r*1.15), "fire" if i % 2 else "copper")
+        if frame < 3:
+            ball("Flour explosion core", (0, 0, .20), (.24-p*.09,)*3, "score")
+        for i in range(5):
+            a = i*math.tau/5+.3
+            ball("Golden bomb crumb", ((radius+.12)*math.cos(a), (radius+.12)*math.sin(a), .2), (.035, .035, .055), "butter")
+    elif kind == "freeze":
+        r = .22+p*.33
+        ring("Frost shockwave", (0, 0, .07), r, .035 if frame < 3 else .016, "ice")
+        for i in range(6):
+            a = i*math.tau/6
+            x, y = r*math.cos(a), r*math.sin(a)
+            shard = box("Rounded frost crystal", (x, y, .17), (.12-p*.04, .12-p*.04, .30-p*.13), "ice_light", .035)
+            shard.rotation_euler = (.20*math.cos(a), .20*math.sin(a), a)
+        if frame < 3:
+            snowflake((0, -.03, .25), .22-p*.05, .03)
+    else:
+        for lane in range(3):
+            y = (lane-1)*.19
+            start = -.48+p*.12
+            end = .22+p*.29
+            tube("Butter slide swoosh", [(start, y, .07), (-.03, y-.045, .10), (end, y+.025, .09)], .06*(1-p*.4), "butter" if lane != 1 else "cream")
+            ball("Slide trailing droplet", (start-.10, y, .08), (.055*(1-p*.45), .05, .035), "score")
+        if frame < 3:
+            butter = box("Sliding butter pat", (.14+p*.26, -.02, .19), (.29, .32, .16), "butter", .055)
+            butter.rotation_euler.z = -.18+p*.36
+            box("Butter pat highlight", (.14+p*.26, -.02, .275), (.20, .24, .025), "score", .012)
 
 
 def projectile(kind):
     if kind == "pin":
         pin((0, 0, .16), .46, True)
+        for x in (-.13, -.04, .06, .14):
+            tube("Projectile maple groove", [(x, -.07, .22), (x+.015, 0, .255), (x, .07, .22)], .008, "score")
+        for side in (-1, 1):
+            ball("Projectile handle cap", (side*.36, 0, .16), (.035, .05, .05), "butter")
     elif kind == "whisk":
         for i in range(3):
             ring("Whisk cream spiral", (0, 0, .10+i*.04), .13+i*.07, .038, "cream" if i % 2 else "butter")
         ball("Whipped center", (0, 0, .18), (.1, .10, .09), "flour")
+        cream_swirl((0, 0, .19), .13)
+        for i in range(3):
+            a = i*math.tau/3
+            ball("Whisk flung cream pearl", (.31*math.cos(a), .31*math.sin(a), .11), (.035,)*3, "flour")
     else:
         for i in range(4):
             ball("Baked heat trail", (-.25+i*.12, 0, .15), (.13+i*.02, .07+i*.026, .06+i*.025), "roof" if i < 2 else "fire")
         ball("Golden ember core", (.18, -.035, .20), (.10, .065, .07), "score")
+        tube("Heat curl", [(-.34, .06, .19), (-.20, .16, .22), (-.03, .10, .21)], .023, "butter")
+        for x, y in ((-.34, -.12), (-.19, .18), (-.08, -.17)):
+            ball("Ember crumb", (x, y, .15), (.034, .026, .025), "fire")
 
 
 def puff(frame):
@@ -502,6 +539,10 @@ def puff(frame):
         radius = .13*(1-phase*.50)
         ball("Flour impact puff", (distance*math.cos(a), distance*math.sin(a), .13+phase*.1),
              (radius, radius, radius), "flour" if i % 2 else "cream")
+    for i in range(5):
+        a = i*math.tau/5+.3
+        d = .23+phase*.25
+        ball("Impact dough crumb", (d*math.cos(a), d*math.sin(a), .24), (.038*(1-phase*.55),)*3, "score")
     if frame < 2:
         ball("Puff center", (0, 0, .16), (.22-frame*.05,)*3, "flour")
 
@@ -570,58 +611,51 @@ def soft_shadow(name):
     obj.visible_glossy = False
 
 
-SPECS = []
 
-
-def render_asset(name, count, width, height, build, fps=0, loop=False, map_index=None):
+def render_asset(name, count, width, height, build, fps=0, loop=False):
     if SELECTED and name not in SELECTED:
         return
-    is_map = map_index is not None
-    ppm = 100 if is_map else PPM
+    ppm = 56 if name == "slot" else PPM
     spec = {"id": name, "frameSize": [width, height], "frameCount": count,
             "supersample": 2, "pixelsPerMetre": ppm, "fps": fps, "loop": loop,
             "renderer": {"blender": bpy.app.version_string, "engine": "Cycles CPU",
-                         "samples": args.samples, "supersample": 2, "downsample": "Lanczos3"}, "frames": []}
-    if is_map:
-        spec["map"] = {**MAPS[map_index], "source": "src/lib/td/maps.ts", "sha256": MAP_HASH,
-                       "pathWidth": 74, "slotRadius": SLOT_RADIUS, "breadClearance": 115}
+                         "samples": args.samples, "supersample": 2, "downsample": "Lanczos3"},
+            "artRevision": ART_REVISION, "frames": []}
     if name.startswith("pest-"):
         spec["facing"] = {"mode": "rotate", "defaultDirection": "right", "radians": "atan2(dy, dx)",
                           "pivot": "frame.anchor", "shadow": "baked; rotates with sprite"}
     for frame in range(count):
-        scene = setup(width, height, max(width, height)/ppm, not is_map,
-                      target=(0, 0, 0) if is_map else (0, 0, .25))
+        scene = setup(width, height, max(width, height)/ppm,
+                      target=(0, 0, .55 if name.startswith("tower-") else .25))
+        before = set(bpy.data.objects)
         build(frame)
-        if is_map:
-            data = spec["map"]
-            data["projectedPath"] = [projected(scene, pixel_world(x, y, .012)) for x, y in data["path"]]
-            data["projectedSlots"] = [projected(scene, pixel_world(x, y, .024)) for x, y in data["slots"]]
-            for key in ("Path", "Slots"):
-                for actual, expected in zip(data["projected"+key], data[key.lower()]):
-                    assert math.dist(actual, expected) < .01, (name, key, actual, expected)
-        else:
-            soft_shadow(name)
+        # More of each frame is useful art; camera and ground anchor stay fixed.
+        scale = 1.16 if name.startswith("tower-") else 1.24 if name.startswith("proj-") else 1.08 if name.startswith("fx-") else 1
+        for obj in set(bpy.data.objects)-before:
+            obj.location *= scale
+            obj.scale *= scale
+        soft_shadow(name)
         file = f"{name}-{frame:02d}.png"
         scene.render.filepath = str(CACHE / file)
         bpy.ops.render.render(write_still=True)
-        spec["frames"].append({"file": file, "anchor": [0, 0] if is_map else projected(scene, (0, 0, 0))})
-    SPECS.append(spec)
-    # Checkpoint every completed atlas; interrupted builds can resume with --only.
+        spec["frames"].append({"file": file, "anchor": projected(scene, (0, 0, 0))})
     metadata = CACHE / "renders.json"
-    previous = {s["id"]: s for s in json.loads(metadata.read_text())} if metadata.exists() else {}
+    previous = {s["id"]: s for s in json.loads(metadata.read_text())
+                if s.get("artRevision") == ART_REVISION and not s["id"].startswith("map-")} if metadata.exists() else {}
     previous[name] = spec
     metadata.write_text(json.dumps(list(previous.values()), indent=2)+"\n")
+    print(f"COMPLETE {name}: {count} frames at {width}x{height}", flush=True)
 
 
-for index in range(3):
-    render_asset(f"map-{index+1}", 1, 1440, 810, lambda f, i=index: map_scene(i), map_index=index)
-for kind in ("pin", "sifter", "whisk", "oven"):
+for kind in ("pin", "sifter", "whisk", "oven", "freezer", "piping", "torch"):
     for tier in range(3):
-        render_asset(f"tower-{kind}-{tier}", 1, 128, 144, lambda f, k=kind, t=tier: tower(k, t))
+        render_asset(f"tower-{kind}-{tier}", 1, 256, 288, lambda f, k=kind, t=tier: tower(k, t))
 for kind in ("ant", "mouse", "sparrow", "beetle", "boss"):
-    render_asset(f"pest-{kind}", 4, 112, 112, lambda f, k=kind: pest(k, f), fps=10 if kind == "sparrow" else 8, loop=True)
+    render_asset(f"pest-{kind}", 6, 224, 224, lambda f, k=kind: pest(k, f), fps=12 if kind == "sparrow" else 10, loop=True)
 for kind in ("pin", "whisk", "oven"):
-    render_asset(f"proj-{kind}", 1, 64, 64, lambda f, k=kind: projectile(k))
-render_asset("fx-hit", 4, 80, 80, puff, fps=16)
+    render_asset(f"proj-{kind}", 1, 128, 128, lambda f, k=kind: projectile(k))
+render_asset("fx-hit", 4, 160, 160, puff, fps=16)
+for kind in ("bomb", "freeze", "slide"):
+    render_asset(f"fx-{kind}", 4, 160, 160, lambda f, k=kind: item_fx(k, f), fps=16)
 render_asset("slot", 1, 80, 80, lambda f: slot())
-print("D6 rendering complete:", CACHE / "renders.json", flush=True)
+print("D-ART2 rendering complete:", CACHE / "renders.json", flush=True)
