@@ -13,7 +13,7 @@ const MM = 1 / 2125; // engine mm → metres
 const ROAD_SCALE = .78, LANE = 2.6667 * ROAD_SCALE, TILE = 6, AHEAD = 48, BEHIND = 10;
 const ROAD_HALF = 4 * ROAD_SCALE;
 const FOG = 0xf7dcc6;
-const KIND_NODE: Record<string, string> = { cart: "cart", flour: "flour", awning: "awning", puddle: "puddle", bread: "bread", "paper-bag": "bag", coffee: "coffee", ramp: "ramp", van: "van", truck: "truck" };
+const KIND_NODE: Record<string, string> = { cart: "cart", flour: "flour", awning: "awning", puddle: "puddle", bread: "bread", "paper-bag": "bag", coffee: "coffee", ramp: "ramp", van: "van", truck: "truck", pothole: "pothole", "bread-wheel": "breadwheel", "double-jump-shoes": "shoes", shield: "shield" };
 const hash = (i: number) => { const x = Math.sin(i * 127.1 + 31.7) * 43758.5453; return x - Math.floor(x); };
 const laneX = (lane: number) => (1 - lane) * LANE;
 const ease = (t: number) => t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
@@ -150,6 +150,8 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
     next.reset().play(); current.crossFadeTo(next, fade, false); current = next;
   };
   const bunnyShadow = new THREE.Mesh(shadowGeo, shadowMat); bunnyShadow.renderOrder = 1; scene.add(bunnyShadow);
+  const bubble = new THREE.Mesh(new THREE.SphereGeometry(1.15, 24, 16), new THREE.MeshStandardMaterial({ color: 0xbfe3f5, transparent: true, opacity: .28, roughness: .1, metalness: .2, depthWrite: false }));
+  bubble.visible = false; scene.add(bubble);
 
   // ---- props pool keyed by engine object id ----------------------------------------
   const templates = new Map<string, THREE.Group>();
@@ -182,7 +184,7 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
     for (let i = 0; i < 2; i++) { const r = new THREE.Mesh(new THREE.RingGeometry(.28, .32, 40).rotateX(-Math.PI / 2), ringMat.clone()); r.position.y = .035; r.name = `ripple${i}`; puddle.add(r); }
   }
   const free = new Map<string, THREE.Object3D[]>();
-  const live = new Map<number, { node: string; o: THREE.Object3D; shadow: THREE.Mesh }>();
+  const live = new Map<number, { node: string; o: THREE.Object3D; shadow: THREE.Mesh; x?: number }>();
   const take = (node: string) => {
     const list = free.get(node); if (list?.length) { const o = list.pop()!; o.visible = true; return o; }
     const o = templates.get(node)!.clone(); o.traverse(m => { m.castShadow = node !== "puddle"; }); scene.add(o); return o;
@@ -200,14 +202,25 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
     seen.add(o.id);
     let x = laneX(o.lane), y = 0;
     const z = o.z * MM;
+    // Lane-changing trucks (and anything riding them) slide across instead of snapping.
+    if (o.kind === "truck" || o.carrierId !== undefined) { entry.x = entry.x === undefined ? x : entry.x + (x - entry.x) * .18; x = entry.x; }
     if (o.kind === "bread") {
       if (s.powerUps.magnetTicks > 0 && z < 6) x += (bunnyX - x) * Math.min(1, (6 - z) / 4);
       y = (o.y ?? 0) * MM + .5 + Math.sin((s.tick + o.id * 13) * .12) * .08;
       entry.o.rotation.y = s.tick * .06 + o.id;
-    } else if (o.kind === "paper-bag" || o.kind === "coffee") {
+    } else if (o.kind === "bread-wheel") {
+      entry.o.rotation.x = -(s.distance * MM + z) / .6; // rolls toward the bunny
+    } else if (o.kind === "paper-bag" || o.kind === "coffee" || o.kind === "double-jump-shoes" || o.kind === "shield") {
       y = (o.y ?? 0) * MM + .45 + Math.sin((s.tick + o.id * 13) * .12) * .1; entry.o.rotation.y = s.tick * .04;
     }
     entry.o.position.set(x, y, z);
+    if (o.kind === "truck") {
+      let lamp = entry.o.getObjectByName("signal-lamp") as THREE.Mesh | undefined;
+      if (!lamp) { lamp = new THREE.Mesh(new THREE.SphereGeometry(.18, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffb53a })); lamp.name = "signal-lamp"; lamp.position.y = 1.62; entry.o.add(lamp); }
+      const pending = (o.signalUntil ?? 0) > s.tick && o.targetLane !== undefined && o.targetLane !== o.lane;
+      lamp.visible = pending && Math.floor(s.tick / 6) % 2 === 0;
+      if (pending) lamp.position.x = (laneX(o.targetLane!) - laneX(o.lane)) > 0 ? .7 : -.7;
+    }
     if (o.kind === "puddle") for (let i = 0; i < 2; i++) {
       const r = entry.o.getObjectByName(`ripple${i}`) as THREE.Mesh | undefined; if (!r) continue;
       const k = ((s.tick + o.id * 17) / 70 + i * .5) % 1;
@@ -275,6 +288,8 @@ export async function createRunThree(canvas: HTMLCanvasElement): Promise<RunView
     bunny.position.set(bunnyX, lift, 0);
     bunny.rotation.y = change ? (change.to < change.from ? -.18 : .18) * Math.sin(Math.PI * change.progress / 1000) : 0;
     bunnyShadow.position.set(bunnyX, .03, 0);
+    bubble.visible = !!(s.player as RunState["player"] & { shield?: boolean }).shield;
+    if (bubble.visible) { bubble.position.set(bunnyX, lift + .85, 0); const k = 1 + Math.sin(s.tick * .15) * .03; bubble.scale.set(k, k, k); }
     const sh = Math.max(.4, 1 - lift * .35); bunnyShadow.scale.set(1.1 * sh, 1, .8 * sh);
 
     // Camera: behind and above, follows lanes and height, widens with speed.

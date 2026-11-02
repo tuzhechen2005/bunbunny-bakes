@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- static clay HUD icons */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRunGame, MAX_INPUTS, MAGNET_TICKS, COFFEE_TICKS, type RunInput, type RunDirection, type RunEvent, type RunState } from "@/lib/run";
 import { copy } from "@/copy";
@@ -22,6 +23,7 @@ const EMPTY_EVENTS:RunEvent[]=[];
 const hudValues = (s: RunState) => ({
   distance: Math.floor(s.distance/1000), bread: s.bread, over: s.over,
   magnetTicks: s.powerUps.magnetTicks, coffeeTicks: s.powerUps.coffeeTicks,
+  shoesTicks: s.powerUps.shoesTicks ?? 0, shield: !!s.player.shield, multiplier: s.multiplier ?? 1,
 });
 export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduced,paused,onProgress,onOver,onShowResult}:Props) {
   const {degraded}=useMotionPrefs();
@@ -99,7 +101,8 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
       lastHud.current=now;
       const next=hudValues(s),previous=publishedHud.current;
       if(next.distance!==previous.distance||next.bread!==previous.bread||next.over!==previous.over||
-        next.magnetTicks!==previous.magnetTicks||next.coffeeTicks!==previous.coffeeTicks) {
+        next.magnetTicks!==previous.magnetTicks||next.coffeeTicks!==previous.coffeeTicks||
+        next.shoesTicks!==previous.shoesTicks||next.shield!==previous.shield||next.multiplier!==previous.multiplier) {
         publishedHud.current=next;setHud(next);
       }
     }
@@ -202,6 +205,9 @@ export function RunBoard({seed,initialInputs=[],initialElapsedMs=0,soundOn,reduc
     <div className="run-hud">
       <p className="run-chip"><span>{t.distance}</span><b className="font-num" data-testid="run-distance">{hud.distance}</b></p>
       <div className="run-powers">
+        {hud.multiplier>1&&<span key={hud.multiplier} className="run-mult font-num" data-testid="run-multiplier">×{hud.multiplier}</span>}
+        {hud.shield&&<img className="run-power-ico" src="/brand/art/shop/run-shield.webp" alt="" />}
+        {hud.shoesTicks>0&&<span className="run-power-ico-wrap"><img className="run-power-ico" src="/brand/art/shop/run-shoes.webp" alt="" /><b className="font-num">{Math.ceil(hud.shoesTicks/60)}</b></span>}
         {([{name:'paper-bag',label:t.bag,ticks:hud.magnetTicks,total:MAGNET_TICKS},{name:'coffee-cup',label:t.coffee,ticks:hud.coffeeTicks,total:COFFEE_TICKS}] as const).filter(p=>p.ticks>0).map(p=><div key={p.name} className="run-power" role="img" aria-label={`${p.label} ${Math.ceil(p.ticks/60)}`}>
           <svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="20" pathLength="1" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray={`${p.ticks/p.total} 1`} transform="rotate(-90 22 22)" /></svg>
           <RunSprite name={p.name} />
