@@ -1,8 +1,8 @@
-# Deterministic bakery TD — D11 / engine v11
+# Deterministic bakery TD — D181 / engine v12
 
-Canonical seed: `v11.td.<Gregorian Monday>.<level>`. Old v1–v10 unfinished runs
+Canonical seed: `v12.td.<Gregorian Monday>.<level>`. Old v1–v11 unfinished runs
 and saves are rejected; stored results remain intact. The save key derives from
-`TD_ENGINE_VERSION`, so it changes to `bb_td_save_v11` without frontend edits.
+`TD_ENGINE_VERSION`, so it changes to `bb_td_save_v12` without frontend edits.
 60 integer ticks/s; travel uses 16 subunits per drawing unit. Board: 1440×810.
 No clocks, global random state, account progression, or cross-week unlocks.
 
@@ -15,7 +15,7 @@ bread lives, no items, and no path mechanics. Slot coverage makes placement matt
 
 Every level budgets against the most expensive unlocked tower line: sum its
 base, tier-1 and tier-2 purchase costs, then multiply by the number of slots.
-Start coins plus all bounties plus the maximum four early-call bonuses must fit
+Start coins plus all bounties, the two 12-coin clutter rewards, and the maximum four early-call bonuses must fit
 within 75% of that full-build cost. The first wave call earns no bonus; each later
 call can earn at most 30 coins (600 prep ticks). Bounties are proportionally
 reduced and rounded down when necessary. This is computed from generated waves,
@@ -25,15 +25,18 @@ Finale bosses pay less, reducing coins awarded too late to invest.
 
 The spending regression uses actual earned income, including call bonuses and
 excluding escaped pests: because the greedy bot never sells, income equals
-remaining coins plus tower investment. Every sampled L1–L30 run must invest at
-least 70%. No bot policy changes are part of this balance revision.
+remaining coins plus tower investment. Every sampled L1–L30 clear must invest at
+least 70%. A swarm loss may instead retain less than one maximum tier-2 purchase
+in cash (the bot can die just short of its saved upgrade). The default greedy
+policy is unchanged; the separate responsive boss sample is described below.
 
-D10's density and queue rules remain: ordinary counts are `round(D9 count × 0.6)`,
+D10's ordinary density and queue rules remain: ordinary counts are `round(D9 count × 0.6)`,
 spawn intervals are `ceil(D9 interval / 0.6)` (L1 uses 167 ticks initially and 187 ticks after
 the opening wave), and live caps are 8 below L20 and
-12 thereafter, including bosses and returning thieves across overlapping waves.
+12 thereafter for ordinary arrivals, including returning thieves across overlapping waves.
+V12 swarm and boss-add exceptions use the global 16-pest ceiling documented below.
 Blocked arrivals wait without consuming their index; prep starts only after the
-final actual arrival. The five-minute combat deadline is unchanged.
+final actual arrival. V12 replaces the five-minute deadline with a 72,000-tick replay safety bound; a clear resolves before this bound.
 
 Snapshot week `2026-10-26`, each version's canonical seed. Ant HP is the
 first-wave value; L2 contains mice only. Possible income includes all bounties
@@ -142,7 +145,7 @@ from trusted server state, bind it to the run, and deduct atomically at finish;
 never accept inventory from the finish payload. The TD engine does not deduct inventory.
 
 Build phase remains unlimited and inert. The first `callWave` starts combat with
-no bonus; five waves, later early-call bonuses, 18,000 combat-tick limit, return
+no bonus; five waves, later early-call bonuses, 72,000 combat-tick safety limit, return
 thieves, dropped bread, replay limits and exact input-key validation remain.
 
 ## L1–L10 ASCII overviews
@@ -392,7 +395,7 @@ geometry; use actual coordinates for drawing and hit testing.
 
 ```
 
-## Regression evidence
+## Historical v11 regression evidence
 
 The unchanged D9 checkpoint targets use two disjoint 20-week samples
 (`tdBotWeeks(20, 0)` and offset 100), without purchased inventory: L5 85%,
@@ -426,7 +429,7 @@ client with `npx prisma generate` first when absent.
 npx tsc --noEmit
 npx eslint src tests --quiet
 npx vitest run --configLoader runner --project unit tests/unit/td*.test.ts
-TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_d11_test TEST_DIRECT_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_d11_test npx vitest run --configLoader runner --project db
+TEST_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_td12_test TEST_DIRECT_DATABASE_URL=postgresql://bunbunny:bunbunny@localhost:5432/bunbunny_td12_test npx vitest run --configLoader runner --project db
 ```
 
 Final validation: TypeScript and ESLint pass. All 136 TD unit cases are verified
@@ -438,3 +441,116 @@ assertions are unchanged. The e2e version and affordability assertions were
 updated but browser e2e tests were not run.
 
 No frontend component changes or commits are part of D11.
+
+
+## UI contract — D181 (owner 11/02)
+
+No component or page changes are included. Integrate these engine/server additions:
+
+- **Boss 大胃王鼠:** `boss: true`, `hp`, `maxHp` describe the three equal HP
+  segments (boundaries `ceil(maxHp*2/3)` and `ceil(maxHp/3)`). `phase` is 0/1/2.
+  The boss enters after preceding pests clear, with two escorts.
+  Total generated HP is 1.75× the previous formula. The boss walks at 8 subunits/tick.
+  `bossSpawn {tick,pest,wave}` is followed by two tiny mouse escorts. Each
+  `bossPhase {tick,pest,phase,telegraphUntil,dashUntil,mice:5}` announces a phase
+  at a health boundary. Draw a warning for 48 ticks (0.8 seconds); the boss stops
+  and cannot take damage during this warning. Then it moves at 2× speed for
+  24 ticks (0.4 seconds), subject to existing control effects. There is no death
+  spawn. Snapshot timing fields let resume reconstruct the current warning/dash.
+- **Burst protection:** `phaseReadyTick` exposes the next segment-break/kill
+  eligibility. The first segment cannot break for six seconds after arrival;
+  the second gets eight seconds and the last gets six seconds. Damage can lower HP to one above the
+  next boundary during that window. Show the guarded segment while this applies;
+  it prevents one volley from skipping response windows. No extra damage bonus.
+- **Tiny mice:** `tiny: true` identifies the smaller render scale; `kind` remains
+  `mouse`. Wave 3 from L5 contains 12–18, 8 ticks apart, HP `42+min(80,2*(L-1))`,
+  speed 64. Ordinary wave caps remain 8/12; swarm and boss adds share a hard
+  **16 total live pests**, including returners. Blocked adds queue at the phase
+  location and preserve the parent's fork choices and wave. Adds pay zero coins.
+  The standard `spawn` events still identify every actual arrival.
+- **Clutter:** `tdLevel`, start response, and `state.clutter` expose two objects:
+  `{id,kind,x,y,hp,maxHp,reward}`; kinds are `flourSack`, `eggCrate`, `milkCan`.
+  Render the fixed **12-coin** reward before targeting. HP is 216. A base pin
+  breaks it in 209 ticks (3.48 seconds); combinations/upgrades can be faster.
+  Send `{tick,type:"target-clutter",clutter:id}` (or `null` to cancel) through the
+  normal replay log. `state.targetClutter` is the selected ID. In-range damage
+  towers prioritize it using their normal damage/cooldown; support towers keep
+  supporting. Attacks use `clutterHit {tick,clutter,slot,damage}`, followed by
+  exactly one `clutterCleared {tick,clutter,reward}`. Animate these direct attacks;
+  there are no pest projectiles for clutter. Broken objects remain at zero HP
+  and selection clears. Build phase stays inert. No free tower rewards.
+  The existing client's rejection-limit preflight must recognize this new action
+  before its slot-based checks when the UI wires it up.
+- **Stars:** `state.stars` is zero before a win or on loss; 8–10 bread = 3,
+  4–7 = 2, 1–3 = 1. Finish returns `{stars,bestStars}` in addition to existing
+  fields. Start, leaderboard (alongside `nextLevel`), and progress return
+  `bestStars: Record<level,0|1|2|3>` for the current week and player (JSON keys are
+  strings). No identity gives `{}` on leaderboard. Best stars aggregate verified
+  finished attempts, case-insensitively; poorer retries and duplicate finishes
+  cannot reduce them. Existing records have no invented stars. Apply migration
+  `20261102181000_td_stars` before deploying the server.
+- **Completion:** the former 300-second cutoff no longer ends active levels.
+  Combat clears once all five waves, queued adds and living pests are resolved,
+  even with dropped bread still returning. Only zero bread loses normally.
+  A 1,200-second replay safety bound remains for pathological stalemates, with
+  clearing given priority on its exact tick. The clock imports this bound.
+
+### V12 headless validation
+
+Reproduce the held-out sample with `npx tsx tests/support/td12Simulation.ts`.
+It runs the existing public-state greedy bot over 20 weeks (offset 200) at
+L1/L5/L10/L20, then replays the input log tick by tick for boss events and peak
+population. Durations use simulation time, not 3× presentation speed. Phone
+frame time is not measured by a Node simulation; 16 is an entity budget, not
+proof of device frame rate. The older D9 pass-rate ceilings do not apply after
+removing timeout losses and introducing the new swarm wave.
+
+Final held-out sample (20 weeks per row, offset 200; boss times include arrival,
+computed among killed bosses; losses before the boss are excluded from boss timing):
+
+| Level / policy | Clears | Median level seconds | Median boss seconds | Peak live pests | Two-phase fights |
+|---|---:|---:|---:|---:|---:|
+| L1 greedy | 20/20 | 153.1 | 20.3 | 8 | 20/20 |
+| L5 greedy | 16/20 | 168.0 | 22.0 | 16 | 16/16 |
+| L10 greedy | 20/20 | 283.8 | 21.1 | 16 | 20/20 |
+| L20 greedy | 11/20 | 307.6 | 53.4 | 16 | 11/11 |
+| L20 responsive | 11/20 | 278.2 | 28.2 | 16 | 11/11 |
+
+`npx tsx tests/support/td12Simulation.ts --responsive` uses the same greedy
+policy until the boss is visible, then sells distant investment as needed and
+puts a tier-2 double-strike pin and long-range/piercing oven in the two nearest
+slots. It spends earned coins and records every sale/purchase/upgrade; a unit
+test verifies the resulting complete replay. The reactive L20 fight is 26.7
+seconds from first damage; the passive build is 46.9 seconds. This is a build
+comparison, not a claim that every build meets the 20–30-second goal. In
+particular, passive late-level builds can still take substantially longer.
+
+Other validation:
+
+- 600 comparisons (L1–L30 × 20 weeks) against the actual v11 generator give
+  **1.60–1.915× boss HP**; the 1.75 multiplier leaves room for seeded count
+  rounding. Week 2026-10-26 L1/L5/L10/L20: 525→840, 2160→3780, 3700→6475,
+  6614→11886 HP.
+- Greedy checkpoints at offsets 0 and 100: **L5 80%/80%, L10 100%/100%,
+  L20 65%/65%**. These new ceilings reflect swarm composition and removal of
+  timeout losses. L1 over 100 weeks: greedy 100%, random 51%, one never-upgraded
+  pin 0%. Two base pins still clear all 100, but can retain only one bread;
+  the upgraded entrance pin retains at least two.
+- The 2026-10-26 L10 sample clears with **4 bread / 2 stars in 299.0 seconds**.
+  A dedicated regression continues combat beyond 300 seconds and clears with
+  bread remaining. A separate deadline regression still bounds pathological
+  stalemates. 560 cap runs cover L1–L25, L50, L100 and L1000; the total stays ≤16.
+- Clutter: one base pin takes 3.48 seconds, pays 12 once, and replays exactly.
+  Snapshot mutation, exact action keys, two phase windows, dash movement,
+  queued swarms, bread conservation and every star threshold are covered.
+- TypeScript and ESLint pass. The full unit run had 1324 passing cases and
+  three initial failures: a RUN timing timeout (all six RUN-track tests passed
+  in isolation), the now-one-bread two-pin assertion, and the L5 loss while
+  saving an unaffordable upgrade. Focused reruns pass after aligning the latter
+  two assertions with v12. The hard 75% economy cap remains tested on every run;
+  70% spending remains required for clears, while a loss may retain less than
+  one maximum tier-2 purchase in cash. Further v12 and response-replay tests pass.
+- All **916 database tests** pass, plus the final **14 TD/migration tests**,
+  using `bunbunny_td12_test` (and the suite's suffixed `_test` scratch databases).
+  No production database was used. Frontend rendering and phone frame time
+  remain the UI/device validation work.

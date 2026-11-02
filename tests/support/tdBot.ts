@@ -5,18 +5,23 @@ import {
 } from "../../src/lib/td";
 
 /** Public geometry/stats only; no future waves, RNG state, or private engine injection. */
-function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind, itemsAllowed: TdOptions["itemsAllowed"] = {}, observe?: (state: TdState) => void) {
+function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind, itemsAllowed: TdOptions["itemsAllowed"] = {}, observe?: (state: TdState) => void, respondToBoss = false) {
   const game = createTdGame({ level, itemsAllowed });
   const rng = createRng(`${level.seed}:td-bot`);
   const map = level.mapData;
   const inputs: TdInput[] = [];
+  // Cache immutable geometry without changing weights, order, or bot decisions.
+  const length = pathLength(map);
+  const samples: {point:{x:number;y:number};weight:number}[] = [];
+  for (let d=0;d<length;d+=24*SUBUNITS) samples.push({point:pathPosition(map,d),weight:(2*length-d)/length});
+  const coverageCache = new Map<string,number>();
   const coverage = (slot: number, kind: TowerKind, tier: number, branch?: TdBranch) => {
-    const stats = towerStats(kind, tier, branch);
+    const stats = towerStats(kind, tier, branch), key = `${slot}:${stats.range}`;
+    const cached = coverageCache.get(key);
+    if (cached !== undefined) return cached;
     let total = 0;
-    const length = pathLength(map);
-    for (let d = 0; d < length; d += 24 * SUBUNITS) {
-      if (distanceSquared(map.slots[slot], pathPosition(map, d)) <= stats.range ** 2) total += (2 * length - d) / length;
-    }
+    for (const sample of samples) if (distanceSquared(map.slots[slot],sample.point) <= stats.range ** 2) total += sample.weight;
+    coverageCache.set(key,total);
     return total;
   };
   const strength = (slot: number, kind: TowerKind, tier: number, branch?: TdBranch) => {
@@ -33,8 +38,36 @@ function run(level: TdLevel, mode: "greedy" | "random", onlyKind?: TowerKind, it
     if (!game.apply(input)) throw new Error("bot proposed an illegal action");
     inputs.push(input);
   }
+  let redeployed = false;
   while (!game.over) {
     let state = game.state();
+    if (respondToBoss && !redeployed && level.number >= 8) {
+      const boss = state.pests.find(p => p.boss);
+      if (boss) {
+        redeployed = true;
+        const approach = map.slots.map((point,slot)=>({slot,distance:distanceSquared(point,boss)})).sort((a,b)=>a.distance-b.distance).slice(0,2);
+        const plan = approach.map(({slot},i)=>({slot,kind:(i===0?'rollingPin':'oven') as TowerKind,branch:(i===0?'a':'b') as TdBranch}));
+        const cost = plan.reduce((sum,p)=>sum+[0,1,2].reduce((total,tier)=>total+towerStats(p.kind,tier).cost,0),0);
+        const occupied = state.towers.filter(t=>plan.some(p=>p.slot===t.slot));
+        let budget = state.coins + occupied.reduce((sum,t)=>sum+Math.floor(t.spent/2),0);
+        // A visible boss justifies moving distant investment to its approach.
+        const sales = state.towers.filter(t=>!plan.some(p=>p.slot===t.slot) && distanceSquared(t,boss)>500**2)
+          .sort((a,b)=>distanceSquared(b,boss)-distanceSquared(a,boss));
+        if (budget + sales.reduce((sum,t)=>sum+Math.floor(t.spent/2),0) >= cost) {
+          for (const tower of sales) {
+            if (budget >= cost) break;
+            apply({tick:state.tick,type:'sell',slot:tower.slot});budget+=Math.floor(tower.spent/2);
+          }
+          for (const tower of occupied) apply({tick:state.tick,type:'sell',slot:tower.slot});
+          for (const {slot,kind,branch} of plan) {
+            apply({tick:state.tick,type:'place',slot,tower:kind});
+            apply({tick:state.tick,type:'upgrade',slot});
+            apply({tick:state.tick,type:'upgrade',slot,branch});
+          }
+          state=game.state();
+        }
+      }
+    }
     if (mode === 'greedy') {
       if (itemsAllowed.bomb && level.number >= 2 && !state.itemsUsed.bomb && state.pests.length >= 8) {
         const target = [...state.pests].sort((a,b) =>
@@ -114,3 +147,6 @@ export const randomTd = (level: TdLevel) => run(level, "random");
 /** Disjoint windows can be used for tuning and held-out validation. */
 export const tdBotWeeks = (count: number, offset = 0): string[] => Array.from({ length: count }, (_, i) =>
   new Date(Date.UTC(2026, 0, 5 + (offset + i) * 7)).toISOString().slice(0, 10));
+
+/** Same greedy policy until the visible boss; move distant investment to an approach pin/oven pair. */
+export const responsiveTd = (level: TdLevel) => run(level,"greedy",undefined,{},undefined,true);

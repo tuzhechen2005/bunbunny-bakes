@@ -32,8 +32,8 @@ import { runExpiresAt, weekKeyOf } from "./gameWeek";
 
 export const TD_MAX_FINISH_BODY_BYTES = MAX_INPUTS * 100 + 4096;
 export const tdStartSchema = startSchema.extend({ level: z.number().int().min(1).max(2_147_483_646).optional() });
-export type TdStartResult = StartResult & Pick<TdLevel, "mapData" | "unlockedTowers" | "newlyUnlocked"> & { level: number; weekKey: string; inventory: Awaited<ReturnType<typeof inventory>> };
-export type TdFinishResult = FinishResult & { level: number; passed: boolean };
+export type TdStartResult = StartResult & Pick<TdLevel, "mapData" | "unlockedTowers" | "newlyUnlocked" | "clutter"> & { level: number; weekKey: string; bestStars: Record<number, number>; inventory: Awaited<ReturnType<typeof inventory>> };
+export type TdFinishResult = FinishResult & { level: number; passed: boolean; stars: number; bestStars: Record<number, number> };
 export const tdFinishSchema = z.object({
   runId: z.uuid(),
   inputs: z.array(z.custom<TdInput>(validTdInput)).max(MAX_INPUTS),
@@ -79,7 +79,7 @@ export async function startTdRun(db: DbClient, input: unknown, ipHash: string, n
       ipHash,
     },
   });
-  return { mapData: definition.mapData, unlockedTowers: definition.unlockedTowers, newlyUnlocked: definition.newlyUnlocked, inventory: await inventory(db, data.wechatId), runId: run.id, seed, level, weekKey, tiers, expiresAt: runExpiresAt(now).toISOString() };
+  return { bestStars: await bestTdStars(db, weekKey, data.wechatId), clutter: definition.clutter, mapData: definition.mapData, unlockedTowers: definition.unlockedTowers, newlyUnlocked: definition.newlyUnlocked, inventory: await inventory(db, data.wechatId), runId: run.id, seed, level, weekKey, tiers, expiresAt: runExpiresAt(now).toISOString() };
 }
 
 export async function finishTdRun(db: DbClient, input: unknown, ipHash: string, now: Date): Promise<TdFinishResult> {
@@ -108,6 +108,7 @@ export async function finishTdRun(db: DbClient, input: unknown, ipHash: string, 
       passedAt,
       updatedAt: null,
       score: verified.score,
+      tdStars: verified.stars,
       weekKey,
       drops: data.inputs as unknown as Prisma.InputJsonValue,
       dropCount: data.inputs.length,
@@ -119,16 +120,16 @@ export async function finishTdRun(db: DbClient, input: unknown, ipHash: string, 
     const stored = await db.gameRun.findUniqueOrThrow({ where: { id: run.id } });
     return tdResult(db, stored);
   }
-  return tdResult(db, { ...run, score: verified.score, weekKey, passedAt });
+  return tdResult(db, { ...run, score: verified.score, tdStars: verified.stars, weekKey, passedAt });
 }
 
 async function tdResult(db: DbClient, run: GameRun): Promise<TdFinishResult> {
-  return { ...await resultFor(db, run, "TD"), level: run.level!, passed: run.passedAt !== null };
+  return { ...await resultFor(db, run, "TD"), level: run.level!, passed: run.passedAt !== null, stars: run.tdStars ?? 0, bestStars: await bestTdStars(db, run.weekKey!, run.wechatId) };
 }
 
-export async function getTdLeaderboard(db: DbClient, now: Date, myWechatId?: string | null): Promise<Leaderboard & { nextLevel: number }> {
+export async function getTdLeaderboard(db: DbClient, now: Date, myWechatId?: string | null): Promise<Leaderboard & { nextLevel: number; bestStars: Record<number, number> }> {
   const [board, nextLevel] = await Promise.all([getLeaderboard(db, now, myWechatId, "TD"), myWechatId ? nextGameLevel(db, "TD", weekKeyOf(now), myWechatId) : 1]);
-  return { ...board, nextLevel };
+  return { ...board, nextLevel, bestStars: myWechatId ? await bestTdStars(db, weekKeyOf(now), myWechatId) : {} };
 }
 
 /** Server derives the entire level; client scores, waves and win flags are ignored. */
@@ -147,5 +148,11 @@ export function verifyTdRun(run: GameRun, data: z.output<typeof tdFinishSchema>,
   if (playMs / 3 > now.getTime() - run.startedAt.getTime() + PLAUSIBILITY_SLACK_MS
     || (run.playMs !== null && playMs < run.playMs)
     || (Array.isArray(run.drops) && !run.drops.every((v, i) => isDeepStrictEqual(v, data.inputs[i])))) throw badRun();
-  return { itemsUsed: outcome.itemsUsed, score: outcome.wave, playMs, suspicious: isTdSuspicious(data.inputs), passed: outcome.passed };
+  return { stars: outcome.stars, itemsUsed: outcome.itemsUsed, score: outcome.wave, playMs, suspicious: isTdSuspicious(data.inputs), passed: outcome.passed };
+}
+
+/** Durable per-attempt stars aggregate atomically committed, verified finishes only. */
+export async function bestTdStars(db: DbClient, weekKey: string, wechatId: string): Promise<Record<number, number>> {
+  const rows = await db.gameRun.groupBy({by:["level"],where:{game:"TD",weekKey,wechatId:{equals:wechatId.trim(),mode:"insensitive"},passedAt:{not:null},hidden:false},_max:{tdStars:true}});
+  return Object.fromEntries(rows.filter(r => r.level !== null && r._max.tdStars !== null).map(r => [r.level!,r._max.tdStars!]));
 }

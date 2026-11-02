@@ -1,0 +1,1 @@
+ALTER TABLE "GameRun" ADD COLUMN "tdStars" INTEGER CHECK ("tdStars" BETWEEN 0 AND 3);

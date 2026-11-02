@@ -212,3 +212,27 @@ D178 检查：600 组经济回归及 560 组活体上限回归通过；136 个 T
 D179（[店主] 11/02 N1）：后台管理加“新品”功能，让客户页新上架商品有独立特效。Q1：店主开启后自动展示 7 天（服务器 now + 7×24h），可提前关闭，再次开启重新计时；省略不改。Q2：客户特效由前端（Claude）实现，后台开关也由 Claude 接入；本任务只实现后端。Q3：菜单新品优先，同组保留既有排序。Product.newUntil 可空、无回填，后台返回截止时间，客户及助手只返回服务端计算的 isNew；到期不依赖写库或缓存刷新，改标记与商品 AuditLog 同事务。
 
 D180（[店主] 11/02 F2，站点发布后口味需求及 grill）：每个口味可有独立每日限额 dailyLimit（null 不限），同时始终受商品原有限额／日期覆盖／大圆包整天取整约束（Q1 A+C）；可按取货日期覆盖口味限额，清除后回退默认（Q2 A）。口味有独立 bundlePriceCents（null 不使用套餐），绝不继承商品套餐价（Q3 A）；不同口味不能凑套餐（Q4 A），套餐件数共用商品 bundleSize（Q5）。顾客日期数据仅给 soldOutFlavorIds，不暴露限额或用量（Q6/Q7 UI 由 Claude 接入）。占额创建、改单及恢复状态都在日期锁内按 after 重算；店主超限必须原因及 AuditLog。仅后端、迁移、测试及接口文档；不改 components，不涉及游戏分支。
+
+
+### D181 — TD v12: boss phases, swarms, clutter and weekly stars
+
+Source: owner 11/02, review-adjusted TD brief and playability review. Boss HP is
+1.75× v11's formula, three segments, two escorts, five tiny mice at each of 2/3
+and 1/3 HP, 0.8-second dash telegraph and a short speed burst; no death spawn.
+Burst protection preserves both response windows. From L5, wave 3 is 12–18 fast
+low-HP mice; total live pests never exceeds 16. Each map has two clearable bakery
+clutter targets, 216 HP and a visible fixed 12-coin reward, included in the 75%
+full-build economy budget; targeting is a replayed action, with no hidden tower.
+Verified clears award 3/2/1 stars for 8–10/4–7/1–3 bread and persist per-attempt
+stars for case-insensitive weekly best-per-level aggregation. V12 rejects old
+unfinished saves/runs. Replace the 300-second loss with a 1,200-second replay
+safety bound and resolve clears before the bound; retune regression pass-rate
+ceilings that previously counted timeout losses. Engine/server work only; UI
+integration contract is in `src/lib/td/README.md`.
+
+D181 validation clarification: retain the 75% full-build income cap and 70%
+spending guard for clears; a terminal swarm loss may hold less than one tier-2
+purchase while saving. Two base L1 pins can now finish at one bread (one star).
+The responsive L20 reference build relocates earned investment to a nearby
+pin/oven pair; passive late-level builds are not guaranteed a 20–30-second boss.
+See the engine README for the measured passive/reactive results and UI fields.

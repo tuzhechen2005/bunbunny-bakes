@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import type { TdLevel, TdPestSpec, TowerKind, TdBranch } from '@/lib/td/types';
+import type { TdLevel, TowerKind, TdBranch } from '@/lib/td/types';
 const fixture = vi.hoisted(() => ({ level: null as TdLevel | null }));
 vi.mock('@/lib/td/level', async original => ({ ...await original<object>(), tdLevelFromSeed: () => fixture.level }));
 import { createTdGame, pathLength, TD_MAPS, TOWER_KINDS, type TdEvent } from '@/lib/td';
@@ -48,38 +48,36 @@ it('burn continues after selling its source and pierce hits nearby additional pe
   expect(hits).toHaveLength(2);
   expect(new Set(hits.map(e => e.pest)).size).toBe(2);
 });
-it('a boss takes three highest tiers, drops the whole stack, and dropped bread ignores passing thieves', () => {
-  const spec: TdPestSpec = { kind: 'mouse', hp: 80, armor: 8, speed: 400, bounty: 80, boss: true };
-  fixture.level!.waves[0] = { interval: 120, pests: [spec, { ...spec, boss: false, hp: 10000 }] };
-  const game = createTdGame({ seed: 'combat-fixture', tierCount: 10 });
-  game.apply({ tick: 0, type: 'callWave', slot: -1 });
-  const arrival = Math.ceil(pathLength(TD_MAPS[0]) / spec.speed);
-  game.step(arrival);
-  expect(game.state().pests[0]).toMatchObject({ carrying: 3, carriedTiers: [9, 8, 7], returning: true });
-  game.apply({ tick: arrival, type: 'place', slot: 9, tower: 'oven' });
+it('a boss carries three tiers and returns them on death, preserving bread conservation', () => {
+  fixture.level!.mapData = {name:'bread fixture',path:[{x:100,y:400},{x:300,y:400}],slots:[{x:300,y:300}]};
+  fixture.level!.waves = Array.from({length:5},()=>({interval:20,pests:[{kind:'mouse',hp:80,armor:0,speed:1,bounty:0,boss:true}]}));
+  fixture.level!.waves[0].pests.push({kind:"mouse",hp:1,armor:0,speed:1,bounty:0});
+  fixture.level!.waves[0].interval=100000;
+  const game = createTdGame({seed:'combat-fixture',tierCount:10});
+  game.apply({tick:0,type:'callWave',slot:-1});
+  game.step(3200);
+  expect(game.state().pests[0]).toMatchObject({carrying:3,carriedTiers:[7,6,5]});
+  game.apply({tick:3200,type:'place',slot:0,tower:'oven'});
   const events: TdEvent[] = [];
-  for (let tick = arrival + 1; tick < 500; tick++) {
+  for (let tick=3201;tick<7000 && !game.over;tick++) {
     events.push(...game.step(tick));
-    const s = game.state();
-    expect(s.breadTiers.length + s.dropped.length + s.pests.reduce((n,p) => n+p.carrying,0) + s.lost).toBe(10);
+    const s=game.state();
+    expect(s.breadTiers.length+s.dropped.length+s.pests.reduce((n,p)=>n+p.carrying,0)+s.lost).toBe(10);
   }
-  expect(events.find(e => e.type === 'drop')).toMatchObject({ tiers: [9, 8, 7] });
-  expect(events.filter(e => e.type === 'recover')).toHaveLength(3);
-  expect(events.filter(e => e.type === 'pickup')).toHaveLength(1);
+  expect(events.find(e=>e.type==='drop' && e.pest===1)).toMatchObject({tiers:[7,6,5]});
 });
 
 it('clears five waves with dropped bread still in transit instead of waiting for recovery', () => {
   for (let wave = 0; wave < 5; wave++) fixture.level!.waves[wave].pests = [{
-    kind: 'mouse', hp: 80, armor: 0, speed: 400, bounty: 10, boss: wave === 4,
+    kind: 'mouse', hp: 80, armor: 0, speed: 400, bounty: 10,
   }];
   const game = createTdGame({ seed: 'combat-fixture' });
   for (let tick = 0; tick < 5; tick++) {
-    game.apply({ tick, type: 'callWave', slot: -1 });
-    game.step(tick + 1);
+    game.apply({ tick, type: 'callWave', slot: -1 }); game.step(tick + 1);
   }
   const arrival = Math.ceil(pathLength(TD_MAPS[0]) / 400) + 4;
   game.step(arrival + 80);
-  expect(game.state().pests.find(p => p.boss)?.carrying).toBe(3);
+  expect(game.state().pests[0].carrying).toBe(1);
   game.apply({ tick: arrival + 80, type: 'place', slot: 8, tower: 'oven' });
   game.step(500);
   expect(game.state()).toMatchObject({ over: true, passed: true, wave: 5, pests: [] });

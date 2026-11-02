@@ -3,7 +3,7 @@ import { towerStats, TOWER_KINDS } from "./balance";
 import { tdLevelFromSeed } from "./level";
 import { distanceSquared, pathLength, pathPosition, pathHeading, pestRoute } from "./maps";
 import {
-  FIELD_WIDTH, FIELD_HEIGHT, SUBUNITS, type TdCreamLine, type TdItem, type TdPoint,
+  tdStars, FIELD_WIDTH, FIELD_HEIGHT, SUBUNITS, type TdCreamLine, type TdItem, type TdPoint,
   BREAD_ROLL_SPEED, type TdDroppedBread,
   MAX_INPUTS, MAX_LEVEL_TICKS, PREP_TICKS, START_BREAD, WAVE_COUNT,
   type TdEvent, type TdGame, type TdInput, type TdOptions, type TdPest,
@@ -20,6 +20,7 @@ export function validTdInput(input: unknown): input is TdInput {
   if (!validTdTick(i.tick)) return false;
   const keys = Object.keys(input).sort().join(",");
   if (i.type === "callWave") return keys === "slot,tick,type" && i.slot === -1;
+  if (i.type === "target-clutter") return keys === "clutter,tick,type" && (i.clutter === null || Number.isSafeInteger(i.clutter) && i.clutter >= 0);
   if (i.type === "switch") return keys === "fork,tick,type" && Number.isSafeInteger(i.fork) && i.fork >= 0;
   if (i.type === "item") {
     if (i.item === "bell") return keys === "item,tick,type";
@@ -89,6 +90,8 @@ export function createTdGame(opts: TdOptions): TdGame {
   let pests: TdPest[] = [], projectiles: TdProjectile[] = [];
   let batterPuddles: TdBatterPuddle[] = [];
   const towers: TdTower[] = [];
+  const clutter = (level.clutter ?? []).map(c => ({...c}));
+  let targetClutter: number | null = null;
   const shotOwners = new Map<number, TdTower>();
   let dropped: TdDroppedBread[] = [], lost = 0, nextBread = 1;
   let events: TdEvent[] = [];
@@ -124,15 +127,31 @@ export function createTdGame(opts: TdOptions): TdGame {
     pest.slowed = slow > 0;
     return slow;
   };
+  const pendingMice: { parent: TdPest; count: number }[] = [];
+  const spawn = (spec: import("./types").TdPestSpec, parent?: TdPest) => {
+    const pest: TdPest = { ...spec, ...pathPosition(map, 0), phase: 0, telegraphUntil: 0, dashUntil: 0, phaseReadyTick: tick + (spec.boss ? 360 : 0),
+      inTunnel:false, onStrip:false, onJam:false, forkChoices:{...parent?.forkChoices}, slipped:[], slowUntil:0, slowStrength:0,
+      id: nextPest++, wave: parent?.wave ?? wave, distance: parent?.distance ?? 0, maxHp: spec.hp, slowed: false, heading: 0,
+      carrying: 0, carriedTiers: [], returning: false, frozenUntil: bellUntil, stunnedUntil: 0, floured: false,
+      burning: false, vulnerability: 0, burnUntil: 0, burnTick: 0, burnDamage: 0, burnTower: -1 };
+    syncPest(pest); pests.push(pest);
+    if (pest.boss) events.push({type:"bossSpawn",tick,pest:pest.id,wave});
+    events.push({type:"spawn",tick,pest:pest.id,kind:pest.kind,wave:pest.wave});
+    return pest;
+  };
   const hit = (pest: TdPest, shot: Pick<TdProjectile, "id" | "slot" | "damage" | "knockback" | "burn">) => {
-    if (pest.hp <= 0) return;
+    if (pest.hp <= 0 || pest.boss && tick < pest.telegraphUntil) return;
     const tower = shotOwners.get(shot.id);
     if (shot.id && tower?.kind === "rollingPin") {
       tower.hitCount++;
       if (tower.hitCount % 3 === 0) pest.stunnedUntil = tick + 24;
     }
     // Vulnerability applies after armor, including burn ticks; never stacks.
-    const damage = Math.min(pest.hp, Math.floor(Math.max(1, shot.damage - pest.armor) * (100 + pest.vulnerability) / 100));
+    let damage = Math.min(pest.hp, Math.floor(Math.max(1, shot.damage - pest.armor) * (100 + pest.vulnerability) / 100));
+    // A burst cannot skip a segment or erase its readable response window.
+    const threshold = pest.boss && pest.phase < 2 ? Math.ceil(pest.maxHp * (2 - pest.phase) / 3) : 0;
+    if (pest.boss) damage = Math.min(damage, Math.max(0, pest.hp - (tick < pest.phaseReadyTick ? threshold + 1 : threshold)));
+    if (pest.boss && pendingMice.some(p => p.parent.id === pest.id)) damage = Math.min(damage, Math.max(0, pest.hp - 1));
     if (shot.burn) {
       pest.burnUntil = tick + 180;
       if (!pest.burning) pest.burnTick = tick + 30;
@@ -140,6 +159,13 @@ export function createTdGame(opts: TdOptions): TdGame {
       pest.burnTower = shot.slot; pest.burning = true;
     }
     pest.hp -= damage;
+    if (pest.boss && pest.phase < 2 && pest.hp === threshold) {
+      pest.phase++;
+      pest.telegraphUntil = tick + 48; pest.dashUntil = tick + 72;
+      pest.phaseReadyTick = tick + (pest.phase === 1 ? 480 : 360);
+      pendingMice.push({parent: {...pest, forkChoices:{...pest.forkChoices}}, count: 5});
+      events.push({type:"bossPhase",tick,pest:pest.id,phase:pest.phase,telegraphUntil:pest.telegraphUntil,dashUntil:pest.dashUntil,mice:5});
+    }
     events.push({ type: "hit", tick, projectile: shot.id, pest: pest.id, tower: shot.slot, damage });
     if (pest.hp === 0) {
       if (pest.burning) {
@@ -175,25 +201,27 @@ export function createTdGame(opts: TdOptions): TdGame {
     sifters = combat.filter(({ tower }) => tower.kind === "flourSifter");
     while (!over && tick < toTick) {
       tick++;
-      // Timeout wins all ties; spawn exits resolve before damage.
-      if (tick - startedTick === MAX_LEVEL_TICKS) { finish("timeout"); break; }
+      // Resolve combat and a clear before the replay safety deadline.
       if (nextWaveTick !== null && tick >= nextWaveTick) startWave(false);
       // Delay arrivals while control effects or overlapping waves fill the road.
       // Pending spawns retain their order and resume when a space opens.
       if (spawnTick !== null && tick >= spawnTick
-        && pests.length < (level.waves[wave - 1].maxLivePests ?? Infinity)) {
+        && pests.length < Math.min(16, level.waves[wave - 1].maxLivePests ?? 16)
+        && (!level.waves[wave - 1].pests[spawnIndex].boss || pests.length === 0)) {
         const spec = level.waves[wave - 1].pests[spawnIndex++];
-        const pest: TdPest = { ...spec, ...pathPosition(map, 0), inTunnel:false, onStrip:false, onJam:false, forkChoices:{}, slipped:[], slowUntil:0, slowStrength:0, id: nextPest++, wave, distance: 0, maxHp: spec.hp, slowed: false, heading: pathHeading(map, 0), carrying: 0, carriedTiers: [], returning: false, frozenUntil: bellUntil, stunnedUntil: 0, floured: false, burning: false, vulnerability: 0, burnUntil: 0, burnTick: 0, burnDamage: 0, burnTower: -1 };
-        syncPest(pest);
-        pests.push(pest);
-        if (pest.boss) events.push({ type: "bossSpawn", tick, pest: pest.id, wave });
-        events.push({ type: "spawn", tick, pest: pest.id, kind: pest.kind, wave });
+        const pest = spawn(spec);
+        if (pest.boss) pendingMice.push({parent: {...pest}, count: 2});
         if (spawnIndex === level.waves[wave - 1].pests.length) {
           spawnTick = null;
           if (wave < WAVE_COUNT) nextWaveTick = tick + PREP_TICKS;
         } else spawnTick = tick + level.waves[wave - 1].interval;
       }
 
+      while (pendingMice.length && pests.length < 16) {
+        const pending = pendingMice[0];
+        spawn({kind:"mouse",tiny:true,hp:42 + Math.min(80, (level.number-1)*2),speed:64,bounty:0,armor:0},pending.parent);
+        if (--pending.count === 0) pendingMice.shift();
+      }
       for (const bread of dropped) {
         bread.distance = Math.min(end, bread.distance + BREAD_ROLL_SPEED);
         const route = pestRoute(map,bread.distance,bread.forkChoices);
@@ -212,7 +240,7 @@ export function createTdGame(opts: TdOptions): TdGame {
         // Grounded birds use the mouse species speed ratio before slowing.
         const baseSpeed = pest.kind === "sparrow" && pest.floured ? Math.floor(pest.speed * 34 / 56) : pest.speed;
         const route = pestRoute(map, pest.distance, pest.forkChoices);
-        const speed = pest.stunnedUntil > tick || pest.frozenUntil > tick ? 0 : Math.max(1, Math.floor(baseSpeed * (100 - slow) * (pest.carrying ? 80 : 100) * (pest.onStrip ? 160 : pest.onJam ? 60 : 100) * route.scale / 1000000000));
+        const speed = pest.telegraphUntil > tick || pest.stunnedUntil > tick || pest.frozenUntil > tick ? 0 : Math.max(1, Math.floor(baseSpeed * (pest.dashUntil > tick ? 2 : 1) * (100 - slow) * (pest.carrying ? 80 : 100) * (pest.onStrip ? 160 : pest.onJam ? 60 : 100) * route.scale / 1000000000));
         const previous = pest.distance;
         pest.distance = Math.max(0, Math.min(end, pest.distance + (pest.returning ? -speed : speed)));
         let traversed = pest.distance, teleported = false;
@@ -286,6 +314,17 @@ export function createTdGame(opts: TdOptions): TdGame {
       // Stable slot order, then furthest path progress, then oldest pest id.
       for (const { tower, stats } of combat) {
         if (tower.kind === "flourSifter" || tower.readyTick > tick) continue;
+        const selected = clutter.find(c => c.id === targetClutter && c.hp > 0 && distanceSquared(c,tower) <= stats.range ** 2);
+        if (selected && stats.damage > 0) {
+          const damage = Math.min(selected.hp, stats.damage * stats.strikes);
+          selected.hp -= damage; tower.target = null; tower.lastAttackTick = tick; tower.readyTick = tick + stats.cooldown;
+          events.push({type:"clutterHit",tick,clutter:selected.id,slot:tower.slot,damage});
+          if (!selected.hp) {
+            coins += selected.reward; targetClutter = null;
+            events.push({type:"clutterCleared",tick,clutter:selected.id,reward:selected.reward});
+          }
+          continue;
+        }
         let target: TdPest | undefined;
         for (const pest of pests) if (pest.hp > 0 && !pest.inTunnel && (tower.kind !== "whisk" || pest.kind !== "sparrow" || pest.floured) && distanceSquared(tower, pest) <= stats.range ** 2
           && (!target || pest.distance > target.distance || (pest.distance === target.distance && pest.id < target.id))) target = pest;
@@ -317,11 +356,13 @@ export function createTdGame(opts: TdOptions): TdGame {
         events.push({ type: "shot", tick, projectile: shot.id, slot: tower.slot, target: target.id });
       }
       pests = pests.filter(p => p.hp > 0);
-      if (wave === WAVE_COUNT && spawnTick === null && !pests.length) finish("cleared");
+      if (wave === WAVE_COUNT && spawnTick === null && !pests.length && !pendingMice.length) finish("cleared");
+      if (!over && tick - startedTick >= MAX_LEVEL_TICKS) finish("timeout");
     }
   };
   const cloneEvents = () => events.map(e => ("tiers" in e ? { ...e, tiers: [...e.tiers] } : { ...e }));
   const state = (): TdState => ({
+    stars: tdStars(START_BREAD - lost, passed), clutter: clutter.map(c => ({...c})), targetClutter,
     mapData: map, unlockedTowers:[...level.unlockedTowers], newlyUnlocked:[...level.newlyUnlocked],
     itemsUsed:{...itemsUsed}, switches:{...switches}, creamLines:structuredClone(creamLines),
     tick, seed: level.seed, level: level.number, map: level.map, coins,
@@ -353,6 +394,9 @@ export function createTdGame(opts: TdOptions): TdGame {
       if (input.type === "callWave") {
         if (startedTick !== null && nextWaveTick === null) return reject();
         startWave(true);
+      } else if (input.type === 'target-clutter') {
+        if (input.clutter !== null && !clutter.some(c => c.id === input.clutter && c.hp > 0)) return reject();
+        targetClutter = input.clutter;
       } else if (input.type === 'switch') {
         if (!(input.fork in switches)) return reject();
         switches[input.fork] = 1-switches[input.fork];

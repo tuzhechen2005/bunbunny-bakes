@@ -25,7 +25,7 @@ afterEach(() => {vi.useRealTimers();vi.unstubAllEnvs();});
 afterAll(async () => {await db.$disconnect();await prisma.$disconnect();});
 it('migrates TD without changing BIG defaults; deals common levels, gates case-insensitive identity and resets weekly', async () => {
   const legacy = await db.gameRun.create({data:{seed:'old',wechatId:'old',nickname:'old',tiersSnapshot:[]}});
-  expect(legacy.game).toBe('BIG');
+  expect(legacy.game).toBe('BIG'); expect(legacy.tdStars).toBeNull();
   await db.inventory.create({data:{wechatIdNorm:'alice',item:'bell',count:2}});
   const a = await start(' alice '), b = await start('bob');
   expect(a.unlockedTowers).toEqual(['rollingPin']); expect(a.newlyUnlocked).toEqual(['rollingPin']); expect(a.mapData.slots).toHaveLength(3);
@@ -103,7 +103,7 @@ it('routes expose masked boards, enforce body limits/versions/expiry and allow d
   const board = await (await boardGET(getRequest('/api/game/td/leaderboard?wechatId=WX_ROUTE'))).json();
   expect(board).toMatchObject({nextLevel:2,myBest:1,top:[{score:1,wechatMasked:'wx***te'}]});
   expect((await finishPOST(jsonRequest('/api/game/td/finish',{padding:'x'.repeat(TD_MAX_FINISH_BODY_BYTES)}))).status).toBe(422);
-  for (const version of [8, 9, 10]) {
+  for (const version of [8, 9, 10, 11]) {
     const bad = await start(`old_v${version}`);await db.gameRun.update({where:{id:bad.runId},data:{seed:`v${version}.td.2026-10-19.1`}});
     await expect(finish(bad)).rejects.toMatchObject({message:copy.gameApi.runExpired});
     await expect(progressRun(db,'TD',{runId:bad.runId,log:[],endTick:60},LATER)).rejects.toMatchObject({message:copy.gameApi.runExpired});
@@ -182,4 +182,19 @@ it('verifies shop items against the live inventory and spends them once on finis
   await send(r.id);
   expect((await db.inventory.findFirstOrThrow()).count).toBe(0);
   await expect(send((await run2()).id)).rejects.toMatchObject({code:'VALIDATION'}); // spent
+});
+
+it('stores replay-derived stars once and returns weekly case-insensitive best stars', async () => {
+  const r = await start('alice');
+  const result = await finish(r);
+  expect(result.stars).toBe(win.state.stars);
+  expect(result.bestStars).toEqual({1:win.state.stars});
+  expect((await getTdLeaderboard(db,LATER,' ALICE ')).bestStars).toEqual(result.bestStars);
+  expect((await getTdLeaderboard(db,new Date('2026-10-26T06:00:00Z'),'alice')).bestStars).toEqual({});
+  const retry=await start('ALICE',1);
+  const inputs:TdInput[]=[{tick:0,type:'callWave',slot:-1}];
+  const loss=replayTd({seed:retry.seed},inputs);
+  const failed=await finishTdRun(db,{runId:retry.runId,inputs,endTick:loss.tick,stars:3},'ip',LATER);
+  expect(failed.stars).toBe(0);expect(failed.bestStars).toEqual(result.bestStars);
+  expect(await finish(r)).toEqual(result);
 });
