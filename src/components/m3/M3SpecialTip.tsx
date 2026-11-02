@@ -62,7 +62,7 @@ export function M3KindHint({ level, tierCount, started }: { level: number; tierC
     }, 0);
     return () => clearTimeout(id);
   }, [adds, started, tierCount]);
-  return <div className="m3-special-tip-region" role="status" aria-live="polite" aria-atomic="true">
-    {shown && !started && <p className="m3-special-tip m3-kind-hint" data-testid="m3-kind-hint">{copy.customer.m3.newKindHint}</p>}
-  </div>;
+  // In flow (the line keeps its height after the first move), so it never covers the orders or the board.
+  if (!shown) return null;
+  return <p className="m3-kind-hint" role="status" data-testid="m3-kind-hint" data-hidden={started || undefined}>{copy.customer.m3.newKindHint}</p>;
 }

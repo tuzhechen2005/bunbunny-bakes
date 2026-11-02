@@ -213,9 +213,9 @@ export function M3Board({ level, rules, tiers, seed, initialMoves = [], soundOn,
         </div>
       </div>)}
     </div>
+    {level && rules && <M3KindHint level={level} tierCount={rules.tierCount} started={busy || snap.movesLeft < rules.moves} />}
     <div className="m3-board-wrap">
       <M3SpecialTip board={view.board} />
-      {level && rules && <M3KindHint level={level} tierCount={rules.tierCount} started={busy || snap.movesLeft < rules.moves} />}
       <div ref={board} className={`m3-board ${event?.type === "shuffle" ? "m3-shuffle" : ""}`} role="group" aria-label={t.boardLabel} aria-busy={busy} data-testid="m3-board">
         {view.board.flatMap((row, r) => row.map((code, c) => {
           const p = { r, c };

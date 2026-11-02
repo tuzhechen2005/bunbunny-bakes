@@ -1,5 +1,8 @@
 // S9: weekly levels, replayed HUD, autosave and both result actions. No browser run in S9.
+import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
+import { fill } from "../../src/components/customer/format";
+import { screensDir } from "./support/screensDir";
 import { copy } from "../../src/copy";
 import { createM3Game, m3Level, m3LevelWitness, replayM3, legalM3Moves, type M3Move } from "../../src/lib/m3";
 import { createRng } from "../../src/lib/game/rng";
@@ -141,10 +144,34 @@ for (const width of [320, 390]) {
       await expect(page.getByTestId("m3-moves")).toHaveText("0");
       await expect(page.getByTestId("m3-over-sheet")).toContainText(t.fail);
       await expect(page.getByTestId("m3-again")).toHaveText(t.retry);
+      // D184: a failed level shows how far it was from the target.
+      const rules = definition(1), lost = replayM3(rules.seed, TIERS.slice(0, rules.tierCount), api.finishes[0].moves, rules);
+      await expect(page.getByTestId("m3-gap")).toContainText(fill(t.gapPoints, { n: String(rules.target - lost.score) }));
+      await page.screenshot({ path: path.join(screensDir(), `ui-small-m3-gap-${width}.png`) });
       await page.getByTestId("m3-again").click();
       await expect(page.getByTestId("m3-level")).toHaveText("第 1 关");
       await expect(page.getByTestId("m3-score")).toHaveText("0");
       expect(api.starts.at(-1)?.level).toBe(1);
+    });
+    test("D184: the first level with a new bread kind says so once, until the first move", async ({ page }) => {
+      await mockApi(page);
+      const rules = definition(7);
+      const save = { v: 1, level: 7, weekKey: WEEK, runId: "run-seed7", seed: rules.seed, tiers: TIERS.slice(0, rules.tierCount), moves: [], nickname: "小面包", expiresAt: "2099-01-01T00:00:00Z", score: 0 };
+      const resume = async () => {
+        await page.evaluate(([key, value]) => localStorage.setItem(key as string, JSON.stringify(value)), [M3_SAVE_KEY, save]);
+        await page.reload();
+        await page.getByTestId("m3-resume").click();
+        await expect(page.getByTestId("m3-level")).toHaveText("第 7 关");
+      };
+      await page.goto("/game/m3");
+      await resume();
+      await expect(page.getByTestId("m3-kind-hint")).toHaveText(t.newKindHint);
+      await page.screenshot({ path: path.join(screensDir(), `ui-small-m3-new-kind-${width}.png`) });
+      await play(page, [legalM3Moves(createM3Game({ ...rules, tiers: TIERS.slice(0, rules.tierCount) }).state())[0] as M3Move]);
+      await expect(page.getByTestId("m3-kind-hint")).toHaveAttribute("data-hidden", "true");
+      await resume();
+      await expect(page.getByTestId("m3-board")).toBeVisible();
+      await expect(page.getByTestId("m3-kind-hint")).toHaveCount(0);
     });
     test("discards old v2 saves gracefully and keeps prize/menu copy minimal", async ({ page }) => {
       await mockApi(page);

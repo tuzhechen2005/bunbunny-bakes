@@ -390,7 +390,8 @@ test("D184: after an oven is cleared 收工 and 继续挑战 appear in the empty
   const board = (await page.getByTestId("tu-board").boundingBox())!;
   expect(box.y).toBeGreaterThanOrEqual(board.y + board.height - 1);
   await page.screenshot({ path: path.join(screensDir(), "ui-small-tu-offer.png") });
-  await page.getByTestId("tu-stop").click();
+  // The Next dev indicator (not in production) sits over the bottom-left corner: dispatch the click.
+  await page.getByTestId("tu-stop").dispatchEvent("click");
   await expect(page.getByTestId("tu-over-sheet")).toBeVisible();
   await expect(page.getByTestId("tu-over-sheet")).toContainText(t.stopped);
   await expect(page.getByTestId("tu-bonus")).toHaveText(fill(t.bonus, { n: String(bonus) }));
@@ -406,7 +407,7 @@ test("D184: 继续挑战 hides the offer and play goes on; a tile tap also close
   const api = await mockApi(page);
   const bot = await clearFirstOven(page);
   await expect(page.getByTestId("tu-offer")).toBeVisible();
-  await page.getByTestId("tu-continue").click();
+  await page.getByTestId("tu-continue").dispatchEvent("click");
   await expect(page.getByTestId("tu-offer")).toHaveCount(0);
   await expect(page.getByTestId("tu-over-sheet")).toHaveCount(0);
   const free = page.locator('[data-testid^="tu-tile-"][data-free="true"]').first();
