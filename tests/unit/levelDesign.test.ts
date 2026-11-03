@@ -30,7 +30,7 @@ it('introduces ants, mice, mixed groups, air immunity, then armor in separate le
     expect([...new Set(level.waves.flatMap(w=>w.pests.filter(p=>!p.boss).map(p=>p.kind)))].sort()).toEqual([...kinds].sort());
     expect(level.waves.flatMap(w=>w.pests).filter(p=>p.boss)).toHaveLength(1);
     expect(level.waves[4].pests.at(-1)?.boss).toBe(true);
-    expect(level.waves[4].pests.at(-1)!.hp).toBe([875, 1517, 1904, 3264, 3850][i]);
+    expect(level.waves[4].pests.at(-1)!.hp).toBe([400, 520, 640, 1140, 3080][i]);
     expect(level.waves[4].pests.at(-1)!.armor).toBe(i === 0 ? 0 : i < 3 ? 4 : 8);
     expect(level.waves[3].interval).toBeGreaterThanOrEqual(level.waves[2].interval);
     expect(level.waves[3].pests.length).toBeLessThan(level.waves[2].pests.length);

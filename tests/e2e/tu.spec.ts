@@ -17,7 +17,7 @@ const g = copy.customer.game;
 const PHOTO = readFileSync("tests/fixtures/bun.jpg");
 const MOCK_PHOTO = /\/api\/images\/mock\/|%2Fapi%2Fimages%2Fmock%2F/;
 const TU_SAVE_KEY = `bb_tu_save_v${TU_ENGINE_VERSION}`;
-const SEED = "seed-tu-e2e";
+const SEED = "v6.e2e0";
 
 const COLORS = ["#DCC5BB", "#F0BF45", "#CFDDEA", "#B05219", "#C9D8B6", "#E8B4B8", "#D9C7E8", "#F2E3B3"];
 const NAMES = ["奶酥红豆包", "岩烧乳酪包", "肉松包", "可颂", "吐司", "菠萝包", "蛋挞", "泡芙"];

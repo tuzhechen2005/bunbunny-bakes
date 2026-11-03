@@ -31,9 +31,10 @@ it("benchmarks full server verification of a long BIG run and a valid 20000-entr
   const runId = "11111111-1111-4111-8111-111111111111";
   const body = { runId, drops: bot.log };
   measure(`BIG drops=${bot.log.length} steps=${bot.steps}`, () => verifyBigRun(run, parseGameInput(finishSchema, body), now).score);
+  // A 20000-entry log needs the uncapped v5 rules (v6 ends after 12 ovens); v5 runs stay verifiable (D189).
   const tuTiers = [{ id: "a" }, { id: "b" }];
-  const tu = randomTu(tuSeed("two"), tuTiers);
+  const tu = randomTu("v5.2fe0", tuTiers);
   expect(tu.taps).toHaveLength(20_000);
-  const tuRun = { seed: tuSeed("two"), tiersSnapshot: tuTiers, startedAt } as unknown as GameRun;
+  const tuRun = { seed: "v5.2fe0", tiersSnapshot: tuTiers, startedAt } as unknown as GameRun;
   measure("TU entries=20000", () => verifyTuRun(tuRun, parseGameInput(tuFinishSchema, { runId, taps: tu.taps }), now).score);
 }, 30_000);
