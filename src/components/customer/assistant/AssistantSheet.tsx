@@ -5,11 +5,12 @@ import { Sheet, type SheetHandle } from "@/components/ui/Sheet";
 import { focusRing } from "@/components/ui/focus";
 import { copy } from "@/copy";
 import { dayLabel } from "@/domain/dates";
-import type { MenuProduct } from "@/lib/api";
+import type { Fulfillment, MenuProduct } from "@/lib/api";
 import { ASSISTANT_MAX_CHARS, type AssistantSuggestion } from "@/lib/assistant";
 import { CloseIcon } from "../bag/icons";
 import { cartLineName, fill } from "../format";
 import { IridescentOrb } from "./IridescentOrb";
+import { OrderCard } from "./OrderCard";
 
 const t = copy.customer.assistant;
 
@@ -25,6 +26,7 @@ export interface AssistantSheetProps {
   limited: boolean;
   hasCart: boolean;
   products: readonly MenuProduct[];
+  fulfillment?: Fulfillment;
   onSend: (text: string) => void;
   onApply: (s: AssistantSuggestion, from: DOMRect | null) => void;
   onClosed: () => void;
@@ -34,17 +36,25 @@ function SuggestionCard({
   s,
   products,
   hasCart,
+  fulfillment,
   onApply,
 }: {
   s: AssistantSuggestion;
   products: readonly MenuProduct[];
   hasCart: boolean;
+  /** The page's choice (checkout); the home page has none: 自提. */
+  fulfillment: Fulfillment;
   onApply: (rect: DOMRect | null) => void;
 }) {
   const [asking, setAsking] = useState(false);
   const byId = new Map(products.map((p) => [p.id, p]));
   const lines = s.items.filter((i) => byId.get(i.productId)?.status === "ACTIVE");
   if (lines.length === 0) return null;
+  // Only an order the server could take as is: every flavoured line names one of its active flavours.
+  const orderable = lines.every((i) => {
+    const fl = byId.get(i.productId)?.flavors ?? [];
+    return fl.length === 0 || fl.some((f) => f.id === (i as { flavorId?: string | null }).flavorId);
+  });
   const date = s.date && /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? dayLabel(s.date) : null;
   const apply = (e: { currentTarget: HTMLElement }) => onApply(e.currentTarget.getBoundingClientRect());
   const btn = `flex h-11 items-center justify-center rounded-full px-5 text-[15px] font-bold ${focusRing}`;
@@ -69,6 +79,14 @@ function SuggestionCard({
             </button>
           </div>
         </div>
+      ) : orderable && s.date ? (
+        // D191: with a date the card can place the order itself, on the customer's tap only.
+        <OrderCard
+          lines={lines}
+          date={s.date}
+          initialFulfillment={s.fulfillment ?? fulfillment}
+          onBag={(e) => (hasCart ? setAsking(true) : apply(e))}
+        />
       ) : (
         <button
           type="button"
@@ -84,7 +102,7 @@ function SuggestionCard({
 }
 
 /** The 小小🐰 bottom sheet: opener line, chips, messages, input. Uses the shared Sheet. */
-export function AssistantSheet({ rows, waiting, limited, hasCart, products, onSend, onApply, onClosed }: AssistantSheetProps) {
+export function AssistantSheet({ rows, waiting, limited, hasCart, products, fulfillment = "PICKUP", onSend, onApply, onClosed }: AssistantSheetProps) {
   const sheetRef = useRef<SheetHandle>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -200,6 +218,7 @@ export function AssistantSheet({ rows, waiting, limited, hasCart, products, onSe
                     s={r.suggestion}
                     products={products}
                     hasCart={hasCart}
+                    fulfillment={fulfillment}
                     onApply={(rect) => {
                       onApply(r.suggestion!, rect);
                       sheetRef.current?.close();

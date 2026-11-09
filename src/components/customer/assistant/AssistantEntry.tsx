@@ -202,6 +202,7 @@ export function AssistantEntry({ mode, products, maxQty, fulfillment, suppressed
           limited={limited}
           hasCart={items.length > 0}
           products={products}
+          fulfillment={fulfillment}
           onSend={send}
           onApply={apply}
           onClosed={() => {

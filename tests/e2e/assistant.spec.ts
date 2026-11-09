@@ -230,6 +230,58 @@ test.describe("assistant", () => {
     await expect(page.getByTestId("date-card").nth(1)).toHaveAttribute("aria-pressed", "true");
   });
 
+  test("D191: the card places the order only on the customer's tap, with the WeChat ID typed on the card", async ({ page }) => {
+    const asked: string[] = [];
+    await page.route("**/api/assistant", (route) => {
+      asked.push(route.request().postData() ?? "");
+      return route.fulfill({ json: { ...SUGGESTION, suggestion: { ...SUGGESTION.suggestion, fulfillment: "DELIVERY" } } });
+    });
+    const posted: Record<string, unknown>[] = [];
+    await page.route("**/api/orders", (route) => {
+      posted.push(route.request().postDataJSON());
+      return route.fulfill({ status: 201, json: { orderNo: "1105-001", viewToken: "tok-ai", url: "/o/tok-ai" } });
+    });
+    await page.route("**/api/o/tok-ai", (route) => route.fulfill({ status: 404, json: { error: "NOT_FOUND", message: "x" } }));
+    await openHome(page);
+    await scrollToList(page);
+    await page.getByTestId("assistant-entry").click();
+    await page.getByRole("button", { name: "泡芙怎么订" }).click();
+    const order = page.getByTestId("assistant-order");
+    await expect(order.getByTestId("assistant-delivery")).toHaveAttribute("aria-pressed", "true");
+    await expect(order.getByTestId("assistant-total")).toContainText("$9.00");
+    await order.getByTestId("assistant-place").click();
+    await expect(order.getByTestId("assistant-order-error")).toHaveText("请填写你的微信号");
+    expect(posted).toHaveLength(0);
+    await order.getByTestId("assistant-pickup").click();
+    await order.getByTestId("assistant-wechat").fill("  bunny_fan  ");
+    await order.getByTestId("assistant-place").click();
+    await expect(page).toHaveURL(/\/o\/tok-ai\?new=1/);
+    expect(posted).toHaveLength(1);
+    expect(posted[0]).toMatchObject({
+      items: [{ productId: "nj", qty: 2 }, { productId: "hd", qty: 1 }],
+      pickupDate: "2026-11-05",
+      fulfillment: "PICKUP",
+      wechatId: "bunny_fan",
+    });
+    // The WeChat ID never went to the assistant.
+    expect(asked.join("")).not.toContain("bunny_fan");
+  });
+
+  test("D191: a date that is no longer open shows why and keeps only 先放进纸袋", async ({ page }) => {
+    await page.route("**/api/assistant", (route) =>
+      route.fulfill({ json: { ...SUGGESTION, suggestion: { ...SUGGESTION.suggestion, date: "2026-11-06" } } }),
+    );
+    await openHome(page);
+    await scrollToList(page);
+    await page.getByTestId("assistant-entry").click();
+    await page.getByRole("button", { name: "泡芙怎么订" }).click();
+    const order = page.getByTestId("assistant-order");
+    await expect(order.getByTestId("assistant-order-closed")).toBeVisible();
+    await expect(order.getByTestId("assistant-place")).toHaveCount(0);
+    await expect(order.getByTestId("assistant-wechat")).toHaveCount(0);
+    await expect(order.getByTestId("assistant-apply")).toBeVisible();
+  });
+
   test("429 and 503 show the owner's lines; 429 locks the input", async ({ page }) => {
     let status = 429;
     await page.route("**/api/assistant", (route) =>

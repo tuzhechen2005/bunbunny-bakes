@@ -12,6 +12,8 @@ export interface AssistantSuggestion {
   items: CartItem[];
   date: string | null;
   note: string;
+  /** D191: what the customer asked for; the order card preselects it. */
+  fulfillment?: Fulfillment;
 }
 
 export interface AssistantRequest {

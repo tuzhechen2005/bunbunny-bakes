@@ -257,6 +257,10 @@ export const copy = {
       /** e.g. "取货 11/5 周四" */
       dateLine: "取货 {date}",
       apply: "放进纸袋",
+      /** D191 order card: the place button (total follows), the bag fallback, the WeChat input. */
+      placeOrder: "确认下单",
+      orBag: "先放进纸袋",
+      wechatPlaceholder: "你的微信号（店主会加你确认）",
       replaceAsk: "替换纸袋里的面包？",
       replaceYes: "替换",
       replaceNo: "不用了",
