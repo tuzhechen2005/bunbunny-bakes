@@ -280,6 +280,27 @@ describe("F1 flavour lines", () => {
     ]));
     const store = createCartStore(() => s);
     expect(store.getItems()).toEqual([{ productId: "puff", flavorId: "matcha", qty: 3 }, { productId: "puff", qty: 1 }]);
-    expect(parseLineKey("puff::matcha")).toEqual({ productId: "puff", flavorId: "matcha" });
+    expect(parseLineKey("puff::matcha")).toEqual({ productId: "puff", flavorId: "matcha", stockLotId: null });
+  });
+});
+
+describe("D194 现货 lines", () => {
+  it("a stock line keeps its lot, has its own key and never merges with the preorder line", () => {
+    const s = memoryStorage();
+    s.setItem(CART_STORAGE_KEY, JSON.stringify([
+      { productId: "bread", qty: 1 },
+      { productId: "bread", qty: 2, stockLotId: "lot-1" },
+      { productId: "bread", qty: 1, stockLotId: "lot-1" },
+      { productId: "puff", flavorId: "matcha", qty: 1, stockLotId: "lot-2" },
+    ]));
+    const store = createCartStore(() => s);
+    expect(store.getItems()).toEqual([
+      { productId: "bread", qty: 1 },
+      { productId: "bread", qty: 3, stockLotId: "lot-1" },
+      { productId: "puff", flavorId: "matcha", qty: 1, stockLotId: "lot-2" },
+    ]);
+    expect(lineKey({ productId: "puff", flavorId: "matcha", stockLotId: "lot-2" })).toBe("puff::matcha@@lot-2");
+    expect(parseLineKey("puff::matcha@@lot-2")).toEqual({ productId: "puff", flavorId: "matcha", stockLotId: "lot-2" });
+    expect(parseLineKey("bread@@lot-1")).toEqual({ productId: "bread", flavorId: null, stockLotId: "lot-1" });
   });
 });
