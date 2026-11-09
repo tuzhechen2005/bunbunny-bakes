@@ -13,6 +13,7 @@ import type { LocalDate } from "@/domain/types";
 import type { Prisma } from "@/generated/prisma/client";
 import type { DbClient } from "./db";
 import { fromDbDate, toDbDate } from "./dbDates";
+import { loadPoolReservations } from "./day";
 import { enqueueNotification } from "./outbox";
 
 export type SummaryJobResult =
@@ -40,7 +41,7 @@ export async function loadDailySummary(client: DbClient, now: Date): Promise<Dai
         pickupDate: true,
         status: true,
         fulfillment: true,
-        items: { select: { productId: true, flavorId: true, flavorName: true, qty: true }, orderBy: { id: "asc" } },
+        items: { select: { productId: true, flavorId: true, flavorName: true, stockLotId: true, qty: true }, orderBy: { id: "asc" } },
       },
       orderBy: { seq: "asc" },
     }),
@@ -60,6 +61,7 @@ export async function loadDailySummary(client: DbClient, now: Date): Promise<Dai
       leadDays: p.leadDays,
       name: p.name,
       sortOrder: p.sortOrder,
+      ...(p.saleMode === "GROUP" ? {saleMode:p.saleMode,groupMin:p.groupMin} : {}),
       batchYield: p.batchYield,
       unitLabel: p.unitLabel,
     };
@@ -79,7 +81,7 @@ export async function loadDailySummary(client: DbClient, now: Date): Promise<Dai
       wechatId: o.wechatId,
       status: o.status,
       fulfillment: o.fulfillment,
-      items: o.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, flavorName: i.flavorName, qty: i.qty })),
+      items: o.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, flavorName: i.flavorName, ...(i.stockLotId ? {stockLotId:i.stockLotId} : {}), qty: i.qty })),
     });
     ordersByDate.set(date, list);
   }
@@ -100,6 +102,7 @@ export async function loadDailySummary(client: DbClient, now: Date): Promise<Dai
       date,
       isOpen: row?.isOpen ?? false,
       limits: {
+        poolReservations: await loadPoolReservations(client, date),
         doughLimitG: row?.doughLimitG ?? settings.defaultDoughLimitG,
         deliveryEnabled: row?.deliveryEnabled ?? true,
         deliveryLimit: row?.deliveryLimit ?? settings.defaultDeliveryLimit,

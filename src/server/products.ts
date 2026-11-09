@@ -71,6 +71,8 @@ const shape = {
   unitPriceCents: intIn(0, MAX_CENTS),
   bundleSize: intIn(1, 1000),
   bundlePriceCents: intIn(0, MAX_CENTS).nullable(),
+  saleMode: z.enum(["NORMAL", "GROUP"]),
+  groupMin: intIn(1, 1000).nullable(),
   capacityMode: z.enum(CAPACITY_MODES),
   doughG: intIn(1, 100_000).nullable(),
   roundG: intIn(1, 100_000).nullable(),
@@ -99,6 +101,7 @@ const CAPACITY_FIELDS = ["doughG", "roundG", "piecesPerRound", "dailyLimit"] as 
 const fullSchema = z
   .object(shape)
   .superRefine((v, ctx) => {
+    if (v.saleMode === "GROUP" && (v.capacityMode !== "INDEPENDENT" || !v.batchYield || !v.groupMin || v.groupMin > v.batchYield)) ctx.addIssue({ code: "custom", path: ["groupMin"], message: "GROUP requires independent capacity and 1 <= groupMin <= batchYield" });
     for (const field of MODE_FIELDS[v.capacityMode]) {
       if (v[field] === null) ctx.addIssue({ code: "custom", path: [field], message: "Required for this mode" });
     }
@@ -114,6 +117,8 @@ const fullSchema = z
 const createSchema = z
   .object({ ...shape, isNew: z.boolean().optional() })
   .partial({
+    saleMode: true,
+    groupMin: true,
     unitLabel: true,
     description: true,
     bundleSize: true,
@@ -138,7 +143,7 @@ export type ProductPatchInput = z.input<typeof patchSchema>;
 
 export const reorderSchema = z.object({ ids: z.array(z.uuid()).min(1).max(500) }).strict();
 
-const CAPACITY_KEYS = ["capacityMode", "doughG", "roundG", "piecesPerRound", "dailyLimit"] as const;
+const CAPACITY_KEYS = ["saleMode", "batchYield", "capacityMode", "doughG", "roundG", "piecesPerRound", "dailyLimit"] as const;
 
 export type OverLimitKind = "DOUGH" | "PRODUCT" | "DELIVERY" | "FLAVOR";
 export interface OverLimitDate {
@@ -148,6 +153,8 @@ export interface OverLimitDate {
 
 function pickFields(p: Product): Fields {
   return {
+    saleMode: p.saleMode,
+    groupMin: p.groupMin,
     name: p.name,
     unitLabel: p.unitLabel,
     description: p.description,
@@ -193,6 +200,8 @@ export async function createProduct(db: DbClient, input: unknown, now: Date): Pr
   // Validate before opening a transaction; sortOrder is filled in inside it.
   const fields = parseOrThrow(fullSchema, {
     ...data,
+    saleMode: data.saleMode ?? "NORMAL",
+    groupMin: data.groupMin ?? null,
     unitLabel: data.unitLabel ?? "个",
     description: data.description ?? "",
     bundleSize: data.bundleSize ?? 4,
@@ -245,6 +254,14 @@ export async function updateProduct(
   if (!z.uuid().safeParse(id).success) throw productNotFound();
 
   return db.$transaction(async (tx) => {
+    // Match order lock ordering: today/future dates first when capacity changes, then the product.
+    // A concurrently added date with no orders needs no grandfathering.
+    const head = await tx.product.findUnique({ where: { id } });
+    if (!head) throw productNotFound();
+    const preview = parseOrThrow(fullSchema, { ...pickFields(head), ...patch });
+    const locksDates = CAPACITY_KEYS.some(k => !sameValue(preview[k], head[k]));
+    const dates = locksDates ? await tx.openDate.findMany({ where: { date: { gte: toDbDate(localDateOf(now)) } }, orderBy: { date: "asc" }, select: { date: true } }) : [];
+    for (const d of dates) await tx.$queryRaw`SELECT "date" FROM "OpenDate" WHERE "date" = ${d.date}::date FOR UPDATE`;
     // Serialise concurrent edits of the same product.
     await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${id}::uuid FOR UPDATE`;
     const before = await tx.product.findUnique({ where: { id }, include: PRODUCT_INCLUDE });
@@ -255,15 +272,39 @@ export async function updateProduct(
     if (patch.bundleSize !== undefined && merged.bundleSize < 2 && before.flavors.some(f => f.bundlePriceCents !== null)) {
       throw new AppError("VALIDATION", { extra: { fields: { bundleSize: "Flavour bundles require a bundle size of at least 2" } } });
     }
+    for (const f of before.flavors) if (merged.pickupWeekdays.length && f.pickupWeekdays.some(d => !merged.pickupWeekdays.includes(d))) throw new AppError("VALIDATION");
+    if (merged.saleMode === "GROUP") {
+      const invalid = await tx.groupPool.findFirst({where:{productId:id,minOverride:{gt:merged.batchYield!}}});
+      if (invalid) throw new AppError("VALIDATION");
+    }
     const changed = (Object.keys(merged) as (keyof Fields)[]).filter((k) => !sameValue(merged[k], before[k]));
     const newUntil = patch.isNew === undefined ? before.newUntil : patch.isNew ? newProductUntil(now) : null;
     const newUntilChanged = newUntil?.getTime() !== before.newUntil?.getTime();
     if (changed.length === 0 && !newUntilChanged) return { product: before, overLimitDates: [] };
 
     const capacityChanged = CAPACITY_KEYS.some((k) => changed.includes(k));
+    // A concurrent product edit can turn a previously equal patch into a capacity change.
+    // Retry with the proper date-before-product lock order instead of locking backwards.
+    if (capacityChanged && !locksDates) throw new AppError("STALE");
     const oldProducts = capacityChanged ? await loadProductMap(tx) : null;
 
     const product = await tx.product.update({ where: { id }, data: { ...merged, newUntil }, include: PRODUCT_INCLUDE });
+    if (before.saleMode === "NORMAL" && product.saleMode === "GROUP") {
+      const items = await tx.orderItem.findMany({ where: { productId: id, stockLotId: null, order: { pickupDate: { gte: toDbDate(localDateOf(now)) }, status: { in: [...OCCUPYING_STATUSES] } } }, include: { order: { select: { pickupDate: true } } } });
+      const seen = new Set<string>();
+      for (const i of items) {
+        if (!dates.some(d => d.date.getTime() === i.order.pickupDate.getTime())) throw new AppError("STALE");
+        const key = `${fromDbDate(i.order.pickupDate)}:${i.flavorId ?? ''}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const where = {date:i.order.pickupDate,productId:id,flavorId:i.flavorId};
+        const old = await tx.groupPool.findFirst({where});
+        if (old) continue;
+        const data = {decision:'CONFIRMED' as const,decidedAt:now,note:'改为拼单前已有订单'};
+        const pool = await tx.groupPool.create({data:{...where,...data}});
+        await writeAudit(tx,{actor:'ADMIN',action:'groupPool.grandfather',entityType:'GroupPool',entityId:pool.id,after:pool,at:now});
+      }
+    }
     await writeAudit(tx, {
       actor: "ADMIN",
       action: "product.update",

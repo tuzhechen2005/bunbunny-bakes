@@ -18,6 +18,7 @@ const Body = z.object({
       z.object({
         productId: z.uuid(),
         flavorId: z.uuid().nullable().optional(),
+        stockLotId: z.uuid().nullable().optional(),
         qty: z.number().int().min(1).max(MAX_QTY_SCHEMA),
       }),
     )
@@ -77,10 +78,10 @@ export async function POST(request: Request): Promise<Response> {
       cartProblems: result.cartProblems,
       dates: result.dates.map((d) =>
         d.state === "AVAILABLE"
-          ? { date: d.date, soldOutFlavorIds: d.soldOutFlavorIds, state: d.state, cutoffAt: d.cutoffAt.toISOString(), cutoffLabel: d.cutoffLabel }
+          ? { groupPools: d.groupPools, stockLots: d.stockLots, date: d.date, soldOutFlavorIds: d.soldOutFlavorIds, state: d.state, cutoffAt: d.cutoffAt.toISOString(), cutoffLabel: d.cutoffLabel }
           : d.hints
-            ? { date: d.date, soldOutFlavorIds: d.soldOutFlavorIds, state: d.state, hints: d.hints }
-            : { date: d.date, soldOutFlavorIds: d.soldOutFlavorIds, state: d.state },
+            ? { groupPools: d.groupPools, stockLots: d.stockLots, date: d.date, soldOutFlavorIds: d.soldOutFlavorIds, state: d.state, hints: d.hints }
+            : { groupPools: d.groupPools, stockLots: d.stockLots, date: d.date, soldOutFlavorIds: d.soldOutFlavorIds, state: d.state },
       ),
     });
   } catch (e) {

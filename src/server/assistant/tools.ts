@@ -61,6 +61,7 @@ function weekdaysText(days: number[]): string {
 
 export function publicProduct(menu: Menu, p: MenuProduct, ref: string) {
   return {
+    ...(p.saleMode === "GROUP" ? { saleMode: p.saleMode, groupMin: p.groupMin, piecesPerCake: p.batchYield } : {}),
     id: ref,
     isNew: p.isNew,
     name: p.name,

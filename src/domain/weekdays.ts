@@ -32,12 +32,16 @@ export function weekdayViolations(
   const seen = new Set<string>();
   const out: WeekdayViolation[] = [];
   for (const line of lines) {
-    if (seen.has(line.productId) || !Object.prototype.hasOwnProperty.call(products, line.productId)) continue;
-    seen.add(line.productId);
+    if (line.stockLotId) continue;
+    const identity = `${line.productId}:${line.flavorId ?? ""}`;
+    if (seen.has(identity) || !Object.prototype.hasOwnProperty.call(products, line.productId)) continue;
+    seen.add(identity);
     const product = products[line.productId];
-    if (!allowsDate(product, date)) {
+    const flavor = product.flavors?.find(f => f.id === line.flavorId);
+    if (flavor && !allowsDate(flavor, date)) out.push({ kind: "WEEKDAY", date, productId: line.productId, weekdays: [...(flavor.pickupWeekdays ?? [])] });
+    else if (!allowsDate(product, date)) {
       out.push({ kind: "WEEKDAY", date, productId: line.productId, weekdays: [...(product.pickupWeekdays ?? [])] });
     }
   }
-  return out;
+  return out.filter((v, index) => out.findIndex(other => other.productId === v.productId) === index);
 }

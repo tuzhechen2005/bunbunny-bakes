@@ -9,7 +9,7 @@ import { buildDayProduction, type DayProduction } from "@/domain/summary";
 import { copy } from "@/copy";
 import { writeAudit } from "./audit";
 import type { DbClient, Tx } from "./db";
-import { loadProductMap, loadSettings, lockOpenDate, type ProductInfoMap } from "./day";
+import { loadPoolReservations, loadProductMap, loadSettings, lockOpenDate, type ProductInfoMap } from "./day";
 import { fromDbDate, toDbDate } from "./dbDates";
 import { AppError } from "./errors";
 import { issuesToFields } from "./orderSchemas";
@@ -121,7 +121,7 @@ export async function loadCalendar(
       pickupDate: true,
       status: true,
       fulfillment: true,
-      items: { select: { productId: true, flavorId: true, flavorName: true, qty: true }, orderBy: { id: "asc" } },
+      items: { select: { productId: true, flavorId: true, flavorName: true, stockLotId: true, qty: true }, orderBy: { id: "asc" } },
     },
     orderBy: { seq: "asc" },
   });
@@ -142,7 +142,7 @@ export async function loadCalendar(
       id: o.id,
       status: o.status,
       fulfillment: o.fulfillment,
-      items: o.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, flavorName: i.flavorName, qty: i.qty })),
+      items: o.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, flavorName: i.flavorName, ...(i.stockLotId ? {stockLotId:i.stockLotId} : {}), qty: i.qty })),
     });
     ordersByDate.set(d, list);
   }
@@ -151,11 +151,13 @@ export async function loadCalendar(
     (p) => p.capacityMode === "INDEPENDENT" && p.status !== "ARCHIVED",
   );
 
+  const reservationsByDate = new Map(await Promise.all(eachDate(from, to).map(async date => [date, await loadPoolReservations(tx, date)] as const)));
   const days = eachDate(from, to).map((date): CalendarDay => {
     const row = rowByDate.get(date) ?? null;
     const dayOrders = ordersByDate.get(date) ?? [];
     const overrideMap = overridesByDate.get(date) ?? new Map<string, number>();
-    const u = computeUsage(dayOrders, products);
+    const poolReservations = reservationsByDate.get(date) ?? [];
+    const u = computeUsage([...dayOrders, { id: 'converted-stock', status: 'CONFIRMED', fulfillment: 'PICKUP', items: poolReservations }], products);
     const usedFlavors = flavorUsage(dayOrders);
     const flavorOverrides = new Map(flavorRows.filter(r => fromDbDate(r.date) === date).map(r => [r.flavorId, r.limit]));
     const flavors = Object.values(products).flatMap(p => (p.flavors ?? []).map(f => ({
@@ -187,7 +189,7 @@ export async function loadCalendar(
       if ((u.products[p.id] ?? 0) > limit) overProducts.push(p.id);
     }
 
-    const production = buildDayProduction({ date, isOpen: row?.isOpen ?? false, limits, orders: dayOrders }, products);
+    const production = buildDayProduction({ date, isOpen: row?.isOpen ?? false, limits: { ...limits, poolReservations }, orders: dayOrders }, products);
     return {
       date,
       isOpen: row?.isOpen ?? false,

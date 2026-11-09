@@ -41,7 +41,7 @@
 | roundG | int? | `DOUGH_PER_ROUND` 必填 |
 | piecesPerRound | int? | `DOUGH_PER_ROUND` 必填 |
 | dailyLimit | int? | `INDEPENDENT` 必填，默认上限 |
-| batchYield | int? | 只用于生产汇总（布蕾 3） |
+| batchYield | int? | NORMAL 用于生产汇总（布蕾 3）；GROUP 为每只块数（D192） |
 | leadDays | int | 面团类默认 1，布蕾 2 |
 | pickupWeekdays | int[] | 可取货的星期几（D115），0 = 周日 … 6 = 周六，按芝加哥取货日期算；`[]` = 每天都可以（默认，现有商品不变）。存成从小到大、不重复；选满 7 天存成 `[]`。CHECK：只能是 0–6、没有 NULL、不能 7 个都有。迁移 `20261027120000_product_pickup_weekdays` |
 | status | enum | `ACTIVE` / `PAUSED` / `ARCHIVED`（下架，前台不显示） |
@@ -369,3 +369,28 @@ include both new fields. Order overrides use existing reason + `order.override` 
 DB tests connect only to validated names ending `_test`, including scratch migration
 maintenance connections. The primary test database must already exist; globalSetup
 applies migrations to that database without connecting to a maintenance database.
+
+## 8. 拼单与现货迁移（D192–D194）
+
+迁移 `20261108000000_group_stock`：
+
+- Product.saleMode `SaleMode NORMAL|GROUP NOT NULL DEFAULT NORMAL`；groupMin nullable int。
+  GROUP 必须 INDEPENDENT，1≤groupMin≤batchYield；dailyLimit/按日覆盖单位为只，NORMAL 不变。
+- ProductFlavor.pickupWeekdays `int[] DEFAULT []`，星期值 CHECK + 服务层商品子集校验。
+- GroupPool：uuid 主键，date→OpenDate，productId→Product，nullable flavorId 与 productId 复合外键；
+  decision `OPEN|CONFIRMED|FAILED DEFAULT OPEN`，minOverride nullable 正整数，decidedAt timestamptz、note。
+  `(date,productId,flavorId)` 唯一；额外部分唯一索引保证 null 口味也只有一个池。不存进度计数器。
+- StockLot：uuid 主键，date/productId/flavorId 外键，qty≥0，madeAt nullable timestamptz，sellUntil timestamptz，
+  closed default false，note，createdAt；groupPoolId nullable 外键记录余块来源。
+  部分唯一索引保证每池至多一个未关闭 lot。通用现货 groupPoolId=null。
+- OrderItem：ifNotFormed `CONTACT|CANCEL` nullable；stockLotId nullable 外键、RESTRICT。
+  行唯一性变为 `(orderId,productId,coalesce(flavorId,''),coalesce(stockLotId,''))`，允许同款预订和现货同行下单但分别定价、保存。
+  旧数据自动为 null，不改订单金额、状态或日期。
+
+所有池决定、现货修改、余块转换在 READ COMMITTED 事务中先锁 OpenDate 再读取有效订单统计，业务与 AuditLog 原子提交。
+下单/改单/恢复先锁日期，再锁订单（如有），再锁商品；现货 after 超 qty 是硬拒绝，不能用店主 override 绕过。
+取消无需计数器更新。商品更新按日期升序锁已有 OpenDate 后锁商品，切换 GROUP 在同事务确认已有未来池；
+若读到并发新增且未锁的已占额日期，返回 STALE 整体回滚，可重试。余块生产预留见 CAPACITY_RULES §11。
+查询可用日期使用 REPEATABLE READ READ ONLY 快照；公开池只投影数量、门槛、状态，不包含订单数/顾客/备注。
+
+Round 1: no schema/migration changes. Product updates lock only today's/future OpenDate rows, and only for changed saleMode/capacity fields, before locking the product. Re-grandfathering preserves existing GroupPool rows. Conversion confirms and audits in the same transaction. All readers reuse loadPoolReservations (open qty / closed sold). See CAPACITY_RULES for FIFO and inherited edit fields.

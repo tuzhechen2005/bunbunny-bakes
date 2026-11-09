@@ -18,6 +18,7 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+// NORMAL products must not expose GROUP production metadata.
 const PRODUCT_KEYS = [
   "bundlePriceCents",
   "bundleSize",
@@ -68,7 +69,7 @@ describe("GET /api/menu", () => {
     );
     for (const p of body.products) expect(Object.keys(p).sort()).toEqual(PRODUCT_KEYS);
     const text = JSON.stringify(body);
-    for (const leak of ["newUntil", "doughG", "roundG", "piecesPerRound", "dailyLimit", "batchYield", "capacityMode"]) {
+    for (const leak of ["newUntil", "doughG", "roundG", "piecesPerRound", "dailyLimit", "capacityMode", "batchYield"]) {
       expect(text).not.toContain(leak);
     }
   });

@@ -72,6 +72,7 @@ function totalsOf(orders: DayOrder[], products: ProductMap): Map<string, number>
   const totals = new Map<string, number>();
   for (const order of orders) {
     for (const line of order.items) {
+      if (line.stockLotId) continue;
       assertQty(line);
       lookup(products, line.productId);
       totals.set(line.productId, (totals.get(line.productId) ?? 0) + line.qty);
@@ -142,7 +143,12 @@ function usageOfCounted(orders: DayOrder[], products: ProductMap): Usage {
   for (const [productId, total] of totals) {
     const product = lookup(products, productId);
     if (product.capacityMode === "INDEPENDENT") {
-      result.products[productId] = total;
+      if (product.saleMode === "GROUP") {
+        if (!isPositiveInt(product.batchYield ?? null)) throw new Error("GROUP requires batchYield");
+        const pools = new Map<string, number>();
+        for (const o of orders) for (const l of o.items) if (!l.stockLotId && l.productId === productId) pools.set(l.flavorId ?? "", (pools.get(l.flavorId ?? "") ?? 0) + l.qty);
+        result.products[productId] = [...pools.values()].reduce((n, qty) => n + Math.ceil(qty / product.batchYield!), 0);
+      } else result.products[productId] = total;
     } else {
       result.doughG += doughOfProduct(product, total);
     }
@@ -165,7 +171,7 @@ export function doughUsed(orders: DayOrder[], products: ProductMap): number {
 export function flavorUsage(orders: DayOrder[]): Record<string, number> {
   const totals: Record<string, number> = {};
   for (const order of orders.filter(isOccupying)) for (const line of order.items) {
-    if (line.flavorId) totals[line.flavorId] = (totals[line.flavorId] ?? 0) + line.qty;
+    if (!line.stockLotId && line.flavorId) totals[line.flavorId] = (totals[line.flavorId] ?? 0) + line.qty;
   }
   return totals;
 }
@@ -200,13 +206,24 @@ export function checkDay(input: CheckDayInput): CheckDayResult {
     items: candidate.items,
   };
 
-  const before = usageOfCounted(counted, products);
+  // Open converted lots reserve their full qty. Closed lots reserve only sold pieces,
+  // including this candidate's stock changes and excluding the edited order's old stock.
+  const oldStock = existing.filter(o => o.id === excludeOrderId && isOccupying(o)).flatMap(o => o.items);
+  const reservations = (candidateLines: CartLine[]): DayOrder[] => {
+    const items = (limits.poolReservations ?? []).map(r => {
+      if (!r.reservationLotId) return r;
+      const sold = (lines: CartLine[]) => lines.filter(l => l.stockLotId === r.reservationLotId).reduce((n,l) => n+l.qty,0);
+      return {...r,qty:r.qty-sold(oldStock)+sold(candidateLines)};
+    }).filter(r => r.qty > 0);
+    return items.length ? [{id:"__reserved__",status:"NEW",fulfillment:"PICKUP",items}] : [];
+  };
+  const before = usageOfCounted([...counted, ...reservations([])], products);
   // Always recompute "after" over the whole day.
-  const after = usageOfCounted([...counted, candidateOrder], products);
+  const after = usageOfCounted([...counted, ...reservations(candidate.items), candidateOrder], products);
 
   const violations: Violation[] = [];
 
-  const candidateProductIds = [...new Set(candidate.items.map((l) => l.productId))];
+  const candidateProductIds = [...new Set(candidate.items.filter(l => !l.stockLotId).map((l) => l.productId))];
   const touchesDough = candidateProductIds.some(
     (id) => lookup(products, id).capacityMode !== "INDEPENDENT",
   );
@@ -239,7 +256,7 @@ export function checkDay(input: CheckDayInput): CheckDayResult {
   }
 
   const flavorTotals = flavorUsage([...counted, candidateOrder]);
-  for (const flavorId of new Set(candidate.items.map(l => l.flavorId))) {
+  for (const flavorId of new Set(candidate.items.filter(l => !l.stockLotId).map(l => l.flavorId))) {
     if (!flavorId) continue;
     const productId = candidate.items.find(l => l.flavorId === flavorId)!.productId;
     const limit = effectiveFlavorLimit(lookup(products, productId), flavorId, limits);

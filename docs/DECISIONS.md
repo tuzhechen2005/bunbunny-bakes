@@ -342,3 +342,30 @@ original save data through `TuPage.tsx` / `TuPlay.tsx` (engine README has the ha
 ### D191 — 小小 prepares a customer-confirmed order card (owner 11/08)
 
 取代 D117「不能替顾客下单（只给『放进购物车』卡片）」的卡片限制：小小可用现有 `propose_cart` 准备商品、日期、自取/配送订单卡；只有顾客亲自点「确认下单」才能由客户端通过正常 `POST /api/orders` 下单，沿用校验、名额事务锁、服务端定价和幂等。AI 不能自行调用下单接口，也不能声称已下单或保留名额。微信号只由顾客在卡片上填写，不送给 AI；提示规则 7 和 D118 脱敏保持不变。
+
+### D192 — 拼单开做（owner 11/08）
+
+采用已批准 `group-preorder.md` §3–6、10 和店主 11/08 答复：未成团池也占当天只数；
+每只默认业务门槛采用 4 块，`batchYield` 为每只块数，GROUP 的 dailyLimit 为所有口味合计只数，
+NORMAL 保留原算法。日期/商品/口味分池，进度从有效订单实时推导。顾客与店主代客下单均须选择
+「没成团时：联系我 / 直接取消」，不自动执行。后台可确认、判失败、改/清门槛、显式重开，全部日期锁和审计。
+已确认池不因数量下降或门槛变化倒退。NORMAL→GROUP 保留旧订单承诺：同事务为现有未来池确认开做，
+注明「改为拼单前已有订单」；旧行 null 有效，不追溯拒绝已有超限日。仅新写入执行只数规则。
+
+### D193 — 口味按星期轮换（owner 11/08）
+
+巴斯克 4 种口味可轮换供应。延续 D115/F2：ProductFlavor.pickupWeekdays 默认空，继承商品星期；
+非空须为商品限制的子集。顾客下单、可用日期、小小查日期共用校验；店主写原因可覆盖并记日志。
+收窄商品星期也验证已有口味，不能留下矛盾配置。已制作现货不受预订星期限制。
+
+### D194 — 通用现货与余块转现货（owner 11/08）
+
+店主明确要求同时实现通用现货，覆盖设计稿暂缓通用现货的建议。StockLot 单独管理日期、商品/口味、
+数量、制作时间、sellUntil、关闭与备注；默认当日 Chicago 12:00 停售。有效订单行实时计 sold，
+所有库存写入/售出/恢复与日期 OpenDate 锁一致，不允许店主超卖。现货不占预订产能，允许当日及正常截止后购买；
+混合预订保留预订的 CUTOFF 语义。余块转换须避免与预订重复出售：未关闭 lot 数量及关闭 lot 的已售数保留原批次位置。
+同池最多一个未关闭 lot，关闭后转换扣除历史已售，已转 lot 不增量/重开。不自动取消、不增加支付流程。
+
+### D195 — Group/stock review round 1 (owner 11/09)
+
+Production progress includes converted-lot reservations consistently with capacity checks. Conversion confirms/audits; sold converted stock prevents fail/reopen. Empty pools display OPEN while retaining decisions; FAILED decisions still reject purchases. Same-day customer orders are stock-only, including leadDays=0. Omitted GROUP choices default to CONTACT; admin edits inherit omitted line fields. NORMAL menu hides production fields. Customer order views expose stock:true and FIFO willBake (createdAt, UUID tie-breaker; whole-line allocation), per CAPACITY_RULES/API_SPEC.

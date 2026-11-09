@@ -1,0 +1,55 @@
+import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+vi.mock('next/server', async importOriginal => ({ ...await importOriginal<typeof import('next/server')>(), connection: async () => { } }));
+let cookieToken: string | undefined;
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: (name: string) => name === 'bb_session' && cookieToken ? { name, value: cookieToken } : undefined }) }));
+import { db, resetDb, createOpenDate, createSettings } from './helpers';
+import { prisma } from '@/server/db';
+import { createSession } from '@/server/auth';
+import { localDateOf, addDays } from '@/domain/dates';
+import { createProduct } from '@/server/products';
+import { createAdminOrder } from '@/server/orders';
+import { GET as PUBLIC_POOLS } from '@/app/api/group-pools/route';
+import { GET as PUBLIC_STOCK } from '@/app/api/stock-lots/route';
+import { GET as POOLS, POST as DECIDE } from '@/app/api/admin/group-pools/route';
+import { POST as STOCK } from '@/app/api/admin/stock-lots/route';
+import { PATCH as UPDATE, DELETE as CLOSE } from '@/app/api/admin/stock-lots/[id]/route';
+const site = 'http://localhost:3111';
+beforeAll(() => vi.stubEnv('SITE_URL', site));
+let productId: string, date: string;
+const req = (path: string, method = 'GET', body?: unknown, origin = site) => new Request(site + path, { method, headers: { origin, 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+beforeEach(async () => {
+  await resetDb(); cookieToken = undefined;
+  await createSettings({ orderingEnabled: true }); date = addDays(localDateOf(new Date()), 3); await createOpenDate(date);
+  productId = (await createProduct(db, { name: 'cake', capacityMode: 'INDEPENDENT', unitPriceCents: 500, saleMode: 'GROUP', groupMin: 4, batchYield: 6, dailyLimit: 2 }, new Date())).id;
+});
+afterAll(async () => { vi.unstubAllEnvs(); await db.$disconnect(); await prisma.$disconnect(); });
+async function login() { const user = await db.adminUser.create({ data: { username: 'owner', passwordHash: 'unused' } }); cookieToken = (await createSession(db, user.id, new Date())).token; }
+it('admin mutations require session and origin', async () => {
+  const body = { date, productId, action: 'confirm' };
+  expect((await DECIDE(req('/api/admin/group-pools', 'POST', body))).status).toBe(401);
+  await login();
+  expect((await DECIDE(req('/api/admin/group-pools', 'POST', body, 'https://attacker.invalid'))).status).toBe(403);
+});
+it('public pools expose only aggregate progress; admin decisions and stock routes write audit', async () => {
+  await createAdminOrder(db, { items: [{ productId, qty: 3, ifNotFormed: 'CONTACT' }], pickupDate: date, fulfillment: 'PICKUP', wechatId: 'private-customer' }, new Date());
+  await login();
+  const decision = await DECIDE(req('/api/admin/group-pools', 'POST', { date, productId, action: 'confirm', note: 'private-owner-note' }));
+  expect(decision.status).toBe(200);
+  const publicResult = await PUBLIC_POOLS(req(`/api/group-pools?productId=${productId}`));
+  expect(publicResult.status).toBe(200);
+  const payload = await publicResult.json();
+  expect(payload.pools[0]).toMatchObject({ pieces: 3, status: 'CONFIRMED', min: 4 });
+  expect(Object.keys(payload.pools[0]).sort()).toEqual(['cakes', 'date', 'flavorId', 'fullCakes', 'last', 'min', 'needMore', 'pieces', 'productId', 'spare', 'status']);
+  expect(JSON.stringify(payload)).not.toMatch(/private|orderCount|decidedAt|note/);
+  const admin = await POOLS(req(`/api/admin/group-pools?from=${date}&to=${date}`));
+  expect((await admin.json()).pools[0].orderCount).toBe(1);
+  const created = await STOCK(req('/api/admin/stock-lots', 'POST', { date, productId, qty: 2 }));
+  expect(created.status).toBe(201);
+  const { lot } = await created.json(), ctx = { params: Promise.resolve({ id: lot.id }) };
+  expect((await UPDATE(req('/api/admin/stock-lots/' + lot.id, 'PATCH', { qty: 1 }), ctx)).status).toBe(200);
+  const publicLots = await (await PUBLIC_STOCK()).json();
+  expect(publicLots.lots[0]).toMatchObject({ lotId: lot.id, left: 1 });
+  expect(Object.keys(publicLots.lots[0]).sort()).toEqual(['date', 'flavorId', 'left', 'lotId', 'productId', 'sellUntil']);
+  expect((await CLOSE(req('/api/admin/stock-lots/' + lot.id, 'DELETE'), ctx)).status).toBe(200);
+  expect(await db.auditLog.count({ where: { entityType: 'StockLot' } })).toBe(3);
+});

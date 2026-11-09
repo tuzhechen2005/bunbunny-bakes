@@ -292,3 +292,69 @@ Every example below is tested in `tests/unit/flavorLimits.test.ts`:
 Real Postgres tests in `tests/db/flavors.test.ts` additionally cover the last-slot
 race, owner create/edit/restoration override audits, cancellation release, per-date
 set/clear and below-usage confirmation, and immutable bundle snapshots.
+
+## 11. 拼单、口味轮换与现货（D192–D194，店主 11/08）
+
+`NORMAL` 完全保留原单位和算法。`GROUP` 使用 `INDEPENDENT`，不占面团；
+`batchYield=B` 是每只块数，`groupMin=M` 是最后一只开做门槛（店主采用 4），
+`dailyLimit` 和 `OpenDateProductLimit.limit` 的单位是**所有口味合计的只数**。
+口味默认/按日限额仍是**块数**。套餐仍按每条商品/口味行的 bundleSize/bundlePriceCents 定价。
+
+池键为 `(取货日期, productId, flavorId 或 null)`。公开 pieces 仅统计占额预订行；生产总数 n = 预订块数 + 转换 lot 预留（open 取 qty，closed 取有效 sold）。通用现货不参与。`cakes=ceil(n/B)`，`last=n>0 ? n-(cakes-1)*B : 0`，
+`spare=cakes*B-n`，`formed=n>0 && (last>=M || decision=CONFIRMED)`。
+状态优先级：n=0 → OPEN（数据库决定保留）；显式 FAILED → FAILED；显式 CONFIRMED → CONFIRMED；
+截止后且未成团 → FAILED；已成团 → FORMED；否则 OPEN。
+`needMore=CONFIRMED ? 0 : max(0,M-last)`；n=7 时表示下一只还差 3 块。
+时间是纯函数参数，不依赖定时任务；FAILED 不取消、不移动、不修改任何订单。
+
+下单时合并新内容整体重算 `Σ_flavour ceil(n_f/B) <= limit`，未成团也占一只。
+只有新增/改变占额内容时检查；已有超限日保留并展示。修改普通备注不追溯拒绝旧订单。
+每条新 GROUP 预订行使用 `ifNotFormed=CONTACT|CANCEL`，省略时默认 CONTACT；这只是店主处理依据，绝不自动取消。
+NORMAL 与现货行保存 null。NORMAL→GROUP 同事务对今天及未来已有有效预订的每个池设置
+CONFIRMED，备注「改为拼单前已有订单」，旧行保持 null。
+
+口味 `pickupWeekdays=[]` 继承商品允许的星期；非空必须是商品星期集合的子集（商品空则任意）。
+按 Chicago 日期检查每一条口味，不按商品去重跳过后面的口味。顾客不能越过，店主须原因和日志。
+现货已经制作完成，不受预订的星期轮换限制。
+
+现货 `StockLot` 的 `sold` 是 §1 状态里引用该 lot 的件数；`left=max(0,qty-sold)`。
+购买必须 `!closed && now<sellUntil`，默认当日 Chicago 12:00；整点不可买。
+只限 lot 的日期；当日可买。混合预订时照常按**预订行**最大 leadDays 检查 CUTOFF。
+纯现货单的取消截止存 lot 最早 sellUntil。现货不占面团、只数或口味预订限额，配送名额与每单上限仍适用。
+店主也不能超卖现货；减少 lot.qty 不能低于 sold，售罄/删除操作软关闭保留历史。
+
+余块转现货只对 FORMED/CONFIRMED 池开放，同池最多一个未关闭 lot。关闭后可再转，
+数量直接为统一总数算出的 spare，不再重复减去已售。已转出的余块不能再作为预订余量出售：
+日期容量检查额外保留该池未关闭 lot 的 qty、已关闭 lot 的 sold，再与预订块数合并取整。
+这是原批次的生产预留，不是一般现货占产能。已转 lot 不允许增量或重新开启，以免凭空增加余块。
+
+以下例子全部在 `tests/unit/groupPool.test.ts`；数据库端在 `tests/db/groupStock.test.ts`：
+
+| 例子 | 输入 | 结果 |
+|---|---|---|
+| G1 | 周五原味 3/4、周五抹茶 1/4、周六原味 2/4 | 分别还差 1、3、2，互不合并 |
+| G2 | B=6 M=4，n=4 | 1 只、余 2、FORMED |
+| G3 | n=6 | 1 只、余 0、FORMED |
+| G4 | n=7 | 2 只、最后 1、余 5、OPEN、下一只还差 3 |
+| G5 | n=10 | 2 只、余 2、FORMED |
+| G6 | n=12 | 2 只、余 0、FORMED |
+| G7 | 限 2 只，原味 3、抹茶 1 | 第三口味第 1 块拒绝；原味再 3/抹茶再 5 可；原味再 4 拒绝 |
+| G8 | 原味已有 3，口味当日上限 4，商品当日 1 只，加 2 | 因口味 5>4 拒绝，只数未超 |
+| G9 | 商品/口味预订上限都是 0，现货 100 块 | 不占面团、只数、口味预订限额（另检查 lot 库存） |
+| G10 | 商品周五/六，原味周五、抹茶周六，周五各订 1 | 抹茶 WEEKDAY；抹茶现货不受此限 |
+| G11 | n=3，minOverride=3 | 立即 FORMED；清除后回到商品门槛 |
+| G12 | n=4 后取消 1 | OPEN、还差 1；CONFIRMED 即使取消到 0 也不倒退 |
+| G13 | n=3 到截止；或 n=6 店主判定 FAILED | FAILED，原订单与选择保留 |
+| G14 | lot.qty=2 sold=2；或 now=sellUntil | 可卖 0；qty=2 sold=1 且未截止可卖 1 |
+
+### Round 1: production allocation and compatibility
+
+All pool/availability/summary/calendar production calculations use preorder pieces plus converted-lot reservations (open: qty; closed: capacity-holding sold). Public pool pieces remains preorder-only. Conversion uses this same spare, confirms the pool and writes a GroupPool audit in the date-locked transaction. A pool with capacity-holding converted-stock sales cannot fail/reopen. General stock does not reserve cakes.
+
+fullCakes=max(0,last<min ? cakes-1 : cakes). For capacity-holding preorder lines, willBake is true when the pool is formed/confirmed, or the entire line fits in fullCakes*batchYield by order createdAt ascending, with order UUID ascending as the deterministic tie-breaker. A line crossing the full-cake boundary is false. Cancelled/rejected lines are false. Example: orders of 6 then 1 with B=6/M=4 give true then false; confirmation gives true for both.
+
+Example: 4 preorder + converted lot of 2 + 1 new preorder = total 7, cakes 2, last 1, fullCakes 1, spare 5; public pieces=5. Immediately after conversion the pool spare is 0: the lot advertises the converted 2 pieces, never both surfaces.
+
+Same-day customer carts must contain only stock, even for leadDays=0. Stored FAILED decisions block preorder purchases (availability FULL), including empty pools whose display status is OPEN. Re-grandfathering skips existing GroupPool rows.
+
+Admin edits inherit omitted stockLotId/ifNotFormed from the same product/flavour line. Explicit null clears a value. Multiple matching old lines require an explicit stockLotId (null for preorder), otherwise VALIDATION. New customer/admin GROUP lines default to CONTACT. Status correction checks stock quantity but ignores the sales window. Weekday violations are reported once per product after checking every flavour.

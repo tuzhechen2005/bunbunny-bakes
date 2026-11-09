@@ -13,6 +13,7 @@ const fields = {
   priceCents: z.number().int().min(0).max(MAX_CENTS),
   dailyLimit: z.number().int().min(0).max(1_000_000).nullable().optional(),
   bundlePriceCents: z.number().int().positive().max(MAX_CENTS).nullable().optional(),
+  pickupWeekdays: z.array(z.number().int().min(0).max(6)).max(7).transform(d => [...new Set(d)].sort()).optional(),
   active: z.boolean(),
   sort: z.number().int().min(-1_000_000).max(1_000_000),
 };
@@ -22,7 +23,7 @@ const orderSchema = z.object({ ids: z.array(z.uuid()).max(500) }).strict();
 
 async function lockProduct(tx: Tx, id: string) {
   if (!z.uuid().safeParse(id).success) throw new AppError("NOT_FOUND");
-  const rows = await tx.$queryRaw<{ id: string; bundleSize: number }[]>`SELECT "id", "bundleSize" FROM "Product" WHERE "id" = ${id}::uuid FOR UPDATE`;
+  const rows = await tx.$queryRaw<{ id: string; bundleSize: number; pickupWeekdays: number[] }[]>`SELECT "id", "bundleSize", "pickupWeekdays" FROM "Product" WHERE "id" = ${id}::uuid FOR UPDATE`;
   if (!rows.length) throw new AppError("NOT_FOUND");
   return rows[0];
 }
@@ -38,6 +39,7 @@ export async function createFlavor(db: DbClient, productId: string, input: unkno
   return db.$transaction(async tx => {
     const product = await lockProduct(tx, productId);
     validateBundle(product.bundleSize, data.bundlePriceCents);
+    if (product.pickupWeekdays.length && data.pickupWeekdays?.some(d => !product.pickupWeekdays.includes(d))) throw new AppError("VALIDATION");
     const max = await tx.productFlavor.aggregate({ where: { productId }, _max: { sort: true } });
     const flavor = await tx.productFlavor.create({ data: { ...data, productId, sort: data.sort ?? (max._max.sort ?? -1) + 1, createdAt: now, updatedAt: now } });
     await writeAudit(tx, { actor: "ADMIN", action: "product.flavor.create", entityType: "Product", entityId: productId, after: flavor, at: now });
@@ -53,7 +55,8 @@ export async function updateFlavor(db: DbClient, productId: string, flavorId: st
     const before = await tx.productFlavor.findFirst({ where: { id: flavorId, productId } });
     if (!before) throw new AppError("NOT_FOUND");
     validateBundle(locked.bundleSize, data.bundlePriceCents);
-    const changed = Object.entries(data).some(([k, v]) => before[k as keyof typeof data] !== v);
+    if (locked.pickupWeekdays.length && data.pickupWeekdays?.some(d => !locked.pickupWeekdays.includes(d))) throw new AppError("VALIDATION");
+    const changed = Object.entries(data).some(([k, v]) => JSON.stringify(before[k as keyof typeof data]) !== JSON.stringify(v));
     if (changed) {
       const after = await tx.productFlavor.update({ where: { id: flavorId }, data: { ...data, updatedAt: now } });
       await writeAudit(tx, { actor: "ADMIN", action: "product.flavor.update", entityType: "Product", entityId: productId, before, after, at: now });

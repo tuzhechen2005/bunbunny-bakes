@@ -32,6 +32,9 @@ export interface AvailProduct extends CapacityProduct {
 }
 
 export interface OpenDay {
+  failedGroupPools?: { productId: string; flavorId: string | null }[];
+  groupPools?: ({ productId: string; flavorId: string | null } & import("./groupPool").PoolProgress)[];
+  stockLots?: { lotId: string; productId: string; flavorId: string | null; date: string; left: number; sellUntil: string }[];
   date: LocalDate;
   isOpen: boolean;
   limits: DayLimits;
@@ -60,6 +63,8 @@ export interface DayEvaluation {
 }
 
 export interface DateEntry {
+  groupPools?: OpenDay["groupPools"];
+  stockLots?: OpenDay["stockLots"];
   date: LocalDate;
   state: DateState;
   cutoffAt: Date;
@@ -119,18 +124,32 @@ function knownLines(cart: CartLine[], products: Record<string, AvailProduct>): C
 /** Rules 2, 5–7 for one day (visibility and the ordering switch are not checked here). */
 export function evaluateDay(input: AvailabilityInput, day: OpenDay): DayEvaluation {
   const lines = knownLines(input.cart, input.products);
-  const leadDays = lines.length === 0 ? DEFAULT_LEAD_DAYS : leadDaysOf(lines, input.products);
-  const cutoffAt = computeCutoffAt(day.date, leadDays, input.cutoffTime);
+  const preorder = lines.filter(l => !l.stockLotId);
+  const leadDays = preorder.length === 0 ? DEFAULT_LEAD_DAYS : leadDaysOf(preorder, input.products);
+  let cutoffAt = computeCutoffAt(day.date, leadDays, input.cutoffTime);
+  if (lines.length && !preorder.length) {
+    const deadlines = lines.map(l => day.stockLots?.find(s => s.lotId === l.stockLotId)?.sellUntil).filter((s): s is string => !!s);
+    cutoffAt = deadlines.length === lines.length ? new Date(Math.min(...deadlines.map(s => new Date(s).getTime()))) : input.now;
+  }
 
-  if (!isBeforeCutoff(input.now, cutoffAt)) {
+  if ((day.date === localDateOf(input.now) && preorder.length > 0) || !isBeforeCutoff(input.now, cutoffAt)) {
     return { state: "CUTOFF", cutoffAt, violations: [] };
   }
 
+  const stockQty = new Map<string, number>();
+  for (const line of lines) if (line.stockLotId) stockQty.set(line.stockLotId, (stockQty.get(line.stockLotId) ?? 0) + line.qty);
+  for (const line of lines) if (line.stockLotId) {
+    const lot = day.stockLots?.find(s => s.lotId === line.stockLotId);
+    if (!lot || lot.date !== day.date || lot.productId !== line.productId || lot.flavorId !== (line.flavorId ?? null) || input.now >= new Date(lot.sellUntil)) return {state:'CUTOFF',cutoffAt,violations:[]};
+    if (stockQty.get(line.stockLotId)! > lot.left) return {state:'FULL',cutoffAt,violations:[]};
+  }
   // Rule 2b (D115): every cart product must be available on this weekday.
   const weekday = weekdayViolations(day.date, lines, input.products);
   if (weekday.length > 0) {
     return { state: "WEEKDAY", cutoffAt, violations: weekday };
   }
+
+  if (preorder.some(l => day.failedGroupPools?.some(p => p.productId === l.productId && p.flavorId === (l.flavorId ?? null)) || day.groupPools?.some(p => p.productId === l.productId && p.flavorId === (l.flavorId ?? null) && p.status === 'FAILED'))) return { state: 'FULL', cutoffAt, violations: [] };
 
   const { violations } = checkDay({
     date: day.date,
@@ -155,7 +174,7 @@ function visibleDays(input: AvailabilityInput): OpenDay[] {
   const last = addDays(today, VISIBLE_DAYS);
   return input.days
     .filter(
-      (d) => d.isOpen && compareLocalDate(d.date, today) > 0 && compareLocalDate(d.date, last) <= 0,
+      (d) => d.isOpen && (compareLocalDate(d.date, today) > 0 || (d.date === today && input.cart.some(l => l.stockLotId))) && compareLocalDate(d.date, last) <= 0,
     )
     .sort((a, b) => compareLocalDate(a.date, b.date));
 }
@@ -174,6 +193,7 @@ function planDay(
   const { state, cutoffAt } = evaluateDay(input, day);
   if (hasProblems || (state !== "FULL" && state !== "WEEKDAY")) return { state, cutoffAt, hints: [] };
   const cart = hintCart(input);
+  if (cart.some(l => l.stockLotId || input.products[l.productId]?.saleMode === "GROUP")) return { state, cutoffAt, hints: [] };
   if (cart.length === 0) return { state, cutoffAt, hints: [] };
   const hints = hintsFor({
     cart,
@@ -205,6 +225,9 @@ export function listAvailability(input: AvailabilityInput): AvailabilityResult {
   const dates = visible.map((day): DateEntry => {
     const { state, cutoffAt, hints } = planDay(input, day, visible, problems.length > 0);
     const entry: DateEntry = { date: day.date, state, cutoffAt, cutoffLabel: cutoffLabel(cutoffAt), soldOutFlavorIds: soldOutFlavors(input.products, day) };
+    const pools = day.groupPools?.filter(p => input.cart.some(l => !l.stockLotId && l.productId === p.productId && (l.flavorId ?? null) === p.flavorId));
+    if (pools?.length) entry.groupPools = pools;
+    if (day.stockLots?.length) entry.stockLots = day.stockLots;
     if (hints.length > 0) entry.hints = hints;
     return entry;
   });

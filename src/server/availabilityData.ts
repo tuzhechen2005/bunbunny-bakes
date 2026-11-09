@@ -1,3 +1,4 @@
+import { listPools, listStock } from "./groupStock";
 // Builds the AvailabilityInput for src/domain/availability (CAPACITY_RULES.md §7, §7.1).
 // Non-locking reads: the result is only for display / suggestions. Every order submit
 // re-checks everything inside its own locked transaction.
@@ -6,7 +7,7 @@ import type { AvailabilityInput, OpenDay } from "@/domain/availability";
 import { addDays, localDateOf } from "@/domain/dates";
 import type { CartLine, DayLimits, DayOrder, Fulfillment, LocalDate } from "@/domain/types";
 import type { DbClient } from "./db";
-import { loadProductMap, loadSettings } from "./day";
+import { loadProductMap, loadSettings, loadPoolReservations } from "./day";
 import { fromDbDate, toDbDate } from "./dbDates";
 
 /** Same window as the domain's visibleDays (today < date ≤ today + 60). */
@@ -30,7 +31,7 @@ export async function loadAvailabilityInput(
   { cart, fulfillment, now }: LoadAvailabilityOptions,
 ): Promise<AvailabilityInput> {
   const today = localDateOf(now);
-  const from = toDbDate(addDays(today, 1));
+  const from = toDbDate(today);
   const to = toDbDate(addDays(today, VISIBLE_DAYS));
 
   return db.$transaction(
@@ -57,7 +58,7 @@ export async function loadAvailabilityInput(
               pickupDate: true,
               status: true,
               fulfillment: true,
-              items: { select: { productId: true, flavorId: true, qty: true }, orderBy: { id: "asc" } },
+              items: { select: { productId: true, flavorId: true, stockLotId: true, qty: true }, orderBy: { id: "asc" } },
             },
             orderBy: [{ pickupDate: "asc" }, { seq: "asc" }],
           })
@@ -70,12 +71,15 @@ export async function loadAvailabilityInput(
           id: o.id,
           status: o.status,
           fulfillment: o.fulfillment,
-          items: o.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, qty: i.qty })),
+          items: o.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, ...(i.stockLotId ? {stockLotId:i.stockLotId} : {}), qty: i.qty })),
         });
         ordersByDate.set(d, list);
       }
 
-      const days: OpenDay[] = openDates.map((od) => {
+      const pools = await listPools(tx, {from:today,to:addDays(today,VISIBLE_DAYS)}, now);
+      const lots = await listStock(tx, {from:today,to:addDays(today,VISIBLE_DAYS)}, now, false, true);
+      const days: OpenDay[] = [];
+      for (const od of openDates) {
         const date = fromDbDate(od.date);
         // Limit resolution mirrors loadDayContext (src/server/day.ts).
         const productLimits: Record<string, number> = {};
@@ -88,19 +92,23 @@ export async function loadAvailabilityInput(
           productLimits[p.id] = limit;
         }
         const limits: DayLimits = {
+          poolReservations: await loadPoolReservations(tx, fromDbDate(od.date)),
           doughLimitG: od.doughLimitG ?? settings.defaultDoughLimitG,
           deliveryEnabled: od.deliveryEnabled,
           deliveryLimit: od.deliveryLimit ?? settings.defaultDeliveryLimit,
           productLimits,
           flavorLimits: Object.fromEntries(flavorOverrides.filter(o => fromDbDate(o.date) === date).map(o => [o.flavorId, o.limit])),
         };
-        return {
+        days.push({
+          failedGroupPools: pools.filter(p => p.date === date && p.decision === "FAILED").map(({productId, flavorId}) => ({productId, flavorId})),
+          groupPools: pools.filter(p => p.date === date).map(({productId,flavorId,pieces,min,cakes,fullCakes,last,spare,formed,status,needMore})=>({productId,flavorId,pieces,min,cakes,fullCakes,last,spare,formed,status,needMore})),
+          stockLots: lots.filter(l => l.date === date),
           date,
           isOpen: od.isOpen,
           limits,
           orders: ordersByDate.get(date) ?? [],
-        };
-      });
+        });
+      }
 
       return {
         now,
