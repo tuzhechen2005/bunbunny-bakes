@@ -8,6 +8,7 @@ import { createFlavor, updateFlavor } from '@/server/productFlavors';
 import { createStock, updateStock, poolProgress, decidePool, listStock } from '@/server/groupStock';
 import { loadAvailabilityInput } from '@/server/availabilityData';
 import { listAvailability } from '@/domain/availability';
+import { loadDashboard } from '@/server/dashboard';
 import { getCustomerOrderView } from '@/server/orderView';
 import { toDbDate } from '@/server/dbDates';
 const date = '2026-11-13';
@@ -359,4 +360,42 @@ it('M6: crossing lines are false and same-createdAt ties use order UUID', async 
   const [first, last] = [a,b].sort((x,y) => x.id.localeCompare(y.id));
   expect((await getCustomerOrderView(db, first.viewToken, now)).items[0].willBake).toBe(true);
   expect((await getCustomerOrderView(db, last.viewToken, now)).items[0].willBake).toBe(false);
+});
+
+it('dashboard counts converted reservations in production, cake usage and over-limit flags', async () => {
+  await updateProduct(db, productId, { dailyLimit: 2 }, now);
+  await buy(4);
+  expect((await createStock(db, key(), now, true)).qty).toBe(2);
+  await buy(1);
+  await updateProduct(db, productId, { dailyLimit: 1 }, now);
+  const summaryAt = new Date('2026-11-12T15:00:00Z');
+  const summary = await loadDailySummary(db, summaryAt);
+  expect(summary.tonight.lines[0]).toMatchObject({ qty: 5, batches: 2, leftover: 5 });
+  for (const at of [summaryAt, new Date('2026-11-13T15:00:00Z')]) {
+    const dashboard = await loadDashboard(db, at);
+    expect(dashboard.days[date].independent).toContainEqual(expect.objectContaining({ productId, qty: 2, limit: 1 }));
+    expect(dashboard.next14.find(d => d.date === date)?.over).toBe(true);
+    if (at === summaryAt) expect(dashboard.tonightBrulee).toEqual(summary.tonight.lines);
+  }
+  expect((await loadDashboard(db, now)).next14.find(d => d.date === date)?.over).toBe(true);
+});
+
+it.each([6, 7])('FAILED decision never promises baking for %i pieces, including full-cake FIFO orders', async pieces => {
+  await updateProduct(db, productId, { dailyLimit: 2 }, now);
+  const first = await buy(6);
+  if (pieces > 6) await buy(pieces - 6, {}, new Date(now.getTime() + 1000));
+  await decidePool(db, { ...key(), action: 'fail' }, now);
+  expect((await getCustomerOrderView(db, first.viewToken, now)).items[0]).toMatchObject({ poolStatus: 'FAILED', willBake: false });
+});
+
+it('minimum-only OPEN rows are grandfathered in place while preserving their override', async () => {
+  await decidePool(db, { ...key(), action: 'minimum', minOverride: 3 }, now);
+  const original = await db.groupPool.findFirstOrThrow();
+  await updateProduct(db, productId, { saleMode: 'NORMAL' }, now);
+  await buy(1);
+  await updateProduct(db, productId, { saleMode: 'GROUP' }, now);
+  expect(await db.groupPool.findFirst()).toMatchObject({ id: original.id, decision: 'CONFIRMED', minOverride: 3, decidedAt: now, note: '改为拼单前已有订单' });
+  expect(await progress()).toMatchObject({ pieces: 1, status: 'CONFIRMED' });
+  expect(await db.auditLog.count({ where: { action: 'groupPool.grandfather', entityId: original.id } })).toBe(1);
+  expect(await db.auditLog.count({ where: { action: 'groupPool.minimum', entityId: original.id } })).toBe(1);
 });

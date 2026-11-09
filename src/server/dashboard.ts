@@ -13,7 +13,7 @@ import {
 import type { LocalDate, OrderStatus } from "@/domain/types";
 import type { DbClient } from "./db";
 import { writeAudit } from "./audit";
-import { loadSettings } from "./day";
+import { loadPoolReservations, loadSettings } from "./day";
 import { fromDbDate, toDbDate } from "./dbDates";
 
 export const ORDER_STATUSES: readonly OrderStatus[] = [
@@ -142,6 +142,7 @@ export async function loadDashboard(client: DbClient, now: Date): Promise<Dashbo
     ordersByDate.set(date, list);
   }
 
+  const reservationsByDate = new Map(await Promise.all(dates.map(async date => [date, await loadPoolReservations(client, date)] as const)));
   const dayData = new Map<LocalDate, DayData>();
   const summaryDays: Record<LocalDate, SummaryDay> = {};
   for (const date of dates) {
@@ -167,6 +168,7 @@ export async function loadDashboard(client: DbClient, now: Date): Promise<Dashbo
         deliveryEnabled,
         deliveryLimit,
         productLimits,
+        poolReservations: reservationsByDate.get(date) ?? [],
       },
       orders: ordersByDate.get(date) ?? [],
     };
@@ -183,7 +185,7 @@ export async function loadDashboard(client: DbClient, now: Date): Promise<Dashbo
   function card(date: LocalDate, bread: ReturnType<typeof buildSummary>["bread"]): DayCard {
     const data = dayData.get(date)!;
     const { day } = data;
-    const u = usage(day.orders, products);
+    const u = usage([...day.orders, { id: "converted-stock", status: "CONFIRMED", fulfillment: "PICKUP", items: day.limits.poolReservations ?? [] }], products);
     const byStatus = Object.fromEntries(ORDER_STATUSES.map((s) => [s, 0])) as Record<
       OrderStatus,
       number
@@ -221,7 +223,7 @@ export async function loadDashboard(client: DbClient, now: Date): Promise<Dashbo
 
   const next14: Next14Day[] = dates.map((date) => {
     const { day } = dayData.get(date)!;
-    const u = usage(day.orders, products);
+    const u = usage([...day.orders, { id: "converted-stock", status: "CONFIRMED", fulfillment: "PICKUP", items: day.limits.poolReservations ?? [] }], products);
     const productOver = Object.entries(day.limits.productLimits).some(
       ([id, limit]) => (u.products[id] ?? 0) > limit,
     );
