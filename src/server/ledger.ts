@@ -3,13 +3,14 @@
 // same transaction, entity `manual_income`).
 
 import { z } from "zod";
-import { LEDGER_METHODS, dayDetail, monthBounds, monthSummary } from "@/domain/ledger";
+import { LEDGER_METHODS, dayDetail, monthBounds, monthSummary, rangeDayCount, rangeSummary } from "@/domain/ledger";
 import type {
   DayDetail,
   LedgerManualEntry,
   LedgerMethod,
   LedgerOrder,
   MonthSummary,
+  RangeSummary,
 } from "@/domain/ledger";
 import { isLocalDate } from "@/domain/dates";
 import type { LocalDate } from "@/domain/types";
@@ -31,6 +32,13 @@ export const monthQuerySchema = z.object({
     .string()
     .refine((m) => /^\d{4}-\d{2}$/.test(m) && isLocalDate(`${m}-01`), { message: "Invalid month (YYYY-MM)" }),
 });
+
+export const rangeQuerySchema = z.object({ from: localDate, to: localDate }).refine(
+  ({ from, to }) => {
+    try { rangeDayCount(from, to); return true; } catch { return false; }
+  },
+  { message: "Expected an inclusive range of 1–366 days", path: ["to"] },
+);
 
 export const dayQuerySchema = z.object({ date: localDate });
 
@@ -157,6 +165,12 @@ export async function getLedgerMonth(db: DbClient, month: string): Promise<Month
   const { first, last } = monthBounds(month);
   const [orders, manual] = await Promise.all([loadOrders(db, first, last), loadManual(db, first, last)]);
   return monthSummary(month, orders, manual);
+}
+
+export async function getLedgerRange(db: DbClient, from: LocalDate, to: LocalDate): Promise<RangeSummary> {
+  rangeDayCount(from, to);
+  const [orders, manual] = await Promise.all([loadOrders(db, from, to), loadManual(db, from, to)]);
+  return rangeSummary(from, to, orders, manual);
 }
 
 export async function getLedgerDay(db: DbClient, date: LocalDate): Promise<DayDetail> {

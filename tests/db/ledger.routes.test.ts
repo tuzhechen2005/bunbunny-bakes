@@ -261,3 +261,36 @@ describe("manual entries", () => {
     expect(await db.auditLog.count()).toBe(1);
   });
 });
+
+
+describe("range route", () => {
+  it("includes both boundaries, empty days and actual product totals across month/DST", async () => {
+    const p = await createDefaultProducts();
+    for (const date of ["2026-10-30", "2026-11-02", "2026-11-03"]) {
+      await createOpenDate(date);
+      const o = await createOrder({ date, fulfillment: "DELIVERY", items: [{ productId: p.cheeseHorn, qty: 2 }] });
+      await db.order.update({ where: { id: o.id }, data: { paid: true } });
+    }
+    await post({ ...VALID, date: "2026-11-02", amountCents: 700 });
+    const res = await monthGET(req("GET", "/api/admin/ledger?from=2026-10-30&to=2026-11-02"));
+    expect(res.status).toBe(200);
+    const r = await res.json();
+    const a = await (await day("2026-10-30")).json();
+    const b = await (await day("2026-11-02")).json();
+    expect(r).toMatchObject({ from: "2026-10-30", to: "2026-11-02",
+      revenueCents: a.revenueCents + b.revenueCents, deliveryFeeCents: a.deliveryFeeCents + b.deliveryFeeCents,
+      byMethod: { CASH: 700, UNSPECIFIED: a.revenueCents + b.revenueCents - 700 } });
+    expect(r.products[0]).toMatchObject({ qty: 4, amountCents: a.products[0].amountCents + b.products[0].amountCents });
+    expect(r.days.map((d: { date: string }) => d.date)).toEqual(["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02"]);
+    expect(r.days[1]).toEqual({ date: "2026-10-31", revenueCents: 0, qty: 0, receivableCents: 0 });
+  });
+  it.each([
+    "from=2026-11-07", "to=2026-11-07", "from=2026-02-30&to=2026-03-01",
+    "from=2026-11-08&to=2026-11-07", "from=2026-01-01&to=2027-01-02",
+    "from=2026-11-07&from=2026-11-08&to=2026-11-09",
+  ])("returns 400 VALIDATION for %s", async query => {
+    const res = await monthGET(req("GET", `/api/admin/ledger?${query}`));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "VALIDATION" });
+  });
+});

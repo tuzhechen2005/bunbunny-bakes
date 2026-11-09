@@ -554,3 +554,43 @@ it("F2: assistant shares flavour bundle prices and rejects full flavour dates", 
   expect(toolResults().price).toMatchObject({ ok: true, 小计: "$20.50" });
   expect(toolResults().full).toMatchObject({ state: "FULL" });
 });
+
+
+describe("D191 customer-confirmed order cards", () => {
+  it.each([undefined, "PICKUP", "DELIVERY"])("accepts optional fulfillment %s without placing an order", async fulfillment => {
+    await createOpenDate("2026-10-22");
+    script.push({ tool_calls: [{ id: "card", name: "propose_cart", args: {
+      items: [{ product: "p1", qty: 1 }], date: "2026-10-22", note: "", fulfillment,
+    } }] }, { content: "请检查卡片后确认下单" });
+    const res = await call(user("帮我准备一单"));
+    expect(res.status).toBe(200);
+    const { suggestion } = await res.json();
+    expect(suggestion).toEqual({ items: [{ productId: ids.redBean, qty: 1 }], date: "2026-10-22", note: "",
+      ...(fulfillment ? { fulfillment } : {}) });
+    expect(await db.order.count()).toBe(0);
+    const messages = sent[0].body.messages as { role: string; content: string }[];
+    const prompt = messages.find(m => m.role === "system")!.content;
+    expect(prompt).toContain("绝不说已经帮顾客下单或保留了名额");
+    expect(prompt).toContain("确认下单");
+    expect(prompt).toContain("在卡片上填写微信号");
+    expect(prompt).toContain("不要询问或复述微信号、电话、地址");
+    expect(prompt).not.toContain("放进纸袋");
+  });
+  it.each(["SHIP", null, 123])("rejects invalid suggestion fulfillment %s", async fulfillment => {
+    script.push({ tool_calls: [{ id: "bad", name: "propose_cart", args: {
+      items: [{ product: "p1", qty: 1 }], note: "", fulfillment,
+    } }] }, { content: "请检查选择" });
+    const res = await call(user("帮我准备一单"));
+    expect((await res.json()).suggestion).toBeUndefined();
+    expect(toolResults().bad).toMatchObject({ error: expect.any(String) });
+  });
+  it("checks delivery capacity using the proposed fulfillment", async () => {
+    await createOpenDate("2026-10-22", { deliveryLimit: 0 });
+    script.push({ tool_calls: [{ id: "full", name: "propose_cart", args: {
+      items: [{ product: "p1", qty: 1 }], date: "2026-10-22", note: "", fulfillment: "DELIVERY",
+    } }] }, { content: "可以改自取" });
+    const res = await call(user("配送"));
+    expect((await res.json()).suggestion).toBeUndefined();
+    expect(toolResults().full).toMatchObject({ error: expect.any(String) });
+  });
+});

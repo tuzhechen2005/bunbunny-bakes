@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   dayDetail,
+  rangeSummary,
+  weekBounds,
+  shiftRange,
   monthBounds,
   shiftMonth,
   monthSummary,
@@ -251,5 +254,69 @@ describe("monthBounds", () => {
     for (const bad of ["2026-13", "2026-00", "2026-1", "26-11", "2026-11-01", ""]) {
       expect(() => monthBounds(bad)).toThrow();
     }
+  });
+});
+
+
+describe("rangeSummary", () => {
+  it("keeps daily accounting, actual line totals and all payment buckets", () => {
+    const orders = [
+      order({ orderNo: "a", totalCents: 1700, deliveryFeeCents: 500, paidMethod: null, items: [cheese(2, 1200)] }),
+      order({ orderNo: "b", totalCents: 1200, items: [cheese(2, 1200)] }),
+      order({ orderNo: "c", paid: false, totalCents: 900 }),
+      order({ orderNo: "d", status: "CANCELLED", totalCents: 999 }),
+      order({ orderNo: "e", status: "REJECTED", totalCents: 999 }),
+      order({ orderNo: "f", pickupDate: "2026-11-08", totalCents: 999 }),
+    ];
+    const entries = [manual({ id: "m", items: [{ productId: CHEESE, name: "Cheese", qty: 1 }] })];
+    const r = rangeSummary("2026-11-07", "2026-11-07", orders, entries);
+    expect(r).toMatchObject({ from: "2026-11-07", to: "2026-11-07", revenueCents: 3000,
+      receivableCents: 900, deliveryFeeCents: 500, qty: 5,
+      byMethod: { UNSPECIFIED: 1700, WECHAT: 1200, CASH: 100, OTHER: 0 },
+      products: [{ productId: CHEESE, name: "Cheese", qty: 5, amountCents: 2400 }] });
+    expect(r.days).toEqual([{ date: "2026-11-07", revenueCents: 3000, qty: 5, receivableCents: 900 }]);
+  });
+
+  it("includes every day of a Monday–Sunday week, including empty days", () => {
+    const r = rangeSummary("2026-11-02", "2026-11-08", [], []);
+    expect(r.days.map(d => d.date)).toEqual(Array.from({ length: 7 }, (_, i) => `2026-11-0${i + 2}`));
+    expect(r.days.every(d => d.revenueCents === 0 && d.qty === 0 && d.receivableCents === 0)).toBe(true);
+    expect(r.products).toEqual([]);
+  });
+
+  it("crosses a month and Chicago fall DST change without skipping or duplicating days", () => {
+    const r = rangeSummary("2026-10-30", "2026-11-02", [
+      order({ orderNo: "a", pickupDate: "2026-10-30", totalCents: 100 }),
+      order({ orderNo: "b", pickupDate: "2026-11-01", totalCents: 200 }),
+      order({ orderNo: "c", pickupDate: "2026-11-03", totalCents: 999 }),
+    ], [manual({ id: "m", date: "2026-11-02" }), manual({ id: "out", date: "2026-10-29" })]);
+    expect(r.days.map(d => d.date)).toEqual(["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02"]);
+    expect(r.revenueCents).toBe(400);
+  });
+
+  it("accepts 366 days including leap day", () => {
+    expect(rangeSummary("2028-01-01", "2028-12-31", [], []).days).toHaveLength(366);
+  });
+
+  it.each([
+    ["2026-11-08", "2026-11-07"], ["2026-01-01", "2027-01-02"],
+    ["2026-02-30", "2026-03-01"], ["bad", "2026-11-07"], ["2026-11-07", ""],
+  ])("rejects invalid range %s..%s", (from, to) => {
+    expect(() => rangeSummary(from, to, [], [])).toThrow();
+  });
+});
+
+describe("range navigation", () => {
+  it("uses Monday through Sunday including across a year and DST", () => {
+    expect(weekBounds("2026-11-01")).toEqual({ from: "2026-10-26", to: "2026-11-01" });
+    expect(weekBounds("2026-11-02")).toEqual({ from: "2026-11-02", to: "2026-11-08" });
+    expect(weekBounds("2027-01-01")).toEqual({ from: "2026-12-28", to: "2027-01-03" });
+    expect(() => weekBounds("bad")).toThrow();
+  });
+  it("shifts calendar days across spring DST and rejects invalid inputs", () => {
+    expect(shiftRange("2026-03-02", "2026-03-08", 7)).toEqual({ from: "2026-03-09", to: "2026-03-15" });
+    expect(shiftRange("2026-03-09", "2026-03-15", -7)).toEqual({ from: "2026-03-02", to: "2026-03-08" });
+    expect(() => shiftRange("2026-11-08", "2026-11-07", 1)).toThrow();
+    expect(() => shiftRange("2026-11-07", "2026-11-08", 0.5)).toThrow();
   });
 });

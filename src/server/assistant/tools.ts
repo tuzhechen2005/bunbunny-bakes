@@ -23,6 +23,7 @@ export interface Suggestion {
   items: CartLine[];
   date: LocalDate | null;
   note: string;
+  fulfillment?: Fulfillment;
 }
 
 /** Everything the tools read: one snapshot loaded per request. */
@@ -96,6 +97,7 @@ const CheckDateArgs = z.object({ items: Items, date: DateArg, fulfillment: Fulfi
 const FindDatesArgs = z.object({ items: Items, fulfillment: FulfillmentArg });
 const ProposeArgs = z.object({
   items: Items,
+  fulfillment: FulfillmentArg,
   date: DateArg.nullable().optional(),
   note: z.string().max(400).default(""),
 });
@@ -163,13 +165,14 @@ export const TOOL_DEFINITIONS = [
     function: {
       name: "propose_cart",
       description:
-        "给顾客一张「放进纸袋」的建议卡片（不会下单，顾客自己确认后再下单）。date 可选，必须是查过能订的日期",
+        "为顾客准备订单卡片（工具不会下单，顾客在卡片上亲自点「确认下单」）。date 可选，必须是查过能订的日期",
       parameters: {
         type: "object",
         properties: {
           items: itemsSchema,
           date: { type: "string", description: "建议的取货日期 YYYY-MM-DD，可不填" },
           note: { type: "string", description: "一句简短说明（不超过 40 字）" },
+          fulfillment: fulfillmentSchema,
         },
         required: ["items", "note"],
       },
@@ -316,16 +319,17 @@ function proposeCartTool(ctx: ToolContext, raw: unknown) {
   if (problems.length) return { error: problems.join("；") };
   const date = args.date ?? null;
   if (date) {
-    const plan = ctx.availability.orderingEnabled ? planCart(inputFor(ctx, r.lines, undefined), date) : null;
+    const plan = ctx.availability.orderingEnabled ? planCart(inputFor(ctx, r.lines, args.fulfillment), date) : null;
     if (!plan || plan.state !== "AVAILABLE") {
       return { error: `${date} 订不了这些（${plan ? STATE_TEXT[plan.state] : "不开放预订"}），换一天或不填日期` };
     }
   }
-  ctx.suggestion = { items: r.lines, date, note: plainText(scrubPii(args.note), NOTE_MAX) };
+  ctx.suggestion = { items: r.lines, date, note: plainText(scrubPii(args.note), NOTE_MAX),
+    ...(args.fulfillment ? { fulfillment: args.fulfillment } : {}) };
   return {
     ok: true,
-    说明: "已经给顾客看建议卡片了，顾客自己点「放进纸袋」再下单",
-    ...priceFor(ctx, r.lines, ctx.fulfillment),
+    说明: "已准备订单卡片，尚未下单或保留名额；请顾客核对，在卡片上填写微信号并亲自点「确认下单」",
+    ...priceFor(ctx, r.lines, args.fulfillment ?? ctx.fulfillment),
   };
 }
 

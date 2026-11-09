@@ -235,7 +235,7 @@
 
 返回：
 
-- `200 { reply, suggestion?, remaining }`：`reply` 纯文本（去掉 HTML/Markdown/链接/不可见字符，最多 400 字符）；`suggestion = { items: { productId, qty }[], date: "YYYY-MM-DD" | null, note }`（`note` 最多 100 字符），只有模型调用了 `propose_cart` 且通过校验才有；`remaining` = 这个访客今天还能问几句。
+- `200 { reply, suggestion?, remaining }`：`reply` 纯文本（去掉 HTML/Markdown/链接/不可见字符，最多 400 字符）；`suggestion = { items: { productId, qty, flavorId? }[], date: "YYYY-MM-DD" | null, note, fulfillment?: "PICKUP" | "DELIVERY" }`（`note` 最多 100 字符），只有模型调用了 `propose_cart` 且通过校验才有；`remaining` = 这个访客今天还能问几句。
 - `429 { error: "ASSISTANT_LIMIT" }`：同一 IP 哈希每天（America/Chicago）20 句，或全站每天 500 句。先计访客、没超才计全站：访客自己超限不占全站额度；被全站上限拒绝的那一句仍算访客的一句。
 - `503 { error: "ASSISTANT_UNAVAILABLE" }`：没配 `DEEPSEEK_API_KEY`（不计次数）、缺 `IP_HASH_SECRET`（不计次数）、DeepSeek 返回错误（含 402 余额不足）、网络错误、超时（见下）。网站其他功能不受影响。
 - `400 { error: "VALIDATION", message, fields }`：请求体不对（注意：这里是 400，其他顾客接口是 422）。
@@ -244,6 +244,8 @@
 流程：校验 → 有 key → 计数（在调用 DeepSeek 之前，原子加一）→ 把所有消息里像微信号/电话/邮箱/地址的内容换成 `***` → 调用 `${DEEPSEEK_BASE_URL}/chat/completions`（`fetch`，非流式，`tools` + `tool_choice: "auto"`，`temperature 0.3`，`max_tokens 250`）→ 最多 3 次模型调用：最多 2 轮工具调用，第 3 次 `tool_choice: "none"` 必须直接回答。
 
 时间预算（Netlify 函数 10 秒就会被杀）：从请求到达开始整个请求 8.5 秒（数据库读取也算在内）；每次模型调用最多 `min(剩余, 4.5 秒)`；剩余不足 1.5 秒就不再发起调用。超时或 DeepSeek 出错时：如果已经有通过校验的建议卡片 → `200 { reply: copy.assistantApi.suggestionReply, suggestion, remaining }`；否则 `503 ASSISTANT_UNAVAILABLE`。
+
+订单卡（D191）：`fulfillment` 可省略；提供时只接受 `PICKUP` / `DELIVERY`，按该方式检查日期名额并计算价格；省略时沿用请求的方式（默认自取），响应中不包含该字段。卡片只是建议，不占名额、不创建订单。顾客核对商品、日期、自取/配送并**只在卡片上**填写微信号后，亲自点击「确认下单」，由客户端调用现有 `POST /api/orders`（服务端校验、锁名额、定价、幂等不变）。AI 没有下单工具，不接收卡片上的微信号，D118 聊天脱敏不变。
 
 系统提示（`prompt.ts`）：小小🐰 的身份和规则、今天日期、接单开关、截止时间、自提说明、运费和免运费门槛、每单每种上限、菜单（名字、价格、组合价、提前天数、可取货的星期、简介）、顾客纸袋和取货方式。没有店主微信号、克数、名额。
 
@@ -254,7 +256,7 @@
 | `get_menu` | — | 商品（短 id `p1…`、名字、价格、组合价、状态、提前天数、可取货的日子、简介、`isNew: boolean`）、每种上限、是否接单 |
 | `check_date` | `items, date, fulfillment?` | 服务器算的小计（配送时含运费、合计）、这一天的状态（`planCart`；不开放的日子是 `NOT_OFFERED`）、可订时的截止时间、FULL/WEEKDAY 时的办法（REDUCE / SPLIT，只有商品名和件数） |
 | `find_dates` | `items, fulfillment?` | 最近 ≤ 5 个 AVAILABLE 的日子和截止时间 |
-| `propose_cart` | `items, date?, note` | 校验（商品存在且在售、每种 ≤ `maxQtyPerItem`、日期填了就必须 AVAILABLE）后成为响应里的 `suggestion`，并返回服务器算的小计（配送时含运费、合计） |
+| `propose_cart` | `items, date?, note, fulfillment?` | 校验（商品存在且在售、每种 ≤ `maxQtyPerItem`、日期填了就必须 AVAILABLE）后成为响应里的 `suggestion`，并返回服务器算的小计（配送时含运费、合计） |
 
 `items` 里的 `product` 是 `get_menu` 的短 id（也接受商品 id 或完整商品名），同一商品会合并。
 
@@ -289,6 +291,7 @@
 | GET/PUT | `/api/admin/settings` | |
 | GET | `/api/admin/logs?entityId=&from=&to=` | |
 | GET | `/api/admin/ledger?month=YYYY-MM` | 记账月汇总（D87）：`{ month, revenueCents, qty, deliveryFeeCents, receivableCents, byMethod: {WECHAT,ZELLE,VENMO,CASH,OTHER,UNSPECIFIED}, days: [{ date, revenueCents, qty, receivableCents }] }`。口径：按取货日；不含已取消/已拒绝；已付款订单（含运费）和手动记录计入营业额，未付款计入待收；件数只算已付款订单和手动记录里填的商品；已付款但 `paidMethod` 为空的订单算 `UNSPECIFIED`「未注明」（D94），与明确选的「其他」分开；月份格式错误 `VALIDATION` |
+| GET | `/api/admin/ledger?from=YYYY-MM-DD&to=YYYY-MM-DD` | 任意日期范围汇总（D190），两端包含、按 Chicago 取货本地日期筛选。返回 `{ from, to, revenueCents, qty, deliveryFeeCents, receivableCents, byMethod: {WECHAT,ZELLE,VENMO,CASH,OTHER,UNSPECIFIED}, days: [{date,revenueCents,qty,receivableCents}], products: [{productId,name,qty,amountCents}] }`。`days` 按日期升序列出范围内每一天（无记录填 0）；商品金额累加已付款订单实际行金额，手动商品只加件数；其他口径与月汇总相同。两日期必须合法、from ≤ to、含首尾最多 366 天，否则 `400 VALIDATION`（含 `fields`）。任一 from/to 参数存在就按范围校验，若同时给 month，范围优先。旧 month 查询及其 422 校验保持不变，仍只列有记录的日期且不增加字段。 |
 | GET | `/api/admin/ledger/day?date=YYYY-MM-DD` | 日明细：同样的汇总字段加 `orders`（每单：订单号、微信号、商品、金额、运费、是否已付款、付款方式）、`manual`（手动记录）、`products`（每款件数和金额，金额是各单实际行金额相加，不重新套用套餐价；手动记录里的商品只加件数） |
 | POST | `/api/admin/ledger/manual` | 记一笔。`{ date, amountCents（整数 > 0）, note（1–100 字）, paidMethod（WECHAT/ZELLE/VENMO/CASH/OTHER）, items?: [{ productId 或 name（自由填写，≤ 60 字）, qty 1–999 }]（最多 30 行） }`；返回 201 `{ entry }`；写 `manual_income.create` 日志（entity `manual_income`） |
 | PATCH | `/api/admin/ledger/manual/{id}` | 修改（字段同上，整条替换，商品行整体替换）；返回 `{ entry }`；日志 `manual_income.update`，记录修改前后的值；找不到 `NOT_FOUND` |
@@ -654,3 +657,6 @@ A PRODUCT violation without flavorId still denotes the product limit. Existing
 `override:true` plus a nonblank `reason` permits either kind and writes
 `order.override` with the complete violations. No customer edit API exists in this
 branch; cancellation and unchanged snapshot/notification shapes remain as before.
+
+
+Ledger UI helpers (`src/domain/ledger.ts`, D190): `rangeSummary(from,to,orders,manual)` returns `RangeSummary`; `rangeDayCount(from,to)` validates and returns the inclusive 1–366 day count; `weekBounds(date)` returns `{from,to}` for Monday–Sunday; `shiftRange(from,to,deltaDays)` returns `{from,to}` shifted by an integer number of calendar days. Dates are Chicago `YYYY-MM-DD` strings; calendar arithmetic is independent of DST and the host timezone. `monthBounds`, `shiftMonth`, and the legacy `monthSummary` remain available; month accounting delegates to the range calculation.
