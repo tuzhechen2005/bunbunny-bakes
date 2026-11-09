@@ -13,7 +13,7 @@ export function groupPool(input: { pieces: number; batchYield: number; min: numb
   const cakes = Math.ceil(pieces / batchYield);
   const last = pieces ? pieces - (cakes - 1) * batchYield : 0;
   const formed = pieces > 0 && (last >= min || decision === 'CONFIRMED');
-  const status = pieces === 0 ? 'OPEN' : decision === 'FAILED' ? 'FAILED' : decision === 'CONFIRMED' ? 'CONFIRMED' : now >= cutoffAt && !formed ? 'FAILED' : formed ? 'FORMED' : 'OPEN';
+  const status = decision === 'FAILED' ? 'FAILED' : pieces === 0 ? 'OPEN' : decision === 'CONFIRMED' ? 'CONFIRMED' : now >= cutoffAt && !formed ? 'FAILED' : formed ? 'FORMED' : 'OPEN';
   return { pieces, min, cakes, fullCakes: Math.max(0, last < min ? cakes - 1 : cakes), last, spare: cakes * batchYield - pieces, formed, status, needMore: decision === 'CONFIRMED' ? 0 : Math.max(0, min - last) };
 }
 

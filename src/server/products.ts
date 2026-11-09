@@ -299,9 +299,11 @@ export async function updateProduct(
         seen.add(key);
         const where = {date:i.order.pickupDate,productId:id,flavorId:i.flavorId};
         const old = await tx.groupPool.findFirst({where});
-        if (old) continue;
+        if (old && old.decision !== "OPEN") continue;
         const data = {decision:'CONFIRMED' as const,decidedAt:now,note:'改为拼单前已有订单'};
-        const pool = await tx.groupPool.create({data:{...where,...data}});
+        const pool = old
+          ? await tx.groupPool.update({where:{id:old.id},data})
+          : await tx.groupPool.create({data:{...where,...data}});
         await writeAudit(tx,{actor:'ADMIN',action:'groupPool.grandfather',entityType:'GroupPool',entityId:pool.id,after:pool,at:now});
       }
     }

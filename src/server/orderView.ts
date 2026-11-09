@@ -113,7 +113,7 @@ export async function getCustomerOrderView(
       productId: i.productId, flavorId: i.flavorId, stockLotId: null,
       order: { pickupDate: order.pickupDate, status: { in: [...OCCUPYING_STATUSES] }, OR: [{ createdAt: { lt: order.createdAt } }, { createdAt: order.createdAt, id: { lt: order.id } }] },
     }, _sum: { qty: true } });
-    const willBake = OCCUPYING_STATUSES.includes(order.status) && (pool.formed || (earlier._sum.qty ?? 0) + i.qty <= pool.fullCakes * product.batchYield!);
+    const willBake = OCCUPYING_STATUSES.includes(order.status) && (pool.status === "FORMED" || pool.status === "CONFIRMED" || (pool.decision !== "FAILED" && (earlier._sum.qty ?? 0) + i.qty <= pool.fullCakes * product.batchYield!));
     progress.set(`${i.productId}:${i.flavorId ?? ""}`, { poolStatus: pool.status, willBake });
   }
   return {
