@@ -105,4 +105,26 @@ test.describe("拼单 (customer)", () => {
     ]);
     await expect(page.getByTestId("order-pool")).toHaveText("拼单中");
   });
+
+  test("现货: the detail offers the lot, +1 adds its own line, capped at what is left, sent with stockLotId", async ({ page }) => {
+    const posted: Record<string, unknown>[] = [];
+    await mock(page, posted);
+    await page.route("**/api/stock-lots", (r) =>
+      r.fulfill({ json: { lots: [{ lotId: "lot-1", date: "2026-11-17", productId: BREAD.id, flavorId: null, left: 2, sellUntil: "2026-11-17T18:00:00Z" }] } }),
+    );
+    await page.goto("/");
+    await page.locator(`[data-testid="product-card"][data-product-id="${BREAD.id}"]`).getByTestId("tile-photo").click();
+    const offer = page.getByTestId("detail-stock");
+    await expect(offer).toContainText("现货");
+    await expect(offer).toContainText("剩 2 块");
+    const add = offer.getByTestId("detail-stock-add");
+    await add.click();
+    await add.click();
+    await expect(add).toBeDisabled();
+    const stored = await page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? "[]"), CART_KEY);
+    expect(stored).toEqual([{ productId: BREAD.id, qty: 2, stockLotId: "lot-1" }]);
+    await page.goto("/checkout");
+    await expect(page.locator(`[data-testid="cart-line"][data-product-id="${BREAD.id}"]`).getByTestId("line-stock")).toHaveText("现货");
+    await expect(page.getByTestId("group-choice")).toHaveCount(0);
+  });
 });
