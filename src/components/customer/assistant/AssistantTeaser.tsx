@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /** First question this long after the orb shows up. */
 const FIRST_MS = 1500;
@@ -28,6 +28,26 @@ function markUsed(): void {
   }
 }
 
+/** Where the questions carry on from: across pages and visits in this session, so the same one does not keep coming back. */
+const CURSOR_KEY = "bb_ai_teaser_next";
+
+function readCursor(): number {
+  try {
+    const n = Number(sessionStorage.getItem(CURSOR_KEY));
+    return Number.isSafeInteger(n) && n >= 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveCursor(n: number): void {
+  try {
+    sessionStorage.setItem(CURSOR_KEY, String(n));
+  } catch {
+    /* ignore: the order just restarts on the next page */
+  }
+}
+
 /** Set by e2e tests that need the plain orb (a tap during a question would ask it). */
 function noTeasers(): boolean {
   return typeof window !== "undefined" && (window as unknown as { __noTeasers?: boolean }).__noTeasers === true;
@@ -42,11 +62,19 @@ export function useTeaser(active: boolean, questions: readonly string[]): { ques
   const [usedBefore, setUsedBefore] = useState(() => typeof window !== "undefined" && readUsed());
   const [shown, setShown] = useState(0);
   const [current, setCurrent] = useState<string | null>(null);
+  // Next question to show. It moves on the moment a question shows, so a question cut short (the orb
+  // scrolls out of view, the page changes) is not shown again next time.
+  const cursor = useRef<number | null>(null);
 
   useEffect(() => {
     if (!active || questions.length === 0 || noTeasers()) return;
     const wait = shown === 0 ? FIRST_MS : usedBefore ? GAP_AFTER_USE_MS : GAP_MS;
-    const show = setTimeout(() => setCurrent(questions[shown % questions.length]), wait);
+    const show = setTimeout(() => {
+      const at = cursor.current ?? readCursor();
+      cursor.current = at + 1;
+      saveCursor(at + 1);
+      setCurrent(questions[at % questions.length]);
+    }, wait);
     const hide = setTimeout(() => {
       setCurrent(null);
       setShown((n) => n + 1);
@@ -54,6 +82,8 @@ export function useTeaser(active: boolean, questions: readonly string[]): { ques
     return () => {
       clearTimeout(show);
       clearTimeout(hide);
+      // Interrupted while showing: hide it; the next one comes after a normal gap.
+      setCurrent(null);
     };
   }, [active, usedBefore, shown, questions]);
 

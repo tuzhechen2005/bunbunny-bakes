@@ -157,6 +157,23 @@ test.describe("assistant", () => {
     await expect(entry).toHaveAttribute("data-teasing", "0");
   });
 
+  test("a question cut short or seen before a reload is not the next one again", async ({ page }) => {
+    await page.route("**/api/assistant", (route) => route.fulfill({ json: { reply: "好的。", remaining: 19 } }));
+    await openHome(page, { teasers: true });
+    await scrollToList(page);
+    const teaser = page.getByTestId("assistant-teaser");
+    await expect(teaser).toHaveText("帮我下单", { timeout: 6000 });
+    // Scroll the orb away mid-question, then back: the next question comes, not the same one.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(page.getByTestId("assistant-entry")).toBeHidden();
+    await scrollToList(page);
+    await expect(teaser).toHaveText("周四取 4 个奶酪角", { timeout: 8000 });
+    // A new page in the same session carries on.
+    await page.reload();
+    await scrollToList(page);
+    await expect(teaser).toHaveText("这周四能取什么？", { timeout: 8000 });
+  });
+
   test("questions rotate and keep coming after the orb was opened, just less often", async ({ page }) => {
     test.setTimeout(70_000);
     await page.route("**/api/assistant", (route) => route.fulfill({ json: { reply: "好的。", remaining: 19 } }));
@@ -255,7 +272,8 @@ test.describe("assistant", () => {
     await order.getByTestId("assistant-pickup").click();
     await order.getByTestId("assistant-wechat").fill("  bunny_fan  ");
     await order.getByTestId("assistant-place").click();
-    await expect(page).toHaveURL(/\/o\/tok-ai\?new=1/);
+    // The order page drops ?new=1 once it has read it.
+    await expect(page).toHaveURL(/\/o\/tok-ai/);
     expect(posted).toHaveLength(1);
     expect(posted[0]).toMatchObject({
       items: [{ productId: "nj", qty: 2 }, { productId: "hd", qty: 1 }],
