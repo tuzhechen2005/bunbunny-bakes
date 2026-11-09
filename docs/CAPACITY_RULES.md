@@ -300,17 +300,16 @@ set/clear and below-usage confirmation, and immutable bundle snapshots.
 `dailyLimit` 和 `OpenDateProductLimit.limit` 的单位是**所有口味合计的只数**。
 口味默认/按日限额仍是**块数**。套餐仍按每条商品/口味行的 bundleSize/bundlePriceCents 定价。
 
-池键为 `(取货日期, productId, flavorId 或 null)`。仅 §1 占额状态的**预订行**参与进度；
-现货行不参与。`cakes=ceil(n/B)`，`last=n>0 ? n-(cakes-1)*B : 0`，
+池键为 `(取货日期, productId, flavorId 或 null)`。公开 pieces 仅统计占额预订行；生产总数 n = 预订块数 + 转换 lot 预留（open 取 qty，closed 取有效 sold）。通用现货不参与。`cakes=ceil(n/B)`，`last=n>0 ? n-(cakes-1)*B : 0`，
 `spare=cakes*B-n`，`formed=n>0 && (last>=M || decision=CONFIRMED)`。
-状态优先级：显式 FAILED → FAILED；显式 CONFIRMED → CONFIRMED（即使取消到 0）；
+状态优先级：n=0 → OPEN（数据库决定保留）；显式 FAILED → FAILED；显式 CONFIRMED → CONFIRMED；
 截止后且未成团 → FAILED；已成团 → FORMED；否则 OPEN。
 `needMore=CONFIRMED ? 0 : max(0,M-last)`；n=7 时表示下一只还差 3 块。
 时间是纯函数参数，不依赖定时任务；FAILED 不取消、不移动、不修改任何订单。
 
 下单时合并新内容整体重算 `Σ_flavour ceil(n_f/B) <= limit`，未成团也占一只。
 只有新增/改变占额内容时检查；已有超限日保留并展示。修改普通备注不追溯拒绝旧订单。
-每条新 GROUP 预订行必须选择 `ifNotFormed=CONTACT|CANCEL`；这只是店主处理依据，绝不自动取消。
+每条新 GROUP 预订行使用 `ifNotFormed=CONTACT|CANCEL`，省略时默认 CONTACT；这只是店主处理依据，绝不自动取消。
 NORMAL 与现货行保存 null。NORMAL→GROUP 同事务对今天及未来已有有效预订的每个池设置
 CONFIRMED，备注「改为拼单前已有订单」，旧行保持 null。
 
@@ -325,7 +324,7 @@ CONFIRMED，备注「改为拼单前已有订单」，旧行保持 null。
 店主也不能超卖现货；减少 lot.qty 不能低于 sold，售罄/删除操作软关闭保留历史。
 
 余块转现货只对 FORMED/CONFIRMED 池开放，同池最多一个未关闭 lot。关闭后可再转，
-数量为 `spare - 该池历史关闭 lots 的有效已售数`。已转出的余块不能再作为预订余量出售：
+数量直接为统一总数算出的 spare，不再重复减去已售。已转出的余块不能再作为预订余量出售：
 日期容量检查额外保留该池未关闭 lot 的 qty、已关闭 lot 的 sold，再与预订块数合并取整。
 这是原批次的生产预留，不是一般现货占产能。已转 lot 不允许增量或重新开启，以免凭空增加余块。
 
@@ -347,3 +346,15 @@ CONFIRMED，备注「改为拼单前已有订单」，旧行保持 null。
 | G12 | n=4 后取消 1 | OPEN、还差 1；CONFIRMED 即使取消到 0 也不倒退 |
 | G13 | n=3 到截止；或 n=6 店主判定 FAILED | FAILED，原订单与选择保留 |
 | G14 | lot.qty=2 sold=2；或 now=sellUntil | 可卖 0；qty=2 sold=1 且未截止可卖 1 |
+
+### Round 1: production allocation and compatibility
+
+All pool/availability/summary/calendar production calculations use preorder pieces plus converted-lot reservations (open: qty; closed: capacity-holding sold). Public pool pieces remains preorder-only. Conversion uses this same spare, confirms the pool and writes a GroupPool audit in the date-locked transaction. A pool with capacity-holding converted-stock sales cannot fail/reopen. General stock does not reserve cakes.
+
+fullCakes=max(0,last<min ? cakes-1 : cakes). For capacity-holding preorder lines, willBake is true when the pool is formed/confirmed, or the entire line fits in fullCakes*batchYield by order createdAt ascending, with order UUID ascending as the deterministic tie-breaker. A line crossing the full-cake boundary is false. Cancelled/rejected lines are false. Example: orders of 6 then 1 with B=6/M=4 give true then false; confirmation gives true for both.
+
+Example: 4 preorder + converted lot of 2 + 1 new preorder = total 7, cakes 2, last 1, fullCakes 1, spare 5; public pieces=5. Immediately after conversion the pool spare is 0: the lot advertises the converted 2 pieces, never both surfaces.
+
+Same-day customer carts must contain only stock, even for leadDays=0. Stored FAILED decisions block preorder purchases (availability FULL), including empty pools whose display status is OPEN. Re-grandfathering skips existing GroupPool rows.
+
+Admin edits inherit omitted stockLotId/ifNotFormed from the same product/flavour line. Explicit null clears a value. Multiple matching old lines require an explicit stockLotId (null for preorder), otherwise VALIDATION. New customer/admin GROUP lines default to CONTACT. Status correction checks stock quantity but ignores the sales window. Weekday violations are reported once per product after checking every flavour.

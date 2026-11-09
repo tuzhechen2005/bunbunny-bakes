@@ -43,5 +43,5 @@ export function weekdayViolations(
       out.push({ kind: "WEEKDAY", date, productId: line.productId, weekdays: [...(product.pickupWeekdays ?? [])] });
     }
   }
-  return out;
+  return out.filter((v, index) => out.findIndex(other => other.productId === v.productId) === index);
 }

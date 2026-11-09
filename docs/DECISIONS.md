@@ -365,3 +365,7 @@ NORMAL 保留原算法。日期/商品/口味分池，进度从有效订单实�
 所有库存写入/售出/恢复与日期 OpenDate 锁一致，不允许店主超卖。现货不占预订产能，允许当日及正常截止后购买；
 混合预订保留预订的 CUTOFF 语义。余块转换须避免与预订重复出售：未关闭 lot 数量及关闭 lot 的已售数保留原批次位置。
 同池最多一个未关闭 lot，关闭后转换扣除历史已售，已转 lot 不增量/重开。不自动取消、不增加支付流程。
+
+### D195 — Group/stock review round 1 (owner 11/09)
+
+Production progress includes converted-lot reservations consistently with capacity checks. Conversion confirms/audits; sold converted stock prevents fail/reopen. Empty pools display OPEN while retaining decisions; FAILED decisions still reject purchases. Same-day customer orders are stock-only, including leadDays=0. Omitted GROUP choices default to CONTACT; admin edits inherit omitted line fields. NORMAL menu hides production fields. Customer order views expose stock:true and FIFO willBake (createdAt, UUID tie-breaker; whole-line allocation), per CAPACITY_RULES/API_SPEC.

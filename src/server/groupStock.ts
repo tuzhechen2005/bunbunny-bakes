@@ -5,7 +5,7 @@ import { isLocalDate } from '@/domain/dates';
 import { OCCUPYING_STATUSES, type CartLine } from '@/domain/types';
 import type { DbClient, Tx } from './db';
 import { fromDbDate, toDbDate } from './dbDates';
-import { lockOpenDate, type ProductInfoMap } from './day';
+import { loadPoolReservations, lockOpenDate, type ProductInfoMap } from './day';
 import { lockCartProducts } from './flavorPricing';
 import { writeAudit } from './audit';
 import { AppError } from './errors';
@@ -24,9 +24,11 @@ export async function poolProgress(db: DbClient | Tx, key: Key, now: Date) {
   const pool = await db.groupPool.findFirst({ where: { date, productId: key.productId, flavorId: key.flavorId } });
   const items = await db.orderItem.findMany({ where: { productId: key.productId, flavorId: key.flavorId, stockLotId: null, order: { pickupDate: date, status: holding } }, select: { qty: true, orderId: true } });
   const settings = await db.setting.findUniqueOrThrow({ where: { id: 1 } });
+  const reserved = (await loadPoolReservations(db, key.date)).filter(l => l.productId === key.productId && (l.flavorId ?? null) === key.flavorId).reduce((n,l) => n + l.qty, 0);
   return {
     ...key, id: pool?.id ?? null, decision: pool?.decision ?? 'OPEN', minOverride: pool?.minOverride ?? null,
-    ...groupPool({ pieces: items.reduce((n, i) => n + i.qty, 0), batchYield: product.batchYield!, min: pool?.minOverride ?? product.groupMin!, decision: pool?.decision, cutoffAt: cutoffAt(key.date, product.leadDays, settings.cutoffTime), now }),
+    ...groupPool({ pieces: reserved + items.reduce((n, i) => n + i.qty, 0), batchYield: product.batchYield!, min: pool?.minOverride ?? product.groupMin!, decision: pool?.decision, cutoffAt: cutoffAt(key.date, product.leadDays, settings.cutoffTime), now }),
+    pieces: items.reduce((n,i) => n + i.qty, 0),
     orderCount: new Set(items.map(i => i.orderId)).size
   };
 }
@@ -48,6 +50,11 @@ export async function listPools(db: DbClient | Tx, input: unknown, now: Date) {
     const total = totals.get(key) ?? { pieces: 0, orders: new Set<string>() };
     total.pieces += i.qty; total.orders.add(i.orderId); totals.set(key, total);
   }
+  const reservations = new Map<string, number>();
+  for (const d of dates) for (const l of await loadPoolReservations(db, fromDbDate(d.date))) {
+    const key = identity(fromDbDate(d.date), l.productId, l.flavorId ?? null);
+    reservations.set(key, (reservations.get(key) ?? 0) + l.qty);
+  }
   const result = [];
   for (const d of dates) for (const p of products) for (const flavorId of [null, ...p.flavors.map(f => f.id)]) {
     const date = fromDbDate(d.date), key = identity(date, p.id, flavorId);
@@ -55,7 +62,7 @@ export async function listPools(db: DbClient | Tx, input: unknown, now: Date) {
     if (!total && !pool && flavorId === null && p.flavors.length) continue;
     result.push({
       date, productId: p.id, flavorId, id: pool?.id ?? null, decision: pool?.decision ?? 'OPEN', minOverride: pool?.minOverride ?? null,
-      ...groupPool({ pieces: total?.pieces ?? 0, batchYield: p.batchYield!, min: pool?.minOverride ?? p.groupMin!, decision: pool?.decision, cutoffAt: cutoffAt(date, p.leadDays, settings.cutoffTime), now }), orderCount: total?.orders.size ?? 0
+      ...groupPool({ pieces: (total?.pieces ?? 0) + (reservations.get(key) ?? 0), batchYield: p.batchYield!, min: pool?.minOverride ?? p.groupMin!, decision: pool?.decision, cutoffAt: cutoffAt(date, p.leadDays, settings.cutoffTime), now }), pieces: total?.pieces ?? 0, orderCount: total?.orders.size ?? 0
     });
   }
   return result;
@@ -70,6 +77,10 @@ export async function decidePool(db: DbClient, input: unknown, now: Date) {
     const product = await tx.product.findUniqueOrThrow({ where: { id: data.productId } });
     if (data.flavorId && !await tx.productFlavor.findFirst({ where: { id: data.flavorId, productId: data.productId } })) throw new AppError('VALIDATION');
     if (data.action === 'minimum' && (data.minOverride === undefined || (data.minOverride !== null && data.minOverride > product.batchYield!))) throw new AppError('VALIDATION');
+    if (before.id && ['fail', 'reopen'].includes(data.action)) {
+      const sold = await tx.orderItem.count({ where: { stockLot: { groupPoolId: before.id }, order: { status: holding } } });
+      if (sold) throw new AppError('VALIDATION');
+    }
     const change = {
       decision: data.action === 'confirm' ? 'CONFIRMED' as const : data.action === 'fail' ? 'FAILED' as const : data.action === 'reopen' ? 'OPEN' as const : before.decision,
       ...(data.action === 'minimum' ? { minOverride: data.minOverride } : {}), decidedAt: data.action === 'minimum' ? undefined : data.action === 'reopen' ? null : now, note: data.note
@@ -115,9 +126,9 @@ export async function createStock(db: DbClient, input: unknown, now: Date, conve
       groupPoolId = pool.id;
       const previous = await tx.stockLot.findMany({ where: { groupPoolId } });
       if (previous.some(l => !l.closed)) throw new AppError('VALIDATION');
-      let sold = 0;
-      for (const l of previous) sold += await soldForLot(tx, l.id);
-      qty = p.spare - sold;
+      qty = p.spare;
+      const confirmed = await tx.groupPool.update({ where: { id: pool.id }, data: { decision: 'CONFIRMED', decidedAt: now } });
+      await writeAudit(tx, { actor: 'ADMIN', action: 'groupPool.confirm', entityType: 'GroupPool', entityId: pool.id, before: pool, after: confirmed, at: now });
       if (qty <= 0) throw new AppError('FULL');
     }
     if (qty === undefined) throw new AppError('VALIDATION');
@@ -165,7 +176,7 @@ export async function validateStock(tx: Tx, date: string, lines: CartLine[], now
 export function validateGroupChoices(lines: CartLine[], products: ProductInfoMap, legacy = new Set<string>()) {
   for (const line of lines) {
     if (!line.stockLotId && products[line.productId]?.saleMode === 'GROUP') {
-      if (!line.ifNotFormed && !legacy.has(`${line.productId}:${line.flavorId ?? ''}`)) throw new AppError('VALIDATION');
+      if (!line.ifNotFormed && !legacy.has(`${line.productId}:${line.flavorId ?? ''}`)) line.ifNotFormed = 'CONTACT';
     } else line.ifNotFormed = null;
   }
 }

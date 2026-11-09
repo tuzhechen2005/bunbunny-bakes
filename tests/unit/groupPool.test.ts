@@ -8,7 +8,7 @@ describe('D192 pool arithmetic', () => {
   it('independent Friday plain 3, matcha 1, Saturday plain 2', () => expect([3, 1, 2].map(n => progress(n).needMore)).toEqual([1, 3, 2]));
   it('min override forms immediately', () => expect(progress(3, { min: 3 }).status).toBe('FORMED'));
   it('cancel lowers progress', () => expect([progress(4).status, progress(3).status]).toEqual(['FORMED', 'OPEN']));
-  it('confirmation never reverts, even empty', () => expect(progress(0, { decision: 'CONFIRMED' }).status).toBe('CONFIRMED'));
+  it('empty pools are OPEN even when a decision exists', () => expect(progress(0, { decision: 'CONFIRMED' }).status).toBe('OPEN'));
   it('cutoff and explicit failure', () => { expect(progress(3, { now: cutoffAt }).status).toBe('FAILED'); expect(progress(6, { decision: 'FAILED' }).status).toBe('FAILED'); });
   it('stock sold out and exact sellUntil', () => { expect(stockLeft(2, 2, false, cutoffAt, now)).toBe(0); expect(stockLeft(2, 0, false, cutoffAt, cutoffAt)).toBe(0); expect(stockLeft(2, 1, false, cutoffAt, now)).toBe(1); });
 });
@@ -49,4 +49,10 @@ import { cutoffAt as stockDeadline } from '@/domain/cutoff';
 it('stock default noon observes Chicago DST', () => {
   expect(stockDeadline('2026-10-30', 0, '12:00').toISOString()).toBe('2026-10-30T17:00:00.000Z');
   expect(stockDeadline('2026-11-13', 0, '12:00').toISOString()).toBe('2026-11-13T18:00:00.000Z');
+});
+it('L1: empty pools never fail after cutoff or an explicit failure', () => {
+  for (const decision of ['OPEN', 'CONFIRMED', 'FAILED']) expect(progress(0, { decision, now: cutoffAt })).toMatchObject({ status: 'OPEN', fullCakes: 0, last: 0 });
+});
+it('L3: weekday violations contain each product once even with multiple blocked flavours', () => {
+  expect(weekdayViolations('2026-11-13', [{ productId: 'cake', flavorId: 'plain', qty: 1 }, { productId: 'cake', flavorId: 'matcha', qty: 1 }], { cake: { ...product, pickupWeekdays: [6] } })).toHaveLength(1);
 });

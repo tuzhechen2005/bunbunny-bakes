@@ -400,7 +400,7 @@ export async function adminCorrectStatus(
     let violations: Violation[] = [];
     if (correctionReoccupies(order.status, data.to)) {
       await lockCartProducts(tx, order.items);
-      await validateStock(tx, date, order.items, now, order.id);
+      await validateStock(tx, date, order.items, now, order.id, false);
       violations = await violationsFor(tx, order.id, date, {
         items: order.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, stockLotId: i.stockLotId, ifNotFormed: i.ifNotFormed, qty: i.qty })),
         fulfillment: order.fulfillment,
@@ -508,7 +508,12 @@ export async function adminEditOrder(
     const oldCart: CartLine[] = mergeLines(order.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, stockLotId: i.stockLotId, ifNotFormed: i.ifNotFormed, qty: i.qty })));
     const newDate = data.pickupDate ?? oldDate;
     const dateChanged = newDate !== oldDate;
-    const newCart = data.items ? mergeLines(data.items) : oldCart;
+    const newCart = data.items ? mergeLines(data.items.map(line => {
+      const matches = oldCart.filter(old => old.productId === line.productId && (old.flavorId ?? null) === (line.flavorId ?? null));
+      const old = matches.find(old => line.stockLotId !== undefined && old.stockLotId === line.stockLotId) ?? (matches.length === 1 ? matches[0] : undefined);
+      if (!old && matches.length > 1 && line.stockLotId === undefined) throw new AppError('VALIDATION');
+      return { ...line, stockLotId: line.stockLotId === undefined ? old?.stockLotId : line.stockLotId, ifNotFormed: line.ifNotFormed === undefined ? old?.ifNotFormed : line.ifNotFormed };
+    })) : oldCart;
     const itemsChanged = !sameCart(oldCart, newCart);
     const quantitiesChanged = !sameCart(oldCart.map(l=>({...l,ifNotFormed:null})),newCart.map(l=>({...l,ifNotFormed:null})));
     const newFulfillment = data.fulfillment ?? order.fulfillment;

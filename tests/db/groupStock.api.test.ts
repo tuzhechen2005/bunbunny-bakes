@@ -39,7 +39,7 @@ it('public pools expose only aggregate progress; admin decisions and stock route
   expect(publicResult.status).toBe(200);
   const payload = await publicResult.json();
   expect(payload.pools[0]).toMatchObject({ pieces: 3, status: 'CONFIRMED', min: 4 });
-  expect(Object.keys(payload.pools[0]).sort()).toEqual(['cakes', 'date', 'flavorId', 'min', 'needMore', 'pieces', 'productId', 'spare', 'status']);
+  expect(Object.keys(payload.pools[0]).sort()).toEqual(['cakes', 'date', 'flavorId', 'fullCakes', 'last', 'min', 'needMore', 'pieces', 'productId', 'spare', 'status']);
   expect(JSON.stringify(payload)).not.toMatch(/private|orderCount|decidedAt|note/);
   const admin = await POOLS(req(`/api/admin/group-pools?from=${date}&to=${date}`));
   expect((await admin.json()).pools[0].orderCount).toBe(1);

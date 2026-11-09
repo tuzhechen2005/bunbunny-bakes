@@ -12,7 +12,7 @@ import type {
   LocalDate,
   ProductStatus,
 } from "@/domain/types";
-import type { Tx } from "./db";
+import type { DbClient, Tx } from "./db";
 import { fromDbDate, toDbDate } from "./dbDates";
 
 /** An OpenDate row with `date` as a LocalDate. */
@@ -199,7 +199,7 @@ export async function loadDayContext(
 }
 
 /** Converted lots reserve spare once, regardless of whether those pieces have sold. */
-export async function loadPoolReservations(tx: Tx, date: string): Promise<CartLine[]> {
+export async function loadPoolReservations(tx: DbClient | Tx, date: string): Promise<CartLine[]> {
   const lots = await tx.stockLot.findMany({where:{date:toDbDate(date),groupPoolId:{not:null}},include:{items:{where:{order:{status:{in:["NEW","CONTACTED","CONFIRMED","BAKING","READY","COMPLETED"]}}}}}});
   return lots.flatMap(l => {
     const qty = l.closed ? l.items.reduce((n,i)=>n+i.qty,0) : l.qty;

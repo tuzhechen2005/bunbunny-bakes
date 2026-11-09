@@ -18,15 +18,13 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-// D192 explicitly makes sale mode, threshold and pieces per cake public.
+// NORMAL products must not expose GROUP production metadata.
 const PRODUCT_KEYS = [
-  "batchYield",
   "bundlePriceCents",
   "bundleSize",
   "description",
   "field",
   "flavors",
-  "groupMin",
   "id",
   "imageUrl",
   "images",
@@ -35,7 +33,6 @@ const PRODUCT_KEYS = [
   "name",
   "pickupWeekdays",
   "priceFromCents",
-  "saleMode",
   "status",
   "unitPriceCents",
 ];
@@ -72,7 +69,7 @@ describe("GET /api/menu", () => {
     );
     for (const p of body.products) expect(Object.keys(p).sort()).toEqual(PRODUCT_KEYS);
     const text = JSON.stringify(body);
-    for (const leak of ["newUntil", "doughG", "roundG", "piecesPerRound", "dailyLimit", "capacityMode"]) {
+    for (const leak of ["newUntil", "doughG", "roundG", "piecesPerRound", "dailyLimit", "capacityMode", "batchYield"]) {
       expect(text).not.toContain(leak);
     }
   });

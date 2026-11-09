@@ -672,15 +672,15 @@ Ledger UI helpers (`src/domain/ledger.ts`, D190): `rangeSummary(from,to,orders,m
   每只门槛按店主采用 4 配置。NORMAL→GROUP 自动确认旧未来池，返回原有 `overLimitDates`；不拒绝旧超限订单。
 - 口味创建/PATCH：`pickupWeekdays: number[]`，省略保留/创建空，空继承商品星期；非空必须为商品星期子集。
   菜单口味在有轮换时附带 pickupWeekdays（省略等于空）。商品收窄星期时也验证全部已有口味。
-- `GET /api/menu` 商品新增 `saleMode, groupMin, batchYield`，无内部限额。
+- `GET /api/menu` 仅 GROUP 商品提供 `saleMode, groupMin, batchYield`，无内部限额。
 - `POST /api/orders`、`POST /api/admin/orders`、`PATCH /api/admin/orders/{id}` 的 items 行新增：
   `{productId, flavorId?, qty, ifNotFormed?:"CONTACT"|"CANCEL"|null, stockLotId?:uuid|null}`。
-  新 GROUP 预订行必须明确选择 ifNotFormed；NORMAL/现货保存 null；旧行的 null 保持合法。
+  新 GROUP 预订行省略 ifNotFormed 默认 CONTACT；NORMAL/现货保存 null；旧行的 null 保持合法。
   同产品/口味不同 stockLotId 各自一行；现货和预订分别定价、不跨行凑套餐。
   现货 lot 必须匹配日期、商品、口味；售完 `FULL`，过期/关闭 `CUTOFF_PASSED`，错配 `VALIDATION`。
   现货上限不可由 admin override 绕过。预订 CUTOFF 仍优先于 WEEKDAY/产能；后台预订仍可覆盖限额但需原因。
-- `GET /api/o/{token}` 拼单行附带 `poolStatus:"OPEN"|"FORMED"|"CONFIRMED"|"FAILED"`、`ifNotFormed`；
-  现货行附带 stockLotId。后台订单详情亦提供非空 ifNotFormed / stockLotId，供编辑保留。
+- `GET /api/o/{token}` 拼单行附带 `poolStatus:"OPEN"|"FORMED"|"CONFIRMED"|"FAILED"`、`ifNotFormed`、`willBake:boolean`；
+  现货行仅附带 stock:true，不返回 stockLotId。后台订单详情亦提供非空 ifNotFormed / stockLotId，供编辑保留。
 
 ### 公开查询
 
@@ -688,7 +688,7 @@ Ledger UI helpers (`src/domain/ledger.ts`, D190): `rangeSummary(from,to,orders,m
 按商品及口味星期过滤。`Cache-Control:no-store`，无客户、订单数、决定备注或订单列表。
 
 ```json
-{"pools":[{"date":"2026-11-13","productId":"uuid","flavorId":"uuid-or-null","pieces":7,"min":4,"cakes":2,"spare":5,"status":"OPEN","needMore":3}]}
+{"pools":[{"date":"2026-11-13","productId":"uuid","flavorId":"uuid-or-null","pieces":7,"min":4,"cakes":2,"fullCakes":1,"last":1,"spare":5,"status":"OPEN","needMore":3}]}
 ```
 
 `GET /api/stock-lots`：今天至未来 60 天，开放日、在售商品、未关闭/未过期且剩余>0 的 lots。
@@ -699,7 +699,7 @@ Ledger UI helpers (`src/domain/ledger.ts`, D190): `rangeSummary(from,to,orders,m
 
 `POST /api/availability` 输入 items 也支持 stockLotId；日期条目附带：
 
-- `groupPools`：仅购物车里的预订拼单商品/口味，字段 `{productId,flavorId,pieces,min,cakes,last,spare,formed,status,needMore}`。
+- `groupPools`：仅购物车里的预订拼单商品/口味，字段 `{productId,flavorId,pieces,min,cakes,fullCakes,last,spare,formed,status,needMore}`。
 - `stockLots`：该日公开 lots，与上面相同形状。
 - 无池/无现货时可省略，原有日期字段保持不变。只有带现货的购物车才展示今天；纯现货使用最早 lot.sellUntil 作 cutoffAt。
 - 拼单/现货不返回旧的减量/拆单提示（该搜索以普通件数为假设）；日期状态、soldOutFlavorIds、服务端定价继续可用。
@@ -709,7 +709,7 @@ Ledger UI helpers (`src/domain/ledger.ts`, D190): `rangeSummary(from,to,orders,m
 所有后台接口沿用 session + Origin 校验。查询范围首尾包含、最多相差 366 天。
 
 - `GET /api/admin/group-pools?from=YYYY-MM-DD&to=YYYY-MM-DD&productId={uuid?}` → `{pools:[...]}`。
-  每池 `{date,productId,flavorId,id|null,decision,minOverride,pieces,min,cakes,last,spare,formed,status,needMore,orderCount}`，包含零进度配置池。
+  每池 `{date,productId,flavorId,id|null,decision,minOverride,pieces,min,cakes,fullCakes,last,spare,formed,status,needMore,orderCount}`，包含零进度配置池。
 - `POST /api/admin/group-pools` body：
   `{date,productId,flavorId?:uuid|null,action:"confirm"|"fail"|"reopen"|"minimum",minOverride?:number|null,note?:string|null}`。
   `minimum` 必须提供 minOverride（null=清除），有效值 1..batchYield。CONFIRMED 不因改门槛倒退；
@@ -729,3 +729,11 @@ Ledger UI helpers (`src/domain/ledger.ts`, D190): `rangeSummary(from,to,orders,m
 
 修改、取消、恢复订单的库存/池进度均立即按有效订单推导。所有写入共享 OpenDate FOR UPDATE；
 公开查询只是展示，提交时在锁内重新检查。D191 的小小订单卡仍须顾客亲自确认并选择拼单失败处理方式。
+
+#### Round 1 response and input compatibility
+
+- Menu exposes saleMode/groupMin/batchYield only on GROUP products; NORMAL omits all three.
+- Public/admin pools and availability.groupPools include fullCakes and last. pieces remains preorder-only; production progress includes converted-lot reservations.
+- Customer GROUP order lines add willBake:boolean (FIFO rule in CAPACITY_RULES). Stock lines return stock:true instead of stockLotId. Admin details retain lot IDs.
+- Admin edits preserve omitted stockLotId/ifNotFormed for the same product/flavour; explicit null clears. Ambiguous multiple old lines require explicit stockLotId or null. New GROUP lines default to CONTACT.
+- Same-day mixed carts return CUTOFF in availability; FAILED pool decisions return FULL even for empty pools. Conversion confirms and audits the pool; fail/reopen with sold converted inventory returns VALIDATION.

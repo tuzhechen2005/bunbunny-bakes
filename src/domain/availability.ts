@@ -32,6 +32,7 @@ export interface AvailProduct extends CapacityProduct {
 }
 
 export interface OpenDay {
+  failedGroupPools?: { productId: string; flavorId: string | null }[];
   groupPools?: ({ productId: string; flavorId: string | null } & import("./groupPool").PoolProgress)[];
   stockLots?: { lotId: string; productId: string; flavorId: string | null; date: string; left: number; sellUntil: string }[];
   date: LocalDate;
@@ -131,7 +132,7 @@ export function evaluateDay(input: AvailabilityInput, day: OpenDay): DayEvaluati
     cutoffAt = deadlines.length === lines.length ? new Date(Math.min(...deadlines.map(s => new Date(s).getTime()))) : input.now;
   }
 
-  if (!isBeforeCutoff(input.now, cutoffAt)) {
+  if ((day.date === localDateOf(input.now) && preorder.length > 0) || !isBeforeCutoff(input.now, cutoffAt)) {
     return { state: "CUTOFF", cutoffAt, violations: [] };
   }
 
@@ -147,6 +148,8 @@ export function evaluateDay(input: AvailabilityInput, day: OpenDay): DayEvaluati
   if (weekday.length > 0) {
     return { state: "WEEKDAY", cutoffAt, violations: weekday };
   }
+
+  if (preorder.some(l => day.failedGroupPools?.some(p => p.productId === l.productId && p.flavorId === (l.flavorId ?? null)) || day.groupPools?.some(p => p.productId === l.productId && p.flavorId === (l.flavorId ?? null) && p.status === 'FAILED'))) return { state: 'FULL', cutoffAt, violations: [] };
 
   const { violations } = checkDay({
     date: day.date,

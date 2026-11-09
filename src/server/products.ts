@@ -254,9 +254,13 @@ export async function updateProduct(
   if (!z.uuid().safeParse(id).success) throw productNotFound();
 
   return db.$transaction(async (tx) => {
-    // Match order lock ordering: all existing dates first, then the product.
+    // Match order lock ordering: today/future dates first when capacity changes, then the product.
     // A concurrently added date with no orders needs no grandfathering.
-    const dates = await tx.openDate.findMany({ orderBy: { date: "asc" }, select: { date: true } });
+    const head = await tx.product.findUnique({ where: { id } });
+    if (!head) throw productNotFound();
+    const preview = parseOrThrow(fullSchema, { ...pickFields(head), ...patch });
+    const locksDates = CAPACITY_KEYS.some(k => !sameValue(preview[k], head[k]));
+    const dates = locksDates ? await tx.openDate.findMany({ where: { date: { gte: toDbDate(localDateOf(now)) } }, orderBy: { date: "asc" }, select: { date: true } }) : [];
     for (const d of dates) await tx.$queryRaw`SELECT "date" FROM "OpenDate" WHERE "date" = ${d.date}::date FOR UPDATE`;
     // Serialise concurrent edits of the same product.
     await tx.$queryRaw`SELECT "id" FROM "Product" WHERE "id" = ${id}::uuid FOR UPDATE`;
@@ -279,6 +283,9 @@ export async function updateProduct(
     if (changed.length === 0 && !newUntilChanged) return { product: before, overLimitDates: [] };
 
     const capacityChanged = CAPACITY_KEYS.some((k) => changed.includes(k));
+    // A concurrent product edit can turn a previously equal patch into a capacity change.
+    // Retry with the proper date-before-product lock order instead of locking backwards.
+    if (capacityChanged && !locksDates) throw new AppError("STALE");
     const oldProducts = capacityChanged ? await loadProductMap(tx) : null;
 
     const product = await tx.product.update({ where: { id }, data: { ...merged, newUntil }, include: PRODUCT_INCLUDE });
@@ -292,8 +299,9 @@ export async function updateProduct(
         seen.add(key);
         const where = {date:i.order.pickupDate,productId:id,flavorId:i.flavorId};
         const old = await tx.groupPool.findFirst({where});
+        if (old) continue;
         const data = {decision:'CONFIRMED' as const,decidedAt:now,note:'改为拼单前已有订单'};
-        const pool = old ? await tx.groupPool.update({where:{id:old.id},data}) : await tx.groupPool.create({data:{...where,...data}});
+        const pool = await tx.groupPool.create({data:{...where,...data}});
         await writeAudit(tx,{actor:'ADMIN',action:'groupPool.grandfather',entityType:'GroupPool',entityId:pool.id,after:pool,at:now});
       }
     }

@@ -275,6 +275,11 @@ export async function createCustomerOrder(
       }
       validateFlavors(cart, products);
       validateGroupChoices(cart, products);
+      if (date === localDateOf(now) && cart.some(l => !l.stockLotId)) throw new AppError('CUTOFF_PASSED');
+      for (const line of cart) if (!line.stockLotId && products[line.productId]?.saleMode === 'GROUP') {
+        const failed = await tx.groupPool.findFirst({ where: { date: toDbDate(date), productId: line.productId, flavorId: line.flavorId ?? null, decision: 'FAILED' } });
+        if (failed) throw new AppError('FULL');
+      }
       const overMax = [...productQuantities(cart)]
         .filter(([, qty]) => qty > settings.maxQtyPerItem)
         .map(([productId]) => ({ productId }));

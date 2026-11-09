@@ -392,3 +392,5 @@ applies migrations to that database without connecting to a maintenance database
 取消无需计数器更新。商品更新按日期升序锁已有 OpenDate 后锁商品，切换 GROUP 在同事务确认已有未来池；
 若读到并发新增且未锁的已占额日期，返回 STALE 整体回滚，可重试。余块生产预留见 CAPACITY_RULES §11。
 查询可用日期使用 REPEATABLE READ READ ONLY 快照；公开池只投影数量、门槛、状态，不包含订单数/顾客/备注。
+
+Round 1: no schema/migration changes. Product updates lock only today's/future OpenDate rows, and only for changed saleMode/capacity fields, before locking the product. Re-grandfathering preserves existing GroupPool rows. Conversion confirms and audits in the same transaction. All readers reuse loadPoolReservations (open qty / closed sold). See CAPACITY_RULES for FIFO and inherited edit fields.

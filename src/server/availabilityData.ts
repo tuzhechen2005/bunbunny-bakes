@@ -100,7 +100,8 @@ export async function loadAvailabilityInput(
           flavorLimits: Object.fromEntries(flavorOverrides.filter(o => fromDbDate(o.date) === date).map(o => [o.flavorId, o.limit])),
         };
         days.push({
-          groupPools: pools.filter(p => p.date === date).map(({productId,flavorId,pieces,min,cakes,last,spare,formed,status,needMore})=>({productId,flavorId,pieces,min,cakes,last,spare,formed,status,needMore})),
+          failedGroupPools: pools.filter(p => p.date === date && p.decision === "FAILED").map(({productId, flavorId}) => ({productId, flavorId})),
+          groupPools: pools.filter(p => p.date === date).map(({productId,flavorId,pieces,min,cakes,fullCakes,last,spare,formed,status,needMore})=>({productId,flavorId,pieces,min,cakes,fullCakes,last,spare,formed,status,needMore})),
           stockLots: lots.filter(l => l.date === date),
           date,
           isOpen: od.isOpen,

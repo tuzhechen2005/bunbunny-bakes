@@ -56,7 +56,7 @@ export async function updateFlavor(db: DbClient, productId: string, flavorId: st
     if (!before) throw new AppError("NOT_FOUND");
     validateBundle(locked.bundleSize, data.bundlePriceCents);
     if (locked.pickupWeekdays.length && data.pickupWeekdays?.some(d => !locked.pickupWeekdays.includes(d))) throw new AppError("VALIDATION");
-    const changed = Object.entries(data).some(([k, v]) => before[k as keyof typeof data] !== v);
+    const changed = Object.entries(data).some(([k, v]) => JSON.stringify(before[k as keyof typeof data]) !== JSON.stringify(v));
     if (changed) {
       const after = await tx.productFlavor.update({ where: { id: flavorId }, data: { ...data, updatedAt: now } });
       await writeAudit(tx, { actor: "ADMIN", action: "product.flavor.update", entityType: "Product", entityId: productId, before, after, at: now });

@@ -13,6 +13,7 @@ import type { LocalDate } from "@/domain/types";
 import type { Prisma } from "@/generated/prisma/client";
 import type { DbClient } from "./db";
 import { fromDbDate, toDbDate } from "./dbDates";
+import { loadPoolReservations } from "./day";
 import { enqueueNotification } from "./outbox";
 
 export type SummaryJobResult =
@@ -101,6 +102,7 @@ export async function loadDailySummary(client: DbClient, now: Date): Promise<Dai
       date,
       isOpen: row?.isOpen ?? false,
       limits: {
+        poolReservations: await loadPoolReservations(client, date),
         doughLimitG: row?.doughLimitG ?? settings.defaultDoughLimitG,
         deliveryEnabled: row?.deliveryEnabled ?? true,
         deliveryLimit: row?.deliveryLimit ?? settings.defaultDeliveryLimit,

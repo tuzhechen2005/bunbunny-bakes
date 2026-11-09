@@ -45,11 +45,11 @@ describe('group and stock under the real date lock', () => {
     await customerCancel(db, { viewToken: a.viewToken }, now);
     expect((await progress()).pieces).toBe(0);
   });
-  it('requires GROUP preferences for both customer and admin, NORMAL ignores them', async () => {
+  it('defaults GROUP preferences for customer and admin, NORMAL ignores them', async () => {
     const input = { items: [{ productId, qty: 1 }], pickupDate: date, fulfillment: 'PICKUP' as const, wechatId: 'choice' };
-    await expect(createCustomerOrder(db, input, now)).rejects.toMatchObject({ code: 'VALIDATION' });
-    await expect(createAdminOrder(db, input, now)).rejects.toMatchObject({ code: 'VALIDATION' });
-    await updateProduct(db, productId, { saleMode: 'NORMAL' }, now);
+    await createCustomerOrder(db, input, now);
+    await createAdminOrder(db, input, now);
+    await updateProduct(db, productId, { saleMode: 'NORMAL', dailyLimit: 100 }, now);
     const o = await buy();
     expect((await db.orderItem.findFirstOrThrow({ where: { orderId: o.id } })).ifNotFormed).toBeNull();
   });
@@ -71,8 +71,8 @@ describe('group and stock under the real date lock', () => {
     expect((await db.orderItem.findFirstOrThrow({ where: { orderId: o.id } })).ifNotFormed).toBe('CANCEL');
     await decidePool(db, { ...key(), action: 'confirm' }, now);
     await customerCancel(db, { viewToken: o.viewToken }, now);
-    expect((await progress()).status).toBe('CONFIRMED');
-    expect((await getCustomerOrderView(db, o.viewToken, now)).items[0].poolStatus).toBe('CONFIRMED');
+    expect(await progress()).toMatchObject({ status: 'OPEN', decision: 'CONFIRMED' });
+    expect((await getCustomerOrderView(db, o.viewToken, now)).items[0].poolStatus).toBe('OPEN');
   });
   it('stock last piece race after preorder cutoff, idempotency, cancel and restore', async () => {
     const lot = await createStock(db, { ...key(), qty: 1 }, now);
@@ -197,11 +197,166 @@ it('editing expired stock down is allowed and closed-spare reservations recomput
   const o = await buy(2, { stockLotId: lot.id });
   await updateStock(db, lot.id, { closed: true }, now);
   const old = await db.order.findUniqueOrThrow({ where: { id: o.id } });
-  await adminEditOrder(db, { orderId: o.id, expectedUpdatedAt: old.updatedAt.toISOString(), items: [{ productId, qty: 1, stockLotId: lot.id }, { productId, qty: 1, ifNotFormed: 'CONTACT' }] }, new Date('2026-11-14T00:00:00Z'));
+  await adminEditOrder(db, { orderId: o.id, expectedUpdatedAt: old.updatedAt.toISOString(), items: [{ productId, qty: 1, stockLotId: lot.id }, { productId, qty: 1, stockLotId: null, ifNotFormed: 'CONTACT' }] }, new Date('2026-11-14T00:00:00Z'));
   expect((await progress()).pieces).toBe(5);
   expect((await listStock(db, { from: date, to: date }, now, true))[0]).toMatchObject({ sold: 1, closed: true });
 });
 it('mixed preorder cutoff takes priority over sold-out stock', async () => {
   const lot = await createStock(db, { ...key(), qty: 0 }, now);
   await expect(createCustomerOrder(db, { items: [{ productId, qty: 1, stockLotId: lot.id }, { productId, qty: 1, ifNotFormed: 'CONTACT' }], pickupDate: date, fulfillment: 'PICKUP', wechatId: 'cutoff-first' }, new Date('2026-11-13T17:00:00Z'))).rejects.toMatchObject({ code: 'CUTOFF_PASSED' });
+});
+
+import { listPools } from '@/server/groupStock';
+import { loadDailySummary } from '@/server/summaryJob';
+import { loadCalendar } from '@/server/calendar';
+import { getMenu } from '@/server/menu';
+import { evaluateDay } from '@/domain/availability';
+it('H1: converted pieces appear once in pools, availability, summary and calendar', async () => {
+  await updateProduct(db, productId, { dailyLimit: 2 }, now);
+  await buy(4);
+  const lot = await createStock(db, key(), now, true);
+  expect(await progress()).toMatchObject({ pieces: 4, spare: 0 });
+  await buy();
+  const expected = { pieces: 5, cakes: 2, last: 1, fullCakes: 1, spare: 5 };
+  expect(await progress()).toMatchObject(expected);
+  expect((await listPools(db, { from: date, to: date }, now))[0]).toMatchObject(expected);
+  const input = await loadAvailabilityInput(db, { cart: [{ productId, qty: 1 }], fulfillment: 'PICKUP', now });
+  expect(listAvailability(input).dates[0].groupPools?.[0]).toMatchObject(expected);
+  const summary = await loadDailySummary(db, new Date('2026-11-12T15:00:00Z'));
+  expect(summary.tonight.lines[0]).toMatchObject({ qty: 5, batches: 2, leftover: 5 });
+  const calendar = await db.$transaction(tx => loadCalendar(tx, date, date));
+  expect(calendar.days[0].production.independent[0]).toMatchObject({ qty: 5, batches: 2, leftover: 5 });
+  await buy(1, { stockLotId: lot.id });
+  await updateStock(db, lot.id, { closed: true }, now);
+  expect(await progress()).toMatchObject({ cakes: 1, last: 6, spare: 0 });
+});
+it('H1 race: conversion and preorder serialize without exceeding the cake limit', async () => {
+  await buy(4);
+  const results = await Promise.allSettled([createStock(db, key(), now, true), buy(2)]);
+  expect(results.filter(r => r.status === 'fulfilled').length).toBeGreaterThanOrEqual(1);
+  const p = await progress();
+  expect(p.cakes).toBe(1);
+  const lots = await db.stockLot.findMany();
+  expect(p.pieces + lots.reduce((n,l) => n + l.qty, 0)).toBe(6);
+});
+it('M1: same-day leadDays zero preorder is rejected alone and mixed with stock', async () => {
+  await updateProduct(db, productId, { leadDays: 0 }, now);
+  const at = new Date('2026-11-13T15:00:00Z');
+  const lot = await createStock(db, { ...key(), qty: 2 }, now);
+  for (const cart of [[{ productId, qty: 1 }], [{ productId, qty: 1 }, { productId, qty: 1, stockLotId: lot.id }]]) {
+    await expect(createCustomerOrder(db, { items: cart, pickupDate: date, fulfillment: 'PICKUP', wechatId: 'today' }, at)).rejects.toMatchObject({ code: cart.length === 1 ? 'DATE_CLOSED' : 'CUTOFF_PASSED' });
+    const input = await loadAvailabilityInput(db, { cart, fulfillment: 'PICKUP', now: at });
+    expect(evaluateDay(input, input.days.find(d => d.date === date)!).state).toBe('CUTOFF');
+  }
+});
+it('M2: conversion confirms and audits; sold converted stock prevents fail/reopen', async () => {
+  await buy(4);
+  const lot = await createStock(db, key(), now, true);
+  expect(await db.groupPool.findFirst()).toMatchObject({ decision: 'CONFIRMED' });
+  expect(await db.auditLog.count({ where: { action: 'groupPool.confirm' } })).toBe(1);
+  await buy(1, { stockLotId: lot.id });
+  for (const action of ['fail', 'reopen']) await expect(decidePool(db, { ...key(), action }, now)).rejects.toMatchObject({ code: 'VALIDATION' });
+});
+it('M3: failed empty pool rejects customer growth and availability flags FULL', async () => {
+  await decidePool(db, { ...key(), action: 'fail' }, now);
+  await expect(buy()).rejects.toMatchObject({ code: 'FULL' });
+  const input = await loadAvailabilityInput(db, { cart: [{ productId, qty: 1 }], fulfillment: 'PICKUP', now });
+  expect(listAvailability(input).dates[0].state).toBe('FULL');
+});
+it('M4: only GROUP menu products expose production fields', async () => {
+  expect((await getMenu(db, now)).products[0]).toMatchObject({ saleMode: 'GROUP', groupMin: 4, batchYield: 6 });
+  await updateProduct(db, productId, { saleMode: 'NORMAL' }, now);
+  const p = (await getMenu(db, now)).products[0];
+  for (const field of ['saleMode', 'groupMin', 'batchYield']) expect(p).not.toHaveProperty(field);
+});
+it('M5/L5: omitted admin edit fields retain stock and preference; customer view hides lot id', async () => {
+  const lot = await createStock(db, { ...key(), qty: 2 }, now);
+  const stock = await buy(2, { stockLotId: lot.id });
+  const preorder = await buy(2, { ifNotFormed: 'CANCEL' });
+  for (const o of [stock, preorder]) {
+    const old = await db.order.findUniqueOrThrow({ where: { id: o.id } });
+    await adminEditOrder(db, { orderId: o.id, expectedUpdatedAt: old.updatedAt.toISOString(), items: [{ productId, qty: 1 }] }, now);
+  }
+  expect(await db.orderItem.findFirst({ where: { orderId: stock.id } })).toMatchObject({ stockLotId: lot.id, qty: 1 });
+  expect(await db.orderItem.findFirst({ where: { orderId: preorder.id } })).toMatchObject({ ifNotFormed: 'CANCEL', qty: 1 });
+  const view = (await getCustomerOrderView(db, stock.viewToken, now)).items[0];
+  expect(view).toHaveProperty('stock', true); expect(view).not.toHaveProperty('stockLotId');
+});
+it('M5: customer and admin create default omitted GROUP choice to CONTACT', async () => {
+  const input = { items: [{ productId, qty: 1 }], pickupDate: date, fulfillment: 'PICKUP' as const, wechatId: 'legacy client' };
+  for (const create of [createCustomerOrder, createAdminOrder]) {
+    const o = await create(db, input, now);
+    expect(await db.orderItem.findFirst({ where: { orderId: o.id } })).toMatchObject({ ifNotFormed: 'CONTACT' });
+  }
+});
+it('M6: full-cake FIFO allocation distinguishes earlier orders from the unformed tail', async () => {
+  await updateProduct(db, productId, { dailyLimit: 2 }, now);
+  const first = await buy(6);
+  const last = await buy(1, {}, new Date(now.getTime() + 1000));
+  expect(await progress()).toMatchObject({ fullCakes: 1, last: 1, status: 'OPEN' });
+  expect((await getCustomerOrderView(db, first.viewToken, now)).items[0]).toMatchObject({ poolStatus: 'OPEN', willBake: true });
+  expect((await getCustomerOrderView(db, last.viewToken, now)).items[0]).toMatchObject({ poolStatus: 'OPEN', willBake: false });
+  await decidePool(db, { ...key(), action: 'confirm' }, now);
+  expect((await getCustomerOrderView(db, last.viewToken, now)).items[0].willBake).toBe(true);
+});
+it('L2: status correction ignores expiry but still enforces stock quantity', async () => {
+  const lot = await createStock(db, { ...key(), qty: 1 }, now);
+  const o = await buy(1, { stockLotId: lot.id });
+  await customerCancel(db, { viewToken: o.viewToken }, now);
+  await updateStock(db, lot.id, { closed: true }, now);
+  const old = await db.order.findUniqueOrThrow({ where: { id: o.id } });
+  await adminCorrectStatus(db, { orderId: o.id, expectedUpdatedAt: old.updatedAt.toISOString(), to: 'CONFIRMED', reason: 'already delivered' }, new Date('2026-11-14T15:00:00Z'));
+  expect(await db.order.findUnique({ where: { id: o.id } })).toMatchObject({ status: 'CONFIRMED' });
+});
+it('L6: re-grandfathering preserves existing decisions and audit history', async () => {
+  await buy();
+  await decidePool(db, { ...key(), action: 'fail', note: 'keep this decision' }, now);
+  await updateProduct(db, productId, { saleMode: 'NORMAL' }, now);
+  await updateProduct(db, productId, { saleMode: 'GROUP' }, now);
+  expect(await db.groupPool.findFirst()).toMatchObject({ decision: 'FAILED', note: 'keep this decision' });
+  expect(await db.auditLog.count({ where: { action: 'groupPool.grandfather' } })).toBe(0);
+});
+it('L7: equivalent weekday arrays do not update timestamps or create audits', async () => {
+  const p = await createFlavor(db, productId, { name: 'rotation', priceCents: 500, pickupWeekdays: [5, 6] }, now);
+  const f = p.flavors[0];
+  const count = await db.auditLog.count();
+  await updateFlavor(db, productId, f.id, { pickupWeekdays: [6, 5] }, new Date(now.getTime() + 1000));
+  expect((await db.productFlavor.findUniqueOrThrow({ where: { id: f.id } })).updatedAt).toEqual(f.updatedAt);
+  expect(await db.auditLog.count()).toBe(count);
+});
+it('L4: product edits do not lock past dates, or any dates for non-capacity/equal patches', async () => {
+  const past = '2026-11-01';
+  await createOpenDate(past);
+  for (const [lockedDate, patch] of [[date, { name: 'renamed' }], [date, { dailyLimit: 1 }], [date, { doughG: 100 }], [past, { dailyLimit: 2 }]] as const) {
+    let release!: () => void;
+    let ready!: () => void;
+    const acquired = new Promise<void>(resolve => { ready = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const holder = db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "date" FROM "OpenDate" WHERE "date" = ${toDbDate(lockedDate)}::date FOR UPDATE`;
+      ready(); await gate;
+    });
+    await acquired;
+    const edit = updateProduct(db, productId, patch, now);
+    try {
+      expect(await Promise.race([edit.then(() => 'completed'), new Promise(resolve => setTimeout(() => resolve('blocked'), 1000))])).toBe('completed');
+    } finally { release(); await holder; await edit; }
+  }
+});
+it('H1: re-conversion uses closed sold pieces exactly once', async () => {
+  await buy(4);
+  const lot = await createStock(db, key(), now, true);
+  await buy(1, { stockLotId: lot.id });
+  await updateStock(db, lot.id, { closed: true }, now);
+  expect(await progress()).toMatchObject({ pieces: 4, last: 5, spare: 1 });
+  expect((await createStock(db, key(), now, true)).qty).toBe(1);
+  expect(await progress()).toMatchObject({ cakes: 1, last: 6, spare: 0 });
+});
+it('M6: crossing lines are false and same-createdAt ties use order UUID', async () => {
+  await updateProduct(db, productId, { dailyLimit: 2 }, now);
+  const a = await buy(4), b = await buy(4);
+  await db.order.updateMany({ data: { createdAt: now } });
+  const [first, last] = [a,b].sort((x,y) => x.id.localeCompare(y.id));
+  expect((await getCustomerOrderView(db, first.viewToken, now)).items[0].willBake).toBe(true);
+  expect((await getCustomerOrderView(db, last.viewToken, now)).items[0].willBake).toBe(false);
 });

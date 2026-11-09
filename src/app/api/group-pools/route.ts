@@ -19,7 +19,7 @@ export async function GET(request: Request) {
         const product = products.find(x => x.id === p.productId);
         const flavor = product?.flavors.find(f => f.id === p.flavorId);
         return dates.has(p.date) && product && allowsDate(product, p.date) && (!p.flavorId || (flavor?.active && allowsDate(flavor, p.date)));
-      }).map(({ date, productId, flavorId, pieces, min, cakes, spare, status, needMore }) => ({ date, productId, flavorId, pieces, min, cakes, spare, status, needMore }));
+      }).map(({ date, productId, flavorId, pieces, min, cakes, fullCakes, last, spare, status, needMore }) => ({ date, productId, flavorId, pieces, min, cakes, fullCakes, last, spare, status, needMore }));
     }, { isolationLevel: 'RepeatableRead' });
     return Response.json({ pools }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) { return jsonError(e); }

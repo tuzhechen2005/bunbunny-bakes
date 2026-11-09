@@ -2,7 +2,7 @@ import { OCCUPYING_STATUSES, type DayOrder } from './types';
 
 export type PoolDecision = 'OPEN' | 'CONFIRMED' | 'FAILED';
 export interface PoolProgress {
-  pieces: number; min: number; cakes: number; last: number; spare: number;
+  pieces: number; min: number; cakes: number; fullCakes: number; last: number; spare: number;
   formed: boolean; status: PoolDecision | 'FORMED'; needMore: number;
 }
 
@@ -13,8 +13,8 @@ export function groupPool(input: { pieces: number; batchYield: number; min: numb
   const cakes = Math.ceil(pieces / batchYield);
   const last = pieces ? pieces - (cakes - 1) * batchYield : 0;
   const formed = pieces > 0 && (last >= min || decision === 'CONFIRMED');
-  const status = decision === 'FAILED' ? 'FAILED' : decision === 'CONFIRMED' ? 'CONFIRMED' : now >= cutoffAt && !formed ? 'FAILED' : formed ? 'FORMED' : 'OPEN';
-  return { pieces, min, cakes, last, spare: cakes * batchYield - pieces, formed, status, needMore: decision === 'CONFIRMED' ? 0 : Math.max(0, min - last) };
+  const status = pieces === 0 ? 'OPEN' : decision === 'FAILED' ? 'FAILED' : decision === 'CONFIRMED' ? 'CONFIRMED' : now >= cutoffAt && !formed ? 'FAILED' : formed ? 'FORMED' : 'OPEN';
+  return { pieces, min, cakes, fullCakes: Math.max(0, last < min ? cakes - 1 : cakes), last, spare: cakes * batchYield - pieces, formed, status, needMore: decision === 'CONFIRMED' ? 0 : Math.max(0, min - last) };
 }
 
 export function poolPieces(orders: DayOrder[], productId: string, flavorId: string | null): number {

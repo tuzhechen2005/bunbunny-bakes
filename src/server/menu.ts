@@ -84,7 +84,7 @@ export async function getMenuData(db: DbClient): Promise<MenuData> {
       // A row whose cover was set without a photos row still shows that cover.
       const images = p.images.length > 0 ? p.images.map((i) => i.url) : p.imageUrl ? [p.imageUrl] : [];
       return {
-        saleMode: p.saleMode, groupMin: p.groupMin, batchYield: p.batchYield,
+        ...(p.saleMode === "GROUP" ? { saleMode: p.saleMode, groupMin: p.groupMin, batchYield: p.batchYield } : {}),
         newUntil: p.newUntil,
         id: p.id,
         name: p.name,
