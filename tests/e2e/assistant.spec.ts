@@ -109,8 +109,8 @@ test.describe("assistant", () => {
     await scrollToList(page);
     await page.getByTestId("assistant-entry").click();
     await expect(page.getByRole("dialog", { name: "小小🐰" })).toBeVisible();
-    await expect(page.getByTestId("assistant-opener")).toHaveText("想要什么面包、哪天取？跟我说就行");
-    await expect(page.getByTestId("assistant-chips").getByRole("button")).toHaveText(["周四能取什么", "泡芙怎么订", "可以配送吗"]);
+    await expect(page.getByTestId("assistant-opener")).toHaveText("想要什么、哪天取，告诉我，我帮你下单");
+    await expect(page.getByTestId("assistant-chips").getByRole("button")).toHaveText(["帮我下单", "周四能取什么", "泡芙怎么订", "可以配送吗"]);
     await shot(page, "sheet");
     await page.getByRole("button", { name: "周四能取什么" }).click();
     await expect(page.getByTestId("assistant-reply")).toContainText("周四有奶酪角");
@@ -139,15 +139,15 @@ test.describe("assistant", () => {
     await scrollToList(page);
     const entry = page.getByTestId("assistant-entry");
     await expect(entry).toHaveAttribute("data-teasing", "1", { timeout: 6000 });
-    await expect(page.getByTestId("assistant-teaser")).toHaveText("这周四能取什么？");
+    await expect(page.getByTestId("assistant-teaser")).toHaveText("帮我下单");
     // The orb shrinks to about half while a question shows.
     await expect.poll(async () => (await entry.boundingBox())?.height ?? 99).toBeLessThan(50);
-    await expect(entry).toHaveAccessibleName("这周四能取什么？");
+    await expect(entry).toHaveAccessibleName("帮我下单");
     await entry.click();
     await expect(page.getByRole("dialog", { name: "小小🐰" })).toBeVisible();
     await expect(page.getByTestId("assistant-sheet-orb")).toHaveAttribute("data-thinking", "1");
     await expect(page.getByTestId("assistant-typing")).toBeVisible();
-    expect(body!.messages).toEqual([{ role: "user", content: "这周四能取什么？" }]);
+    expect(body!.messages).toEqual([{ role: "user", content: "帮我下单" }]);
     release();
     await expect(page.getByTestId("assistant-reply")).toContainText("周四有奶酪角");
     await expect(page.getByTestId("assistant-sheet-orb")).toHaveAttribute("data-thinking", "0");
@@ -165,7 +165,7 @@ test.describe("assistant", () => {
     const entry = page.getByTestId("assistant-entry");
     await expect(entry).toHaveAttribute("data-teasing", "1", { timeout: 6000 });
     await expect(entry).toHaveAttribute("data-teasing", "0", { timeout: 7000 });
-    await expect(page.getByTestId("assistant-teaser")).toHaveText("泡芙怎么订？", { timeout: 7000 });
+    await expect(page.getByTestId("assistant-teaser")).toHaveText("周四取 4 个奶酪角", { timeout: 7000 });
     await expect(entry).toHaveAttribute("data-teasing", "0", { timeout: 7000 });
     await entry.click();
     await page.getByTestId("assistant-close").click();

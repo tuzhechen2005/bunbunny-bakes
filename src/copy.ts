@@ -240,13 +240,14 @@ export const copy = {
     /** 小小🐰 assistant (N4): entry button, sheet, suggestion card and error lines. */
     assistant: {
       name: "小小🐰",
-      entryAria: "找小小🐰帮忙选面包",
+      entryAria: "找小小🐰帮你选面包、下单",
       close: "关闭",
-      opener: "想要什么面包、哪天取？跟我说就行",
-      chips: ["周四能取什么", "泡芙怎么订", "可以配送吗"],
+      /** D191: the assistant can place the order (the customer confirms on the card). */
+      opener: "想要什么、哪天取，告诉我，我帮你下单",
+      chips: ["帮我下单", "周四能取什么", "泡芙怎么订", "可以配送吗"],
       /** Bubbles that pop up beside the orb now and then (D120); a tap asks that question. */
-      teasers: ["这周四能取什么？", "泡芙怎么订？", "可以配送吗？", "帮我配 4 个奶酪角"],
-      teasersCheckout: ["哪天还能取？", "满多少免运费？", "泡芙只能周三吗？"],
+      teasers: ["帮我下单", "周四取 4 个奶酪角", "这周四能取什么？", "泡芙怎么订？"],
+      teasersCheckout: ["帮我下单", "哪天还能取？", "满多少免运费？"],
       inputLabel: "想问什么",
       inputPlaceholder: "想问什么",
       send: "发送",
