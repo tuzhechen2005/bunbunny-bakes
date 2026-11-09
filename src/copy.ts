@@ -118,7 +118,12 @@ export const copy = {
     group: {
       rule: "拼单：满 {min} 块开做（一只 {size} 块）",
       progress: "{have}/{min} 块 · 还差 {more} 块",
+      /** Live, with the pieces the customer is choosing. */
+      progressMine: "{have}/{min} 块（含你 {mine} 块）· 还差 {more} 块",
+      formsWithYou: "加上你的就成团",
       formed: "已成团",
+      /** Owner confirmed (or ordered before 拼单 started): it will be made. */
+      confirmed: "确认开做 · 还剩 {spare} 块",
       failed: "未成团",
       noDates: "最近没有可拼的日子",
       tag: "拼单",

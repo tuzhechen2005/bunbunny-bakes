@@ -20,7 +20,7 @@ const BREAD = {
   bundlePriceCents: 899, status: "ACTIVE", leadDays: 1, pickupWeekdays: [], field: { bg: "#e8b84b", ink: "#3a2a12", ink2: "#6b5430" },
 };
 
-const pool = (date: string, flavorId: string, last: number, status = "OPEN") => ({
+const pool = (date: string, flavorId: string, last: number, status = "OPEN"): Record<string, unknown> => ({
   date, productId: BASQUE.id, flavorId, pieces: last, min: 4, cakes: last ? 1 : 0, fullCakes: 0, last, spare: 6 - last, status, needMore: Math.max(0, 4 - last),
 });
 
@@ -29,7 +29,17 @@ async function mock(page: Page, posted: Record<string, unknown>[] = []) {
     r.fulfill({ json: { orderingEnabled: true, products: [BASQUE, BREAD], pickupNote: "", deliveryFeeCents: 500, freeDeliveryMinCents: 2500, maxQtyPerItem: 8 } }),
   );
   await page.route("**/api/group-pools?*", (r) =>
-    r.fulfill({ json: { pools: [pool("2026-11-17", PLAIN, 3), pool("2026-11-24", PLAIN, 0), pool("2026-11-17", TEA, 4, "FORMED")] } }),
+    r.fulfill({
+      json: {
+        pools: [
+          pool("2026-11-17", PLAIN, 3),
+          pool("2026-11-24", PLAIN, 0),
+          pool("2026-11-17", TEA, 4, "FORMED"),
+          // Ordered before 拼单 started: confirmed with a single piece; it says so instead of 已成团.
+          pool("2026-11-19", TEA, 1, "CONFIRMED"),
+        ],
+      },
+    }),
   );
   await page.route("**/api/availability", (r) =>
     r.fulfill({
@@ -61,10 +71,13 @@ test.describe("拼单 (customer)", () => {
     await page.getByTestId(`detail-flavor-${PLAIN}`).click();
     const rows = group.getByTestId("detail-pool");
     await expect(rows).toHaveCount(2);
-    await expect(rows.first()).toContainText("3/4 块 · 还差 1 块");
-    await expect(rows.first().getByRole("progressbar")).toHaveAttribute("aria-valuenow", "3");
+    // Live: the 1 piece on the stepper counts. 3 ordered + 1 = the cake forms; an empty date shows only mine.
+    await expect(rows.first()).toContainText("加上你的就成团");
+    await expect(rows.first().getByRole("progressbar")).toHaveAttribute("aria-valuenow", "4");
+    await expect(rows.nth(1)).toContainText("1/4 块（含你 1 块）· 还差 3 块");
     await page.getByTestId(`detail-flavor-${TEA}`).click();
     await expect(group.getByTestId("detail-pool").first()).toContainText("已成团");
+    await expect(group.getByTestId("detail-pool").nth(1)).toContainText("确认开做 · 还剩 4 块");
   });
 
   test("checkout: the line's bar, the 没成团 choice, and the choice is sent with the 拼单 line only", async ({ page }) => {
@@ -90,7 +103,8 @@ test.describe("拼单 (customer)", () => {
     await page.goto("/checkout");
     const basque = page.locator(`[data-testid="cart-line"][data-product-id="${BASQUE.id}"]`);
     await page.locator('[data-testid="date-card"][data-date="2026-11-17"]').click();
-    await expect(basque.getByTestId("line-pool")).toContainText("3/4 块 · 还差 1 块");
+    // 3 ordered + the 2 in this bag.
+    await expect(basque.getByTestId("line-pool")).toContainText("加上你的就成团");
     const choice = page.getByTestId("group-choice");
     await expect(choice).toContainText("满 4 块开做；没成团时：");
     await expect(choice.getByTestId("group-if-contact")).toHaveAttribute("aria-checked", "true");

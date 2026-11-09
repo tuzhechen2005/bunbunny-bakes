@@ -1234,6 +1234,10 @@
   background: currentColor;
   transition: width 0.6s var(--ease);
 }
+/* The customer's own pieces: the same ink, lighter. */
+.hm-pool-track i.is-mine {
+  opacity: 0.35;
+}
 .hm-pool[data-formed] .hm-pool-track i {
   background: var(--c-red);
 }

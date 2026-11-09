@@ -51,6 +51,8 @@ export interface DetailProps {
   /** D194: one 现货 piece from a lot; `stockInCart` says how many of that lot are in the bag. */
   onAddStock?: (product: MenuProduct, lot: PublicLot, from: DOMRect) => void;
   stockInCart?: (lotId: string) => number;
+  /** D192: preorder pieces of this product + flavour already in the bag (they count towards the bar). */
+  bagQty?: (productId: string, flavorId: string | null) => number;
   /** Opened by key (the close button gets a focus ring) or by touch / mouse (no ring anywhere). */
   via: "key" | "pointer";
   ref?: Ref<DetailHandle>;
@@ -59,7 +61,7 @@ export interface DetailProps {
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /** The taken-down bread (FRONTEND.md 4.2): colour field, photo with peg, details, sticky add button. */
-export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChange, onClose, onAdd, onAddStock, stockInCart, via, ref }: DetailProps) {
+export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChange, onClose, onAdd, onAddStock, stockInCart, bagQty, via, ref }: DetailProps) {
   const { reduced } = useMotionPrefs();
   const n = products.length;
   const [i, setI] = useState(startIndex);
@@ -369,7 +371,7 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
               ))}
             </div>
           ) : null}
-          {product.saleMode === "GROUP" ? <GroupProgress product={product} flavorId={flavorId} /> : null}
+          {product.saleMode === "GROUP" ? <GroupProgress product={product} flavorId={flavorId} mine={(bagQty?.(product.id, flavorId) ?? 0) + q} /> : null}
           {onAddStock ? (
             <StockOffer product={product} flavorId={flavorId} inCart={stockInCart ?? (() => 0)} onAdd={(lot, rect) => onAddStock(product, lot, rect)} />
           ) : null}

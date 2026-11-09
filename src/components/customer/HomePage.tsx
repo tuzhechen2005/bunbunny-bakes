@@ -444,6 +444,7 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
           onAdd={addFromDetail}
           onAddStock={addStock}
           stockInCart={stockInCart}
+          bagQty={(id, f) => items.reduce((n, i) => (i.productId === id && (i.flavorId ?? null) === f && !i.stockLotId ? n + i.qty : n), 0)}
           via={detail.via}
         />
       ) : null}

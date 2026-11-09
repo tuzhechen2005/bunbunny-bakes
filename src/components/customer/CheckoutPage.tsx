@@ -753,7 +753,7 @@ export function CheckoutPage() {
                       <span className="text-xs font-semibold text-c-red" data-testid="line-stock">{groupT.stockTag}</span>
                     ) : product.saleMode === "GROUP" ? (() => {
                       const pool = selectedPools.find((g) => g.productId === productId && (g.flavorId ?? null) === (line.flavorId ?? null));
-                      return pool ? <PoolBar pool={pool} testId="line-pool" /> : <span className="text-xs font-semibold text-c-grey">{groupT.tag}</span>;
+                      return pool ? <PoolBar pool={pool} batch={product.batchYield ?? 1} mine={qty} testId="line-pool" /> : <span className="text-xs font-semibold text-c-grey">{groupT.tag}</span>;
                     })() : null}
                     <p className="font-num text-[13px] leading-snug font-semibold text-c-grey" data-testid="line-breakdown">
                       {line.flavorId ? formatCents(cartLineTotal(line, product)) : breakdownText(qty, product)}
