@@ -114,10 +114,11 @@ test("ledger: a paid order without a method is 未注明, not 其他", async ({ 
   await withDb((c) => c.query(`UPDATE "Order" SET paid = true, "paidMethod" = NULL WHERE id = $1`, [o.id]));
   await loginAsAdmin(page, baseURL!, "e2e-polish-ledger");
   await page.goto("/admin/ledger");
+  await page.getByTestId("ledger-mode-month").click();
   const [year, month] = date.split("-").map(Number);
   const label = ledger.monthLabel.replace("{year}", String(year)).replace("{month}", String(month));
   if ((await page.getByTestId("ledger-month-label").textContent()) !== label) {
-    await page.getByRole("button", { name: ledger.nextMonth }).click();
+    await page.getByRole("button", { name: ledger.next }).click();
   }
   await expect(page.getByTestId("ledger-month-label")).toHaveText(label);
   await expect(page.getByTestId("month-method-UNSPECIFIED")).toHaveText("$4.98");

@@ -16,11 +16,13 @@ async function noHorizontalScroll(page: Page): Promise<boolean> {
 /** Opens /admin/ledger and moves to the month that contains `date`. */
 async function openMonthOf(page: Page, date: string) {
   await page.goto("/admin/ledger");
+  // D190: the page opens on this week; 月 is a preset.
+  await page.getByTestId("ledger-mode-month").click();
   const [year, month] = date.split("-").map(Number);
   const label = t.monthLabel.replace("{year}", String(year)).replace("{month}", String(month));
   for (let i = 0; i < 2; i++) {
     if ((await page.getByTestId("ledger-month-label").textContent()) === label) return;
-    await page.getByRole("button", { name: t.nextMonth }).click();
+    await page.getByRole("button", { name: t.next }).click();
   }
   await expect(page.getByTestId("ledger-month-label")).toHaveText(label);
 }
@@ -182,4 +184,49 @@ test("editing an entry whose product is archived keeps the product link", async 
       `SELECT "productId", qty FROM "ManualIncomeItem" WHERE "incomeId" = $1`, [id])).rows,
   );
   expect(item).toEqual([{ productId: seeded.products.red, qty: 3 }]);
+});
+
+test("D190: by day, by week (Mon–Sun, the default) and any range, same totals rules", async ({ page, context, baseURL }) => {
+  const seeded = await resetAndSeed();
+  await withDb((c) => c.query(`TRUNCATE "ManualIncomeItem","ManualIncome" CASCADE`));
+  const date = seeded.dates.d1;
+  const red = seeded.products.red;
+  const o = await insertOrder({ date, wechatId: "weekly", status: "COMPLETED", items: [ITEM.red(red, 2)] });
+  await withDb((c) => c.query(`UPDATE "Order" SET paid = true, "paidMethod" = 'CASH' WHERE id = $1`, [o.id]));
+  const token = await createAdminSession("e2e-ledger-range");
+  await context.addCookies([{ name: "bb_session", value: token, url: baseURL! }]);
+
+  await page.goto("/admin/ledger");
+  await expect(page.getByTestId("ledger-mode-week")).toHaveAttribute("aria-pressed", "true");
+  // Walk to the week holding the order (it is at most a few days ahead).
+  const label = page.getByTestId("ledger-month-label");
+  for (let i = 0; i < 3; i++) {
+    await expect(page.getByTestId("month-revenue")).toBeVisible();
+    if (await page.getByTestId(`ledger-day-${date}`).count()) break;
+    await page.getByRole("button", { name: t.next }).click();
+    await expect(label).not.toHaveText("");
+  }
+  await expect(page.getByTestId("month-revenue")).toHaveText("$4.98");
+  await expect(page.getByTestId(`ledger-day-${date}`)).toBeVisible();
+
+  // 日: the day detail is the page itself, no back link.
+  await page.getByTestId("ledger-mode-day").click();
+  for (let i = 0; i < 7; i++) {
+    await expect(page.getByTestId("day-revenue")).toBeVisible();
+    if (await page.getByTestId(`ledger-order-${o.orderNo}`).count()) break;
+    await page.getByRole("button", { name: t.next }).click();
+  }
+  await expect(page.getByTestId("day-revenue")).toHaveText("$4.98");
+  await expect(page.getByRole("button", { name: t.backToMonth })).toHaveCount(0);
+
+  // 自选: one day before to the order day.
+  await page.getByTestId("ledger-mode-range").click();
+  const before = await withDb(async (c) => (await c.query<{ d: string }>(`SELECT to_char($1::date - 1, 'YYYY-MM-DD') AS d`, [date])).rows[0].d);
+  await page.getByTestId("ledger-range-from").fill(before);
+  await page.getByTestId("ledger-range-to").fill(date);
+  await expect(page.getByTestId("month-revenue")).toHaveText("$4.98");
+  // The end cannot go before the start.
+  await page.getByTestId("ledger-range-to").fill(before);
+  await expect(page.getByTestId("ledger-range-from")).toHaveValue(before);
+  await expect(page.getByTestId("month-revenue")).toHaveText("$0.00");
 });

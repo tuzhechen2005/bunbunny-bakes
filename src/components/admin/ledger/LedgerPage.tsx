@@ -7,14 +7,18 @@ import { primaryBtn, secondaryBtn } from "@/components/admin/orders/shared";
 import { useProducts } from "@/components/admin/products/useProducts";
 import { fill } from "@/components/customer/format";
 import { copy } from "@/copy";
-import { dayLabel, localDateOf } from "@/domain/dates";
+import { dayLabel, localDateOf, monthDay } from "@/domain/dates";
 import {
   LEDGER_BUCKETS,
+  monthBounds,
+  rangeDayCount,
   shiftMonth,
+  shiftRange,
+  weekBounds,
   type DayDetail,
   type LedgerManualEntry,
   type MethodTotals,
-  type MonthSummary,
+  type RangeSummary,
 } from "@/domain/ledger";
 import { formatCents } from "@/domain/pricing";
 import { adminApi } from "@/lib/adminApi";
@@ -28,6 +32,51 @@ type Modal =
   | null;
 
 const navBtn = "flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-line bg-card px-3 text-base";
+
+/** D190: what the ledger sums. A month is a preset range; 自选 is any 1–366 days. */
+type Mode = "day" | "week" | "month" | "range";
+interface Period {
+  mode: Mode;
+  from: string;
+  to: string;
+}
+const MODES: Mode[] = ["day", "week", "month", "range"];
+const MAX_DAYS = 366;
+
+function periodFor(mode: Mode, anchor: string, current?: Period): Period {
+  if (mode === "day") return { mode, from: anchor, to: anchor };
+  if (mode === "week") return { mode, ...weekBounds(anchor) };
+  if (mode === "month") {
+    const { first, last } = monthBounds(anchor.slice(0, 7));
+    return { mode, from: first, to: last };
+  }
+  // 自选 starts from what was on screen.
+  return { mode, from: current?.from ?? anchor, to: current?.to ?? anchor };
+}
+
+function shiftPeriod(p: Period, delta: 1 | -1): Period {
+  if (p.mode === "month") return periodFor("month", `${shiftMonth(p.from.slice(0, 7), delta)}-01`);
+  const days = p.mode === "day" ? 1 : p.mode === "week" ? 7 : rangeDayCount(p.from, p.to);
+  return { ...p, ...shiftRange(p.from, p.to, delta * days) };
+}
+
+function periodLabel(p: Period): string {
+  if (p.mode === "day") return dayLabel(p.from);
+  if (p.mode === "month") {
+    const [year, month] = p.from.split("-").map(Number);
+    return fill(t.monthLabel, { year, month });
+  }
+  return fill(t.rangeLabel, { from: monthDay(p.from), to: monthDay(p.to) });
+}
+
+/** 自选: keeps from <= to and the span within 366 days, moving the other end when needed. */
+function clampRange(from: string, to: string, moved: "from" | "to"): { from: string; to: string } {
+  if (to < from) return moved === "from" ? { from, to: from } : { from: to, to };
+  if (rangeDayCount(from, to) > MAX_DAYS) {
+    return moved === "from" ? { from, to: shiftRange(from, from, MAX_DAYS - 1).to } : { from: shiftRange(to, to, 1 - MAX_DAYS).from, to };
+  }
+  return { from, to };
+}
 
 function Stat({ label, value, testId }: Readonly<{ label: string; value: string; testId: string }>) {
   return (
@@ -87,34 +136,36 @@ function Failed({ message, onRetry }: Readonly<{ message: string; onRetry: () =>
   );
 }
 
-function MonthView({
-  month,
+function RangeView({
+  period,
   data,
   error,
   onRetry,
   onOpenDay,
 }: Readonly<{
-  month: string;
-  data: MonthSummary | null;
+  period: Period;
+  data: RangeSummary | null;
   error: string | null;
   onRetry: () => void;
   onOpenDay: (date: string) => void;
 }>) {
   if (error) return <Failed message={error} onRetry={onRetry} />;
-  if (!data || data.month !== month) return <p className="text-muted">{t.loading}</p>;
+  if (!data || data.from !== period.from || data.to !== period.to) return <p className="text-muted">{t.loading}</p>;
+  // The range lists every day; only days with something on them are worth a row.
+  const days = data.days.filter((d) => d.revenueCents > 0 || d.qty > 0 || d.receivableCents > 0);
   return (
     <>
       <AdminCard className="mb-3">
         <Totals {...data} prefix="month" />
       </AdminCard>
       <AdminCard title={t.daysTitle}>
-        {data.days.length === 0 ? (
+        {days.length === 0 ? (
           <p className="text-muted" data-testid="ledger-month-empty">
-            {t.emptyMonth}
+            {period.mode === "month" ? t.emptyMonth : t.emptyRange}
           </p>
         ) : (
           <ul className="flex flex-col divide-y divide-line">
-            {data.days.map((d) => (
+            {days.map((d) => (
               <li key={d.date}>
                 <button
                   type="button"
@@ -156,16 +207,19 @@ function DayView({
   data: DayDetail | null;
   error: string | null;
   onRetry: () => void;
-  onBack: () => void;
+  /** Absent in 日 mode: the day is the period itself. */
+  onBack?: () => void;
   onAdd: () => void;
   onEdit: (e: LedgerManualEntry) => void;
   onRemove: (e: LedgerManualEntry) => void;
 }>) {
   return (
     <>
-      <button type="button" className="mb-1 inline-flex min-h-11 items-center text-sm text-muted" onClick={onBack}>
-        {t.backToMonth}
-      </button>
+      {onBack ? (
+        <button type="button" className="mb-1 inline-flex min-h-11 items-center text-sm text-muted" onClick={onBack}>
+          {t.backToMonth}
+        </button>
+      ) : null}
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">{dayLabel(date)}</h2>
         <button type="button" className={primaryBtn} onClick={onAdd}>
@@ -265,11 +319,11 @@ function DayView({
 }
 
 export function LedgerPage() {
-  const [month, setMonth] = useState<string | null>(null);
+  const [period, setPeriod] = useState<Period | null>(null);
   const [day, setDay] = useState<string | null>(null);
-  const [monthData, setMonthData] = useState<MonthSummary | null>(null);
+  const [rangeData, setRangeData] = useState<RangeSummary | null>(null);
   const [dayData, setDayData] = useState<DayDetail | null>(null);
-  const [monthError, setMonthError] = useState<string | null>(null);
+  const [rangeError, setRangeError] = useState<string | null>(null);
   const [dayError, setDayError] = useState<string | null>(null);
   const [modal, setModal] = useState<Modal>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -278,30 +332,33 @@ export function LedgerPage() {
   useEffect(() => {
     // Clock is read on the client after mount (no Date in prerender, no hydration mismatch).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMonth(localDateOf(new Date()).slice(0, 7));
+    setPeriod(periodFor("week", localDateOf(new Date())));
   }, []);
 
+  // In 日 mode the day detail is the page; otherwise a day opens from the list.
+  const shownDay = period?.mode === "day" ? period.from : day;
+
   useEffect(() => {
-    if (!month) return;
+    if (!period || period.mode === "day") return;
     const ctrl = new AbortController();
     void (async () => {
-      const r = await adminApi<MonthSummary>(`/api/admin/ledger?month=${month}`, { signal: ctrl.signal });
+      const r = await adminApi<RangeSummary>(`/api/admin/ledger?from=${period.from}&to=${period.to}`, { signal: ctrl.signal });
       if (ctrl.signal.aborted) return;
       if (r.ok) {
-        setMonthData(r.data);
-        setMonthError(null);
+        setRangeData(r.data);
+        setRangeError(null);
       } else if (r.error !== "UNAUTHORIZED") {
-        setMonthError(r.message || t.loadFailed);
+        setRangeError(r.message || t.loadFailed);
       }
     })();
     return () => ctrl.abort();
-  }, [month, reloadKey]);
+  }, [period, reloadKey]);
 
   useEffect(() => {
-    if (!day) return;
+    if (!shownDay) return;
     const ctrl = new AbortController();
     void (async () => {
-      const r = await adminApi<DayDetail>(`/api/admin/ledger/day?date=${day}`, { signal: ctrl.signal });
+      const r = await adminApi<DayDetail>(`/api/admin/ledger/day?date=${shownDay}`, { signal: ctrl.signal });
       if (ctrl.signal.aborted) return;
       if (r.ok) {
         setDayData(r.data);
@@ -311,7 +368,7 @@ export function LedgerPage() {
       }
     })();
     return () => ctrl.abort();
-  }, [day, reloadKey]);
+  }, [shownDay, reloadKey]);
 
   const reload = useCallback(() => setReloadKey((n) => n + 1), []);
   const closeModal = useCallback(() => setModal(null), []);
@@ -323,23 +380,24 @@ export function LedgerPage() {
     [productsState],
   );
 
-  function go(delta: number) {
-    if (!month) return;
-    setMonthError(null);
-    setMonth(shiftMonth(month, delta));
-  }
-
-  if (!month) return <p className="text-muted">{t.loading}</p>;
-  const [year, mm] = month.split("-").map(Number);
-  const todayInMonth = localDateOf(new Date()).slice(0, 7) === month;
-  const defaultDate = day ?? (todayInMonth ? localDateOf(new Date()) : `${month}-01`);
+  if (!period) return <p className="text-muted">{t.loading}</p>;
+  const today = localDateOf(new Date());
+  const show = (p: Period) => {
+    setRangeError(null);
+    setDayError(null);
+    setDay(null);
+    setPeriod(p);
+  };
+  const inPeriod = today >= period.from && today <= period.to;
+  const defaultDate = shownDay ?? (inPeriod ? today : period.from);
+  const openDay = day !== null && period.mode !== "day";
 
   return (
     <div>
       <PageHeader
         title={t.title}
         actions={
-          !day && (
+          !openDay && (
             <button
               type="button"
               className={primaryBtn}
@@ -352,45 +410,94 @@ export function LedgerPage() {
         }
       />
 
-      {day ? (
+      {openDay ? null : (
+        <>
+          <div role="group" aria-label={t.modesLabel} className="mb-3 grid grid-cols-4 gap-1 rounded-xl bg-soft p-1">
+            {MODES.map((m) => (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={period.mode === m}
+                className={`min-h-10 rounded-lg text-sm font-semibold ${period.mode === m ? "bg-card shadow-sm" : "text-muted"}`}
+                onClick={() => show(periodFor(m, inPeriod ? today : period.from, period))}
+                data-testid={`ledger-mode-${m}`}
+              >
+                {t.modes[m]}
+              </button>
+            ))}
+          </div>
+          {period.mode === "range" ? (
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              {(["from", "to"] as const).map((end) => (
+                <label key={end} className="flex flex-col gap-1 text-sm text-muted">
+                  {t[end]}
+                  <input
+                    type="date"
+                    className="min-h-11 rounded-lg border border-line bg-card px-3 text-base text-foreground"
+                    value={period[end]}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+                      const next = end === "from" ? clampRange(v, period.to, "from") : clampRange(period.from, v, "to");
+                      show({ mode: "range", ...next });
+                    }}
+                    data-testid={`ledger-range-${end}`}
+                  />
+                </label>
+              ))}
+            </div>
+          ) : null}
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <button type="button" className={navBtn} aria-label={t.prev} onClick={() => show(shiftPeriod(period, -1))}>
+              ‹
+            </button>
+            <div className="flex flex-col items-center">
+              <h2 className="text-lg font-semibold" aria-live="polite" data-testid="ledger-month-label">
+                {periodLabel(period)}
+              </h2>
+              {!inPeriod && period.mode !== "range" ? (
+                <button type="button" className="text-sm text-muted underline" onClick={() => show(periodFor(period.mode, today))}>
+                  {t.today}
+                </button>
+              ) : null}
+            </div>
+            <button type="button" className={navBtn} aria-label={t.next} onClick={() => show(shiftPeriod(period, 1))}>
+              ›
+            </button>
+          </div>
+        </>
+      )}
+
+      {shownDay ? (
         <DayView
-          date={day}
+          date={shownDay}
           data={dayData}
           error={dayError}
           onRetry={reload}
-          onBack={() => {
-            setDay(null);
-            setDayData(null);
-            setDayError(null);
-          }}
-          onAdd={() => setModal({ kind: "form", entry: null, date: day })}
+          onBack={
+            openDay
+              ? () => {
+                  setDay(null);
+                  setDayData(null);
+                  setDayError(null);
+                }
+              : undefined
+          }
+          onAdd={() => setModal({ kind: "form", entry: null, date: shownDay })}
           onEdit={(entry) => setModal({ kind: "form", entry, date: entry.date })}
           onRemove={(entry) => setModal({ kind: "delete", entry })}
         />
       ) : (
-        <>
-          <div className="mb-3 flex items-center justify-between">
-            <button type="button" className={navBtn} aria-label={t.prevMonth} onClick={() => go(-1)}>
-              ‹
-            </button>
-            <h2 className="text-lg font-semibold" aria-live="polite" data-testid="ledger-month-label">
-              {fill(t.monthLabel, { year, month: mm })}
-            </h2>
-            <button type="button" className={navBtn} aria-label={t.nextMonth} onClick={() => go(1)}>
-              ›
-            </button>
-          </div>
-          <MonthView
-            month={month}
-            data={monthData}
-            error={monthError}
-            onRetry={reload}
-            onOpenDay={(d) => {
-              setDayData(null);
-              setDay(d);
-            }}
-          />
-        </>
+        <RangeView
+          period={period}
+          data={rangeData}
+          error={rangeError}
+          onRetry={reload}
+          onOpenDay={(d) => {
+            setDayData(null);
+            setDay(d);
+          }}
+        />
       )}
 
       {modal?.kind === "form" && (
