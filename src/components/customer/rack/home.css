@@ -1245,3 +1245,15 @@
 @media (prefers-reduced-motion: reduce) {
   .hm-pool-track i { transition: none; }
 }
+.hm-stock-add {
+  flex: none;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--fink);
+  color: var(--field);
+  font: 800 14px/1 var(--font-display);
+}
+.hm-stock-add:disabled {
+  opacity: 0.35;
+}

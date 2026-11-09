@@ -12,20 +12,29 @@ export interface CartItem {
   qty: number;
   /** Chosen flavour (F1); absent for products without flavours. */
   flavorId?: string | null;
+  /** D194: a 现货 line bought from this lot (its own line, never merged with a preorder line). */
+  stockLotId?: string | null;
 }
 
 const SEP = "::";
-/** The line key used by every store method: productId, or productId::flavorId. */
-export function lineKey(i: { productId: string; flavorId?: string | null }): string {
-  return i.flavorId ? `${i.productId}${SEP}${i.flavorId}` : i.productId;
+const LOT = "@@";
+/** The line key used by every store method: productId, productId::flavorId, plus @@lotId for a 现货 line. */
+export function lineKey(i: { productId: string; flavorId?: string | null; stockLotId?: string | null }): string {
+  const base = i.flavorId ? `${i.productId}${SEP}${i.flavorId}` : i.productId;
+  return i.stockLotId ? `${base}${LOT}${i.stockLotId}` : base;
 }
-export function parseLineKey(key: string): { productId: string; flavorId: string | null } {
-  const at = key.indexOf(SEP);
-  return at < 0 ? { productId: key, flavorId: null } : { productId: key.slice(0, at), flavorId: key.slice(at + SEP.length) || null };
+export function parseLineKey(key: string): { productId: string; flavorId: string | null; stockLotId: string | null } {
+  const lotAt = key.indexOf(LOT);
+  const stockLotId = lotAt < 0 ? null : key.slice(lotAt + LOT.length) || null;
+  const base = lotAt < 0 ? key : key.slice(0, lotAt);
+  const at = base.indexOf(SEP);
+  return at < 0
+    ? { productId: base, flavorId: null, stockLotId }
+    : { productId: base.slice(0, at), flavorId: base.slice(at + SEP.length) || null, stockLotId };
 }
 const lineOf = (key: string, qty: number): CartItem => {
-  const { productId, flavorId } = parseLineKey(key);
-  return flavorId ? { productId, flavorId, qty } : { productId, qty };
+  const { productId, flavorId, stockLotId } = parseLineKey(key);
+  return { productId, ...(flavorId ? { flavorId } : {}), qty, ...(stockLotId ? { stockLotId } : {}) };
 };
 
 /** The subset of the Web Storage API the cart uses. */
@@ -65,11 +74,12 @@ function sanitize(raw: unknown): CartItem[] {
   const merged = new Map<string, number>();
   for (const entry of raw) {
     if (!entry || typeof entry !== "object") continue;
-    const { productId, qty, flavorId } = entry as { productId?: unknown; qty?: unknown; flavorId?: unknown };
-    if (typeof productId !== "string" || !productId || productId.includes(SEP)) continue;
+    const { productId, qty, flavorId, stockLotId } = entry as { productId?: unknown; qty?: unknown; flavorId?: unknown; stockLotId?: unknown };
+    if (typeof productId !== "string" || !productId || productId.includes(SEP) || productId.includes(LOT)) continue;
     if (typeof qty !== "number" || !Number.isInteger(qty) || qty < 1) continue;
-    const flavor = typeof flavorId === "string" && flavorId ? flavorId : null;
-    const key = lineKey({ productId, flavorId: flavor });
+    const flavor = typeof flavorId === "string" && flavorId && !flavorId.includes(LOT) ? flavorId : null;
+    const lot = typeof stockLotId === "string" && stockLotId ? stockLotId : null;
+    const key = lineKey({ productId, flavorId: flavor, stockLotId: lot });
     merged.set(key, (merged.get(key) ?? 0) + qty);
   }
   return [...merged].map(([key, qty]) => lineOf(key, qty));

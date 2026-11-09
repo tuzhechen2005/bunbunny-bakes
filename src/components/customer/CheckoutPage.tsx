@@ -507,7 +507,7 @@ export function CheckoutPage() {
   // F2: flavours sold out on the chosen pickup date (advisory; the server rechecks on submit).
   const soldOutFlavors = new Set(data?.dates.find((d) => d.date === selectedDate)?.soldOutFlavorIds ?? []);
   const selectedPools = data?.dates.find((d) => d.date === selectedDate)?.groupPools ?? [];
-  const groupLines = lines.filter((l) => l.product.saleMode === "GROUP");
+  const groupLines = lines.filter((l) => l.product.saleMode === "GROUP" && !l.stockLotId);
   const problems = new Map<string, string>();
   for (const p of data?.cartProblems ?? []) if (!problems.has(p.productId)) problems.set(p.productId, p.error);
   // D96: the product with the longest lead time (ties: the first in the bag) names the hint.
@@ -574,11 +574,11 @@ export function CheckoutPage() {
     inflight.current = true;
     setSubmitting(true);
     const result = await submitOrder({
-      items: items.map(({ productId, qty, flavorId }) => ({
+      items: items.map(({ productId, qty, flavorId, stockLotId }) => ({
         productId,
         qty,
         ...(flavorId ? { flavorId } : {}),
-        ...(byId.get(productId)?.saleMode === "GROUP" ? { ifNotFormed } : {}),
+        ...(stockLotId ? { stockLotId } : byId.get(productId)?.saleMode === "GROUP" ? { ifNotFormed } : {}),
       })),
       pickupDate: selectedDate,
       fulfillment,
@@ -749,7 +749,9 @@ export function CheckoutPage() {
                   />
                   <div className="min-w-0 flex-1">
                     <p className="text-[15px] leading-snug font-bold break-words">{cartLineName(line, product)}</p>
-                    {product.saleMode === "GROUP" ? (() => {
+                    {line.stockLotId ? (
+                      <span className="text-xs font-semibold text-c-red" data-testid="line-stock">{groupT.stockTag}</span>
+                    ) : product.saleMode === "GROUP" ? (() => {
                       const pool = selectedPools.find((g) => g.productId === productId && (g.flavorId ?? null) === (line.flavorId ?? null));
                       return pool ? <PoolBar pool={pool} testId="line-pool" /> : <span className="text-xs font-semibold text-c-grey">{groupT.tag}</span>;
                     })() : null}

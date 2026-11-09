@@ -161,7 +161,10 @@ export function fetchAvailability(
 ): Promise<ApiResult<Availability>> {
   return request<Availability>("/api/availability", {
     method: "POST",
-    body: { items: items.map(({ productId, qty, flavorId }) => (flavorId ? { productId, flavorId, qty } : { productId, qty })), fulfillment },
+    body: {
+      items: items.map(({ productId, qty, flavorId, stockLotId }) => ({ productId, qty, ...(flavorId ? { flavorId } : {}), ...(stockLotId ? { stockLotId } : {}) })),
+      fulfillment,
+    },
   });
 }
 

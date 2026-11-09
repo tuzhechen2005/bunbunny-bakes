@@ -129,7 +129,9 @@ export const copy = {
       orderFormed: "已成团，会做",
       orderFailed: "未成团，店主会联系你",
       stockTag: "现货",
-      stockLeft: "现货剩 {n} 块",
+      stockLeft: "剩 {n} 块",
+      stockUntil: "{time} 前",
+      stockAdd: "+1 现货",
     },
     /** The bag sheet (names are spoken with the action so a screen reader hears what changes). */
     bag: {

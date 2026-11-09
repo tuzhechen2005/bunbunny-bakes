@@ -7,7 +7,7 @@ import { Logo } from "@/components/brand/Logo";
 import { copy } from "@/copy";
 import { formatCents } from "@/domain/pricing";
 import type { Menu, MenuProduct } from "@/lib/api";
-import { cart, lineKey, useCart } from "@/lib/cart";
+import { cart, lineKey, setPreferredDate, useCart } from "@/lib/cart";
 import { applyField, productField } from "@/lib/field";
 import { flyToBag } from "@/lib/flyToBag";
 import { pushOverlay } from "@/lib/overlayHistory";
@@ -289,6 +289,16 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
     flyToBag({ from, imageUrl: p.imageUrl, productId: p.id, count: added });
   };
 
+  /** D194: one 现货 piece; its own line tied to the lot, and the lot's date becomes the pickup date. */
+  const stockInCart = (lotId: string) => items.reduce((n, i) => (i.stockLotId === lotId ? n + i.qty : n), 0);
+  const addStock = (p: MenuProduct, lot: { lotId: string; date: string; flavorId: string | null; left: number }, from: DOMRect) => {
+    const have = stockInCart(lot.lotId);
+    if (have >= lot.left) return;
+    setPreferredDate(lot.date);
+    cart.setQty(lineKey({ productId: p.id, flavorId: lot.flavorId, stockLotId: lot.lotId }), have + 1, lot.left);
+    flyToBag({ from, imageUrl: p.imageUrl, productId: p.id, count: 1 });
+  };
+
   const orderingEnabled = menu?.orderingEnabled ?? false;
   const paused = current?.status === "PAUSED";
   const showHero = menu !== null && products.length > 0;
@@ -432,6 +442,8 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
           onIndexChange={onDetailIndex}
           onClose={() => void hangBack()}
           onAdd={addFromDetail}
+          onAddStock={addStock}
+          stockInCart={stockInCart}
           via={detail.via}
         />
       ) : null}

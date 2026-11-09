@@ -8,6 +8,7 @@ import type { MenuProduct } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
 import { fill, flavorBundleText, safeLineTotal, weekdayList, weekdayTag } from "../format";
 import { GroupProgress } from "./GroupProgress";
+import { StockOffer, type PublicLot } from "./StockOffer";
 import { bindDrag } from "./drag";
 import { focusQuietly } from "./focus";
 import { DownIcon, LeftIcon, MinusIcon, PlusIcon, RightIcon } from "./icons";
@@ -47,6 +48,9 @@ export interface DetailProps {
   onClose: () => void;
   /** Add `qty` of `product` to the bag; `from` is the photo's rect. */
   onAdd: (product: MenuProduct, qty: number, from: DOMRect, flavorId?: string | null) => void;
+  /** D194: one 现货 piece from a lot; `stockInCart` says how many of that lot are in the bag. */
+  onAddStock?: (product: MenuProduct, lot: PublicLot, from: DOMRect) => void;
+  stockInCart?: (lotId: string) => number;
   /** Opened by key (the close button gets a focus ring) or by touch / mouse (no ring anywhere). */
   via: "key" | "pointer";
   ref?: Ref<DetailHandle>;
@@ -55,7 +59,7 @@ export interface DetailProps {
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /** The taken-down bread (FRONTEND.md 4.2): colour field, photo with peg, details, sticky add button. */
-export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChange, onClose, onAdd, via, ref }: DetailProps) {
+export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChange, onClose, onAdd, onAddStock, stockInCart, via, ref }: DetailProps) {
   const { reduced } = useMotionPrefs();
   const n = products.length;
   const [i, setI] = useState(startIndex);
@@ -366,6 +370,9 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
             </div>
           ) : null}
           {product.saleMode === "GROUP" ? <GroupProgress product={product} flavorId={flavorId} /> : null}
+          {onAddStock ? (
+            <StockOffer product={product} flavorId={flavorId} inCart={stockInCart ?? (() => 0)} onAdd={(lot, rect) => onAddStock(product, lot, rect)} />
+          ) : null}
           <div className="hm-dt-prices">
             <div>
               <b className="hm-n" data-testid="detail-unit">
