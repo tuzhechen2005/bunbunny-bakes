@@ -118,6 +118,13 @@ export function ProductCard({
           <span className="hm-ph-img">
             <ProductPhoto product={product} className="h-full w-full" variant="grid" decorative />
           </span>
+          {paused ? (
+            <span className="hm-stamp hm-tile-stamp is-off">{t.paused}</span>
+          ) : weekdayTag(product) ? (
+            <span className="hm-stamp hm-tile-stamp" data-testid="weekday-tag">
+              {weekdayTag(product)}
+            </span>
+          ) : null}
         </span>
         <span className="hm-t-name">{product.name}</span>
         <span className="hm-t-p">
@@ -130,12 +137,6 @@ export function ProductCard({
             </small>
           ) : null}
         </span>
-        {weekdayTag(product) ? (
-          <span className="hm-t-note" data-testid="weekday-tag">
-            {weekdayTag(product)}
-          </span>
-        ) : null}
-        {paused ? <span className="hm-t-note">{t.paused}</span> : null}
       </button>
     </li>
   );

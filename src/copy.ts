@@ -80,6 +80,11 @@ export const copy = {
       /** Joins unitPrice and bundlePrice (full-width space). */
       priceSeparator: "　",
       paused: "暂停供应",
+      /** "帮我选": the opener, the spoken close and re-spin, the stamp on the pick. */
+      pickOpen: "帮我选",
+      pickClose: "关上",
+      pickAgain: "再转一次",
+      pickStamp: "吃这个！",
       maxReached: "大量订购请加微信联系",
       decrease: "减少一个",
       increase: "增加一个",

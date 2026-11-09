@@ -18,6 +18,7 @@ import { FlyLayer } from "./bag/FlyLayer";
 import { cartLineTotal, fill, hasFlavors } from "./format";
 import { GameEntryCard } from "./GameEntryCard";
 import { ProductCard } from "./ProductCard";
+import { BreadPicker } from "./rack/BreadPicker";
 import { Detail, type DetailHandle } from "./rack/Detail";
 import { NameSwap } from "./rack/NameSwap";
 import { focusQuietly } from "./rack/focus";
@@ -208,6 +209,13 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
     [markHintDone, openDetail],
   );
 
+  /** The picker's pick: the detail grows out of its photo; closing goes back to the grid tile. */
+  const chooseFromPicker = (id: string, rect: DOMRect) => {
+    const i = productsRef.current.findIndex((p) => p.id === id);
+    const tile = document.querySelector<HTMLElement>(`[data-testid=product-card][data-product-id="${id}"] .hm-tile-btn`);
+    if (i >= 0 && tile) openFromTile(i, rect, tile, "pointer");
+  };
+
   const takeDown = useCallback(
     (i: number, via: OpenVia) => {
       if (phaseRef.current !== "home") return;
@@ -391,9 +399,12 @@ export function HomePage({ initialMenu = null }: { initialMenu?: Menu | null }) 
 
           {menu && products.length > 0 ? (
             <section id="hm-list" className="hm-list" aria-labelledby="hm-list-title">
-              <h2 className="hm-sec-t" id="hm-list-title">
-                {b.listTitle}
-              </h2>
+              <div className="hm-list-h">
+                <h2 className="hm-sec-t" id="hm-list-title">
+                  {b.listTitle}
+                </h2>
+                <BreadPicker products={products} onChoose={chooseFromPicker} />
+              </div>
               <ul className="hm-grid">
                 {products.map((p) => (
                   <ProductCard

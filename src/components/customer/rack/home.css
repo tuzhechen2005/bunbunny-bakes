@@ -457,7 +457,14 @@
 /* ---------- list ---------- */
 .hm-list {
   padding: 40px 20px 34px;
-  background: var(--tint);
+  background: var(--tint) url("/brand/paper.webp") 0 0 / 256px;
+  background-blend-mode: multiply;
+}
+.hm-list-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .hm-sec-t {
   margin: 0 0 8px;
@@ -547,6 +554,170 @@
 }
 .hm-t-note.is-warn {
   color: var(--c-red);
+}
+/* A rubber stamp pressed a little crooked onto the photo: pickup days, 暂停. Red is the stamp's own colour. */
+.hm-stamp {
+  display: inline-block;
+  padding: 2px 9px;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-paper) 78%, transparent);
+  color: var(--c-red);
+  font: 800 12px/1.4 var(--font-display);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.hm-tile-stamp {
+  position: absolute;
+  top: 8px;
+  left: 6px;
+  transform: rotate(-6deg);
+}
+.hm-tile-stamp.is-off {
+  color: var(--c-grey-text);
+}
+/* ---------- 帮我选 ---------- */
+.hm-pick-open {
+  flex: none;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--fink);
+  color: var(--field);
+  font: 800 15px/1 var(--font-display);
+  transform: rotate(-2deg);
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--fink) 70%, var(--c-ink));
+  transition: transform 0.12s var(--ease), box-shadow 0.12s var(--ease);
+}
+.hm-pick-open:active:not(:disabled) {
+  transform: translateY(2px) rotate(-2deg);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--fink) 70%, var(--c-ink));
+}
+.hm-pick-open:disabled {
+  display: none;
+}
+.hm-pick {
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  padding: calc(56px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));
+  color: var(--fink);
+  background: var(--tint) url("/brand/paper.webp") 0 0 / 256px;
+  background-blend-mode: multiply;
+  transition: background-color 0.4s var(--ease);
+}
+.hm-page .hm-pick:focus,
+.hm-page .hm-pick:focus-visible {
+  outline: none;
+}
+.hm-pick[open] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+.hm-pick[data-landed] {
+  background-color: var(--field);
+}
+.hm-pick:not([data-landed]) {
+  color: var(--c-ink);
+}
+.hm-pick-x {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  font-size: 30px;
+  line-height: 1;
+  color: inherit;
+}
+.hm-pick-stage {
+  position: relative;
+  width: min(72vw, 320px);
+  perspective: 800px;
+  flex: none;
+}
+.hm-pick-card {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--linen);
+  box-shadow: 0 24px 34px -22px rgba(0, 0, 0, 0.55);
+}
+.hm-pick-ph {
+  position: absolute;
+  inset: 0;
+  display: block;
+  visibility: hidden;
+}
+.hm-pick-ph[data-on="true"] {
+  visibility: visible;
+}
+.hm-pick-ph img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.hm-pick-stamp {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  padding: 4px 14px;
+  font-size: 16px;
+  transform: rotate(-8deg);
+  animation: hm-pick-thump 0.36s cubic-bezier(0.3, 1.5, 0.5, 1) both;
+}
+@keyframes hm-pick-thump {
+  0% { opacity: 0; transform: rotate(-14deg) scale(1.8); }
+  60% { opacity: 1; transform: rotate(-7deg) scale(0.93); }
+  100% { opacity: 1; transform: rotate(-8deg) scale(1); }
+}
+.hm-pick-words {
+  min-height: 92px;
+  text-align: center;
+}
+.hm-pick-words .hm-name {
+  margin: 0;
+}
+.hm-pick-words .hm-price {
+  justify-content: center;
+}
+.hm-pick-note {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.hm-pick-acts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: opacity 0.2s;
+}
+.hm-pick-acts[data-hidden] {
+  opacity: 0;
+  pointer-events: none;
+}
+.hm-pick-again {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  color: inherit;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hm-pick,
+  .hm-pick-acts { transition: none; }
+  .hm-pick-stamp { animation: none; }
 }
 .hm-stp {
   display: flex;
