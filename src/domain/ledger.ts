@@ -104,6 +104,57 @@ export interface MonthSummary extends LedgerTotals {
   days: MonthDay[];
 }
 
+export interface LedgerRange {
+  from: LocalDate;
+  to: LocalDate;
+}
+
+export interface RangeSummary extends LedgerTotals, LedgerRange {
+  days: MonthDay[];
+  products: ProductTotal[];
+}
+
+const DAY_MS = 86_400_000;
+
+// UTC is only a calendar arithmetic surrogate: inputs are Chicago dates, not instants.
+function calendarMs(date: LocalDate): number {
+  const ms = Date.parse(`${date}T00:00:00.000Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(ms) ||
+      new Date(ms).toISOString().slice(0, 10) !== date) {
+    throw new Error("Invalid ledger date");
+  }
+  return ms;
+}
+
+/** Validates an inclusive range of 1–366 calendar days; returns its day count. */
+export function rangeDayCount(from: LocalDate, to: LocalDate): number {
+  const count = (calendarMs(to) - calendarMs(from)) / DAY_MS + 1;
+  if (count < 1 || count > 366) throw new Error("Ledger range must contain 1–366 days");
+  return count;
+}
+
+function shiftedDate(date: LocalDate, deltaDays: number): LocalDate {
+  const shifted = new Date(calendarMs(date) + deltaDays * DAY_MS);
+  if (!Number.isFinite(shifted.getTime())) throw new Error("Invalid ledger date shift");
+  const result = shifted.toISOString().slice(0, 10);
+  calendarMs(result);
+  return result;
+}
+
+/** Monday–Sunday containing a Chicago local date. */
+export function weekBounds(date: LocalDate): LedgerRange {
+  const weekday = new Date(calendarMs(date)).getUTCDay();
+  const from = shiftedDate(date, -((weekday + 6) % 7));
+  return { from, to: shiftedDate(from, 6) };
+}
+
+/** Move both endpoints by calendar days, preserving the inclusive duration. */
+export function shiftRange(from: LocalDate, to: LocalDate, deltaDays: number): LedgerRange {
+  rangeDayCount(from, to);
+  if (!Number.isSafeInteger(deltaDays)) throw new Error("Range shift must be an integer");
+  return { from: shiftedDate(from, deltaDays), to: shiftedDate(to, deltaDays) };
+}
+
 export function emptyMethodTotals(): MethodTotals {
   return { WECHAT: 0, ZELLE: 0, VENMO: 0, CASH: 0, OTHER: 0, UNSPECIFIED: 0 };
 }
@@ -220,16 +271,36 @@ export function monthSummary(
   manual: LedgerManualEntry[],
 ): MonthSummary {
   const { first, last } = monthBounds(month);
-  const inMonth = (d: LocalDate) => d >= first && d <= last; // fixed-width ISO dates sort as text
-  const mo = orders.filter((o) => inMonth(o.pickupDate) && isValidOrder(o));
-  const mm = manual.filter((m) => inMonth(m.date));
-  const dates = new Set<LocalDate>([...mo.map((o) => o.pickupDate), ...mm.map((m) => m.date)]);
-  const days: MonthDay[] = [...dates].sort().map((date) => {
-    const t = totalsOf(
-      mo.filter((o) => o.pickupDate === date),
-      mm.filter((m) => m.date === date),
+  const summary = rangeSummary(first, last, orders, manual);
+  // Preserve the legacy month payload, including days with data but zero amounts.
+  const activeDates = new Set([
+    ...orders.filter(isValidOrder).map(o => o.pickupDate),
+    ...manual.map(m => m.date),
+  ]);
+  return { month, revenueCents: summary.revenueCents, qty: summary.qty,
+    deliveryFeeCents: summary.deliveryFeeCents, receivableCents: summary.receivableCents,
+    byMethod: summary.byMethod, days: summary.days.filter(d => activeDates.has(d.date)) };
+}
+
+/** Inclusive calendar range, with a row for every day and actual product line totals. */
+export function rangeSummary(
+  from: LocalDate,
+  to: LocalDate,
+  orders: LedgerOrder[],
+  manual: LedgerManualEntry[],
+): RangeSummary {
+  const count = rangeDayCount(from, to);
+  const inRange = (date: LocalDate) => date >= from && date <= to;
+  const selectedOrders = orders.filter(o => inRange(o.pickupDate) && isValidOrder(o));
+  const selectedManual = manual.filter(m => inRange(m.date));
+  const days = Array.from({ length: count }, (_, i) => {
+    const date = shiftedDate(from, i);
+    const totals = totalsOf(
+      selectedOrders.filter(o => o.pickupDate === date),
+      selectedManual.filter(m => m.date === date),
     );
-    return { date, revenueCents: t.revenueCents, qty: t.qty, receivableCents: t.receivableCents };
+    return { date, revenueCents: totals.revenueCents, qty: totals.qty, receivableCents: totals.receivableCents };
   });
-  return { month, ...totalsOf(mo, mm), days };
+  return { from, to, ...totalsOf(selectedOrders, selectedManual), days,
+    products: productTotals(selectedOrders, selectedManual) };
 }

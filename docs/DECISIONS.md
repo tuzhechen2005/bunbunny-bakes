@@ -333,3 +333,12 @@ The fixture `tests/fixtures/tu-v5-run.json` was recorded using unmodified HEAD v
 Unit tests pin replay and resume; DB tests cover v5 progress/finish and obsolete rejection.
 No component edits: Claude must preserve/read the v5 storage key in `tuSave.ts` and pass
 original save data through `TuPage.tsx` / `TuPlay.tsx` (engine README has the handoff).
+
+
+### D190 — Ledger by day, week or any range (owner 11/08)
+
+记账支持单日、周（Chicago 周一至周日）或任意日期范围，首尾包含、最多 366 天；月份保留为预设，旧月接口保持兼容。新范围响应补齐每一天并提供商品汇总。延续 D87/D94 全部记账口径：按取货日期、已付款订单与手动收入计营业额、未付款有效订单为待收、运费计入并单列、商品金额累加每单实际行金额、未注明付款方式单独归类。
+
+### D191 — 小小 prepares a customer-confirmed order card (owner 11/08)
+
+取代 D117「不能替顾客下单（只给『放进购物车』卡片）」的卡片限制：小小可用现有 `propose_cart` 准备商品、日期、自取/配送订单卡；只有顾客亲自点「确认下单」才能由客户端通过正常 `POST /api/orders` 下单，沿用校验、名额事务锁、服务端定价和幂等。AI 不能自行调用下单接口，也不能声称已下单或保留名额。微信号只由顾客在卡片上填写，不送给 AI；提示规则 7 和 D118 脱敏保持不变。
