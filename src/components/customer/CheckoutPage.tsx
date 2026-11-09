@@ -28,6 +28,7 @@ import { pendingSave } from "@/lib/pendingSave";
 import { FieldError } from "./checkout/FieldError";
 import { RollNumber } from "./checkout/RollNumber";
 import { breakdownText, cartLineName, cartLineTotal, fill, formatDollars, weekdayList } from "./format";
+import { PoolBar } from "./rack/GroupProgress";
 import { ProductPhoto } from "./ProductCard";
 import { SiteFooter } from "./SiteFooter";
 import { useMenu } from "./useMenu";
@@ -35,6 +36,7 @@ import { useMenu } from "./useMenu";
 const t = copy.customer.checkout;
 const home = copy.customer.home;
 const bagCopy = copy.customer.bag;
+const groupT = copy.customer.group;
 const WECHAT_MAX = 40;
 const NOTE_MAX = 300;
 /** The character counter of the note only shows when the limit is getting close. */
@@ -300,6 +302,8 @@ export function CheckoutPage() {
   const { reduced } = useMotionPrefs();
 
   const [fulfillment, setFulfillment] = useState<Fulfillment>("PICKUP");
+  /** D192: one answer for every 拼单 line of the order. */
+  const [ifNotFormed, setIfNotFormed] = useState<"CONTACT" | "CANCEL">("CONTACT");
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [avail, setAvail] = useState<AvailState>({ status: "idle", data: null });
   const [availTick, setAvailTick] = useState(0);
@@ -502,6 +506,8 @@ export function CheckoutPage() {
   const data = avail.data;
   // F2: flavours sold out on the chosen pickup date (advisory; the server rechecks on submit).
   const soldOutFlavors = new Set(data?.dates.find((d) => d.date === selectedDate)?.soldOutFlavorIds ?? []);
+  const selectedPools = data?.dates.find((d) => d.date === selectedDate)?.groupPools ?? [];
+  const groupLines = lines.filter((l) => l.product.saleMode === "GROUP");
   const problems = new Map<string, string>();
   for (const p of data?.cartProblems ?? []) if (!problems.has(p.productId)) problems.set(p.productId, p.error);
   // D96: the product with the longest lead time (ties: the first in the bag) names the hint.
@@ -568,7 +574,12 @@ export function CheckoutPage() {
     inflight.current = true;
     setSubmitting(true);
     const result = await submitOrder({
-      items: items.map(({ productId, qty, flavorId }) => (flavorId ? { productId, flavorId, qty } : { productId, qty })),
+      items: items.map(({ productId, qty, flavorId }) => ({
+        productId,
+        qty,
+        ...(flavorId ? { flavorId } : {}),
+        ...(byId.get(productId)?.saleMode === "GROUP" ? { ifNotFormed } : {}),
+      })),
       pickupDate: selectedDate,
       fulfillment,
       wechatId: trimmed.slice(0, WECHAT_MAX),
@@ -738,6 +749,10 @@ export function CheckoutPage() {
                   />
                   <div className="min-w-0 flex-1">
                     <p className="text-[15px] leading-snug font-bold break-words">{cartLineName(line, product)}</p>
+                    {product.saleMode === "GROUP" ? (() => {
+                      const pool = selectedPools.find((g) => g.productId === productId && (g.flavorId ?? null) === (line.flavorId ?? null));
+                      return pool ? <PoolBar pool={pool} testId="line-pool" /> : <span className="text-xs font-semibold text-c-grey">{groupT.tag}</span>;
+                    })() : null}
                     <p className="font-num text-[13px] leading-snug font-semibold text-c-grey" data-testid="line-breakdown">
                       {line.flavorId ? formatCents(cartLineTotal(line, product)) : breakdownText(qty, product)}
                     </p>
@@ -777,6 +792,26 @@ export function CheckoutPage() {
               );
             })}
           </ul>
+          {groupLines.length > 0 ? (
+            <div className="mt-2 rounded-2xl bg-c-wash p-3.5" data-testid="group-choice">
+              <p className="text-sm font-semibold">{fill(groupT.checkoutNote, { min: groupLines[0].product.groupMin ?? 0 })}</p>
+              <div className="mt-2 flex gap-2" role="radiogroup">
+                {(["CONTACT", "CANCEL"] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    role="radio"
+                    aria-checked={ifNotFormed === v}
+                    onClick={() => setIfNotFormed(v)}
+                    className={`min-h-10 flex-1 rounded-full px-3 text-sm font-bold ${ifNotFormed === v ? "bg-c-ink text-c-paper" : "bg-c-paper text-c-ink"} ${focusRing}`}
+                    data-testid={`group-if-${v.toLowerCase()}`}
+                  >
+                    {v === "CONTACT" ? groupT.ifContact : groupT.ifCancel}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {/* 1. Dates */}
           <Block

@@ -6,7 +6,8 @@ import { flavorPrice } from "@/domain/flavorPricing";
 import { formatCents } from "@/domain/pricing";
 import type { MenuProduct } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion/react";
-import { fill, flavorBundleText, safeLineTotal, weekdayTag } from "../format";
+import { fill, flavorBundleText, safeLineTotal, weekdayList, weekdayTag } from "../format";
+import { GroupProgress } from "./GroupProgress";
 import { bindDrag } from "./drag";
 import { focusQuietly } from "./focus";
 import { DownIcon, LeftIcon, MinusIcon, PlusIcon, RightIcon } from "./icons";
@@ -358,10 +359,13 @@ export function Detail({ products, startIndex, from, maxQty, inCart, onIndexChan
                   onClick={() => setFlavorOf((m) => ({ ...m, [product.id]: f.id }))}>
                   <span>{f.name}</span><b className="hm-n">{formatCents(f.priceCents)}</b>
                   {flavorBundleText(product, f) ? <small className="hm-n" data-testid={`detail-flavor-bundle-${f.id}`}>{flavorBundleText(product, f)}</small> : null}
+                  {/* D193 rotation: the flavour's own pickup days. */}
+                  {f.pickupWeekdays?.length ? <small data-testid={`detail-flavor-days-${f.id}`}>{fill(t.weekdayOnly, { days: weekdayList(f.pickupWeekdays) })}</small> : null}
                 </button>
               ))}
             </div>
           ) : null}
+          {product.saleMode === "GROUP" ? <GroupProgress product={product} flavorId={flavorId} /> : null}
           <div className="hm-dt-prices">
             <div>
               <b className="hm-n" data-testid="detail-unit">

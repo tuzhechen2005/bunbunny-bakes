@@ -50,6 +50,9 @@ interface FormState {
   pickupWeekdays: number[];
   /** N1: shown as 新品 (for 7 days from when it is turned on). */
   isNew: boolean;
+  /** D192 拼单开做: only with 独立限额. */
+  group: boolean;
+  groupMin: string;
 }
 
 /** True while the stored 新品 period is running. */
@@ -77,6 +80,8 @@ function initialState(p?: ProductDto): FormState {
       fieldColor: DEFAULT_FIELD_COLOR,
       pickupWeekdays: [],
       isNew: false,
+      group: false,
+      groupMin: "4",
     };
   }
   return {
@@ -96,6 +101,8 @@ function initialState(p?: ProductDto): FormState {
     fieldColor: p.fieldColor ?? DEFAULT_FIELD_COLOR,
     pickupWeekdays: p.pickupWeekdays ?? [],
     isNew: isNewNow(p),
+    group: p.saleMode === "GROUP",
+    groupMin: p.groupMin == null ? "4" : String(p.groupMin),
   };
 }
 
@@ -118,6 +125,8 @@ const API_FIELD_TO_FORM: Record<string, keyof FormState> = {
   status: "status",
   fieldColor: "fieldColor",
   pickupWeekdays: "pickupWeekdays",
+  groupMin: "groupMin",
+  saleMode: "group",
 };
 
 type Payload = Record<string, string | number | number[] | boolean | null>;
@@ -132,7 +141,7 @@ function buildPayload(f: FormState, storedColor: string | null, wasNew: boolean)
   payload.name = name;
   payload.description = f.description.trim();
 
-  const intOf = (key: Exclude<keyof FormState, "pickupWeekdays" | "isNew">, required: boolean): number | null => {
+  const intOf = (key: Exclude<keyof FormState, "pickupWeekdays" | "isNew" | "group">, required: boolean): number | null => {
     const raw = f[key].trim();
     if (!raw) {
       if (required) errors[key] = t.requiredField;
@@ -164,7 +173,10 @@ function buildPayload(f: FormState, storedColor: string | null, wasNew: boolean)
   payload.piecesPerRound = f.capacityMode === "DOUGH_PER_ROUND" ? intOf("piecesPerRound", true) : null;
   payload.dailyLimit = f.capacityMode === "INDEPENDENT" ? intOf("dailyLimit", true) : null;
   payload.leadDays = intOf("leadDays", true);
-  payload.batchYield = intOf("batchYield", false);
+  const group = f.group && f.capacityMode === "INDEPENDENT";
+  payload.saleMode = group ? "GROUP" : "NORMAL";
+  payload.batchYield = intOf("batchYield", group);
+  payload.groupMin = group ? intOf("groupMin", true) : null;
   // Untouched default stays "no colour chosen" (null) so a plain save does not write one.
   payload.fieldColor = f.fieldColor === DEFAULT_FIELD_COLOR && storedColor === null ? null : f.fieldColor;
   payload.pickupWeekdays = [...f.pickupWeekdays].sort((a, b) => a - b);
@@ -433,7 +445,36 @@ export function ProductForm({ product }: Readonly<{ product?: ProductDto }>) {
             </>
           )}
           {mode === "INDEPENDENT" && (
-            <Field label={t.fieldDailyLimit} error={errors.dailyLimit}>
+            <label className="flex min-h-11 items-center gap-3" data-testid="product-group">
+              <input type="checkbox" className="size-5 accent-accent" checked={form.group} onChange={(e) => set("group", e.target.checked)} />
+              <span className="text-base font-medium">{t.fieldGroup}</span>
+            </label>
+          )}
+          {mode === "INDEPENDENT" && form.group && (
+            <>
+              <p className="text-sm text-muted">{t.groupHint}</p>
+              <Field label={t.fieldPiecesPerCake} error={errors.batchYield}>
+                <input
+                  className={inputClass}
+                  name="batchYield"
+                  inputMode="numeric"
+                  value={form.batchYield}
+                  onChange={(e) => set("batchYield", e.target.value)}
+                />
+              </Field>
+              <Field label={t.fieldGroupMin} error={errors.groupMin}>
+                <input
+                  className={inputClass}
+                  name="groupMin"
+                  inputMode="numeric"
+                  value={form.groupMin}
+                  onChange={(e) => set("groupMin", e.target.value)}
+                />
+              </Field>
+            </>
+          )}
+          {mode === "INDEPENDENT" && (
+            <Field label={form.group ? t.fieldCakesPerDay : t.fieldDailyLimit} error={errors.dailyLimit}>
               <input
                 className={inputClass}
                 name="dailyLimit"
@@ -474,15 +515,17 @@ export function ProductForm({ product }: Readonly<{ product?: ProductDto }>) {
             error={errors.pickupWeekdays}
             onChange={(days) => set("pickupWeekdays", days)}
           />
-          <Field label={t.fieldBatchYield} hint={t.batchYieldHint} error={errors.batchYield}>
-            <input
-              className={inputClass}
-              name="batchYield"
-              inputMode="numeric"
-              value={form.batchYield}
-              onChange={(e) => set("batchYield", e.target.value)}
-            />
-          </Field>
+          {!(mode === "INDEPENDENT" && form.group) && (
+            <Field label={t.fieldBatchYield} hint={t.batchYieldHint} error={errors.batchYield}>
+              <input
+                className={inputClass}
+                name="batchYield"
+                inputMode="numeric"
+                value={form.batchYield}
+                onChange={(e) => set("batchYield", e.target.value)}
+              />
+            </Field>
+          )}
           <label className="flex min-h-11 items-center gap-3 sm:col-span-2" data-testid="product-new">
             <input type="checkbox" className="size-5 accent-accent" checked={form.isNew} onChange={(e) => set("isNew", e.target.checked)} />
             <span className="text-base font-medium">{t.fieldNew}</span>

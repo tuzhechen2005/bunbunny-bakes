@@ -50,6 +50,14 @@ export function FlavorsPanel({ product }: Readonly<{ product: ProductDto }>) {
     if (!v) { setError(t.invalid); return; }
     if (await run(`${base}/${f.id}`, "PATCH", v)) setEditing((all) => { const next = { ...all }; delete next[f.id]; return next; });
   };
+  // D193: the flavour's own pickup weekdays, within the product's (rotation). None = every allowed day.
+  const allowedDays = product.pickupWeekdays.length > 0 ? product.pickupWeekdays : [0, 1, 2, 3, 4, 5, 6];
+  const toggleDay = (f: FlavorDto, d: number) => {
+    const cur = f.pickupWeekdays ?? [];
+    const next = cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d].sort((a, b) => a - b);
+    // Every allowed day ticked is the same as none: store [].
+    void run(`${base}/${f.id}`, "PATCH", { pickupWeekdays: next.length === allowedDays.length ? [] : next });
+  };
   const move = (i: number, d: -1 | 1) => {
     const ids = flavors.map((f) => f.id), j = i + d;
     if (j < 0 || j >= ids.length) return;
@@ -98,6 +106,19 @@ export function FlavorsPanel({ product }: Readonly<{ product: ProductDto }>) {
                 <button type="button" aria-label={t.up} disabled={busy || i === 0} className="size-10 rounded-lg border border-line" onClick={() => move(i, -1)}>↑</button>
                 <button type="button" aria-label={t.down} disabled={busy || i === flavors.length - 1} className="size-10 rounded-lg border border-line" onClick={() => move(i, 1)}>↓</button>
                 <button type="button" disabled={busy} className="h-10 rounded-lg border border-line px-3 text-sm" onClick={() => void run(`${base}/${f.id}`, "PATCH", { active: !f.active })}>{f.active ? t.takeOff : t.putOn}</button>
+                <div role="group" aria-label={fill(t.daysLabel, { name: f.name })} className="flex w-full flex-wrap items-center gap-1.5" data-testid={`flavor-days-${f.id}`}>
+                  <span className="text-xs text-muted">{t.days}</span>
+                  {allowedDays.map((d) => {
+                    const on = (f.pickupWeekdays ?? []).includes(d);
+                    return (
+                      <button key={d} type="button" aria-pressed={on} disabled={busy} onClick={() => toggleDay(f, d)}
+                        className={`h-9 min-w-11 rounded-full border px-3 text-sm ${on ? "border-accent bg-accent font-bold text-accent-ink" : "border-line"}`}>
+                        {copy.dates.weekdays[d]}
+                      </button>
+                    );
+                  })}
+                  {(f.pickupWeekdays ?? []).length === 0 ? <small className="text-muted">{t.daysAll}</small> : null}
+                </div>
               </li>
             );
           })}

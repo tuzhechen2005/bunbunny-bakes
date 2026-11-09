@@ -267,7 +267,16 @@ export function OrderPage() {
               <ul className="m-0 list-none p-0">
                 {order.items.map((item, i) => (
                   <li key={i} className="flex items-baseline justify-between gap-3 text-[14.5px] leading-8">
-                    <span className="min-w-0 break-words text-c-grey">{fill(t.itemLine, { name: item.flavorName ? `${item.name}${copy.customer.home.flavorJoin}${item.flavorName}` : item.name, qty: item.qty })}</span>
+                    <span className="min-w-0 break-words text-c-grey">
+                      {fill(t.itemLine, { name: item.flavorName ? `${item.name}${copy.customer.home.flavorJoin}${item.flavorName}` : item.name, qty: item.qty })}
+                      {item.poolStatus ? (
+                        <small className={`ml-2 text-xs font-semibold ${item.willBake ? "text-c-ink" : item.poolStatus === "FAILED" ? "text-c-red" : ""}`} data-testid="order-pool">
+                          {item.willBake ? copy.customer.group.orderFormed : item.poolStatus === "FAILED" ? copy.customer.group.orderFailed : copy.customer.group.orderOpen}
+                        </small>
+                      ) : item.stock ? (
+                        <small className="ml-2 text-xs font-semibold">{copy.customer.group.stockTag}</small>
+                      ) : null}
+                    </span>
                     <span className="shrink-0 font-num font-bold tabular-nums">{formatCents(item.lineTotalCents)}</span>
                   </li>
                 ))}

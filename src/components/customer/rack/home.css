@@ -1210,3 +1210,38 @@
   .hm-new-stamp { animation: none; }
   .hm-face.is-new::after { display: none; }
 }
+
+/* ---------- 拼单 progress (D192) ---------- */
+.hm-pool {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.hm-pool-track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  overflow: hidden;
+}
+.hm-pool-track i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: currentColor;
+  transition: width 0.6s var(--ease);
+}
+.hm-pool[data-formed] .hm-pool-track i {
+  background: var(--c-red);
+}
+.hm-pool-t {
+  flex: none;
+  font: 600 13px/1.2 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hm-pool-track i { transition: none; }
+}

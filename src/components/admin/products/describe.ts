@@ -11,7 +11,7 @@ export interface ProductImageDto {
 }
 
 /** The product as the admin API returns it (dates arrive as ISO strings). */
-export interface FlavorDto { id: string; productId: string; name: string; priceCents: number; dailyLimit: number | null; bundlePriceCents: number | null; active: boolean; sort: number }
+export interface FlavorDto { id: string; productId: string; name: string; priceCents: number; dailyLimit: number | null; bundlePriceCents: number | null; active: boolean; sort: number; /** D193: [] = every day the product allows. */ pickupWeekdays?: number[] }
 
 export interface ProductDto {
   id: string;
@@ -35,6 +35,9 @@ export interface ProductDto {
   piecesPerRound: number | null;
   dailyLimit: number | null;
   batchYield: number | null;
+  /** D192: GROUP = 拼单开做 (whole cakes cut into batchYield pieces; dailyLimit counts cakes). */
+  saleMode?: "NORMAL" | "GROUP";
+  groupMin?: number | null;
   leadDays: number;
   /** D115: 0 = Sunday … 6 = Saturday; [] = every day. */
   pickupWeekdays: number[];

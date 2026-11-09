@@ -26,7 +26,11 @@ export interface MenuProduct {
   /** Chicago weekdays the product can be picked up (0 = Sunday ... 6 = Saturday); empty = every day (C1). */
   pickupWeekdays: number[];
   /** Active flavours (F1); a product with flavours needs one chosen per cart line. */
-  flavors?: { id: string; name: string; priceCents: number; bundlePriceCents: number | null }[];
+  flavors?: { id: string; name: string; priceCents: number; bundlePriceCents: number | null; /** D193; absent = every day. */ pickupWeekdays?: number[] }[];
+  /** D192: present only on 拼单 products (whole cakes of batchYield pieces, made once groupMin are ordered). */
+  saleMode?: "NORMAL" | "GROUP";
+  groupMin?: number | null;
+  batchYield?: number | null;
   /** Cheapest active flavour, or unitPriceCents. */
   priceFromCents?: number;
 }
@@ -58,6 +62,8 @@ export interface DateOption {
   /** Only for AVAILABLE dates. */
   cutoffAt?: string;
   cutoffLabel?: string;
+  /** D192: progress of the 拼单 pools the cart's GROUP lines would join on this date. */
+  groupPools?: { productId: string; flavorId: string | null; min: number; last: number; cakes: number; needMore: number; status: "OPEN" | "FORMED" | "CONFIRMED" | "FAILED" }[];
 }
 
 export interface CartProblem {
@@ -78,7 +84,8 @@ export interface Availability {
 }
 
 export interface OrderRequest {
-  items: CartItem[];
+  /** D192: GROUP lines carry what to do if the pool does not form. */
+  items: (CartItem & { ifNotFormed?: "CONTACT" | "CANCEL" })[];
   pickupDate: string;
   fulfillment: Fulfillment;
   wechatId: string;

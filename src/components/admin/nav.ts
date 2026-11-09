@@ -13,6 +13,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { href: "/admin/calendar", label: t.calendar },
   { href: "/admin/orders/new", label: t.newOrder },
   { href: "/admin/products", label: t.products },
+  { href: "/admin/pools", label: t.pools },
   { href: "/admin/ledger", label: t.ledger },
   { href: "/admin/game", label: t.game },
   { href: "/admin/settings", label: t.settings },
