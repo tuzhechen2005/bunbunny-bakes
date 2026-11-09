@@ -4,6 +4,7 @@
 import type { Setting, ProductFlavor } from "@/generated/prisma/client";
 import { parseLocalDate } from "@/domain/dates";
 import type {
+  CartLine,
   CapacityProduct,
   Cents,
   DayLimits,
@@ -98,6 +99,7 @@ export async function loadProductMap(tx: Tx): Promise<ProductInfoMap> {
     map[p.id] = {
       id: p.id,
       flavors: p.flavors,
+      ...(p.saleMode === "GROUP" ? {saleMode:p.saleMode,groupMin:p.groupMin} : {}),
       capacityMode: p.capacityMode,
       doughG: p.doughG,
       roundG: p.roundG,
@@ -147,7 +149,7 @@ export async function loadDayContext(
       id: true,
       status: true,
       fulfillment: true,
-      items: { select: { productId: true, flavorId: true, qty: true }, orderBy: { id: "asc" } },
+      items: { select: { productId: true, flavorId: true, stockLotId: true, qty: true }, orderBy: { id: "asc" } },
     },
     orderBy: { seq: "asc" },
   });
@@ -174,7 +176,9 @@ export async function loadDayContext(
     productLimits[p.id] = limit;
   }
 
+  const reservations = await loadPoolReservations(tx, date);
   const limits: DayLimits = {
+    ...(reservations.length ? {poolReservations:reservations} : {}),
     doughLimitG: openDate?.doughLimitG ?? settings.defaultDoughLimitG,
     deliveryEnabled: openDate?.deliveryEnabled ?? true,
     deliveryLimit: openDate?.deliveryLimit ?? settings.defaultDeliveryLimit,
@@ -189,7 +193,16 @@ export async function loadDayContext(
       id: o.id,
       status: o.status,
       fulfillment: o.fulfillment,
-      items: o.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, qty: i.qty })),
+      items: o.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, ...(i.stockLotId ? {stockLotId:i.stockLotId} : {}), qty: i.qty })),
     })),
   };
+}
+
+/** Converted lots reserve spare once, regardless of whether those pieces have sold. */
+export async function loadPoolReservations(tx: Tx, date: string): Promise<CartLine[]> {
+  const lots = await tx.stockLot.findMany({where:{date:toDbDate(date),groupPoolId:{not:null}},include:{items:{where:{order:{status:{in:["NEW","CONTACTED","CONFIRMED","BAKING","READY","COMPLETED"]}}}}}});
+  return lots.flatMap(l => {
+    const qty = l.closed ? l.items.reduce((n,i)=>n+i.qty,0) : l.qty;
+    return qty || l.closed ? [{productId:l.productId,flavorId:l.flavorId,qty,...(l.closed ? {reservationLotId:l.id} : {})}] : [];
+  });
 }

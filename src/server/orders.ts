@@ -1,3 +1,4 @@
+import { validateStock, validateGroupChoices } from "./groupStock";
 // Order creation transactions (DATA_MODEL.md §4; CAPACITY_RULES.md §6–§8; D37, D38).
 //
 // Every create runs in ONE interactive transaction at READ COMMITTED that first locks the
@@ -101,6 +102,8 @@ async function insertOrder(tx: Tx, input: InsertInput) {
     const p = products[l.productId];
     return {
       productId: l.productId,
+      stockLotId: l.stockLotId ?? null,
+      ifNotFormed: l.ifNotFormed ?? null,
       qty: l.qty,
       name: p.name,
       ...currentLinePrice(l, p),
@@ -137,6 +140,8 @@ async function insertOrder(tx: Tx, input: InsertInput) {
       updatedAt: now,
       items: {
         create: lines.map((l, i) => ({
+          stockLotId: l.stockLotId,
+          ifNotFormed: l.ifNotFormed,
           productId: l.productId,
           flavorId: l.flavorId,
           flavorName: l.flavorName,
@@ -166,6 +171,8 @@ async function insertOrder(tx: Tx, input: InsertInput) {
       wechatId: input.wechatId,
       note: input.note,
       items: lines.map((l, i) => ({
+        stockLotId: l.stockLotId,
+        ifNotFormed: l.ifNotFormed,
         productId: l.productId,
         flavorId: l.flavorId,
         flavorName: l.flavorName,
@@ -251,7 +258,7 @@ export async function createCustomerOrder(
       if (!settings.orderingEnabled) throw new AppError("ORDERING_DISABLED");
 
       // 4. Date: must exist, be open, and be after today (Chicago).
-      if (!openDate || !openDate.isOpen || compareLocalDate(date, localDateOf(now)) <= 0) {
+      if (!openDate || !openDate.isOpen || compareLocalDate(date, localDateOf(now)) < 0 || (date === localDateOf(now) && !cart.some(l => l.stockLotId))) {
         throw new AppError("DATE_CLOSED");
       }
 
@@ -267,6 +274,7 @@ export async function createCustomerOrder(
         });
       }
       validateFlavors(cart, products);
+      validateGroupChoices(cart, products);
       const overMax = [...productQuantities(cart)]
         .filter(([, qty]) => qty > settings.maxQtyPerItem)
         .map(([productId]) => ({ productId }));
@@ -275,7 +283,11 @@ export async function createCustomerOrder(
       }
 
       // 6. Cutoff: now < cutoff, strictly.
-      const cutoffAt = cartCutoff(cart, date, products, settings);
+      const preorder = cart.filter(l => !l.stockLotId);
+      const preorderCutoff = preorder.length ? cartCutoff(preorder, date, products, settings) : null;
+      if (preorderCutoff && !isBeforeCutoff(now, preorderCutoff)) throw new AppError("CUTOFF_PASSED");
+      const stockCutoff = await validateStock(tx, date, cart, now);
+      const cutoffAt = preorderCutoff ?? stockCutoff!;
       if (!isBeforeCutoff(now, cutoffAt)) throw new AppError("CUTOFF_PASSED");
 
       // 6b. Pickup weekdays (D115): checked under the day lock, before capacity.
@@ -409,6 +421,8 @@ export async function createAdminOrder(
     }
 
     validateFlavors(cart, products);
+    validateGroupChoices(cart, products);
+    const stockCutoff = await validateStock(tx, date, cart, now);
     const day = await loadDayContext(tx, date, settings, products);
     // Weekday restrictions (D115) are overridable like capacity, with the same reason flow.
     const violations: Violation[] = [
@@ -427,7 +441,8 @@ export async function createAdminOrder(
     }
 
     // Stored for reference; the owner is never bound by it.
-    const cutoffAt = cartCutoff(cart, date, products, settings);
+    const preorder = cart.filter(l => !l.stockLotId);
+    const cutoffAt = preorder.length ? cartCutoff(preorder, date, products, settings) : stockCutoff!;
     const order = await insertOrder(tx, {
       date,
       cart,

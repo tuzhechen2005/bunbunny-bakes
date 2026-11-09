@@ -12,6 +12,22 @@ datasource db {
   provider = "postgresql"
 }
 
+enum SaleMode {
+  NORMAL
+  GROUP
+}
+
+enum GroupDecision {
+  OPEN
+  CONFIRMED
+  FAILED
+}
+
+enum IfNotFormed {
+  CONTACT
+  CANCEL
+}
+
 enum CapacityMode {
   DOUGH_PER_UNIT
   DOUGH_PER_ROUND
@@ -112,6 +128,8 @@ model Product {
   roundG           Int?
   piecesPerRound   Int?
   dailyLimit       Int?
+  saleMode         SaleMode @default(NORMAL)
+  groupMin         Int?
   batchYield       Int?
   leadDays         Int           @default(1)
   /// D115: weekdays (0 = Sunday … 6 = Saturday, Chicago pickup date) it can be picked up on.
@@ -123,6 +141,8 @@ model Product {
   createdAt        DateTime      @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
 
+  groupPools GroupPool[]
+  stockLots StockLot[]
   dateLimits  OpenDateProductLimit[]
   orderItems  OrderItem[]
   manualItems ManualIncomeItem[]
@@ -136,6 +156,7 @@ model ProductFlavor {
   productId        String   @db.Uuid
   name             String
   priceCents       Int
+  pickupWeekdays Int[] @default([])
   dailyLimit       Int?
   bundlePriceCents Int?
   active           Boolean  @default(true)
@@ -143,6 +164,8 @@ model ProductFlavor {
   createdAt        DateTime @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
+  groupPools GroupPool[]
+  stockLots StockLot[]
   product    Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
   items      OrderItem[]
   dateLimits OpenDateFlavorLimit[]
@@ -176,6 +199,8 @@ model OpenDate {
   createdAt       DateTime @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 
+  groupPools GroupPool[]
+  stockLots StockLot[]
   flavorLimits  OpenDateFlavorLimit[]
   productLimits OpenDateProductLimit[]
   orders        Order[]
@@ -243,6 +268,9 @@ model OrderItem {
   orderId          String @db.Uuid
   productId        String @db.Uuid
   flavorId         String? @db.Uuid
+  stockLotId       String? @db.Uuid
+  ifNotFormed      IfNotFormed?
+  stockLot         StockLot? @relation(fields: [stockLotId], references: [id], onDelete: Restrict)
   flavorName       String?
   nameSnapshot     String
   qty              Int
@@ -256,7 +284,7 @@ model OrderItem {
 
   flavor ProductFlavor? @relation(fields: [flavorId, productId], references: [id, productId], onDelete: Restrict)
 
-  @@unique([orderId, productId, flavorId])
+  @@index([stockLotId])
   @@index([orderId])
   @@index([productId])
 }
@@ -513,4 +541,40 @@ model Inventory {
   item         String
   count        Int @default(0)
   @@id([wechatIdNorm, item])
+}
+
+model GroupPool {
+  id String @id @default(uuid()) @db.Uuid
+  date DateTime @db.Date
+  productId String @db.Uuid
+  flavorId String? @db.Uuid
+  decision GroupDecision @default(OPEN)
+  minOverride Int?
+  decidedAt DateTime? @db.Timestamptz(3)
+  note String?
+  openDate OpenDate @relation(fields: [date], references: [date], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  flavor ProductFlavor? @relation(fields: [flavorId, productId], references: [id, productId], onDelete: Restrict)
+  stockLots StockLot[]
+  @@unique([date, productId, flavorId])
+}
+
+model StockLot {
+  id String @id @default(uuid()) @db.Uuid
+  date DateTime @db.Date
+  productId String @db.Uuid
+  flavorId String? @db.Uuid
+  qty Int
+  madeAt DateTime? @db.Timestamptz(3)
+  sellUntil DateTime @db.Timestamptz(3)
+  closed Boolean @default(false)
+  note String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  groupPoolId String? @db.Uuid
+  groupPool GroupPool? @relation(fields: [groupPoolId], references: [id], onDelete: Restrict)
+  openDate OpenDate @relation(fields: [date], references: [date], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  flavor ProductFlavor? @relation(fields: [flavorId, productId], references: [id, productId], onDelete: Restrict)
+  items OrderItem[]
+  @@index([date])
 }

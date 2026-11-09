@@ -1,3 +1,4 @@
+import { validateStock, validateGroupChoices } from "./groupStock";
 import { syncOrderCoins } from "./economy";
 // Changing existing orders: customer cancel, owner status changes, payment, and edits
 // (DATA_MODEL.md §2, §4 "店主改单" / "顾客或店主取消"; CAPACITY_RULES.md §3.3, §6, §8, §9;
@@ -399,8 +400,9 @@ export async function adminCorrectStatus(
     let violations: Violation[] = [];
     if (correctionReoccupies(order.status, data.to)) {
       await lockCartProducts(tx, order.items);
+      await validateStock(tx, date, order.items, now, order.id);
       violations = await violationsFor(tx, order.id, date, {
-        items: order.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, qty: i.qty })),
+        items: order.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, stockLotId: i.stockLotId, ifNotFormed: i.ifNotFormed, qty: i.qty })),
         fulfillment: order.fulfillment,
       });
       if (violations.length > 0 && !data.override) {
@@ -484,7 +486,7 @@ function sameCart(a: CartLine[], b: CartLine[]): boolean {
   const key = (l: CartLine[]) =>
     [...l]
       .sort((x, y) => lineKey(x).localeCompare(lineKey(y)))
-      .map((x) => `${lineKey(x)}:${x.qty}`)
+      .map((x) => `${lineKey(x)}:${x.qty}:${x.ifNotFormed ?? ""}`)
       .join(",");
   return key(a) === key(b);
 }
@@ -503,11 +505,12 @@ export async function adminEditOrder(
     assertFresh(order, data.expectedUpdatedAt);
 
     // --- new content
-    const oldCart: CartLine[] = mergeLines(order.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, qty: i.qty })));
+    const oldCart: CartLine[] = mergeLines(order.items.map((i) => ({ productId: i.productId, flavorId: i.flavorId, stockLotId: i.stockLotId, ifNotFormed: i.ifNotFormed, qty: i.qty })));
     const newDate = data.pickupDate ?? oldDate;
     const dateChanged = newDate !== oldDate;
     const newCart = data.items ? mergeLines(data.items) : oldCart;
     const itemsChanged = !sameCart(oldCart, newCart);
+    const quantitiesChanged = !sameCart(oldCart.map(l=>({...l,ifNotFormed:null})),newCart.map(l=>({...l,ifNotFormed:null})));
     const newFulfillment = data.fulfillment ?? order.fulfillment;
     const fulfillmentChanged = newFulfillment !== order.fulfillment;
     const newWechatId = data.wechatId ?? order.wechatId;
@@ -541,9 +544,12 @@ export async function adminEditOrder(
       throw new AppError("PRODUCT_UNAVAILABLE", { extra: { productIds: unavailable.map((l) => l.productId) } });
     }
 
+    validateGroupChoices(newCart, products, new Set(order.items.filter(i => !i.ifNotFormed && !i.stockLotId).map(i => `${i.productId}:${i.flavorId ?? ""}`)));
+    const stockCutoff = await validateStock(tx, newDate, newCart, now, order.id, isOccupying(order.status) && (quantitiesChanged || dateChanged), isOccupying(order.status), dateChanged ? [] : oldCart);
+
     // --- capacity (only content changes can change usage)
     let violations: Violation[] = [];
-    if (isOccupying(order.status) && (itemsChanged || dateChanged || fulfillmentChanged)) {
+    if (isOccupying(order.status) && (quantitiesChanged || dateChanged || fulfillmentChanged)) {
       violations = await violationsFor(
         tx,
         order.id,
@@ -571,6 +577,8 @@ export async function adminEditOrder(
         : currentLinePrice(l, products[l.productId]);
       const name = existing ? existing.nameSnapshot : products[l.productId].name;
       return {
+        stockLotId: l.stockLotId ?? null,
+        ifNotFormed: l.ifNotFormed ?? null,
         productId: l.productId,
         flavorId: l.flavorId ?? null,
         flavorName: priced.flavorName,
@@ -597,7 +605,7 @@ export async function adminEditOrder(
     // --- cutoff (CAPACITY_RULES §6: recomputed on owner edits)
     const newCutoffAt =
       itemsChanged || dateChanged
-        ? computeCutoffAt(newDate, leadDaysOf(newCart, products), settings.cutoffTime)
+        ? (newCart.some(l => !l.stockLotId) ? computeCutoffAt(newDate, leadDaysOf(newCart.filter(l => !l.stockLotId), products), settings.cutoffTime) : stockCutoff ?? order.cutoffAt)
         : order.cutoffAt;
 
     // --- D52: a new number on the new date (both days are locked); viewToken never changes
@@ -609,6 +617,8 @@ export async function adminEditOrder(
       await tx.orderItem.createMany({
         data: lines.map((l, i) => ({
           orderId: order.id,
+          stockLotId: l.stockLotId ?? null,
+          ifNotFormed: l.ifNotFormed ?? null,
           productId: l.productId,
           flavorId: l.flavorId,
           flavorName: l.flavorName,
@@ -649,6 +659,8 @@ export async function adminEditOrder(
         wechatId: order.wechatId,
         note: order.note,
         items: order.items.map((i) => ({
+          stockLotId: i.stockLotId,
+          ifNotFormed: i.ifNotFormed,
           productId: i.productId,
           flavorId: i.flavorId,
           flavorName: i.flavorName,
@@ -668,6 +680,8 @@ export async function adminEditOrder(
         wechatId: newWechatId,
         note: newNote,
         items: lines.map((l, i) => ({
+          stockLotId: l.stockLotId ?? null,
+          ifNotFormed: l.ifNotFormed ?? null,
           productId: l.productId,
           flavorId: l.flavorId,
           flavorName: l.flavorName,

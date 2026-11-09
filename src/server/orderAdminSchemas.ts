@@ -39,6 +39,8 @@ const reason = z
 const cartLine = z.object({
   productId: z.uuid(),
   flavorId: z.uuid().nullable().optional(),
+  stockLotId: z.uuid().nullable().optional(),
+  ifNotFormed: z.enum(["CONTACT", "CANCEL"]).nullable().optional(),
   qty: z.number().int().min(1).max(MAX_QTY_SCHEMA),
 });
 

@@ -132,6 +132,7 @@ function totalsOf(orders: DayOrder[], products: ProductMap): Map<string, number>
   const totals = new Map<string, number>();
   for (const order of orders) {
     for (const line of order.items) {
+      if (line.stockLotId) continue;
       lookup(products, line.productId);
       totals.set(line.productId, (totals.get(line.productId) ?? 0) + line.qty);
     }
@@ -157,7 +158,7 @@ export function flavorQuantities(lines: readonly CartLine[]): FlavorQuantity[] {
 }
 
 function flavorSection(orders: DayOrder[], product: SummaryProduct): { flavors?: FlavorQuantity[] } {
-  const lines = orders.flatMap(o => o.items).filter(l => l.productId === product.id);
+  const lines = orders.flatMap(o => o.items).filter(l => !l.stockLotId && l.productId === product.id);
   return product.flavors?.length || lines.some(l => l.flavorId)
     ? { flavors: flavorQuantities(lines) } : {};
 }
@@ -217,7 +218,9 @@ function batchLines(day: ProductionDay | undefined, products: ProductMap): Batch
     if (!isPositiveInt(y)) {
       return { productId: product.id, name: product.name, unitLabel: product.unitLabel, ...flavorSection(orders, product), qty, batches: null, leftover: null };
     }
-    const batches = Math.ceil(qty / y);
+    const pools = new Map<string, number>();
+    for (const o of orders) for (const l of o.items) if (!l.stockLotId && l.productId === product.id) pools.set(l.flavorId ?? "", (pools.get(l.flavorId ?? "") ?? 0) + l.qty);
+    const batches = product.saleMode === "GROUP" ? [...pools.values()].reduce((n,qty)=>n+Math.ceil(qty/y),0) : Math.ceil(qty / y);
     return { productId: product.id, name: product.name, unitLabel: product.unitLabel, ...flavorSection(orders, product), qty, batches, leftover: batches * y - qty };
   });
 }

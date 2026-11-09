@@ -1,8 +1,8 @@
 import type { CartLine } from "./types";
 
 /** Pricing identity; product capacity aggregates by productId; flavour limits also aggregate by flavorId. */
-export function lineKey(line: Pick<CartLine, "productId" | "flavorId">): string {
-  return `${line.productId}:${line.flavorId ?? ""}`;
+export function lineKey(line: Pick<CartLine, "productId" | "flavorId" | "stockLotId">): string {
+  return `${line.productId}:${line.flavorId ?? ""}${line.stockLotId ? `:stock:${line.stockLotId}` : ""}`;
 }
 
 export function mergeCartLines(lines: CartLine[]): CartLine[] {
@@ -11,6 +11,7 @@ export function mergeCartLines(lines: CartLine[]): CartLine[] {
     const key = lineKey(line);
     const old = merged.get(key);
     if (old) {
+      if (old.ifNotFormed !== line.ifNotFormed) old.ifNotFormed = null;
       old.qty += line.qty;
       // An omitted flavour must never acquire the explicit legacy-null exemption.
       if (line.flavorId === undefined) delete old.flavorId;

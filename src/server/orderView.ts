@@ -1,3 +1,4 @@
+import { poolProgress } from "./groupStock";
 import { orderCoins } from "@/domain/economy";
 // GET /api/o/{token} data (API_SPEC §2, DATA_MODEL §2 "顾客看到的状态").
 // Exactly the fields the order page needs: no ids, no wechatId, no payment fields,
@@ -18,7 +19,7 @@ export type StatusKind = "PENDING" | "CONFIRMED" | "BAKING" | "READY" | "COMPLET
 export interface CustomerOrderView {
   orderNo: string;
   /** `imageUrl`: the public product photo (null: none, or the product is gone). */
-  items: { flavorName: string | null; name: string; qty: number; lineTotalCents: number; imageUrl: string | null }[];
+  items: { poolStatus?: string | null; ifNotFormed?: "CONTACT" | "CANCEL" | null; stockLotId?: string | null; flavorName: string | null; name: string; qty: number; lineTotalCents: number; imageUrl: string | null }[];
   coinsOnPickup: number;
   subtotalCents: number;
   deliveryFeeCents: number;
@@ -77,7 +78,7 @@ export async function getCustomerOrderView(
       cutoffAt: true,
       items: {
         orderBy: { id: "asc" },
-        select: { productId: true, nameSnapshot: true, flavorName: true, qty: true, lineTotalCents: true },
+        select: { flavorId: true, ifNotFormed: true, stockLotId: true, productId: true, nameSnapshot: true, flavorName: true, qty: true, lineTotalCents: true },
       },
     },
   });
@@ -87,7 +88,7 @@ export async function getCustomerOrderView(
   if (!settings) throw new Error("Setting row (id = 1) is missing; run `npm run db:seed`");
   const products = await db.product.findMany({
     where: { id: { in: order.items.map((i) => i.productId) } },
-    select: { id: true, capacityMode: true, sortOrder: true, imageUrl: true },
+    select: { saleMode: true, id: true, capacityMode: true, sortOrder: true, imageUrl: true },
   });
   const mode = new Map(products.map((p) => [p.id, p.capacityMode]));
   const imageOf = new Map(products.map((p) => [p.id, p.imageUrl]));
@@ -103,9 +104,16 @@ export async function getCustomerOrderView(
 
   const canCancel = customerCanCancel(order.status, now, order.cutoffAt);
   const pickupDate = fromDbDate(order.pickupDate);
+  const progress = new Map<string, string>();
+  for (const i of sortedItems) if (!i.stockLotId && products.find(p => p.id === i.productId)?.saleMode === "GROUP") {
+    const pool = await poolProgress(db, {date:pickupDate,productId:i.productId,flavorId:i.flavorId},now);
+    progress.set(`${i.productId}:${i.flavorId ?? ""}`,pool.status);
+  }
   return {
     orderNo: order.orderNo,
     items: sortedItems.map((i) => ({
+      ...(progress.has(`${i.productId}:${i.flavorId ?? ""}`) ? {poolStatus:progress.get(`${i.productId}:${i.flavorId ?? ""}`),ifNotFormed:i.ifNotFormed} : {}),
+      ...(i.stockLotId ? {stockLotId:i.stockLotId} : {}),
       name: i.nameSnapshot,
       flavorName: i.flavorName,
       qty: i.qty,

@@ -18,12 +18,15 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+// D192 explicitly makes sale mode, threshold and pieces per cake public.
 const PRODUCT_KEYS = [
+  "batchYield",
   "bundlePriceCents",
   "bundleSize",
   "description",
   "field",
   "flavors",
+  "groupMin",
   "id",
   "imageUrl",
   "images",
@@ -32,6 +35,7 @@ const PRODUCT_KEYS = [
   "name",
   "pickupWeekdays",
   "priceFromCents",
+  "saleMode",
   "status",
   "unitPriceCents",
 ];
@@ -68,7 +72,7 @@ describe("GET /api/menu", () => {
     );
     for (const p of body.products) expect(Object.keys(p).sort()).toEqual(PRODUCT_KEYS);
     const text = JSON.stringify(body);
-    for (const leak of ["newUntil", "doughG", "roundG", "piecesPerRound", "dailyLimit", "batchYield", "capacityMode"]) {
+    for (const leak of ["newUntil", "doughG", "roundG", "piecesPerRound", "dailyLimit", "capacityMode"]) {
       expect(text).not.toContain(leak);
     }
   });

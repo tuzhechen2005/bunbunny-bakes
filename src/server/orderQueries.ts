@@ -205,6 +205,8 @@ export function itemsSummary(items: { nameSnapshot: string; flavorName?: string 
 // Detail
 
 export interface OrderDetailItem {
+  stockLotId?: string | null;
+  ifNotFormed?: "CONTACT" | "CANCEL" | null;
   flavorId: string | null;
   flavorName: string | null;
   flavorLabel: string | null;
@@ -290,6 +292,8 @@ export async function getOrderDetail(db: DbClient, id: string): Promise<OrderDet
       name: i.nameSnapshot,
       flavorId: i.flavorId,
       flavorName: i.flavorName,
+      ...(i.stockLotId ? {stockLotId:i.stockLotId} : {}),
+      ...(i.ifNotFormed ? {ifNotFormed:i.ifNotFormed} : {}),
       flavorLabel: i.flavorName,
       qty: i.qty,
       unitPriceCents: i.unitPriceCents,

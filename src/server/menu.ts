@@ -6,6 +6,9 @@ import { fieldFor, type FieldColors } from "@/lib/fieldColor";
 import type { DbClient } from "./db";
 
 export interface MenuProduct {
+  saleMode?: "NORMAL" | "GROUP";
+  groupMin?: number | null;
+  batchYield?: number | null;
   isNew: boolean;
   id: string;
   name: string;
@@ -16,7 +19,7 @@ export interface MenuProduct {
   images: string[];
   /** The product's home colours (D95); defaults filled in. */
   field: FieldColors;
-  flavors: { id: string; name: string; priceCents: number; bundlePriceCents: number | null }[];
+  flavors: { pickupWeekdays?: number[]; id: string; name: string; priceCents: number; bundlePriceCents: number | null }[];
   priceFromCents: number;
   unitPriceCents: number;
   bundleSize: number;
@@ -58,6 +61,7 @@ export async function getMenuData(db: DbClient): Promise<MenuData> {
     where: { status: { in: ["ACTIVE", "PAUSED"] } },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     select: {
+      saleMode: true, groupMin: true, batchYield: true,
       newUntil: true,
       id: true,
       name: true,
@@ -65,7 +69,7 @@ export async function getMenuData(db: DbClient): Promise<MenuData> {
       imageUrl: true,
       fieldColor: true,
       images: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], select: { url: true } },
-      flavors: { where: { active: true }, orderBy: [{ sort: "asc" }, { id: "asc" }], select: { id: true, name: true, priceCents: true, bundlePriceCents: true } },
+      flavors: { where: { active: true }, orderBy: [{ sort: "asc" }, { id: "asc" }], select: { id: true, name: true, priceCents: true, bundlePriceCents: true, pickupWeekdays: true } },
       unitPriceCents: true,
       bundleSize: true,
       bundlePriceCents: true,
@@ -80,6 +84,7 @@ export async function getMenuData(db: DbClient): Promise<MenuData> {
       // A row whose cover was set without a photos row still shows that cover.
       const images = p.images.length > 0 ? p.images.map((i) => i.url) : p.imageUrl ? [p.imageUrl] : [];
       return {
+        saleMode: p.saleMode, groupMin: p.groupMin, batchYield: p.batchYield,
         newUntil: p.newUntil,
         id: p.id,
         name: p.name,
@@ -87,7 +92,7 @@ export async function getMenuData(db: DbClient): Promise<MenuData> {
         imageUrl: images[0] ?? null,
         images,
         field: fieldFor(p.fieldColor),
-        flavors: p.flavors,
+        flavors: p.flavors.map(({pickupWeekdays,...f})=>({...f,...(pickupWeekdays.length ? {pickupWeekdays}: {})})),
         priceFromCents: p.flavors.length ? Math.min(...p.flavors.map(f => f.priceCents)) : p.unitPriceCents,
         unitPriceCents: p.unitPriceCents,
         bundleSize: p.bundleSize,

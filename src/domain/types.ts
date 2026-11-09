@@ -40,7 +40,10 @@ export interface PriceSnapshot {
 /** Current capacity settings of a product (capacity always uses current settings, D45). */
 export interface CapacityProduct {
   id: string;
-  flavors?: readonly { id: string; dailyLimit?: number | null; active?: boolean }[];
+  flavors?: readonly { id: string; dailyLimit?: number | null; active?: boolean; pickupWeekdays?: readonly number[] }[];
+  saleMode?: "NORMAL" | "GROUP";
+  groupMin?: number | null;
+  batchYield?: number | null;
   capacityMode: CapacityMode;
   doughG: number | null;
   roundG: number | null;
@@ -59,6 +62,10 @@ export interface CartLine {
   productId: string;
   flavorId?: string | null;
   flavorName?: string | null;
+  /** Internal: a closed converted lot whose reserved sold quantity must be recomputed on edit. */
+  reservationLotId?: string;
+  stockLotId?: string | null;
+  ifNotFormed?: "CONTACT" | "CANCEL" | null;
   qty: number;
 }
 
@@ -72,6 +79,7 @@ export interface DayOrder {
 
 /** Limits for one open date, already resolved (OpenDate override ?? Setting/product default). */
 export interface DayLimits {
+  poolReservations?: CartLine[];
   doughLimitG: number;
   deliveryEnabled: boolean;
   deliveryLimit: number;
